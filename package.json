@@ -1,17 +1,39 @@
 {
-  "name": "temp-init",
+  "name": "ofertas-super",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "test": "tsx --test tests/**/*.test.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "lighthouse": "lhci autorun --config=./lighthouserc.json",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "scrape:disco": "tsx scripts/scrapers/disco.ts",
+    "scrape:carrefour": "tsx scripts/scrapers/carrefour.ts",
+    "scrape:jumbo": "tsx scripts/scrapers/jumbo.ts",
+    "scrape:vea": "tsx scripts/scrapers/vea.ts",
+    "scrape:dia": "tsx scripts/scrapers/dia.ts",
+    "scrape:mas": "tsx scripts/scrapers/mas.ts",
+    "probe:vtex": "tsx scripts/probe-vtex.ts",
+    "populate": "tsx scripts/populateDb.ts",
+    "update:prices": "tsx scripts/updatePrices.ts",
+    "cleanup:history": "tsx scripts/cleanup-history.ts",
+    "ingest": "tsx scripts/ingest.ts",
+    "cleanup:staging": "tsx scripts/cleanup-staging.ts",
+    "metrics:ingestion": "tsx scripts/pipeline/metrics.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
     "@clerk/nextjs": "^7.0.6",
-    "@prisma/client": "^7.5.0",
+    "@prisma/client": "^6.19.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
@@ -30,13 +52,15 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@ducanh2912/next-pwa": "^10.2.9",
+    "@lhci/cli": "^0.15.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.0",
-    "prisma": "^7.5.0",
+    "eslint-config-next": "^15.5.14",
+    "prisma": "^6.19.0",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"
