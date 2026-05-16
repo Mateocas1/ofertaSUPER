@@ -29,9 +29,17 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+tmp-dev-server*.log
+
+# generated PWA/workbox assets
+/public/sw.js
+/public/workbox-*.js
+/public/fallback-*.js
+/public/swe-worker-*.js
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
