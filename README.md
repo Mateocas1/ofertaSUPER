@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ofertasSUPER
 
-## Getting Started
+Comparador de precios y ofertas para supermercados argentinos. El foco actual es una home de búsqueda clara, una canasta inteligente como firma visual y una base de catálogo preparada para comparar productos por EAN.
 
-First, run the development server:
+> Estado: implementación en curso. No vender como producción cerrada ni deploy-ready. Ver `docs/handoff.md` para el estado exacto, verificación y pendientes.
+
+## Qué está en este corte
+
+- Home visual aprobada contra `docs/design/canasta-inteligente-ui-spec.md`.
+- Búsqueda principal en `/buscar` con fallback demo si Supabase/Prisma no está alcanzable.
+- API `/api/search` fail-open para sugerencias acotadas.
+- Prisma schema, catalog layer, helpers VTEX, promoción/precio y tests de base.
+- Controles locales de canasta/favoritos sin backend profundo.
+- Política admin fail-closed por allowlist o rol explícito.
+
+## Stack
+
+- Next.js 15 App Router + React 19
+- TypeScript + Tailwind CSS v4
+- Prisma + Supabase Postgres
+- Upstash Redis para cache/rate-limit cuando está disponible
+- Clerk para futuras superficies admin
+- Node test runner vía `tsx --test`
+
+## Arranque local
 
 ```bash
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abrir `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Variables mínimas esperadas para trabajar con datos reales:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+DATABASE_URL=
+DIRECT_URL=
+VTEX_SHA256_HASH=
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+ADMIN_EMAILS=
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
 
-## Learn More
+Sin Supabase/Redis alcanzables, las superficies públicas deben degradar sin romper la demo principal.
 
-To learn more about Next.js, take a look at the following resources:
+## Verificación local
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm test
+npm run typecheck
+npm run lint
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+No se corre `npm run build` en este goal por restricción explícita.
 
-## Deploy on Vercel
+## Documentación útil
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `docs/handoff.md` — estado vivo, commits relevantes, QA y pendientes.
+- `docs/design/canasta-inteligente-ui-spec.md` — dirección visual aprobada.
+- `docs/production-readiness-vtex.md` — qué está verificado y qué falta antes de hablar de producción.
+- `docs/repo-publication-checklist.md` — checklist para publicar el repo sin inflar claims.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Fuera de alcance de este corte
+
+- Producto profundo, canasta profunda, admin completo e ingesta productiva.
+- Deploy real o claim de production-ready.
+- Build final con PWA.
