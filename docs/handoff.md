@@ -1,14 +1,14 @@
 # ofertasSUPER handoff
 
-Última actualización: 2026-05-16
+?ltima actualizaci?n: 2026-05-16
 
 ## Estado actual
 
 - Primera slice visual de home implementada contra `docs/design/canasta-inteligente-ui-spec.md`.
 - Preview aprobada usada como referencia: `docs/design/canasta-inteligente-preview-2026-05-16.png`.
-- No se avanzó a detalle de producto ni canasta profunda.
-- El buscador principal ya no cae en 500 local cuando Supabase/Prisma no está alcanzable: `/buscar` y `/api/search` degradan a datos demo acotados.
-- Quedan cambios previos sin ordenar en el working tree, principalmente documentación, rutas profundas, admin, ingesta, scripts, assets y tests heredados.
+- La home/first slice qued? cerrada primero; despu?s se orden? el resto del working tree en commits separados sin cambiar la direcci?n visual aprobada.
+- El buscador principal ya no cae en 500 local cuando Supabase/Prisma no est? alcanzable: `/buscar` y `/api/search` degradan a datos demo acotados o usan datos reales si la DB responde.
+- Working tree limpio al cierre de este handoff.
 
 ## Commits de esta etapa
 
@@ -55,32 +55,35 @@
 - `ef56541 docs(ingestion): add fase1 telemetry evidence`
 - `392aef4 docs(evidence): add runtime screenshots`
 - `1c8b101 docs(plan): update implementation checkpoint`
+- `6e4f15a docs(handoff): record final sorted tree state`
 
-## Verificación ejecutada
+## Verificaci?n ejecutada
 
-- `npm test` — 21/21 tests pasan.
-- `npm run typecheck` — OK.
-- `npm run lint` — OK.
+- `npm test` ? 21/21 tests pasan.
+- `npm run typecheck` ? OK.
+- `npm run lint` ? OK.
 - QA visual home con dev server local y Edge headless:
-  - desktop screenshot: `C:\Users\picala\AppData\Local\Temp\ofertas-super-home-desktop-1536x960.png`
-  - mobile screenshot: `C:\Users\picala\AppData\Local\Temp\ofertas-super-home-mobile-390x900.png`
-- QA búsqueda con dev server local `http://127.0.0.1:3029/`:
-  - `/` respondió 200.
-  - `/buscar?q=leche` respondió 200, renderizó `Leche entera larga vida 1L` y no incluyó `PrismaClientInitializationError`.
-  - `/api/search?q=yerba&limit=1` respondió 200 con `Yerba mate suave 1kg` y no incluyó error Prisma.
-  - screenshot: `C:\Users\picala\AppData\Local\Temp\ofertas-super-search-leche-1365x900.png`
+  - accepted preview: `docs/design/canasta-inteligente-preview-2026-05-16.png`
+  - desktop screenshot inicial: `C:\Users\picala\AppData\Local\Temp\ofertas-super-home-desktop-1536x960.png`
+  - mobile screenshot inicial: `C:\Users\picala\AppData\Local\Temp\ofertas-super-home-mobile-390x900.png`
+  - final home screenshot: `C:\Users\picala\AppData\Local\Temp\ofertas-super-home-final-1365x900.png`
+- QA b?squeda con dev server local `http://127.0.0.1:3033/` y Edge headless:
+  - `/` respondi? 200 y contiene la home aprobada.
+  - `/buscar?q=leche` respondi? 200, mostr? resultados y no incluy? `PrismaClientInitializationError`.
+  - `/api/search?q=yerba&limit=1` respondi? 200 con `items` y no incluy? error Prisma.
+  - final search screenshot: `C:\Users\picala\AppData\Local\Temp\ofertas-super-search-final-1365x900.png`
 
-## Comparación visual
+## Comparaci?n visual
 
-- Header: respeta marca, nav `Inicio`, `Buscar`, `Ofertas`, `Canasta` y acción `Ver canasta`.
-- Hero: mantiene búsqueda primero, H1 aprobado, CTA y chips rápidos.
+- Header: respeta marca, nav `Inicio`, `Buscar`, `Ofertas`, `Canasta` y acci?n `Ver canasta`.
+- Hero: mantiene b?squeda primero, H1 aprobado, CTA y chips r?pidos.
 - Canasta inteligente: queda como firma visual con productos, ranking, cobertura y estado humano.
-- Resultados: usa filas/cards de producto funcionales, sin virar a ecommerce genérico.
+- Resultados: usa filas/cards de producto funcionales, sin virar a ecommerce gen?rico.
 - Mercado vivo: se mantiene liviano y secundario.
 - Diferencia intencional: thumbnails de producto son miniaturas code-native o placeholder `Sin foto`, no packshots reales.
 
 ## Riesgos / pendientes
 
-- Supabase/Prisma sigue tratado como dependencia externa: en local puede no estar alcanzable, por eso el catálogo público ahora falla abierto con fallback demo.
-- Falta ordenar el resto del working tree en commits separados: admin, producto profundo, canasta profunda, categorías/ofertas, ingesta, scripts, docs operativos, assets PWA y tests heredados.
-- No se corrió build por restricción explícita del objetivo.
+- Supabase/Prisma sigue tratado como dependencia externa: en local puede no estar alcanzable, por eso la b?squeda p?blica falla abierto con fallback demo.
+- Producto profundo, canasta profunda, admin e ingesta quedaron ordenados en commits, pero no tienen QA E2E exhaustiva en este goal.
+- No se corri? build por restricci?n expl?cita del objetivo.
