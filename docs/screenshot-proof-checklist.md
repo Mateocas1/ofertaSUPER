@@ -1,44 +1,27 @@
 # Screenshot proof checklist
 
-Este checklist define qué capturar para usar `ofertasSUPER` como evidencia recruiter-facing sin vender datos demo como datos reales.
+Screenshots in this repo are evidence artifacts. They must be tied to a dated report and must not imply production readiness by themselves.
 
-## Regla principal
+## Fresh screenshots from current readiness goal
 
-No usar screenshots de rutas dependientes de DB como “evidencia real” hasta que Supabase conecte y `ingest --dry-run` o datos existentes estén verificados. La screenshot actual de home fallback sirve para demostrar resiliencia de UI, no ingesta productiva.
-
-## Screenshot actual disponible
-
-| Ruta | Archivo | Uso permitido |
-|---|---|---|
-| `/` con Supabase no disponible | `docs/screenshots/home-demo-fallback-2026-05-14.png` | Demo fallback/resiliencia, no datos scrapeados reales |
-| `/buscar?q=leche` con Supabase activo | `docs/screenshots/search-leche-real-2026-05-15.png` | Evidencia real de busqueda/listado |
-| `/producto/7790387800197` con Supabase activo | `docs/screenshots/product-7790387800197-comparison-2026-05-15.png` | Evidencia real de detalle/comparativa |
-| `/canasta` con Supabase activo | `docs/screenshots/cart-real-products-2026-05-15.png` | Evidencia real de canasta local con producto, precios y totales por supermercado |
-
-## Capturas pendientes con datos reales
-
-| Prioridad | Ruta | Evidencia que debe mostrar | Condición previa |
+| Route | File | Evidence report | Use permitted |
 |---|---|---|---|
-| P1 | `/buscar?q=leche` | Resultados reales de supermercado, precios y fuente | Hecho |
-| P1 | `/producto/[ean]` | Comparativa por supermercado, precio vigente, historial si existe | Hecho para EAN `7790387800197` |
-| P1 | `/canasta` | Canasta con producto real y totales por supermercado | Hecho para EAN `7790387800197`; la API `/api/products/[ean]` responde 200 tras fallback Redis/rate-limit |
-| P2 | `/ofertas` | Promos o descuentos reales/manuales | Datos de promos presentes |
-| P2 | `/admin/promociones` | CRUD/admin protegido | Clerk admin validado en entorno seguro |
+| `/` | `docs/screenshots/readiness-public-home-2026-05-17.png` | Gate 5 | Public smoke / home proof |
+| `/buscar?q=leche` | `docs/screenshots/readiness-public-search-2026-05-17.png` | Gate 5 | Public smoke / search proof |
+| `/canasta` | `docs/screenshots/readiness-public-canasta-2026-05-17.png` | Gate 5 | Public smoke / basket shell proof |
 
-## Criterio de aceptación
+## Rules
 
-- [ ] La ruta responde 200.
-- [ ] La captura no depende del fallback demo.
-- [ ] Se ve al menos una fuente/supermercado real.
-- [ ] El archivo queda en `docs/screenshots/`.
-- [ ] El README o readiness doc aclara si la captura es demo, real o admin.
-- [ ] No hay datos sensibles visibles.
+- Do not call screenshots production evidence unless deploy, secrets, DB, and admin gates are closed.
+- If a screenshot depends on fallback/demo behavior, say so in the report or README.
+- Keep sensitive data out of screenshots.
+- Prefer date-stamped filenames and a matching report under `docs/reports/production-readiness/`.
 
-## Nombres sugeridos
+## Future captures
 
-- `search-leche-real-YYYY-MM-DD.png`
-- `product-<ean>-comparison-YYYY-MM-DD.png`
-- `cart-real-products-YYYY-MM-DD.png`
-- `offers-real-YYYY-MM-DD.png`
-- `admin-promotions-safe-YYYY-MM-DD.png`
-
+| Priority | Route | Condition before capture |
+|---|---|---|
+| P1 | `/producto/[ean]` | EAN discovered from API or DB-backed search in the same run |
+| P1 | `/categoria/[slug]` | Slug discovered from `/api/categories` in the same run |
+| P2 | `/ofertas` | Promotions/discounts seeded or present |
+| P2 | `/admin/promociones` | Authenticated admin session in a safe environment |

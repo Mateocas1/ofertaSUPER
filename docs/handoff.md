@@ -1,3 +1,11 @@
+# Stage-gated production readiness - Gate 8 Portfolio proof pack GREEN - 2026-05-17
+
+- README refreshed with current stack, evidence links, architecture map, verification commands, screenshots, and honest claim boundary.
+- `docs/repo-publication-checklist.md` and `docs/screenshot-proof-checklist.md` now point to current dated readiness evidence.
+- No badges or production/deploy-ready claims were added.
+- Evidence: `docs/reports/production-readiness/2026-05-17-gate8-github-portfolio-proof-pack.md`.
+
+---
 # Stage-gated production readiness - Gate 7 Complexity scan GREEN - 2026-05-17
 
 - Report-only complexity scan completed across catalog, search, canasta, ingestion, pipeline, and VTEX code.

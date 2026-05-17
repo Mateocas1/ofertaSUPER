@@ -1,54 +1,49 @@
-# ofertasSUPER — repo publication checklist
+# ofertasSUPER - portfolio / GitHub proof checklist
 
-Este checklist existe para que el repo pueda mostrarse públicamente sin mezclar evidencia real con ruido de working tree.
+This checklist is for publishing the repository as honest portfolio evidence. It is not a production launch checklist.
 
-## Estado actual
+## Current publish posture
 
-No publicar ni linkear el repo como evidencia principal hasta cerrar esta higiene mínima:
+- The repo can be presented as a serious full-stack portfolio project with documented gates and evidence.
+- It must not be described as production-ready or deploy-ready.
+- The exact state lives in `docs/handoff.md` and `docs/reports/production-readiness/`.
 
-- [x] Revisar el working tree completo con `git status --short`.
-- [ ] Separar cambios propios del proyecto vs. artefactos generados.
-- [x] Confirmar que `temp-init/` ya no existe en el working tree; quedan sus bajas en Git y hay que commitearlas o revertirlas deliberadamente.
-- [x] Decidir si los service workers en `public/*.js` son artefactos generados o assets versionados: se tratan como generados y se ignoran en `.gitignore`.
-- [x] Quitar `jaja.txt`: contenía una nota suelta de runbook y no debía publicarse como evidencia.
-- [ ] Commit claro con mensaje convencional.
-- [ ] README final sin claims de producción no verificados.
-- [x] `.env.example` safe agregado con placeholders y sin secretos reales.
-- [x] Admin fail-closed por allowlist `ADMIN_EMAILS` o metadata Clerk `role=admin`, aplicado a paginas y APIs `/api/admin`.
-- [ ] Screenshots en `docs/screenshots/` actualizados.
-- [x] Crear plan de commits/review para partir el working tree grande: `docs/repo-review-plan.md`.
-- [x] Crear checklist de screenshots reales vs fallback: `docs/screenshot-proof-checklist.md`.
+## Required proof pack
 
-Snapshot de ruido actual:
+| Item | Status | Evidence |
+|---|---|---|
+| Clean, honest README | Done | `README.md` |
+| Stage-gated readiness evidence | Done | `docs/reports/production-readiness/` |
+| Fresh screenshots | Done | `docs/screenshots/readiness-public-*-2026-05-17.png` |
+| Env example without real secrets | Done | `.env.example` |
+| Build/PWA checked | Done | Gate 2 report |
+| Public smoke checked | Done | Gate 5 report |
+| Admin fail-closed checked | Done | Gate 6 report |
+| Complexity risks documented | Done | Gate 7 report |
+| External deploy/dashboard secrets verified | Pending | Requires GitHub/Vercel/Clerk/Upstash/Supabase dashboards |
+| Supabase direct migration readiness | Pending | Gate 1 is `BLOCKED_APPROVED` |
 
-- `jaja.txt` fue eliminado porque era nota temporal, no artefacto de producto.
-- `public/sw.js`, `public/workbox-*.js`, `public/fallback-*.js` y `public/swe-worker-*.js` se tratan como artefactos PWA/generados y quedaron ignorados.
-- `.github/`, `prisma/`, `scripts/`, `src/app/api/`, rutas públicas/admin y `tests/` son cambios sustantivos del proyecto; separarlos en commits revisables.
+## Claims allowed
 
-## Cambios recientes que sí son defendibles
+- Full-stack supermarket price comparison project.
+- Search-first UX, product comparison, local basket, offers/category/product surfaces.
+- Prisma/Supabase catalog model and VTEX ingestion tooling.
+- Readiness gates with real logs/screenshots.
+- Admin access policy fails closed by allowlist or Clerk admin role.
 
-| Área | Archivos |
-|---|---|
-| VTEX/SHA256 | `src/lib/vtex/client.ts`, `src/lib/vtex/encode.ts`, `scripts/probe-vtex.ts`, `tests/vtex.test.ts` |
-| Demo fallback | `src/lib/safe-data.ts`, `src/lib/demo-data.ts`, `src/app/page.tsx`, `docs/screenshots/home-demo-fallback-2026-05-14.png` |
-| Calidad | `package.json`, `eslint.config.mjs`, `tests/vtex.test.ts` |
-| Docs | `README.md`, `docs/production-readiness-vtex.md`, `docs/repo-publication-checklist.md` |
-| DB blocker | `docs/supabase-connection-runbook.md` |
-| Review plan | `docs/repo-review-plan.md` |
-| Screenshot proof | `docs/screenshot-proof-checklist.md` |
+## Claims forbidden
 
-## Claims permitidos si se publica hoy
+- Production-ready.
+- Deploy-ready.
+- Complete E2E coverage.
+- Active ingestion approved or running in production.
+- Production Clerk/admin fully validated.
+- Supabase migrations fully healthy while Gate 1 remains `BLOCKED_APPROVED`.
 
-- “Tiene pipeline VTEX/SHA256 server-side implementado a nivel código.”
-- “El probe VTEX para todas las fuentes configuradas devolvió `isHealthy=true`, `hashValid=true` y 3 productos por fuente con red externa.”
-- “Tiene tests iniciales para request VTEX y normalización.”
-- “Tiene lint/typecheck limpios.”
-- “La home tiene fallback demo representativo para no romper demo si Supabase está caído.”
+## Reviewer path
 
-## Claims prohibidos hoy
-
-- “Producción lista.”
-- “Scraper/ingesta DB verificados en vivo.”
-- “Deploy cerrado.”
-- “Cobertura completa.”
-- “Repo limpio/listo para review pública.”
+1. Read `README.md`.
+2. Open `docs/handoff.md` for latest status.
+3. Check `docs/reports/production-readiness/2026-05-17-gate5-public-e2e-smoke.md` for public smoke.
+4. Check `docs/screenshots/readiness-public-home-2026-05-17.png` and search/canasta screenshots.
+5. Check pending items before making any launch claim.
