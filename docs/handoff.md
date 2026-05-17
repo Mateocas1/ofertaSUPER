@@ -1,3 +1,11 @@
+# Stage-gated production readiness - Final audit GREEN - 2026-05-17
+
+- Final verification passed: `npm test` 21/21, `npm run typecheck` OK, `npm run lint` OK, `npm run build` OK with PWA enabled.
+- All phases are either `GREEN` or explicitly approved as `BLOCKED_APPROVED`; only Gate 1/Supabase direct migrations remains `BLOCKED_APPROVED`.
+- The repo is portfolio/GitHub-ready with honest boundaries, not production-ready or deploy-ready.
+- Evidence: `docs/reports/production-readiness/2026-05-17-final-readiness-audit.md` and final command logs.
+
+---
 # Stage-gated production readiness - Gate 8 Portfolio proof pack GREEN - 2026-05-17
 
 - README refreshed with current stack, evidence links, architecture map, verification commands, screenshots, and honest claim boundary.
