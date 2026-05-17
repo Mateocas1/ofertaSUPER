@@ -26,6 +26,10 @@
 - `b5855a4 feat(search): add fail-open search route`
 - `b58c1d1 feat(vtex): add request encoding and normalization`
 - `a87824c feat(admin): add access policy guard`
+- `a85dd52 feat(pwa): add app manifest assets`
+- `bb4e5cf docs(repo): add publication readiness checks`
+- `1f444b3 docs(ops): add release follow-up runbook`
+- `c21eed1 docs(readme): describe current project scope honestly`
 
 ## Verificación ejecutada
 
