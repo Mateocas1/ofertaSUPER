@@ -1,0 +1,89 @@
+{
+    "baseUrl":  "http://127.0.0.1:3036",
+    "serverPid":  10928,
+    "startedAt":  "2026-05-17T00:25:56.4661274-03:00",
+    "browserFallback":  "Browser plugin runtime tool not exposed; used bounded local HTTP checks plus local Chromium-family headless screenshots.",
+    "routes":  [
+                   {
+                       "path":  "/",
+                       "status":  200,
+                       "ok":  true,
+                       "note":  "200 without obvious framework/Prisma error text"
+                   },
+                   {
+                       "path":  "/buscar?q=leche",
+                       "status":  200,
+                       "ok":  true,
+                       "note":  "200 without obvious framework/Prisma error text"
+                   },
+                   {
+                       "path":  "/canasta",
+                       "status":  200,
+                       "ok":  true,
+                       "note":  "200 without obvious framework/Prisma error text"
+                   },
+                   {
+                       "path":  "/ofertas",
+                       "status":  200,
+                       "ok":  true,
+                       "note":  "200 without obvious framework/Prisma error text"
+                   },
+                   {
+                       "path":  "/api/search?q=yerba\u0026limit=1",
+                       "status":  200,
+                       "ok":  true,
+                       "note":  "items=1; ean=7790710334757"
+                   },
+                   {
+                       "path":  "/producto/7790710334757",
+                       "status":  200,
+                       "ok":  true,
+                       "note":  "200 without obvious framework/Prisma error text"
+                   },
+                   {
+                       "path":  "/api/categories",
+                       "status":  200,
+                       "ok":  true,
+                       "note":  "slug=desayuno-y-merienda"
+                   },
+                   {
+                       "path":  "/categoria/desayuno-y-merienda",
+                       "status":  200,
+                       "ok":  true,
+                       "note":  "200 without obvious framework/Prisma error text"
+                   }
+               ],
+    "discovered":  {
+                       "searchItemCount":  1,
+                       "productEan":  "7790710334757",
+                       "categorySlug":  "desayuno-y-merienda"
+                   },
+    "screenshots":  [
+                        {
+                            "path":  "/",
+                            "file":  "docs\\screenshots\\readiness-public-home-2026-05-17.png",
+                            "exitCode":  0,
+                            "exists":  true,
+                            "bytes":  203142,
+                            "viewport":  "1365,900"
+                        },
+                        {
+                            "path":  "/buscar?q=leche",
+                            "file":  "docs\\screenshots\\readiness-public-search-2026-05-17.png",
+                            "exitCode":  0,
+                            "exists":  true,
+                            "bytes":  173930,
+                            "viewport":  "1365,900"
+                        },
+                        {
+                            "path":  "/canasta",
+                            "file":  "docs\\screenshots\\readiness-public-canasta-2026-05-17.png",
+                            "exitCode":  0,
+                            "exists":  true,
+                            "bytes":  38795,
+                            "viewport":  "390,900"
+                        }
+                    ],
+    "stoppedAt":  "2026-05-17T00:26:24.7155832-03:00",
+    "browserPath":  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
+}

@@ -1,0 +1,10 @@
+
+> ofertas-super@0.1.0 start
+> next start --hostname 127.0.0.1 --port 3036
+
+   ▲ Next.js 15.5.14
+   - Local:        http://127.0.0.1:3036
+   - Network:      http://127.0.0.1:3036
+
+ ✓ Starting...
+ ✓ Ready in 723ms

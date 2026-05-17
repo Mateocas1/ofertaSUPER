@@ -1,3 +1,13 @@
+# Stage-gated production readiness - Gate 5 Public smoke GREEN - 2026-05-17
+
+- Local production server on `127.0.0.1:3036` returned 200 for `/`, `/buscar?q=leche`, `/api/search?q=yerba&limit=1`, `/producto/7790710334757`, `/canasta`, `/ofertas`, `/api/categories`, and `/categoria/desayuno-y-merienda`.
+- Product EAN and category slug were discovered from API responses during the run.
+- Three screenshots were captured under `docs/screenshots/`; server listener was stopped after smoke.
+- Browser plugin runtime tool was not exposed, so the fallback was bounded local HTTP checks plus headless Edge screenshots.
+- Evidence: `docs/reports/production-readiness/2026-05-17-gate5-public-e2e-smoke.md` and `docs/reports/production-readiness/2026-05-17-gate5-public-smoke.json`.
+- This is not full E2E coverage or production deploy validation.
+
+---
 # Stage-gated production readiness - Gate 4 Ingesta controlada GREEN - 2026-05-17
 
 - VTEX probe for `disco`/`leche`/`count=1` passed with `isHealthy=true`, `hashValid=true`, and `productsReturned=1`.
