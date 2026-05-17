@@ -1,3 +1,12 @@
+# Stage-gated production readiness - Gate 7 Complexity scan GREEN - 2026-05-17
+
+- Report-only complexity scan completed across catalog, search, canasta, ingestion, pipeline, and VTEX code.
+- No code optimization was applied.
+- No High finding was identified. Medium findings: canasta N+1 product fetch pattern and VTEX `queue.shift()` traversal worst-case.
+- Recommended future slice: batch product/basket endpoint before optimizing broader flows.
+- Evidence: `docs/reports/production-readiness/2026-05-17-gate7-complexity-report.md`.
+
+---
 # Stage-gated production readiness - Gate 6 Admin/Clerk GREEN - 2026-05-17
 
 - Admin access policy tests passed: `npx tsx --test tests/admin-access.test.ts` -> 4/4 pass.
