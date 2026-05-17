@@ -1,11 +1,20 @@
-# Stage-gated production readiness — Gate 1 STOPPED — 2026-05-17
+# Stage-gated production readiness - Gate 2 Build/PWA GREEN - 2026-05-17
 
-- Execution contract: `goal.md`.
-- Gate 0 passed: repo root confirmed, only expected input file was `goal.md`, `.env` and `.env.local` are ignored, and no stale dev Node process was found.
-- Fase 1 did not close green: `npx prisma validate --schema prisma/schema.prisma` passed, but `npx prisma migrate status --schema prisma/schema.prisma` failed with `P1001` because the direct Supabase host `db.gbpgqhasveytpptxsztw.supabase.co:5432` was not reachable.
-- Network split confirmed: runtime pooler `aws-1-sa-east-1.pooler.supabase.com:6543` is reachable; direct/admin host DNS fails.
-- Evidence: `docs/reports/production-readiness/2026-05-17-gate1-supabase-prisma.md`.
-- Required decision: fix Supabase/DIRECT_URL now, or explicitly mark Fase 1 as `BLOCKED_APPROVED` before continuing to Build/PWA.
+- `npm run build` completed with exit code `0`; PWA stayed enabled.
+- PWA generated `public/sw.js` with URL `/sw.js`, scope `/`, and offline fallback `/~offline`.
+- Static page generation completed `21/21`.
+- Remaining warnings: Next.js workspace-root inference due parent `pnpm-lock.yaml`, and non-blocking webpack cache big-string warning.
+- `DISABLE_PWA=true npm run build` was not run because the normal build passed.
+- Evidence: `docs/reports/production-readiness/2026-05-17-gate2-build-pwa.md` and `docs/reports/production-readiness/2026-05-17-gate2-build-normal.log`.
+- This does not close Supabase direct migrations, deploy secrets, active ingestion, production Clerk, or deep E2E.
+
+---
+# Stage-gated production readiness - Gate 1 BLOCKED_APPROVED - 2026-05-17
+
+- User explicitly authorized deferring Supabase/DIRECT_URL with: `autorizo`.
+- Fase 1 remains technically unresolved: `npx prisma migrate status --schema prisma/schema.prisma` still fails with `P1001` for direct Supabase host reachability.
+- This approval only allows sequencing into Fase 2 Build/PWA; it does not allow production-ready/deploy-ready claims.
+- Evidence updated: `docs/reports/production-readiness/2026-05-17-gate1-supabase-prisma.md`.
 
 ---
 # Continuity readiness checkpoint â€” 2026-05-17

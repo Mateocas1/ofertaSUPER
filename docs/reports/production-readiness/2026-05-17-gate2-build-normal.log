@@ -1,0 +1,105 @@
+COMMAND: npm run build
+START: 2026-05-17T00:12:54.1247437-03:00
+
+> ofertas-super@0.1.0 build
+> next build
+
+node.exe :  �& Warning: Next.js inferred your workspace root, but it may not be correct.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( �& Warning: Nex...not be correct.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+ We detected multiple lockfiles and selected the directory of C:\Users\picala\pnpm-lock.yaml as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles:
+   * C:\Users\picala\Documents\ofertasSUPER\package-lock.json
+
+   �% Next.js 15.5.14
+   - Environments: .env.local, .env
+
+   Creating an optimized production build ...
+ ' (pwa) Compiling for server...
+ ' (pwa) Compiling for server...
+ ' (pwa) Compiling for client (static)...
+ �% (pwa) Service worker: C:\Users\picala\Documents\ofertasSUPER\public\sw.js
+ �% (pwa)   URL: /sw.js
+ �% (pwa)   Scope: /
+ �% (pwa) This app will fallback to these precached routes when fetching from the cache and the network fails:
+ �% (pwa)   Documents (pages): /~offline
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (194kiB) impacts deserialization performance (consider using Buffer instead and decode when
+needed)
+ ' Compiled successfully in 7.2s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/21) ...
+   Generating static pages (5/21)
+   Generating static pages (10/21)
+   Generating static pages (15/21)
+ ' Generating static pages (21/21)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS  Revalidate  Expire
+
+% �% /                                      169 B         108 kB          6h      1y
+
+% �% /_not-found                            999 B         105 kB
+
+% �% /~offline                              169 B         108 kB
+
+% � /admin                                 169 B         108 kB
+
+% � /admin/ingestion                       152 B         105 kB
+
+% � /admin/promociones                     183 B         146 kB
+
+% � /admin/promociones/nueva               165 B         143 kB
+
+% � /api/admin/ingestion                   152 B         105 kB
+
+% � /api/admin/promotions                  152 B         105 kB
+
+% � /api/admin/promotions/[id]             152 B         105 kB
+
+% � /api/categories                        152 B         105 kB
+
+% � /api/products                          152 B         105 kB
+
+% � /api/products/[ean]                    152 B         105 kB
+
+% � /api/products/[ean]/history            152 B         105 kB
+
+% � /api/promotions                        152 B         105 kB
+
+% � /api/search                            152 B         105 kB
+
+% � /buscar                              4.99 kB         127 kB
+
+% �% /canasta                              6.2 kB         129 kB
+
+% � /categoria/[slug]                     2.7 kB         125 kB
+
+% � /ofertas                              2.7 kB         125 kB
+
+% � /producto/[ean]                      4.96 kB         121 kB
+
+% �% /robots.txt                            152 B         105 kB
+% �% /sitemap.xml                           152 B         105 kB          6h      1y
++ First Load JS shared by all             104 kB
+
+% chunks/4bd1b696-409494caf8c83275.js  54.2 kB
+
+% chunks/696-ebc01577b11d9bfe.js       48.1 kB
+  % other shared chunks (total)          2.09 kB
+
+
+� Middleware                               86 kB
+
+�%  (Static)   prerendered as static content
+�  (Dynamic)  server-rendered on demand
+
+EXIT_CODE: 0
+END: 2026-05-17T00:13:11.2881174-03:00

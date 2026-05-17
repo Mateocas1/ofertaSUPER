@@ -1,6 +1,6 @@
 # Gate 1 — Supabase / Prisma / migrations readiness — 2026-05-17
 
-Status: `STOPPED`
+Status: `BLOCKED_APPROVED`
 
 This gate was executed from `goal.md` as the first production/portfolio readiness phase. It is not green because the direct Supabase/admin connection still fails.
 
@@ -58,3 +58,11 @@ The schema is valid and the runtime/pooler endpoint is reachable, but direct/adm
 ## Required decision before Fase 2
 
 Per `goal.md`, do not continue to Build/PWA unless the user explicitly approves marking Fase 1 as `BLOCKED_APPROVED`, or the direct Supabase issue is fixed and `npx prisma migrate status --schema prisma/schema.prisma` passes.
+
+## User approval
+
+The user explicitly authorized deferring this phase and advancing:
+
+> autorizo
+
+Fase 1 remains unresolved technically, but is approved as `BLOCKED_APPROVED` for sequencing purposes. Direct Supabase/admin migration readiness must still be fixed before any production-ready/deploy-ready claim.
