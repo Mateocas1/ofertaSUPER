@@ -1,4 +1,14 @@
-# Continuity readiness checkpoint — 2026-05-17
+# Stage-gated production readiness — Gate 1 STOPPED — 2026-05-17
+
+- Execution contract: `goal.md`.
+- Gate 0 passed: repo root confirmed, only expected input file was `goal.md`, `.env` and `.env.local` are ignored, and no stale dev Node process was found.
+- Fase 1 did not close green: `npx prisma validate --schema prisma/schema.prisma` passed, but `npx prisma migrate status --schema prisma/schema.prisma` failed with `P1001` because the direct Supabase host `db.gbpgqhasveytpptxsztw.supabase.co:5432` was not reachable.
+- Network split confirmed: runtime pooler `aws-1-sa-east-1.pooler.supabase.com:6543` is reachable; direct/admin host DNS fails.
+- Evidence: `docs/reports/production-readiness/2026-05-17-gate1-supabase-prisma.md`.
+- Required decision: fix Supabase/DIRECT_URL now, or explicitly mark Fase 1 as `BLOCKED_APPROVED` before continuing to Build/PWA.
+
+---
+# Continuity readiness checkpoint â€” 2026-05-17
 
 This checkpoint is for safe continuation only. It is not a production-ready or deploy-ready sign-off.
 
@@ -13,11 +23,11 @@ This checkpoint is for safe continuation only. It is not a production-ready or d
 
 ## New artifacts
 
-- `docs/continuity-readiness-runbook.md` — continuity runbook, gate evidence, blockers, and prompt-to-artifact map.
-- `docs/continuity-readiness-goal.md` — preserved execution prompt from the root `goal.md` input artifact.
-- `docs/reports/readiness/continuity-readiness-2026-05-17.json` — raw evidence snapshot without secrets.
-- `docs/screenshots/readiness-home-2026-05-17.png` — home smoke screenshot.
-- `docs/screenshots/readiness-search-2026-05-17.png` — search smoke screenshot.
+- `docs/continuity-readiness-runbook.md` â€” continuity runbook, gate evidence, blockers, and prompt-to-artifact map.
+- `docs/continuity-readiness-goal.md` â€” preserved execution prompt from the root `goal.md` input artifact.
+- `docs/reports/readiness/continuity-readiness-2026-05-17.json` â€” raw evidence snapshot without secrets.
+- `docs/screenshots/readiness-home-2026-05-17.png` â€” home smoke screenshot.
+- `docs/screenshots/readiness-search-2026-05-17.png` â€” search smoke screenshot.
 
 ## Still not closed
 
