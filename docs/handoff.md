@@ -1,3 +1,31 @@
+# Continuity readiness checkpoint — 2026-05-17
+
+This checkpoint is for safe continuation only. It is not a production-ready or deploy-ready sign-off.
+
+## What was verified now
+
+- Repo safety: root confirmed at `C:/Users/picala/Documents/ofertasSUPER`; `.env` and `.env.local` are ignored; no unexpected dev Node process was running before smoke.
+- Prisma: `npx prisma validate --schema prisma/schema.prisma` passed. `npx prisma migrate status --schema prisma/schema.prisma` did not pass because the direct Supabase host was not reachable (`P1001`).
+- Supabase network split: direct host `db.gbpgqhasveytpptxsztw.supabase.co:5432` failed name resolution; pooler host `aws-1-sa-east-1.pooler.supabase.com:6543` accepted TCP.
+- VTEX probe: `npm run probe:vtex -- --source=disco --query=leche --count=1` passed with `isHealthy=true`, `hashValid=true`, `productsReturned=1`.
+- Ingestion dry-run: `INGESTION_V2=shadow npm run ingest -- --dry-run --source=disco --limit=1` passed with `sourceCount=1`, `fetched=6`, `staged=6`, `promoted=0`, `failedSources=0`.
+- Public smoke: local dev server on `127.0.0.1:3035` returned 200 for `/`, `/buscar?q=leche`, `/api/search?q=yerba&limit=1`, `/producto/7790710334757`, and `/canasta`, with no visible Prisma/framework error in checked content.
+
+## New artifacts
+
+- `docs/continuity-readiness-runbook.md` — continuity runbook, gate evidence, blockers, and prompt-to-artifact map.
+- `docs/continuity-readiness-goal.md` — preserved execution prompt from the root `goal.md` input artifact.
+- `docs/reports/readiness/continuity-readiness-2026-05-17.json` — raw evidence snapshot without secrets.
+- `docs/screenshots/readiness-home-2026-05-17.png` — home smoke screenshot.
+- `docs/screenshots/readiness-search-2026-05-17.png` — search smoke screenshot.
+
+## Still not closed
+
+- No build was run by contract.
+- Direct Supabase/admin migration readiness is not closed until `npx prisma migrate status --schema prisma/schema.prisma` succeeds.
+- Build/PWA, GitHub secrets, Clerk production auth, active ingestion, multi-source ingestion, and deep E2E remain pending.
+
+---
 # ofertasSUPER handoff
 
 ?ltima actualizaci?n: 2026-05-16

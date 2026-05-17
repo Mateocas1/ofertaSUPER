@@ -1,0 +1,76 @@
+{
+  "date": "2026-05-17",
+  "scope": "continuity readiness, not production readiness",
+  "repo": "C:/Users/picala/Documents/ofertasSUPER",
+  "commands": {
+    "gate0": {
+      "repoRoot": "C:/Users/picala/Documents/ofertasSUPER",
+      "branch": "master",
+      "statusBeforeDocs": "?? goal.md",
+      "expectedUntrackedInput": "goal.md",
+      "envIgnored": [".env", ".env.local"],
+      "trackedEnvFiles": [".env.example"],
+      "unexpectedDevProcesses": []
+    },
+    "prismaValidate": {
+      "command": "npx prisma validate --schema prisma/schema.prisma",
+      "exitCode": 0,
+      "result": "schema valid",
+      "warning": "package.json#prisma is deprecated for Prisma 7"
+    },
+    "prismaMigrateStatus": {
+      "command": "npx prisma migrate status --schema prisma/schema.prisma",
+      "exitCode": 1,
+      "result": "P1001 cannot reach direct database host db.gbpgqhasveytpptxsztw.supabase.co:5432"
+    },
+    "supabaseNetwork": {
+      "directHost5432": false,
+      "directHostReason": "name resolution failed",
+      "poolerHost6543": true
+    },
+    "vtexProbe": {
+      "command": "npm run probe:vtex -- --source=disco --query=leche --count=1",
+      "exitCode": 0,
+      "source": "disco",
+      "isHealthy": true,
+      "hashValid": true,
+      "productsReturned": 1,
+      "responseTimeMs": 3044
+    },
+    "ingestDryRun": {
+      "command": "INGESTION_V2=shadow npm run ingest -- --dry-run --source=disco --limit=1",
+      "exitCode": 0,
+      "mode": "shadow",
+      "dryRun": true,
+      "sourceCount": 1,
+      "fetched": 6,
+      "staged": 6,
+      "promoted": 0,
+      "rejected": 0,
+      "failedSources": 0,
+      "note": "Dry-run still reads Supabase and hits VTEX. It fetched 6 products because stage count defaults to 50 even with one query term."
+    },
+    "publicSmoke": {
+      "port": 3035,
+      "homeStatus": 200,
+      "searchStatus": 200,
+      "apiSearchStatus": 200,
+      "apiHasItems": true,
+      "sampleEan": "7790710334757",
+      "productStatus": 200,
+      "basketStatus": 200,
+      "visibleErrors": false,
+      "screenshots": [
+        "docs/screenshots/readiness-home-2026-05-17.png",
+        "docs/screenshots/readiness-search-2026-05-17.png"
+      ]
+    }
+  },
+  "notRun": [
+    "npm run build",
+    "INGESTION_V2=active",
+    "multi-source ingestion",
+    "DB write smoke tests",
+    "deep E2E for product/canasta/admin/ingestion"
+  ]
+}
