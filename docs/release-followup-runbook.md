@@ -1,3 +1,8 @@
+# Current status note - 2026-05-17
+
+The historical PWA/build blocker described below was rechecked by `goal.md` Gate 2 on 2026-05-17. `npm run build` passed with PWA enabled and exit code `0`; the current evidence is `docs/reports/production-readiness/2026-05-17-gate2-build-pwa.md`. Keep the old notes as historical context only.
+
+---
 # Release Follow-Up Runbook
 
 ## Objetivo

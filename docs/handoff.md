@@ -1,3 +1,13 @@
+# Stage-gated production readiness - Gate 3 Env/deploy/secrets audit GREEN - 2026-05-17
+
+- Repository-side env contract is documented in `.env.example` and Gate 3 report.
+- `.env` and `.env.local` are ignored; only `.env.example` is tracked.
+- GitHub workflow secret names and write risks are mapped without printing values.
+- Tracked-file secret scan found no real secret literals; only one safe placeholder DB URL in a test fixture.
+- External dashboards/secrets were not verified or changed, so this does not allow deploy-ready/production-ready claims.
+- Evidence: `docs/reports/production-readiness/2026-05-17-gate3-env-deploy-secrets.md`.
+
+---
 # Stage-gated production readiness - Gate 2 Build/PWA GREEN - 2026-05-17
 
 - `npm run build` completed with exit code `0`; PWA stayed enabled.
