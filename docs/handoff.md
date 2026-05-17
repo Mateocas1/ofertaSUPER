@@ -24,6 +24,8 @@
 - `06ee3c5 feat(canasta): add persisted item controls`
 - `fe38d66 feat(search): add product result components`
 - `b5855a4 feat(search): add fail-open search route`
+- `b58c1d1 feat(vtex): add request encoding and normalization`
+- `a87824c feat(admin): add access policy guard`
 
 ## Verificación ejecutada
 
