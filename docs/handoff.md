@@ -1,3 +1,12 @@
+# Stage-gated production readiness - Gate 6 Admin/Clerk GREEN - 2026-05-17
+
+- Admin access policy tests passed: `npx tsx --test tests/admin-access.test.ts` -> 4/4 pass.
+- Local unauthenticated smoke blocked `/admin`, `/api/admin/promotions`, and `/api/admin/ingestion` with status `404`; no admin UI/data leaked.
+- No promotion write, temporary data creation, or cleanup was executed.
+- Authenticated admin session, production Clerk keys, and Clerk role/metadata setup remain external pending gates.
+- Evidence: `docs/reports/production-readiness/2026-05-17-gate6-admin-clerk-promotions.md`.
+
+---
 # Stage-gated production readiness - Gate 5 Public smoke GREEN - 2026-05-17
 
 - Local production server on `127.0.0.1:3036` returned 200 for `/`, `/buscar?q=leche`, `/api/search?q=yerba&limit=1`, `/producto/7790710334757`, `/canasta`, `/ofertas`, `/api/categories`, and `/categoria/desayuno-y-merienda`.

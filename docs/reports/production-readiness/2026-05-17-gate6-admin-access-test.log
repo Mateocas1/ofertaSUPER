@@ -1,0 +1,18 @@
+COMMAND: npx tsx --test tests/admin-access.test.ts
+START: 2026-05-17T00:28:20.3859254-03:00
+�% admin access policy
+  ' parses admin email allowlist case-insensitively (0.6935ms)
+  ' fails closed for authenticated users without an allowed email or admin role (0.1226ms)
+  ' allows users whose email is present in the configured allowlist (0.0789ms)
+  ' allows users with an explicit admin role in Clerk metadata (0.0712ms)
+' admin access policy (1.4728ms)
+9! tests 4
+9! suites 1
+9! pass 4
+9! fail 0
+9! cancelled 0
+9! skipped 0
+9! todo 0
+9! duration_ms 118.8711
+EXIT_CODE: 0
+END: 2026-05-17T00:28:20.9452473-03:00

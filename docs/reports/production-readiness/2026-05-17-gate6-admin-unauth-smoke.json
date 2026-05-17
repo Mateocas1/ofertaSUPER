@@ -1,0 +1,32 @@
+{
+    "baseUrl":  "http://127.0.0.1:3037",
+    "serverPid":  12984,
+    "startedAt":  "2026-05-17T00:28:43.1569311-03:00",
+    "checks":  [
+                   {
+                       "path":  "/admin",
+                       "method":  "GET",
+                       "status":  404,
+                       "ok":  true,
+                       "note":  "blocked unauthenticated access",
+                       "location":  ""
+                   },
+                   {
+                       "path":  "/api/admin/promotions",
+                       "method":  "GET",
+                       "status":  404,
+                       "ok":  true,
+                       "note":  "blocked unauthenticated access",
+                       "location":  ""
+                   },
+                   {
+                       "path":  "/api/admin/ingestion",
+                       "method":  "GET",
+                       "status":  404,
+                       "ok":  true,
+                       "note":  "blocked unauthenticated access",
+                       "location":  ""
+                   }
+               ],
+    "stoppedAt":  "2026-05-17T00:28:45.5031027-03:00"
+}
