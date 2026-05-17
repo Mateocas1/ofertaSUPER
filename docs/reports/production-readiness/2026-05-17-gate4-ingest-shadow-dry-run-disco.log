@@ -1,0 +1,53 @@
+COMMAND: INGESTION_V2=shadow npm run ingest -- --dry-run --source=disco --limit=1
+START: 2026-05-17T00:21:28.0055142-03:00
+
+> ofertas-super@0.1.0 ingest
+> tsx scripts/ingest.ts --dry-run --source=disco --limit=1
+
+{
+  "batchId": "9bb330a0-ca7e-4520-9db5-c41dbcbc0dcd",
+  "mode": "shadow",
+  "dryRun": true,
+  "timing": {
+    "totalPipelineMs": 4524,
+    "reconcileMs": 0
+  },
+  "sourceCount": 1,
+  "totals": {
+    "fetched": 6,
+    "staged": 6,
+    "promoted": 0,
+    "rejected": 0,
+    "failedSources": 0
+  },
+  "reconciliation": null,
+  "metrics": null,
+  "sources": [
+    {
+      "slug": "disco",
+      "status": "SUCCESS",
+      "timing": {
+        "healthMs": 1549,
+        "stageMs": 2351,
+        "validateMs": 183,
+        "reconcileMs": 0,
+        "totalMs": 4083
+      },
+      "queriesSent": 1,
+      "productsFetched": 6,
+      "productsStaged": 6,
+      "productsPromoted": 0,
+      "productsRejected": 0,
+      "errorSummary": null,
+      "health": {
+        "isHealthy": true,
+        "hashValid": true,
+        "errorType": null,
+        "responseTimeMs": 1546,
+        "productsReturned": 5
+      }
+    }
+  ]
+}
+EXIT_CODE: 0
+END: 2026-05-17T00:21:32.9772115-03:00

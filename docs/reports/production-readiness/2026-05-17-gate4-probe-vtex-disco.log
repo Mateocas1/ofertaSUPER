@@ -1,0 +1,24 @@
+COMMAND: npm run probe:vtex -- --source=disco --query=leche --count=1
+START: 2026-05-17T00:21:15.7335007-03:00
+
+> ofertas-super@0.1.0 probe:vtex
+> tsx scripts/probe-vtex.ts --source=disco --query=leche --count=1
+
+{
+  "query": "leche",
+  "count": 1,
+  "results": [
+    {
+      "source": "disco",
+      "baseUrl": "https://www.disco.com.ar",
+      "isHealthy": true,
+      "hashValid": true,
+      "errorType": null,
+      "responseTimeMs": 1184,
+      "productsReturned": 1,
+      "hash": "3eca26a4...4b0fb67d"
+    }
+  ]
+}
+EXIT_CODE: 0
+END: 2026-05-17T00:21:17.3297096-03:00

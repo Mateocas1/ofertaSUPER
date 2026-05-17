@@ -1,3 +1,12 @@
+# Stage-gated production readiness - Gate 4 Ingesta controlada GREEN - 2026-05-17
+
+- VTEX probe for `disco`/`leche`/`count=1` passed with `isHealthy=true`, `hashValid=true`, and `productsReturned=1`.
+- Shadow dry-run ingestion for `disco`/`limit=1` passed with `sourceCount=1`, `fetched=6`, dry-run staged metric `6`, `promoted=0`, `rejected=0`, `failedSources=0`.
+- No active ingestion, non-dry-run write, or multi-source command was executed.
+- Evidence: `docs/reports/production-readiness/2026-05-17-gate4-ingestion-controlled.md` plus the two Gate 4 logs.
+- Real writes still require explicit approval before running.
+
+---
 # Stage-gated production readiness - Gate 3 Env/deploy/secrets audit GREEN - 2026-05-17
 
 - Repository-side env contract is documented in `.env.example` and Gate 3 report.
