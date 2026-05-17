@@ -1,0 +1,46 @@
+name: Cleanup History
+
+on:
+  schedule:
+    - cron: "0 3 1 * *"
+  workflow_dispatch:
+
+jobs:
+  cleanup-history:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Cleanup price history
+        run: npm run cleanup:history
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+      - name: Cleanup staging
+        run: npm run cleanup:staging
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+      - name: Vacuum analyze
+        # VACUUM cannot run through the pgBouncer transaction-mode pooler (port 6543).
+        # We use psql with DIRECT_URL (port 5432) instead.
+        # Targets the tables with most dead tuples: price_history (monthly bulk deletes),
+        # products and supermarket_products (per-run UPDATEs during reconcile).
+        run: psql "$DIRECT_URL" -c "VACUUM ANALYZE price_history, products, supermarket_products;"
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}

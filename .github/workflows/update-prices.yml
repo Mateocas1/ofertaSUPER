@@ -1,0 +1,47 @@
+name: Update Prices
+
+on:
+  schedule:
+    - cron: "0 0,6,12,18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Update prices
+        id: update_prices
+        run: npm run update:prices
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          VTEX_SHA256_HASH: ${{ secrets.VTEX_SHA256_HASH }}
+
+      - name: Report scraper status
+        if: always()
+        run: npx tsx scripts/report-scraper-status.ts
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          SCRAPER_ALERT_WEBHOOK_URL: ${{ secrets.SCRAPER_ALERT_WEBHOOK_URL }}
+          SCRAPER_JOB_NAME: update-prices
+          SCRAPER_JOB_STATUS: ${{ steps.update_prices.outcome }}
