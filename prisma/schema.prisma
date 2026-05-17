@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum PromotionType {
+  TWO_FOR_ONE     @map("2x1")
+  SECOND_HALF     @map("2nd_50")
+  WALLET_DISCOUNT @map("wallet_discount")
+  BANK_DISCOUNT   @map("bank_discount")
+  PERCENTAGE      @map("percentage")
+}
+
+enum RunStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
+enum StagingStatus {
+  PENDING
+  PROMOTED
+  REJECTED
+  DUPLICATE
+}
+
+model Supermarket {
+  id                   Int                  @id @default(autoincrement())
+  name                 String
+  slug                 String               @unique
+  logo_url             String?
+  base_url             String
+  is_vtex              Boolean              @default(true)
+  is_active            Boolean              @default(true)
+  freshness_sla_hours  Int                  @default(12)
+  ingestion_runs       IngestionRun[]
+  supermarket_products SupermarketProduct[]
+  promotions           Promotion[]
+
+  @@map("supermarkets")
+}
+
+model Product {
+  ean                  String               @id
+  name                 String
+  brand                String?
+  description          String?
+  image_url            String?
+  images               String[]             @default([])
+  category             String?
+  supermarket_products SupermarketProduct[]
+  promotion_products   PromotionProduct[]
+
+  @@index([category])
+  @@index([brand])
+  @@map("products")
+}
+
+model SupermarketProduct {
+  id                Int               @id @default(autoincrement())
+  product_ean       String
+  supermarket_id    Int
+  price             Decimal?          @db.Decimal(10, 2)
+  list_price        Decimal?          @db.Decimal(10, 2)
+  reference_price   Decimal?          @db.Decimal(10, 2)
+  reference_unit    String?
+  is_available      Boolean           @default(true)
+  sku_id            String?
+  seller_id         String?
+  product_url       String?
+  last_checked_at   DateTime          @default(now())
+  product           Product           @relation(fields: [product_ean], references: [ean], onDelete: Cascade)
+  supermarket       Supermarket       @relation(fields: [supermarket_id], references: [id], onDelete: Cascade)
+  price_history     PriceHistory[]
+
+  @@unique([product_ean, supermarket_id])
+  @@index([supermarket_id])
+  @@index([last_checked_at])
+  @@map("supermarket_products")
+}
+
+model PriceHistory {
+  id                     Int                @id @default(autoincrement())
+  supermarket_product_id Int
+  price                  Decimal?           @db.Decimal(10, 2)
+  list_price             Decimal?           @db.Decimal(10, 2)
+  scraped_at             DateTime           @default(now())
+  supermarket_product    SupermarketProduct @relation(fields: [supermarket_product_id], references: [id], onDelete: Cascade)
+
+  @@index([supermarket_product_id, scraped_at])
+  @@index([scraped_at])
+  @@map("price_history")
+}
+
+model Promotion {
+  id                 Int                @id @default(autoincrement())
+  supermarket_id     Int
+  type               PromotionType
+  title              String
+  wallet_provider    String?
+  bank_name          String?
+  discount_value     Decimal?           @db.Decimal(10, 2)
+  conditions         String?
+  start_date         DateTime?
+  end_date           DateTime?
+  is_active          Boolean            @default(true)
+  supermarket        Supermarket        @relation(fields: [supermarket_id], references: [id], onDelete: Cascade)
+  promotion_products PromotionProduct[]
+
+  @@index([supermarket_id, is_active])
+  @@index([start_date, end_date])
+  @@map("promotions")
+}
+
+model PromotionProduct {
+  promotion_id Int
+  product_ean  String
+  product      Product   @relation(fields: [product_ean], references: [ean], onDelete: Cascade)
+  promotion    Promotion @relation(fields: [promotion_id], references: [id], onDelete: Cascade)
+
+  @@id([promotion_id, product_ean])
+  @@index([product_ean])
+  @@map("promotion_products")
+}
+
+model Category {
+  id        Int        @id @default(autoincrement())
+  name      String
+  slug      String     @unique
+  parent_id Int?
+  icon      String?
+  parent    Category?  @relation("CategoryTree", fields: [parent_id], references: [id], onDelete: SetNull)
+  children  Category[] @relation("CategoryTree")
+
+  @@index([parent_id])
+  @@map("categories")
+}
+
+model IngestionRun {
+  id                Int             @id @default(autoincrement())
+  batch_id          String
+  source_slug       String
+  supermarket_id    Int?
+  started_at        DateTime
+  finished_at       DateTime?
+  status            RunStatus       @default(RUNNING)
+  queries_sent      Int             @default(0)
+  products_fetched  Int             @default(0)
+  products_staged   Int             @default(0)
+  products_promoted Int             @default(0)
+  products_rejected Int             @default(0)
+  error_summary     String?
+  vtex_hash         String?
+  duration_ms       Int?
+  supermarket       Supermarket?    @relation(fields: [supermarket_id], references: [id], onDelete: SetNull)
+  staging_products  StagingProduct[]
+
+  @@index([batch_id])
+  @@index([source_slug, started_at])
+  @@map("ingestion_run")
+}
+
+model StagingProduct {
+  id              Int           @id @default(autoincrement())
+  run_id          Int
+  source_slug     String
+  ean             String
+  name            String
+  brand           String?
+  description     String?
+  image_url       String?
+  images          String[]      @default([])
+  category        String?
+  sku_id          String?
+  seller_id       String?
+  product_url     String?
+  price           Decimal?      @db.Decimal(10, 2)
+  list_price      Decimal?      @db.Decimal(10, 2)
+  reference_price Decimal?      @db.Decimal(10, 2)
+  reference_unit  String?
+  is_available    Boolean       @default(true)
+  quality_score   Float         @default(0)
+  quality_flags   Json?
+  status          StagingStatus @default(PENDING)
+  created_at      DateTime      @default(now())
+  run             IngestionRun  @relation(fields: [run_id], references: [id], onDelete: Cascade)
+
+  @@index([run_id])
+  @@index([ean, source_slug])
+  @@index([status])
+  @@index([created_at])
+  @@map("staging_product")
+}
+
+model SourceHealth {
+  id               Int      @id @default(autoincrement())
+  source_slug      String
+  checked_at       DateTime @default(now())
+  is_healthy       Boolean
+  response_time_ms Int
+  error_type       String?
+  hash_valid       Boolean
+  products_returned Int     @default(0)
+
+  @@index([source_slug, checked_at])
+  @@map("source_health")
+}
