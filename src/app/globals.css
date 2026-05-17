@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+  --font-heading: var(--font-ui);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,38 +49,40 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --font-ui: "Geist", "Satoshi", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-code: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --background: oklch(0.985 0.006 105);
+  --foreground: oklch(0.18 0.01 240);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.18 0.01 240);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --popover-foreground: oklch(0.18 0.01 240);
+  --primary: oklch(0.43 0.115 148);
+  --primary-foreground: oklch(0.99 0.004 120);
+  --secondary: oklch(0.955 0.006 110);
+  --secondary-foreground: oklch(0.22 0.015 240);
+  --muted: oklch(0.955 0.006 110);
+  --muted-foreground: oklch(0.48 0.018 250);
+  --accent: oklch(0.93 0.035 145);
+  --accent-foreground: oklch(0.25 0.055 148);
+  --destructive: oklch(0.58 0.18 25);
+  --border: oklch(0.88 0.008 110);
+  --input: oklch(0.89 0.006 110);
+  --ring: oklch(0.55 0.105 148);
+  --chart-1: oklch(0.48 0.12 148);
+  --chart-2: oklch(0.62 0.11 80);
+  --chart-3: oklch(0.52 0.11 250);
+  --chart-4: oklch(0.65 0.12 48);
+  --chart-5: oklch(0.58 0.14 20);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.985 0.006 105);
+  --sidebar-foreground: oklch(0.18 0.01 240);
+  --sidebar-primary: oklch(0.43 0.115 148);
+  --sidebar-primary-foreground: oklch(0.99 0.004 120);
+  --sidebar-accent: oklch(0.955 0.006 110);
+  --sidebar-accent-foreground: oklch(0.22 0.015 240);
+  --sidebar-border: oklch(0.88 0.008 110);
+  --sidebar-ring: oklch(0.55 0.105 148);
 }
 
 .dark {
@@ -121,10 +123,71 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
+
   html {
     @apply font-sans;
+    scroll-padding-top: 6rem;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    overflow-x: hidden;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(247, 248, 245, 0.96) 58%, rgba(247, 248, 245, 1) 100%);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-ui);
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 18%, white);
   }
 }
+
+@layer utilities {
+  .surface {
+    @apply rounded-[1rem] border border-border bg-card shadow-[0_18px_60px_rgba(31,41,55,0.08)];
+  }
+
+  .surface-soft {
+    @apply rounded-[0.9rem] border border-border bg-card shadow-[0_12px_36px_rgba(31,41,55,0.06)];
+  }
+
+  .skip-link {
+    @apply absolute left-4 top-4 z-[100] -translate-y-20 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg transition-transform focus:translate-y-0 focus:outline-none focus-visible:ring-3 focus-visible:ring-ring/50;
+  }
+
+  .animate-enter {
+    animation: enter-soft 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@keyframes enter-soft {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
