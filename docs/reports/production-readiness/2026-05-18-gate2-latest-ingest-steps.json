@@ -1,0 +1,74 @@
+[
+    {
+        "number":  1,
+        "name":  "Set up job",
+        "status":  "completed",
+        "conclusion":  "success"
+    },
+    {
+        "number":  2,
+        "name":  "Checkout",
+        "status":  "completed",
+        "conclusion":  "success"
+    },
+    {
+        "number":  3,
+        "name":  "Setup Node",
+        "status":  "completed",
+        "conclusion":  "success"
+    },
+    {
+        "number":  4,
+        "name":  "Install dependencies",
+        "status":  "completed",
+        "conclusion":  "success"
+    },
+    {
+        "number":  5,
+        "name":  "Generate Prisma client",
+        "status":  "completed",
+        "conclusion":  "success"
+    },
+    {
+        "number":  6,
+        "name":  "Run shadow ingestion",
+        "status":  "completed",
+        "conclusion":  "failure"
+    },
+    {
+        "number":  7,
+        "name":  "Print ingestion metrics snapshot",
+        "status":  "completed",
+        "conclusion":  "failure"
+    },
+    {
+        "number":  8,
+        "name":  "Cleanup expired staging records",
+        "status":  "completed",
+        "conclusion":  "failure"
+    },
+    {
+        "number":  9,
+        "name":  "Report scraper status",
+        "status":  "completed",
+        "conclusion":  "success"
+    },
+    {
+        "number":  17,
+        "name":  "Post Setup Node",
+        "status":  "completed",
+        "conclusion":  "skipped"
+    },
+    {
+        "number":  18,
+        "name":  "Post Checkout",
+        "status":  "completed",
+        "conclusion":  "success"
+    },
+    {
+        "number":  19,
+        "name":  "Complete job",
+        "status":  "completed",
+        "conclusion":  "success"
+    }
+]
