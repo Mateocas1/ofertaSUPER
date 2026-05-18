@@ -1,9 +1,11 @@
-# Professional readiness - Gate 2 GitHub Actions STOPPED_PENDING_DECISION - 2026-05-18
+# Professional readiness - Gate 2 GitHub Actions GREEN - 2026-05-18
 
 - GitHub Actions is not blocking Vercel deploy, but scheduled `Ingest Shadow` and `Update Prices` runs are publicly failing on `master`.
 - Latest evidence shows Actions env vars empty (`DATABASE_URL`, `DIRECT_URL`, `VTEX_SHA256_HASH`), causing Prisma `DATABASE_URL` empty-string failures.
-- No workflow YAML was changed yet because the gate requires an explicit strategy decision.
-- Recommended portfolio-safe path: pause schedules and keep `workflow_dispatch` until GitHub Actions secrets and ingestion cadence are configured.
+- User authorized the portfolio-safe strategy: pause schedules and keep `workflow_dispatch` until GitHub Actions secrets and ingestion cadence are configured.
+- `.github/workflows/ingest.yml`, `.github/workflows/update-prices.yml`, and `.github/workflows/cleanup.yml` now have no `schedule:` trigger and keep manual dispatch.
+- Verification passed: YAML parse/trigger inspection OK, `npm test` 21/21, `npm run typecheck` OK, `npm run lint` OK.
+- Historical red runs may remain visible in GitHub Actions, but the recurring scheduled trigger source is removed after this commit is pushed.
 - Evidence: `docs/reports/production-readiness/2026-05-18-gate2-github-actions-hygiene.md`.
 
 ---

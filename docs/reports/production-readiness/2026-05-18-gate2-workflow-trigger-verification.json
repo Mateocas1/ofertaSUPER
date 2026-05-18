@@ -1,0 +1,32 @@
+{
+  "checked_at": "2026-05-18",
+  "result": [
+    {
+      "file": ".github/workflows/ingest.yml",
+      "yaml_ok": true,
+      "triggers": [
+        "workflow_dispatch"
+      ],
+      "schedule": false,
+      "workflow_dispatch": true
+    },
+    {
+      "file": ".github/workflows/update-prices.yml",
+      "yaml_ok": true,
+      "triggers": [
+        "workflow_dispatch"
+      ],
+      "schedule": false,
+      "workflow_dispatch": true
+    },
+    {
+      "file": ".github/workflows/cleanup.yml",
+      "yaml_ok": true,
+      "triggers": [
+        "workflow_dispatch"
+      ],
+      "schedule": false,
+      "workflow_dispatch": true
+    }
+  ]
+}

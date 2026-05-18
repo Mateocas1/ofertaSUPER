@@ -1,8 +1,7 @@
 name: Ingest Shadow
 
+# Scheduled runs are paused until GitHub Actions secrets and ingestion cadence are configured.
 on:
-  schedule:
-    - cron: "30 1,7,13,19 * * *"
   workflow_dispatch:
 
 permissions:

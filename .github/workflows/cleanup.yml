@@ -1,8 +1,7 @@
 name: Cleanup History
 
+# Scheduled runs are paused until GitHub Actions secrets and cleanup cadence are configured.
 on:
-  schedule:
-    - cron: "0 3 1 * *"
   workflow_dispatch:
 
 jobs:

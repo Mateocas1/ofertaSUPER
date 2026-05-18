@@ -1,8 +1,7 @@
 name: Update Prices
 
+# Scheduled runs are paused until GitHub Actions secrets and ingestion cadence are configured.
 on:
-  schedule:
-    - cron: "0 0,6,12,18 * * *"
   workflow_dispatch:
 
 permissions:

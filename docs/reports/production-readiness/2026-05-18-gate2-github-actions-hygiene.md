@@ -1,6 +1,6 @@
 # Gate 2 - GitHub Actions hygiene audit - 2026-05-18
 
-Status: `STOPPED_PENDING_DECISION`
+Status: `GREEN`
 
 GitHub Actions is not blocking the Vercel frontend deploy, but it is currently a public/reputational problem for the repository: scheduled workflows are still running and failing on `master`.
 
@@ -57,7 +57,45 @@ Manual-only or non-scheduled workflows:
 - `.github/workflows/populate-db.yml` - manual only.
 - `.github/workflows/lighthouse-ci.yml` - push to `main`, PR, manual. Current active branch is `master`, so this is not the visible scheduled failure source.
 
-## Decision needed
+## Decision applied
+
+The user explicitly approved the recommended portfolio-safe path (`autorizo`):
+pause scheduled runs and keep manual `workflow_dispatch`.
+
+Changed workflow triggers:
+
+- `.github/workflows/ingest.yml` - removed `schedule`, kept `workflow_dispatch`.
+- `.github/workflows/update-prices.yml` - removed `schedule`, kept `workflow_dispatch`.
+- `.github/workflows/cleanup.yml` - removed `schedule`, kept `workflow_dispatch`.
+
+This does not change ingestion, cleanup, Prisma, or scraper logic. It only stops
+future automatic runs from failing publicly while GitHub Actions secrets remain
+unconfigured.
+
+## Post-change verification
+
+Local verification:
+
+- YAML parse via `js-yaml`: all three workflow files parse successfully.
+- Trigger inspection: `schedule=false`, `workflow_dispatch=true` for all three
+  changed workflow files.
+- Grep inspection: no `schedule:` trigger remains under `.github/workflows/*.yml`.
+- `npm test`: 21/21 passing.
+- `npm run typecheck`: passing.
+- `npm run lint`: passing.
+
+Evidence files:
+
+- `docs/reports/production-readiness/2026-05-18-gate2-workflow-trigger-verification.json`
+- `docs/reports/production-readiness/2026-05-18-gate2-npm-test.log`
+- `docs/reports/production-readiness/2026-05-18-gate2-typecheck.log`
+- `docs/reports/production-readiness/2026-05-18-gate2-lint.log`
+
+The public GitHub Actions page may still show historical failed runs. The gate
+only claims that the recurring scheduled trigger source is removed after this
+commit is pushed.
+
+## Original decision point
 
 The goal requires explicit approval before changing workflow strategy. There are two clean options:
 
@@ -80,12 +118,8 @@ Then manually rerun a bounded workflow.
 
 Tradeoff: keeps automation alive, but requires dashboard work and may perform real ingestion/cleanup operations depending workflow.
 
-## Gate decision
+## Gate decision result
 
-Current status: `STOPPED_PENDING_DECISION`.
+Current status: `GREEN`.
 
-To move to `GREEN`, choose one:
-
-1. Approve pausing scheduled workflows in repo code; or
-2. Configure GitHub Actions secrets and approve one manual verification run; or
-3. Explicitly accept `BLOCKED_APPROVED` and document Actions as intentionally deferred.
+The chosen path was option 1: pause scheduled workflows in repo code.
