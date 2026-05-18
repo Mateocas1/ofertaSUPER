@@ -1,3 +1,14 @@
+# Professional readiness - Gate 3 Vercel STOPPED_PENDING_VERCEL_DECISION - 2026-05-18
+
+- `master` is pushed to GitHub at `3cb503ef687fb4af94a1ce5a298fb060681a6ff1`.
+- Vercel CLI is authenticated as `mateocas1`, but this checkout has no `.vercel/project.json`.
+- `vercel project ls` does not show an `ofertasSUPER` / `ofertas-super` project; it only shows older projects including `ofertasas-web`.
+- Do not reuse `ofertasas-web` without explicit confirmation because project context says `ofertasas` is the abandoned older variant.
+- Pending user decision: create/link a new Vercel project for `ofertasSUPER`, intentionally reuse `ofertasas-web`, or manually import the repo and provide the URL.
+- Evidence: `docs/reports/production-readiness/2026-05-18-gate3-vercel-deploy-context.md`.
+
+---
+
 # Professional readiness - Gate 2 GitHub Actions GREEN - 2026-05-18
 
 - GitHub Actions is not blocking Vercel deploy, but scheduled `Ingest Shadow` and `Update Prices` runs are publicly failing on `master`.
