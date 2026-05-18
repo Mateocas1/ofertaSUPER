@@ -16,6 +16,7 @@ This gate audited the Vercel deployment context without creating, linking, or de
 | Local Vercel link | No `.vercel/project.json` found |
 | Existing Vercel projects | `test-kimi`, `test-deepseek`, `chat-utn`, `test-ecommerce`, `landing`, `ofertasas-web` |
 | Expected ofertasSUPER project | `vercel project inspect ofertas-super` and `vercel project inspect ofertaSUPER` both reported no project |
+| Similar legacy project check | `vercel project inspect ofertasas-web` found a project created on `2026-04-14` with root directory `apps/web`, which does not match this checkout root |
 
 Evidence files:
 
@@ -23,6 +24,7 @@ Evidence files:
 - `docs/reports/production-readiness/2026-05-18-gate3-vercel-project-ls.log`
 - `docs/reports/production-readiness/2026-05-18-gate3-vercel-inspect-ofertas-super.log`
 - `docs/reports/production-readiness/2026-05-18-gate3-vercel-inspect-ofertaSUPER.log`
+- `docs/reports/production-readiness/2026-05-18-gate3-vercel-inspect-ofertasas-web.log`
 
 ## Env contract for a Vercel deployment
 
@@ -57,6 +59,11 @@ Context7/Vercel docs confirm the CLI flow:
 ## Decision needed
 
 There is no verified Vercel project for `ofertasSUPER` yet. The similarly named `ofertasas-web` exists, but the project context says `ofertasas` is the abandoned older variant, so it must not be reused without explicit confirmation.
+
+The read-only `ofertasas-web` inspection reinforces that caution: its root
+directory is `apps/web`, while the current `ofertasSUPER` checkout is a
+single-app root project. Reusing it would be a project-identity risk unless the
+user explicitly confirms that Vercel project should be repointed.
 
 To continue Gate 3, the user must explicitly approve one concrete action:
 
