@@ -1,3 +1,16 @@
+# Career asset publication - LinkedIn/GitHub verified - 2026-05-18
+
+- LinkedIn was audited live with Chrome at `https://www.linkedin.com/in/vazquezmateo/`.
+- LinkedIn project `Comparador de ofertas y precios de supermercados` now points to `https://ofertas-super.vercel.app` and `https://github.com/Mateocas1/ofertaSUPER`.
+- LinkedIn Projects no longer shows `ofertasas-web.vercel.app` or `github.com/Mateocas1/ofertasas` as the main project links.
+- GitHub profile repo `Mateocas1/Mateocas1` was created and published with a professional profile README.
+- GitHub pins show `ofertaSUPER`; `ofertasas` is not pinned.
+- Current safe verification after publication: career/portfolio tests 20/20, `npm test` 21/21, `npm run typecheck` OK, `npm run lint` OK.
+- No local build was run.
+- Remaining human gate: approve/publish the first LinkedIn post and start networking/applications with a tracker.
+
+---
+
 # Professional readiness - Final audit GREEN - 2026-05-18
 
 - Final laboral/portfolio readiness audit is GREEN for the active goal.
@@ -15,7 +28,7 @@
 - Verification passed: `node --test tests/portfolio.test.mjs tests/career-assets.test.mjs` -> 20/20.
 - CV PDF was regenerated from the updated HTML and PDF extraction confirms current demo/repo links with no stale ofertasas links.
 - Evidence: `docs/reports/production-readiness/2026-05-18-gate5-portfolio-case-study.md` and `docs/reports/production-readiness/2026-05-18-gate6-career-activation.md`.
-- Remaining limit: external LinkedIn/GitHub publishing still requires user confirmation; no new post/profile update was pushed in this gate.
+- External LinkedIn/GitHub profile publishing was completed later on 2026-05-18; first LinkedIn post still requires explicit approval before publishing.
 
 ---
 
