@@ -6,6 +6,7 @@
 - Read-only inspection of `ofertasas-web` shows root directory `apps/web`, which does not match this root-app checkout; do not reuse it without explicit confirmation.
 - Pending user decision: create/link a new Vercel project for `ofertasSUPER`, intentionally reuse `ofertasas-web`, or manually import the repo and provide the URL.
 - Evidence: `docs/reports/production-readiness/2026-05-18-gate3-vercel-deploy-context.md`.
+- Setup checklist: `docs/vercel-setup-checklist.md`.
 
 ---
 
