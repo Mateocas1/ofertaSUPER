@@ -20,7 +20,7 @@ External asset root: `C:/Users/picala/Documents/Codex/2026-05-07/files-mentioned
 ## Verification
 
 - `node --test tests/portfolio.test.mjs tests/career-assets.test.mjs`: 20/20 passing (`2026-05-18-gate5-portfolio-career-tests.log`).
-- Link/claim scan: no stale `ofertasas-web.vercel.app` or `github.com/Mateocas1/ofertasas` links in active scanned assets (`2026-05-18-gate5-portfolio-link-claim-scan.log`).
+- Link/claim scan: no legacy ofertasas demo/repo links in active scanned assets (`2026-05-18-gate5-portfolio-link-claim-scan.log`).
 - Static tests cover Spanish default copy, English translations, project order, accessibility fallbacks, design-system classes, and mojibake prevention.
 
 ## Git note

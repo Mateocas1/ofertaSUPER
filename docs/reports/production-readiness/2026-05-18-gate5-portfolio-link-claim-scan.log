@@ -20,4 +20,4 @@ GITHUB_PROFILE_README.md
 CURRENT_STATE_HANDOFF.md
   current_demo=True current_repo=False stale_demo=False stale_repo=False
 
-Result: no stale ofertasas-web/ofertasas repo links in active assets scanned.
+Result: no legacy ofertasas demo/repo links in active assets scanned.

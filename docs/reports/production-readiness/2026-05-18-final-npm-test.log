@@ -1,0 +1,51 @@
+
+> ofertas-super@0.1.0 test
+> tsx --test tests/**/*.test.ts
+
+▶ admin access policy
+  ✔ parses admin email allowlist case-insensitively (0.9616ms)
+  ✔ fails closed for authenticated users without an allowed email or admin role (0.1605ms)
+  ✔ allows users whose email is present in the configured allowlist (0.1009ms)
+  ✔ allows users with an explicit admin role in Clerk metadata (0.0911ms)
+✔ admin access policy (1.9866ms)
+▶ catalog availability preflight
+  ✔ extracts host and port from a database URL without opening Prisma (0.9612ms)
+  ✔ fails closed when the database URL is missing or invalid (0.1316ms)
+✔ catalog availability preflight (1.7846ms)
+▶ demo catalog fallback
+  ✔ returns a paginated search-shaped fallback for matching demo products (1.2114ms)
+  ✔ keeps the fallback scoped to the active supermarket filter (0.1906ms)
+  ✔ returns compact suggestions for the autocomplete fallback (0.1988ms)
+✔ demo catalog fallback (2.2606ms)
+▶ approved home visual slice content
+  ✔ keeps the approved navigation, hero and signal copy focused on search first (1.1503ms)
+  ✔ keeps the smart basket and product preview within the first approved slice (0.1573ms)
+  ✔ does not introduce emojis or overwhelming technical copy in the visible slice (0.4137ms)
+✔ approved home visual slice content (2.4868ms)
+▶ VTEX request builder
+  ✔ keeps the SHA256 persisted query server-side and encodes productSuggestions variables (0.559ms)
+✔ VTEX request builder (0.9929ms)
+▶ safe data fallback
+  ✔ returns fallback data when a runtime dependency is unavailable (0.4795ms)
+  ✔ fails open when Redis cache reads or writes are unavailable (0.2276ms)
+  ✔ fails open when the rate-limit backend is unavailable (0.1287ms)
+✔ safe data fallback (0.9499ms)
+▶ promotion calculations
+  ✔ detects automatic discounts from list price differences (0.1274ms)
+  ✔ calculates common promotion unit prices and picks the best one (0.1302ms)
+✔ promotion calculations (0.3427ms)
+▶ search query schema
+  ✔ trims query text and bounds public search limits (1.0546ms)
+✔ search query schema (1.1262ms)
+▶ VTEX product normalizer
+  ✔ extracts EAN, prices and product URL from a VTEX-like payload (0.4793ms)
+  ✔ rejects products without a valid EAN (0.1125ms)
+✔ VTEX product normalizer (0.7905ms)
+ℹ tests 21
+ℹ suites 9
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 304.358

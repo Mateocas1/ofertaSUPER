@@ -1,0 +1,30 @@
+Final active-doc claim scan - 2026-05-18
+
+C:\Users\picala\Documents\ofertasSUPER\README.md
+  stale_demo=False stale_repo=False risky_terms=production-ready
+C:\Users\picala\Documents\ofertasSUPER\docs\handoff.md
+  stale_demo=False stale_repo=False risky_terms=production-ready,deploy-ready
+C:\Users\picala\Documents\ofertasSUPER\docs\repo-publication-checklist.md
+  stale_demo=False stale_repo=False risky_terms=production-ready
+C:\Users\picala\Documents\ofertasSUPER\docs\reports\production-readiness\2026-05-18-gate5-portfolio-case-study.md
+  stale_demo=False stale_repo=False risky_terms=production-ready
+C:\Users\picala\Documents\ofertasSUPER\docs\reports\production-readiness\2026-05-18-gate6-career-activation.md
+  stale_demo=False stale_repo=False risky_terms=production-ready
+C:\Users\picala\Documents\Codex\2026-05-07\files-mentioned-by-the-user-whatsapp\portfolio\index.html
+  stale_demo=False stale_repo=False risky_terms=none
+C:\Users\picala\Documents\Codex\2026-05-07\files-mentioned-by-the-user-whatsapp\portfolio\script.js
+  stale_demo=False stale_repo=False risky_terms=none
+C:\Users\picala\Documents\Codex\2026-05-07\files-mentioned-by-the-user-whatsapp\CV_IT_Mateo_Vazquez_ATS_v2.md
+  stale_demo=False stale_repo=False risky_terms=none
+C:\Users\picala\Documents\Codex\2026-05-07\files-mentioned-by-the-user-whatsapp\CV_IT_Mateo_Vazquez_ATS_v2.html
+  stale_demo=False stale_repo=False risky_terms=none
+C:\Users\picala\Documents\Codex\2026-05-07\files-mentioned-by-the-user-whatsapp\LINKEDIN_GITHUB_UPDATE_PACK.md
+  stale_demo=False stale_repo=False risky_terms=none
+C:\Users\picala\Documents\Codex\2026-05-07\files-mentioned-by-the-user-whatsapp\APPLICATION_SNIPPETS.md
+  stale_demo=False stale_repo=False risky_terms=none
+C:\Users\picala\Documents\Codex\2026-05-07\files-mentioned-by-the-user-whatsapp\GITHUB_PROFILE_README.md
+  stale_demo=False stale_repo=False risky_terms=none
+C:\Users\picala\Documents\Codex\2026-05-07\files-mentioned-by-the-user-whatsapp\PORTFOLIO_RECRUITER_PROOF_PACK.md
+  stale_demo=False stale_repo=False risky_terms=production-ready
+
+Result: no stale ofertasas active links in scanned public/career docs. Risky terms appear only in claim-boundary/forbidden-claim contexts where present.

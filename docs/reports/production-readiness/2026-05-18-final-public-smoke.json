@@ -1,0 +1,42 @@
+﻿{
+    "checkedAt":  "2026-05-18",
+    "base":  "https://ofertas-super.vercel.app",
+    "sampleEan":  "7790710334757",
+    "results":  [
+                    {
+                        "name":  "home",
+                        "url":  "https://ofertas-super.vercel.app/",
+                        "status":  200,
+                        "ok":  true,
+                        "bytes":  73543
+                    },
+                    {
+                        "name":  "search-page",
+                        "url":  "https://ofertas-super.vercel.app/buscar?q=leche",
+                        "status":  200,
+                        "ok":  true,
+                        "bytes":  301218
+                    },
+                    {
+                        "name":  "search-api",
+                        "url":  "https://ofertas-super.vercel.app/api/search?q=yerba\u0026limit=1",
+                        "status":  200,
+                        "ok":  true,
+                        "bytes":  260
+                    },
+                    {
+                        "name":  "product-sample",
+                        "url":  "https://ofertas-super.vercel.app/producto/7790710334757",
+                        "status":  200,
+                        "ok":  true,
+                        "bytes":  60964
+                    },
+                    {
+                        "name":  "basket",
+                        "url":  "https://ofertas-super.vercel.app/canasta",
+                        "status":  200,
+                        "ok":  true,
+                        "bytes":  15612
+                    }
+                ]
+}
