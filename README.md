@@ -2,7 +2,12 @@
 
 ofertasSUPER is a supermarket price and offer comparison app for Argentina. It is built around a search-first home, product comparison by EAN, a local smart basket, public catalog APIs, VTEX ingestion tooling, and guarded admin surfaces.
 
-> Status: portfolio/readiness project in progress. The repo has strong verified slices, but it is not production-ready or deploy-ready yet. See `docs/handoff.md` and `docs/reports/production-readiness/` for the exact gate evidence.
+> Status: portfolio/readiness project with a smoke-verified public Vercel demo. It is not a production-ready launch claim; operational limits remain documented in `docs/handoff.md` and `docs/reports/production-readiness/`.
+
+## Demo
+
+- Public demo: https://ofertas-super.vercel.app
+- Latest production smoke evidence: `docs/reports/production-readiness/2026-05-18-gate3-vercel-deploy-context.md`
 
 ## What is implemented
 
@@ -18,21 +23,21 @@ ofertasSUPER is a supermarket price and offer comparison app for Argentina. It i
 
 | Gate | Status | Evidence |
 |---|---|---|
-| Supabase / Prisma direct migrations | `BLOCKED_APPROVED` | `docs/reports/production-readiness/2026-05-17-gate1-supabase-prisma.md` |
+| Supabase / RLS hardening | `GREEN` | `docs/reports/production-readiness/2026-05-18-gate1-supabase-rls-posture.md` |
+| GitHub Actions hygiene | `GREEN` | `docs/reports/production-readiness/2026-05-18-gate2-github-actions-hygiene.md` |
+| Vercel deploy + public smoke | `GREEN` | `docs/reports/production-readiness/2026-05-18-gate3-vercel-deploy-context.md` |
 | Build / PWA | `GREEN` | `docs/reports/production-readiness/2026-05-17-gate2-build-pwa.md` |
-| Env / deploy / secrets audit | `GREEN` | `docs/reports/production-readiness/2026-05-17-gate3-env-deploy-secrets.md` |
 | Controlled ingestion dry-run | `GREEN` | `docs/reports/production-readiness/2026-05-17-gate4-ingestion-controlled.md` |
-| Public smoke | `GREEN` | `docs/reports/production-readiness/2026-05-17-gate5-public-e2e-smoke.md` |
 | Admin / Clerk fail-closed checks | `GREEN` | `docs/reports/production-readiness/2026-05-17-gate6-admin-clerk-promotions.md` |
 | Complexity scan | `GREEN` | `docs/reports/production-readiness/2026-05-17-gate7-complexity-report.md` |
 
 ## Screenshots
 
-Fresh bounded smoke screenshots are stored in:
+Latest public Vercel smoke screenshots are stored in:
 
-- `docs/screenshots/readiness-public-home-2026-05-17.png`
-- `docs/screenshots/readiness-public-search-2026-05-17.png`
-- `docs/screenshots/readiness-public-canasta-2026-05-17.png`
+- `docs/screenshots/vercel-public-home-2026-05-18.png`
+- `docs/screenshots/vercel-public-search-2026-05-18.png`
+- `docs/screenshots/vercel-public-canasta-2026-05-18.png`
 
 Older screenshots may exist as historical evidence. Treat the filenames and report dates as the source of truth.
 
@@ -88,7 +93,7 @@ npm run probe:vtex -- --source=disco --query=leche --count=1
 INGESTION_V2=shadow npm run ingest -- --dry-run --source=disco --limit=1
 ```
 
-Do not run active/non-dry-run ingestion without an explicit approval and a rollback/cleanup plan.
+Do not run active/non-dry-run ingestion without an explicit approval and a rollback/cleanup plan. Do not run local production builds in this repo workflow unless explicitly authorized; Vercel build logs are the current deploy evidence.
 
 ## Architecture map
 
@@ -104,14 +109,14 @@ Do not run active/non-dry-run ingestion without an explicit approval and a rollb
 
 ## Honest claim boundary
 
-Defensible: this repo demonstrates a full-stack price comparison product with search, catalog APIs, basket UX, VTEX ingestion tooling, Prisma/Supabase modeling, admin guardrails, and documented readiness gates.
+Defensible: this repo demonstrates a full-stack price comparison product with search, catalog APIs, basket UX, VTEX ingestion tooling, Prisma/Supabase modeling, admin guardrails, documented readiness gates, and a smoke-verified public Vercel demo.
 
-Not defensible yet: production-ready, deploy-ready, complete E2E coverage, active ingestion approved, production Clerk configured, or Supabase direct migration readiness closed.
+Not defensible yet: production-ready launch, complete E2E coverage, active ingestion approved/running, production admin positive path fully validated, custom domain/backups/monitoring closed, or scheduled ingestion cadence configured.
 
 ## Main pending items
 
-- Fix Supabase `DIRECT_URL` / direct migration connectivity.
-- Verify GitHub/Vercel/Clerk/Upstash dashboard secrets externally.
-- Validate authenticated admin positive path with real Clerk production config.
+- Add/verify `ADMIN_EMAILS` and validate the authenticated admin positive path in production Clerk.
 - Decide and test any active ingestion writes with explicit approval.
+- Keep scheduled GitHub Actions paused until repository secrets and ingestion cadence are intentionally configured.
+- Add launch-ops items before any production-ready claim: custom domain if desired, backups, monitoring/alerts, and broader E2E.
 - Consider a future basket batch endpoint to remove the N+1 product-fetch pattern documented in Gate 7.

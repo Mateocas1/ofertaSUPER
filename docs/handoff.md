@@ -1,3 +1,12 @@
+# Professional readiness - Gate 4 GitHub proof pack GREEN - 2026-05-18
+
+- README now includes the public demo URL `https://ofertas-super.vercel.app`, current Gate 1/2/3 evidence, and updated claim boundaries.
+- `docs/repo-publication-checklist.md` and `docs/screenshot-proof-checklist.md` now point to the 2026-05-18 Vercel smoke evidence.
+- Verification passed: `npm test` 21/21, `npm run typecheck` OK, `npm run lint` OK.
+- Evidence: `docs/reports/production-readiness/2026-05-18-gate4-github-proof-pack.md`.
+
+---
+
 # Professional readiness - Gate 3 Vercel GREEN - 2026-05-18
 
 - `master` is pushed to GitHub at `3cb503ef687fb4af94a1ce5a298fb060681a6ff1`.

@@ -6,13 +6,13 @@ Screenshots in this repo are evidence artifacts. They must be tied to a dated re
 
 | Route | File | Evidence report | Use permitted |
 |---|---|---|---|
-| `/` | `docs/screenshots/readiness-public-home-2026-05-17.png` | Gate 5 | Public smoke / home proof |
-| `/buscar?q=leche` | `docs/screenshots/readiness-public-search-2026-05-17.png` | Gate 5 | Public smoke / search proof |
-| `/canasta` | `docs/screenshots/readiness-public-canasta-2026-05-17.png` | Gate 5 | Public smoke / basket shell proof |
+| `/` | `docs/screenshots/vercel-public-home-2026-05-18.png` | Gate 3 Vercel | Public demo / home proof |
+| `/buscar?q=leche` | `docs/screenshots/vercel-public-search-2026-05-18.png` | Gate 3 Vercel | Public demo / search proof |
+| `/canasta` | `docs/screenshots/vercel-public-canasta-2026-05-18.png` | Gate 3 Vercel | Public demo / basket shell proof |
 
 ## Rules
 
-- Do not call screenshots production evidence unless deploy, secrets, DB, and admin gates are closed.
+- Do not call screenshots production-ready evidence. They prove bounded public smoke only, even when captured from Vercel.
 - If a screenshot depends on fallback/demo behavior, say so in the report or README.
 - Keep sensitive data out of screenshots.
 - Prefer date-stamped filenames and a matching report under `docs/reports/production-readiness/`.
