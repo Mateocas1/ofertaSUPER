@@ -15,7 +15,7 @@ This checklist is for publishing the repository as honest portfolio evidence. It
 | Clean, honest README | Done | `README.md` |
 | Stage-gated readiness evidence | Done | `docs/reports/production-readiness/` |
 | Fresh screenshots | Done | `docs/screenshots/vercel-public-*-2026-05-18.png` |
-| Env example without real secrets | Done | `.env.example` |
+| Safe `.env.example` without real secrets | Done | `.env.example` |
 | Build/PWA checked | Done | Gate 2 report |
 | Public smoke checked | Done | Gate 3 Vercel report plus prior Gate 5 local production smoke |
 | Admin fail-closed checked | Done | Gate 6 report |

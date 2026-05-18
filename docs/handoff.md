@@ -1,3 +1,14 @@
+# Professional readiness - Gates 5/6 Portfolio + career assets GREEN - 2026-05-18
+
+- Portfolio/CV/LinkedIn/GitHub-profile assets now treat `ofertasSUPER` as the principal public project and point at `https://ofertas-super.vercel.app` plus `https://github.com/Mateocas1/ofertaSUPER`.
+- External assets live at `C:/Users/picala/Documents/Codex/2026-05-07/files-mentioned-by-the-user-whatsapp`; that folder is under a broad user-home git root with no commits, so no commit was created there.
+- Verification passed: `node --test tests/portfolio.test.mjs tests/career-assets.test.mjs` -> 20/20.
+- CV PDF was regenerated from the updated HTML and PDF extraction confirms current demo/repo links with no stale ofertasas links.
+- Evidence: `docs/reports/production-readiness/2026-05-18-gate5-portfolio-case-study.md` and `docs/reports/production-readiness/2026-05-18-gate6-career-activation.md`.
+- Remaining limit: external LinkedIn/GitHub publishing still requires user confirmation; no new post/profile update was pushed in this gate.
+
+---
+
 # Professional readiness - Gate 4 GitHub proof pack GREEN - 2026-05-18
 
 - README now includes the public demo URL `https://ofertas-super.vercel.app`, current Gate 1/2/3 evidence, and updated claim boundaries.

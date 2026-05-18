@@ -1,0 +1,14 @@
+CV PDF extraction verification - 2026-05-18
+PDF: C:\Users\picala\Documents\Codex\2026-05-07\files-mentioned-by-the-user-whatsapp\CV_IT_Mateo_Vazquez_ATS_v2.pdf
+size_bytes: 88466
+
+has_current_demo: True
+has_current_repo: True
+has_stale_demo: False
+has_stale_repo: False
+has_senior_claim: False
+
+Relevant extracted lines:
+Comparador de ofertas y precios de supermercados
+Aplicación full-stack para buscar productos, comparar precios entre supermercados argentinos y analizar ofertas con pipeline de ingesta automatizada. Demo
+pública: https://ofertas-super.vercel.app | Repositorio: https://github.com/Mateocas1/ofertaSUPER
