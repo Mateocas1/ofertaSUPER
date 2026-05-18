@@ -1,0 +1,26 @@
+
+> ofertas-super@0.1.0 dev
+> next dev --hostname 127.0.0.1 --port 3042
+
+   ▲ Next.js 15.5.14
+   - Local:        http://127.0.0.1:3042
+   - Network:      http://127.0.0.1:3042
+   - Environments: .env.local, .env
+
+ ✓ Starting...
+ ○ (pwa) PWA support is disabled.
+ ✓ Ready in 2.4s
+ ○ Compiling / ...
+ ✓ Compiled / in 3.7s (1041 modules)
+ ✓ Compiled in 1001ms (355 modules)
+ GET / 200 in 178ms
+ GET / 200 in 130ms
+ ○ Compiling /api/search ...
+ ✓ Compiled /api/search in 786ms (1130 modules)
+ GET /api/search?q=yerba&limit=1 200 in 14913ms
+ ○ Compiling /buscar ...
+ ✓ Compiled /buscar in 602ms (1242 modules)
+ GET /buscar?q=leche 200 in 2285ms
+ ✓ Compiled in 138ms (398 modules)
+ ✓ Compiled in 135ms (398 modules)
+[?25h

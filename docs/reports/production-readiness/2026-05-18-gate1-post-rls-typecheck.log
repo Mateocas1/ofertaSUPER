@@ -1,0 +1,12 @@
+$ run typecheck
+exit_code=0
+
+STDOUT:
+
+> ofertas-super@0.1.0 typecheck
+> tsc --noEmit
+
+
+
+STDERR:
+

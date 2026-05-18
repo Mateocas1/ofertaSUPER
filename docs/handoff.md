@@ -1,9 +1,9 @@
-# Professional readiness - Gate 1 Supabase/RLS STOPPED_PENDING_APPROVAL - 2026-05-18
+# Professional readiness - Gate 1 Supabase/RLS GREEN - 2026-05-18
 
-- Supabase/Prisma connectivity is now healthy: `npx prisma migrate status --schema prisma/schema.prisma` reports 4 migrations and database schema up to date.
-- Local env contract is aligned: `DATABASE_URL` uses Supavisor transaction pooler `:6543`; `DIRECT_URL` uses Supavisor session pooler `:5432`.
-- RLS/security posture is not closed: direct DB evidence shows 11 public tables with RLS disabled, no policies, and broad `anon`/`authenticated` table grants; public sequences also grant `USAGE` to those roles.
-- No SQL remediation was applied. Proposed SQL lives at `docs/reports/production-readiness/2026-05-18-gate1-rls-remediation-proposal.sql` and requires explicit user approval.
+- User explicitly authorized RLS remediation (`autorizo`).
+- Applied `docs/reports/production-readiness/2026-05-18-gate1-rls-remediation-proposal.sql` statement-by-statement via `npx supabase db query`.
+- Post-apply DB metadata confirms 11/11 audited public tables now have RLS enabled and no `anon`/`authenticated` table grants; public sequence usage grants to those roles are gone.
+- Verification passed: Prisma migrate status OK, `npm test` 21/21, `npm run typecheck` OK, `npm run lint` OK, local smoke for `/`, `/api/search?q=yerba&limit=1`, `/buscar?q=leche` OK.
 - Evidence: `docs/reports/production-readiness/2026-05-18-gate1-supabase-rls-posture.md`.
 
 ---

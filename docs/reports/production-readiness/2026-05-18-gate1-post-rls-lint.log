@@ -1,0 +1,12 @@
+$ run lint
+exit_code=0
+
+STDOUT:
+
+> ofertas-super@0.1.0 lint
+> eslint .
+
+
+
+STDERR:
+

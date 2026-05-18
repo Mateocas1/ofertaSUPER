@@ -1,0 +1,26 @@
+{
+    "baseUrl":  "http://127.0.0.1:3042",
+    "serverPid":  9084,
+    "checkedAt":  "2026-05-18T00:07:08.4527587-03:00",
+    "purpose":  "Post-RLS minimal public smoke via local Next dev server",
+    "routes":  [
+                   {
+                       "route":  "/",
+                       "status":  200,
+                       "ok":  true,
+                       "bodyPreview":  "\u003c!DOCTYPE html\u003e\u003chtml lang=\"es-AR\" class=\"h-full antialiased\"\u003e\u003chead\u003e\u003cmeta charSet=\"utf-8\"/\u003e\u003cmeta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/\u003e\u003clink rel=\"stylesheet"
+                   },
+                   {
+                       "route":  "/api/search?q=yerba\u0026limit=1",
+                       "status":  200,
+                       "ok":  true,
+                       "bodyPreview":  "{\"items\":[{\"ean\":\"7790710334757\",\"name\":\"Yerba 500gr Mateando\",\"brand\":\"MATEANDO\",\"imageUrl\":\"https://jumboargentina.vtexassets.com/arquivos/ids/887185/Yerba-500gr-Mateando-1-10504"
+                   },
+                   {
+                       "route":  "/buscar?q=leche",
+                       "status":  200,
+                       "ok":  true,
+                       "bodyPreview":  "\u003c!DOCTYPE html\u003e\u003chtml lang=\"es-AR\" class=\"h-full antialiased\"\u003e\u003chead\u003e\u003cmeta charSet=\"utf-8\"/\u003e\u003cmeta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/\u003e\u003clink rel=\"stylesheet"
+                   }
+               ]
+}
