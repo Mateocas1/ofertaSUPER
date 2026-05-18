@@ -1,374 +1,590 @@
-# /goal — ofertasSUPER production/portfolio readiness stage-gated
+# /goal - ofertasSUPER professional readiness: GitHub, demo, portfolio, CV y LinkedIn
 
-/goal Llevar ofertasSUPER lo más cerca posible de nivel producción y portfolio/GitHub profesional mediante fases estrictas, evidencia fresca y gates de aprobación. No avanzar por intuición: cada fase debe cerrarse con comandos, screenshots/logs o documentación verificable. Si una fase no queda verde o no recibe una aprobación explícita para diferirla, detenerse y reportar el bloqueo.
+/goal Cerrar ofertasSUPER como proyecto principal de presentacion profesional sin inflar claims, sin tapar riesgos y avanzando por gates estrictos: una fase solo habilita la siguiente si queda GREEN con evidencia fresca, o BLOCKED_APPROVED con aprobacion explicita del usuario.
 
-## Confianza y alcance
+## North Star
 
-Este goal no promete que la app ya esté production-ready. Promete una estrategia de ejecución que impide fingir readiness.
+ofertasSUPER debe quedar defendible ante recruiter y entrevista tecnica como proyecto full-stack/product engineering real: comparador de precios/ofertas con busqueda, canasta, APIs publicas, Prisma/Supabase, ingesta VTEX, Redis/fail-open, schedulers/admin y documentacion operativa.
 
-La estrategia solo puede considerarse exitosa si al final cada fase queda en uno de estos estados:
+El objetivo no es decir "production-ready" por ansiedad. El objetivo es poder decir, honestamente:
 
-- `GREEN`: verificada con evidencia fresca del run actual.
-- `BLOCKED_APPROVED`: bloqueada por dependencia externa o permiso faltante, documentada con evidencia y aprobada explícitamente por el usuario para diferirse.
-- `STOPPED`: bloqueo no aprobado; no se avanza a fases posteriores.
+> Proyecto production-oriented y portfolio-grade, con demo/smoke verificado, limites operativos documentados y proximos pasos reales.
 
-No usar evidencia vieja como cierre. Los documentos previos sirven como contexto, no como prueba actual.
+## Contexto especifico
 
-## Contexto actual
+- Proyecto principal: `C:\Users\picala\Documents\ofertasSUPER`.
+- Repo remoto: `git@github.com:Mateocas1/ofertaSUPER.git`.
+- Rama esperada: `master`.
+- Proyecto portfolio lead: `ofertasSUPER`.
+- Segundo caso fuerte: `test-kimi`.
+- No continuar `ofertasas` salvo verificacion puntual.
+- No tocar portfolio/CV/LinkedIn hasta llegar a sus fases.
+- Ultimo cierre fuerte recordado: `b2ac487 docs(readiness): add final readiness audit`.
+- Supabase/Prisma local ya fue corregido:
+  - `DATABASE_URL` usa Supavisor transaction pooler `:6543`.
+  - `DIRECT_URL` usa Supavisor session pooler `:5432`.
+  - `npx prisma migrate status --schema prisma/schema.prisma` paso con "Database schema is up to date!" despues de quitar corchetes del password.
+- Supabase CLI funciona via `npx supabase`; no asumir CLI global.
+- Supabase aun reporto RLS critico en 11 tablas publicas:
+  - `public._prisma_migrations`
+  - `public.categories`
+  - `public.ingestion_run`
+  - `public.price_history`
+  - `public.products`
+  - `public.promotion_products`
+  - `public.promotions`
+  - `public.source_health`
+  - `public.staging_product`
+  - `public.supermarket_products`
+  - `public.supermarkets`
+- GitHub Actions fallan por secrets vacios en repository Actions, no por codigo:
+  - `DATABASE_URL`
+  - `DIRECT_URL`
+  - `VTEX_SHA256_HASH`
+  - opcionales: Upstash/webhook.
+- GitHub Actions no bloquea Vercel, pero si afecta la percepcion publica del repo.
 
-- Repo principal: `C:\Users\picala\Documents\ofertasSUPER`.
-- No tocar `ofertasas`, `test-kimi`, portfolio/CV/LinkedIn salvo pedido explícito.
-- Home visual slice ya está cerrada contra:
-  - `docs/design/canasta-inteligente-ui-spec.md`
-  - `docs/design/canasta-inteligente-preview-2026-05-16.png`
-- Último checkpoint: `662093e docs(readiness): add continuity checkpoint evidence`.
-- Continuity readiness actual:
-  - `npm test` 21/21 OK.
-  - `npm run typecheck` OK.
-  - `npm run lint` OK.
-  - Smoke público básico OK.
-  - Prisma schema válido.
-  - VTEX probe y dry-run controlado OK.
-- Bloqueos conocidos:
-  - `npx prisma migrate status --schema prisma/schema.prisma` falla con P1001 en host directo Supabase.
-  - Build/PWA no está cerrado.
-  - GitHub secrets, Clerk producción, active ingestion, multi-source ingestion y E2E profundo siguen pendientes.
+## Estados formales
 
-## Principio rector
+| Estado | Significado |
+|---|---|
+| `GREEN` | Verificado con evidencia fresca del run actual. |
+| `BLOCKED_APPROVED` | Bloqueado por credencial, dashboard externo, decision humana o riesgo aceptado explicitamente por el usuario. |
+| `STOPPED` | Bloqueo no aprobado. No avanzar. |
 
-Trabajar por fases estrictas. Una fase solo se considera cerrada si:
+Evidencia vieja sirve como contexto, no como cierre.
 
-1. El objetivo de la fase está cubierto por archivos/comandos/evidencia concreta del run actual.
-2. Los tests relevantes pasan después de cualquier cambio.
-3. El working tree queda limpio o con commit convencional de la unidad cerrada.
-4. `docs/handoff.md` y/o runbook correspondiente queda actualizado.
-5. La auditoría prompt-to-artifact mapea pedido → archivo/commit → verificación → pendiente.
-6. Los riesgos que no se cierren quedan explícitamente marcados como `BLOCKED_APPROVED` o `STOPPED`.
+## Reglas duras
 
-Si cualquiera de esos puntos falla, NO pasar a la fase siguiente.
+- No claims "production-ready", "deploy cerrado", "listo para produccion" o "experiencia laboral formal" sin evidencia real.
+- No Co-Authored-By ni atribucion AI en commits.
+- Commits convencionales, chicos y por work-unit.
+- Tests junto al cambio relacionado.
+- Si se cambia logica: TDD cuando sea viable. Primero test que falle, luego implementacion minima, luego verde.
+- KISS/YAGNI: no agregar features nuevas para mejorar la historia. Cerrar readiness, no expandir producto.
+- DRY: no duplicar runbooks/checklists si ya existe uno correcto; actualizarlo.
+- No imprimir secretos. Mostrar solo host, puerto, nombre de variable o presencia/ausencia.
+- No correr ingesta activa, writes reales, SQL de RLS, cambios de dashboard, deploy/publish o E2E amplio sin aprobacion explicita.
+- Si hay conflicto con cambios de otra sesion: parar, inspeccionar diff y reportar.
+- Si un gate depende de dashboard externo, pedir una sola accion concreta al usuario y detenerse.
 
-## Contratos estrictos
+## Uso obligatorio de memoria, skills y docs
 
-- No inventar claims production-ready/deploy-ready.
-- No esconder fallos con wording optimista.
-- No tocar otros proyectos.
-- No rediseñar UI salvo que una prueba demuestre una regresión bloqueante.
-- No correr ingesta activa, mutaciones de precio, promociones temporales ni escrituras reales de DB sin aprobación explícita del usuario.
-- No correr E2E amplio/paralelo que pueda romper la máquina; usar pruebas acotadas, seriales y seguras.
-- Commits convencionales, por work-unit, sin Co-Authored-By ni atribución AI.
-- Si se cambia lógica: TDD obligatorio, test fallando primero cuando sea viable.
-- Si se usa agente/subagente: scope claro, archivos asignados, no pisar cambios de otros, y el agente principal debe revisar diff + verificar localmente.
-- Si un comando puede exponer secretos, redireccionar/sanitizar salida o no ejecutarlo.
-- Si una acción requiere dashboard externo, credenciales reales o aprobación humana, parar y pedir una única aprobación concreta.
+Antes de ejecutar:
 
-## Aprobaciones obligatorias antes de actuar
+1. Consultar Engram/contexto reciente:
+   - `mem_context` del proyecto.
+   - `mem_search` si hay dudas sobre decisiones previas.
+2. Guardar en Engram cualquier decision, bugfix, descubrimiento no obvio o convencion nueva.
+3. Al cerrar, guardar session summary con objetivo, descubrimientos, logrado, pendientes y archivos relevantes.
 
-Pedir aprobación explícita antes de:
+Skills segun fase:
 
-- usar `INGESTION_V2=active`;
-- correr ingesta no dry-run;
-- correr ingesta multi-source;
-- crear promociones temporales;
-- mutar precios o datos reales;
-- cambiar secrets, dashboards, Supabase, Clerk, Upstash, Vercel o GitHub settings;
-- borrar/desactivar PWA como solución final;
-- correr Playwright/E2E amplio o paralelo;
-- instalar dependencias nuevas;
-- publicar/deployar/pushear a remoto.
+- `superpowers:systematic-debugging` ante cualquier fallo.
+- `superpowers:verification-before-completion` antes de afirmar que algo esta verde.
+- `superpowers:test-driven-development` si se cambia logica.
+- `work-unit-commits` para dividir commits.
+- `cognitive-doc-design` para README, handoff, proof pack, portfolio y LinkedIn docs.
+- `codex-security:security-scan` o equivalente si se toca RLS/policies/security posture.
+- `find-docs` / Context7 para Supabase, Prisma, Vercel, GitHub Actions o APIs actuales.
+- Browser/Playwright solo acotado y seguro para smoke visual.
 
-## Ubicación de evidencia
+Delegacion de agentes:
 
-Guardar evidencia nueva en paths versionables y claros:
+- Permitida solo para tareas independientes y con scope claro.
+- No delegar el blocker inmediato si el resultado bloquea el proximo paso.
+- Subagentes posibles:
+  - agente A: auditoria RLS/Supabase report-only;
+  - agente B: README/GitHub proof pack;
+  - agente C: portfolio/CV/LinkedIn copy;
+  - agente D: QA smoke publico.
+- El agente principal integra, revisa diffs y verifica localmente.
 
-- `docs/reports/production-readiness/<date>-<gate>.json|md`
-- `docs/screenshots/<date>-<flow>.png`
+## Evidencia versionable
+
+Usar paths claros:
+
 - `docs/handoff.md`
-- runbooks específicos bajo `docs/`
+- `docs/reports/production-readiness/<YYYY-MM-DD>-<phase>.md`
+- `docs/reports/production-readiness/<YYYY-MM-DD>-final-audit.md`
+- `docs/screenshots/<YYYY-MM-DD>-<flow>.png`
+- `README.md`
+- documentos del portfolio/CV/LinkedIn donde corresponda.
 
 No dejar evidencia final solo en `%TEMP%`.
 
-## Gate 0 — Seguridad de workspace
+---
 
-Objetivo: confirmar que se puede trabajar sin pisar nada.
+# Gate 0 - Identidad, seguridad y baseline
 
-Verificar:
+## Objetivo
+
+Confirmar repo correcto, sin pisar otra sesion y con baseline verificable.
+
+## Verificar
 
 - `git rev-parse --show-toplevel`
 - `git status --short`
-- rama actual y últimos commits.
-- procesos dev/node colgados de sesiones previas.
-- `.env` y `.env.local` ignorados, sin imprimir secretos.
-- que `goal.md` sea tratado como input esperado si existe sin commit.
+- `git branch --show-current`
+- `git log --oneline -5`
+- `.env` y `.env.local` ignorados:
+  - `git check-ignore -v .env .env.local`
+- No secretos trackeados:
+  - `git ls-files .env .env.local`
+- Leer contexto actual:
+  - `docs/handoff.md`
+  - ultimo reporte en `docs/reports/production-readiness/`.
 
-Cierre requerido:
+## Gate de avance
 
-- Repo correcto.
-- Sin cambios inesperados.
-- Si existe diff ajeno: detenerse, inspeccionar y reportar antes de tocar archivos.
+`GREEN` si:
 
-## Fase 1 — Supabase / Prisma / migrations readiness
+- repo correcto;
+- sin diff inesperado;
+- baseline documentado si cambia algo.
 
-Objetivo: cerrar el gate DB directo/admin antes de hablar de producción.
+`STOPPED` si:
 
-Verificar:
+- aparece diff ajeno no entendido;
+- el repo no es `ofertasSUPER`.
 
-- `prisma/schema.prisma`
-- `prisma/migrations/**`
-- `prisma/seed.ts`
-- `.env.example` contra uso real de env vars.
+---
+
+# Fase 1 - Supabase/RLS security hardening
+
+## Objetivo
+
+Cerrar o documentar correctamente el riesgo RLS antes de presentar el proyecto como serio.
+
+## Principio tecnico
+
+No activar RLS a ciegas. Activar RLS sin policies puede bloquear accesos via Supabase API; dejarlo apagado puede exponer tablas si `anon`/`authenticated` conservan permisos. Primero entender acceso real.
+
+## Pasos
+
+1. Verificar conexion sin imprimir secretos:
+   - parsear host/puerto de `DATABASE_URL` y `DIRECT_URL`.
+   - `npx prisma validate --schema prisma/schema.prisma`
+   - `npx prisma migrate status --schema prisma/schema.prisma`
+   - `npx supabase db query "select 1 as ok" --db-url <DIRECT_URL>` usando variable local, sin loguear valor.
+2. Ejecutar auditoria report-only:
+   - `npx supabase db advisors --help`
+   - si aplica: `npx supabase db advisors --db-url <DIRECT_URL> --type security`.
+3. Mapear acceso real:
+   - app publica lee DB solo desde Next/Prisma server-side?
+   - existe cliente Supabase browser con anon key leyendo tablas directas?
+   - que tablas necesitan lectura publica real?
+   - que tablas nunca deben exponerse por PostgREST?
+4. Proponer SQL en reporte, no aplicar todavia:
+   - opcion conservadora: enable RLS + revoke anon/authenticated en tablas no publicas;
+   - policies explicitas solo si hay acceso Supabase client legitimo.
+5. Pedir aprobacion antes de ejecutar SQL real.
+6. Si se ejecuta SQL:
+   - guardar SQL aplicado en reporte;
+   - re-ejecutar advisors;
+   - re-ejecutar Prisma migrate status;
+   - smoke API publico minimo.
+
+## Testing minimo
+
 - `npx prisma validate --schema prisma/schema.prisma`
 - `npx prisma migrate status --schema prisma/schema.prisma`
-- conectividad directa Supabase y pooler por separado.
+- Si cambia SQL/RLS:
+  - `npm test`
+  - `npm run typecheck`
+  - `npm run lint`
+  - smoke de `/api/search` y una ruta publica.
 
-Si `migrate status` falla:
+## Gate de avance
 
-- No parchear a ciegas.
-- Determinar si el problema es DNS, project ref, direct URL, password, Supabase pausado o string viejo.
-- Documentar causa probable con evidencia.
-- No pasar a Fase 2 salvo aprobación explícita del usuario para marcar esta fase como `BLOCKED_APPROVED`.
+`GREEN` si:
 
-Cierre requerido:
+- RLS queda aplicado con policies/revokes correctos y smoke verde; o
+- queda reporte honesto aprobando mantenerlo pendiente por decision explicita.
 
-- Prisma validate OK.
-- Migration status OK, o bloqueo documentado y aprobado por usuario como pendiente explícito.
-- Runbook actualizado.
+`STOPPED` si:
 
-## Fase 2 — Build / PWA blocker
+- no se entiende el acceso real;
+- el SQL propuesto puede romper la app;
+- falta aprobacion para tocar DB.
 
-Objetivo: cerrar el blocker técnico principal de build.
+## Commit sugerido
 
-Verificar en orden:
+- `docs(security): document supabase rls posture`
 
-1. `npm run build`
-2. Si falla, capturar error completo en archivo de evidencia.
-3. Confirmar si `DISABLE_PWA=true npm run build` pasa.
-4. Aislar causa raíz en `next.config.ts`, PWA plugin, manifest/offline route, service worker o compatibilidad Next/PWA.
+---
 
-Reglas:
+# Fase 2 - GitHub Actions hygiene
 
-- No aceptar `DISABLE_PWA=true` como solución final sin decisión explícita.
-- No borrar PWA para esconder el problema.
-- No cambiar dependencias sin aprobación explícita.
-- Si se cambia config o código: test/lint/typecheck/build deben pasar.
+## Objetivo
 
-Cierre requerido:
+Evitar que el repo publico muestre fallos recurrentes por infraestructura no configurada.
 
-- `npm run build` pasa sin workaround, o bloqueo documentado con causa raíz y decisión explícita.
-- `npm test`, `npm run typecheck`, `npm run lint` pasan después del cambio.
-- Smoke público acotado después del build si aplica.
+## Decision base
 
-## Fase 3 — Env / deploy / secrets readiness
+Si GitHub Actions no es parte del demo actual, no debe correr schedule en rojo. O se cargan secrets reales, o se convierte a ejecucion manual/guarded.
 
-Objetivo: dejar claro qué falta para deploy real y GitHub Actions.
+## Pasos
 
-Verificar:
+1. Leer workflows:
+   - `.github/workflows/update-prices.yml`
+   - `.github/workflows/ingest.yml`
+   - `.github/workflows/cleanup.yml`
+   - `.github/workflows/populate-db.yml`
+   - `.github/workflows/lighthouse-ci.yml`
+2. Confirmar estado de runs con API/GitHub UI si hay acceso.
+3. Clasificar workflows:
+   - necesarios para demo publico;
+   - jobs operativos futuros;
+   - jobs peligrosos si faltan secrets.
+4. Elegir estrategia con aprobacion del usuario:
+   - cargar GitHub Actions secrets; o
+   - pausar schedules y dejar `workflow_dispatch`; o
+   - agregar guards explicitos con mensaje claro.
+5. Si se modifica YAML:
+   - validar YAML visualmente y por parseo si hay herramienta disponible;
+   - no tocar logica de ingesta.
 
-- `.env.example` completo y honesto.
-- Secrets requeridos para Vercel/GitHub/Supabase/Clerk/Upstash/VTEX.
-- GitHub Actions existentes:
-  - `.github/workflows/*.yml`
-- No hay secretos trackeados.
-- Clerk production keys no se simulan.
+## Testing minimo
 
-Comandos seguros sugeridos:
+- `npm test`
+- `npm run typecheck`
+- `npm run lint`
+- inspeccion de YAML.
+- si se cargan secrets y se dispara manualmente: verificar run manual acotado.
 
-- `git ls-files .env .env.local .env.example`
-- `git check-ignore -v .env .env.local`
-- búsqueda de patrones de secretos solo sobre archivos trackeados y sin imprimir valores completos.
+## Gate de avance
 
-Cierre requerido:
+`GREEN` si:
 
-- Checklist de secrets por ambiente.
-- Qué está verificado localmente vs qué requiere dashboard externo.
-- Docs actualizadas sin exponer valores.
+- no quedan schedules que fallen por secrets ausentes; o
+- secrets requeridos estan cargados y un run manual minimo pasa; o
+- el riesgo queda documentado y aprobado explicitamente como no bloqueante.
 
-## Fase 4 — Ingesta controlada real
+`BLOCKED_APPROVED` si:
 
-Objetivo: probar la ingesta de forma progresiva, no masiva.
+- falta acceso a GitHub Secrets y el usuario aprueba diferir.
 
-Orden obligatorio:
+## Commit sugerido
 
-1. `npm run probe:vtex -- --source=disco --query=leche --count=1`
-2. `INGESTION_V2=shadow npm run ingest -- --dry-run --source=disco --limit=1`
-3. Solo con aprobación explícita: corrida mínima no dry-run de una fuente.
-4. Solo después de evidencia verde y aprobación explícita: multi-source acotado.
+- `ci: pause scheduled ingestion workflows until secrets are configured`
+- o `docs(ci): document required github actions secrets`.
 
-Registrar:
+---
 
-- sourceCount.
-- fetched/staged/promoted/rejected/failedSources.
-- source_health si aplica.
-- si hubo writes reales o no.
-- rollback/cleanup si hubo writes reales.
+# Fase 3 - Vercel deploy + smoke publico real
 
-Cierre requerido:
+## Objetivo
 
-- Dry-run verde.
-- Si se autorizó write real: evidencia de registros creados/actualizados y rollback/limpieza si corresponde.
-- No active/multi-source sin aprobación.
+Tener demo publica verificada. Sin demo, LinkedIn/portfolio pierde fuerza.
 
-## Fase 5 — E2E público profundo, acotado y seguro
+## Pasos
 
-Objetivo: probar flujo público real sin romper la máquina.
+1. Confirmar repo remoto y rama usada por Vercel.
+2. Preparar checklist de env vars para Vercel sin valores:
+   - `DATABASE_URL`
+   - `DIRECT_URL`
+   - `VTEX_SHA256_HASH`
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` si aplica
+   - `CLERK_SECRET_KEY` si aplica
+   - `UPSTASH_REDIS_REST_URL` si aplica
+   - `UPSTASH_REDIS_REST_TOKEN` si aplica
+3. Verificar si Vercel ya esta conectado al repo correcto.
+4. Deploy solo con aprobacion explicita o si el usuario ya lo esta ejecutando.
+5. Revisar logs de deploy si falla.
+6. Smoke publico acotado sobre URL final:
+   - `/`
+   - `/buscar?q=leche`
+   - `/api/search?q=yerba&limit=1`
+   - producto sample descubierto desde API real si existe
+   - `/canasta`
+   - `/ofertas`
+7. Guardar screenshots y reporte de smoke.
 
-Rutas mínimas:
+## Reglas
 
-- `/`
-- `/buscar?q=leche`
-- `/api/search?q=yerba&limit=1`
-- `/producto/[ean]` descubierto desde API real.
-- `/canasta`
-- `/ofertas`
-- `/categoria/[slug]` si hay categoría real.
+- No afirmar "deploy listo" hasta ver URL real y smoke verde.
+- No simular success con localhost.
+- Si una ruta no tiene datos, documentar "sin datos reales" en vez de fakear.
+- No correr E2E amplio; smoke serial y acotado.
 
-Reglas:
+## Testing minimo
 
-- Chromium/Edge headless acotado, serial, 1 worker si aplica.
-- No Playwright amplio sin justificación y aprobación.
-- Capturar screenshots solo de rutas clave.
-- Si no hay datos reales para un flujo, marcar gate como no cerrado; no fakear.
-- Confirmar que el servidor usado para smoke quede apagado al final.
+- Smoke HTTP con status codes.
+- Browser screenshot de home y busqueda.
+- `npm test`, `npm run typecheck`, `npm run lint` si hubo cambios de codigo.
+- Build local solo con aprobacion explicita; Vercel build logs pueden servir como evidencia del deploy.
 
-Cierre requerido:
+## Gate de avance
 
-- Sin 500 visible.
-- Sin Prisma overlay.
-- Sin claim regression.
-- Screenshots/evidencia guardados en `docs/screenshots/` o `docs/reports/`.
+`GREEN` si:
 
-## Fase 6 — Admin / Clerk / promociones
+- Vercel deploy esta accesible;
+- rutas minimas no devuelven 500;
+- screenshots/evidencia guardadas;
+- limites/pendientes documentados.
 
-Objetivo: validar admin sin abrir brechas ni inventar producción.
+`BLOCKED_APPROVED` si:
 
-Verificar:
+- faltan env vars/dashboard y el usuario decide diferir.
 
-- middleware Clerk.
-- allowlist/admin role.
-- rutas admin.
-- APIs admin.
+## Commit sugerido
 
-Escrituras DB:
+- `docs(deploy): add vercel smoke evidence`
 
-- Crear promoción temporal solo con aprobación explícita.
-- Registrar payload, ID, visibilidad en `/ofertas`, y borrado.
-- Verificar que no queden datos temporales vivos.
+---
 
-Cierre requerido:
+# Fase 4 - GitHub repo proof pack
 
-- Auth/admin gate probado o documentado como pendiente por falta de credenciales/permiso.
-- No dejar datos temporales vivos.
+## Objetivo
 
-## Fase 7 — Performance / complexity report-only scan
+Dejar el repo publico facil de entender para recruiter y defendible en entrevista tecnica.
 
-Objetivo: encontrar riesgos de complejidad sin optimizar prematuramente.
+## README debe incluir
 
-Modo por defecto: report-only.
+- Problema que resuelve.
+- Demo URL si existe.
+- Screenshots actuales.
+- Stack real.
+- Arquitectura breve:
+  - Next.js frontend/API routes.
+  - Prisma/Supabase Postgres.
+  - Redis/Upstash fail-open para cache/rate-limit.
+  - Ingesta VTEX/scripts/schedulers.
+  - Admin/operational surfaces si estan verificadas.
+- Features implementadas vs pendientes.
+- Comandos locales.
+- Variables necesarias sin secretos.
+- Testing verificado con fecha.
+- Estado honesto:
+  - "portfolio-grade / production-oriented" si los gates lo respaldan;
+  - no "production-ready" si RLS, deploy, E2E profundo u ops siguen pendientes.
+- Badges solo si estan verdes.
 
-Analizar:
+## Proof pack debe mapear
 
-- O(n), O(n*m), repeated scans.
-- N+1 DB/API calls.
-- repeated filter/map/sort.
-- rutas pesadas de render/runtime.
-- scripts de ingesta.
-
-Áreas sugeridas:
-
-- `src/lib/catalog.ts`
-- `src/app/api/search/route.ts`
-- `src/app/canasta/page.tsx`
-- `src/components/canasta-page.tsx`
-- `scripts/ingest.ts`
-- `scripts/pipeline/*.ts`
-- `src/lib/ingestion/**/*.ts`
-- `src/lib/vtex/**/*.ts`
-
-Output requerido:
-
-- finding.
-- archivo/línea.
-- complejidad actual.
-- complejidad sugerida.
-- riesgo.
-- test necesario.
-- si conviene hacer ahora o diferir.
-
-Cierre requerido:
-
-- Reporte markdown guardado.
-- Sin cambios de código salvo aprobación posterior.
-- Hallazgos High deben convertirse en fase propia antes de optimizar.
-
-## Fase 8 — GitHub / portfolio proof pack
-
-Objetivo: dejar el repo presentable y defendible.
-
-Verificar/actualizar:
-
-- `README.md`
-- screenshots reales.
-- arquitectura.
-- stack.
-- comandos de verificación.
-- qué está implementado.
-- qué falta.
-- no claims inflados.
-- badges solo si son reales.
-
-Cierre requerido:
-
-- README honesto y recruiter-friendly.
-- proof pack con comandos, screenshots y límites claros.
-- `docs/handoff.md` final.
-
-## Gate final — Auditoría de cierre
-
-Antes de marcar el goal completo:
-
-1. Restate objective como checklist concreto.
-2. Mapear cada fase a:
-   - estado: `GREEN`, `BLOCKED_APPROVED` o `STOPPED`;
-   - archivo/commit;
-   - comando ejecutado;
-   - resultado;
-   - evidencia guardada;
-   - pendiente si existe.
-3. Ejecutar verificación final mínima:
-   - `npm test`
-   - `npm run typecheck`
-   - `npm run lint`
-   - `npm run build` si la fase Build/PWA se ejecutó o no fue explícitamente diferida.
-4. `git status --short` debe estar limpio.
-5. Revisar commits recientes:
-   - convencionales;
-   - sin Co-Authored-By;
-   - sin atribución AI.
-6. Actualizar memoria/handoff.
-
-Criterio para decir “cerrado”:
-
-- Todas las fases ejecutadas están verdes.
-- Las fases no ejecutadas están explícitamente diferidas con razón y aprobación.
-- No hay blockers ocultos.
-- No hay claims production-ready si build/deploy/E2E/secrets siguen pendientes.
-- Working tree limpio.
-
-Si algo no puede cerrarse, detenerse y reportar exactamente:
-
-- qué falló;
-- evidencia;
-- impacto;
-- siguiente acción recomendada;
-- si requiere aprobación del usuario.
-
-## Loopholes cerrados en esta versión
-
-- Se define que la confianza aplica a la estrategia/gatekeeping, no al resultado de producción.
-- Se agregan estados formales `GREEN`, `BLOCKED_APPROVED`, `STOPPED`.
-- Se prohíbe usar evidencia vieja como cierre.
-- Se agregan aprobaciones obligatorias antes de escrituras reales, dependencia nueva, E2E amplio, deploy/push y cambios de dashboards/secrets.
-- Se exige guardar evidencia en paths versionables, no solo en `%TEMP%`.
-- Se separa build/PWA de continuity readiness y se impide aceptar `DISABLE_PWA=true` como solución silenciosa.
-- Se agregan comandos seguros para secrets sin imprimir valores.
-- Se obliga a apagar servidores de smoke.
-- Se exige convertir hallazgos High de performance en fase propia antes de tocar código.
+| Claim | Evidencia | Archivo/comando | Estado |
+|---|---|---|---|
+| Busqueda publica | smoke/API/screenshot | ruta + reporte | GREEN/BLOCKED |
+| Canasta | screenshot/flow | docs/screenshots | GREEN/BLOCKED |
+| Prisma/Supabase | migrate status | comando | GREEN/BLOCKED |
+| Ingesta | dry-run/probe | reporte | GREEN/BLOCKED |
+| Seguridad | RLS report | reporte | GREEN/BLOCKED |
+
+## Testing minimo
+
+- `npm test`
+- `npm run typecheck`
+- `npm run lint`
+- link checks manuales del README.
+
+## Gate de avance
+
+`GREEN` si:
+
+- README cuenta una historia clara y honesta;
+- todo claim fuerte apunta a evidencia;
+- no hay badges rojos/enganosos;
+- handoff actualizado.
+
+## Commit sugerido
+
+- `docs(readme): present ofertasSUPER as portfolio case study`
+
+---
+
+# Fase 5 - Portfolio case study
+
+## Objetivo
+
+Actualizar portfolio para que ofertasSUPER sea proyecto lider y explique valor tecnico sin sonar inflado.
+
+## Scope
+
+Tocar portfolio/CV assets solo dentro de esta fase. No tocar `ofertasas`. `test-kimi` se mantiene como segundo proyecto fuerte.
+
+## Pasos
+
+1. Identificar repo/carpeta actual del portfolio.
+2. Verificar estado con `git status` antes de editar.
+3. Actualizar seccion de proyectos:
+   - ofertasSUPER primero;
+   - test-kimi segundo;
+   - landing/otro proyecto solo como soporte si suma.
+4. Escribir case study corto:
+   - problema;
+   - solucion;
+   - arquitectura;
+   - decisiones tecnicas;
+   - evidencia;
+   - limites honestos;
+   - link demo/repo.
+5. Mantener copy recruiter-friendly:
+   - concreto;
+   - escaneable;
+   - keywords ATS reales;
+   - sin seniority inventado.
+6. Verificar visualmente el portfolio si hay preview local segura.
+
+## Testing minimo
+
+- tests del portfolio si existen, por ejemplo:
+  - `node --test tests/portfolio.test.mjs`
+- lint/build solo si el proyecto lo usa y el usuario autoriza segun reglas del repo.
+- browser smoke acotado si hay servidor local seguro.
+
+## Gate de avance
+
+`GREEN` si:
+
+- portfolio muestra ofertasSUPER como lead project;
+- links reales funcionan;
+- claims son defendibles;
+- visual no queda roto;
+- evidencia/test guardado.
+
+## Commit sugerido
+
+- `docs(portfolio): feature ofertasSUPER case study`
+- o commit equivalente en el repo del portfolio si es otro checkout.
+
+---
+
+# Fase 6 - LinkedIn, CV y activacion laboral
+
+## Objetivo
+
+Convertir el proyecto cerrado en senales laborales: CV, LinkedIn Featured, post tecnico y snippets para aplicar.
+
+## Principio
+
+No vender humo. Subir percepcion de madurez con evidencia tecnica real, no con seniority falso.
+
+## Entregables
+
+1. CV:
+   - ofertasSUPER como proyecto principal;
+   - bullets con impacto tecnico real;
+   - stack y keywords ATS;
+   - nada de "empresa" o "experiencia formal" si no existio.
+2. LinkedIn Featured:
+   - demo;
+   - repo;
+   - portfolio.
+3. Post tecnico:
+   - problema del comparador;
+   - arquitectura resumida;
+   - tradeoffs: Supabase/Prisma, ingesta, fail-open, RLS/security posture;
+   - aprendizaje;
+   - CTA profesional.
+4. Application snippets:
+   - mensaje corto para recruiter;
+   - mensaje para dev/tech lead;
+   - descripcion de proyecto para formularios.
+
+## Revision
+
+- Cada claim debe tener evidencia.
+- Prohibido decir:
+  - senior;
+  - production-ready;
+  - experiencia formal no real;
+  - metricas inventadas;
+  - usuarios/clientes reales no verificados.
+- Si hay CV/portfolio tests, correrlos.
+
+## Gate de avance
+
+`GREEN` si:
+
+- CV actualizado/exportable;
+- LinkedIn copy listo para pegar;
+- post listo;
+- application snippets listos;
+- links apuntan a demo/repo/portfolio reales.
+
+`BLOCKED_APPROVED` si:
+
+- publicacion en LinkedIn queda manual por decision del usuario.
+
+## Commit sugerido
+
+- `docs(career): update ofertasSUPER professional positioning`
+- o commit equivalente en repo/documentos correspondientes.
+
+---
+
+# Gate final - Auditoria de cierre
+
+## Objetivo
+
+Cerrar sin autoengano. Si algo queda pendiente, debe estar escrito y aceptado.
+
+## Reporte final requerido
+
+Crear/actualizar:
+
+`docs/reports/production-readiness/<YYYY-MM-DD>-professional-readiness-final-audit.md`
+
+Debe incluir:
+
+| Fase | Estado | Evidencia | Commit/archivo | Pendiente |
+|---|---|---|---|---|
+| 0 Workspace | GREEN/BLOCKED/STOPPED | comando | archivo/commit | pendiente |
+| 1 Supabase/RLS | GREEN/BLOCKED/STOPPED | comando/reporte | archivo/commit | pendiente |
+| 2 Actions | GREEN/BLOCKED/STOPPED | run/log/config | archivo/commit | pendiente |
+| 3 Vercel smoke | GREEN/BLOCKED/STOPPED | URL/screenshot | archivo/commit | pendiente |
+| 4 GitHub proof | GREEN/BLOCKED/STOPPED | README/proof | archivo/commit | pendiente |
+| 5 Portfolio | GREEN/BLOCKED/STOPPED | screenshot/test | archivo/commit | pendiente |
+| 6 LinkedIn/CV | GREEN/BLOCKED/STOPPED | docs/copy | archivo/commit | pendiente |
+
+## Verificacion minima final en ofertasSUPER
+
+Salvo bloqueo aprobado:
+
+- `npm test`
+- `npm run typecheck`
+- `npm run lint`
+- `npx prisma migrate status --schema prisma/schema.prisma`
+- smoke publico si hay URL Vercel.
+
+No correr build local salvo aprobacion explicita. Si hay deploy, usar Vercel build logs como evidencia.
+
+## Git final
+
+- `git status --short` limpio en cada repo tocado.
+- Commits convencionales.
+- Sin Co-Authored-By.
+- Sin atribucion AI.
+- Sin secretos trackeados.
+
+## Engram final
+
+Guardar:
+
+- decision de RLS/security;
+- estado de Actions;
+- URL demo y smoke;
+- posicion final del proyecto en portfolio/CV/LinkedIn;
+- pendientes reales.
+
+## Criterio para decir "cerrado para objetivo laboral"
+
+Se puede decir cerrado solo si:
+
+- Supabase/RLS tiene decision segura y documentada;
+- GitHub publico no muestra senales rojas innecesarias;
+- demo Vercel fue smokeada;
+- README/proof pack esta honesto;
+- portfolio usa ofertasSUPER como proyecto lider;
+- CV/LinkedIn copy esta listo o publicado;
+- todo claim esta respaldado por evidencia;
+- working tree limpio.
+
+Si una fase no cierra, no maquillar. Reportar:
+
+1. que fallo;
+2. evidencia exacta;
+3. impacto laboral/reputacional;
+4. proxima accion unica;
+5. si requiere aprobacion del usuario.
