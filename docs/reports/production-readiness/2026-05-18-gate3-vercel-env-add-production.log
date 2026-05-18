@@ -1,0 +1,131 @@
+Vercel production env add started 2026-05-18T00:33:01.9806806-03:00
+ADD DATABASE_URL production
+node.exe : Retrieving project…
+At C:\Users\picala\AppData\Roaming\npm\vercel.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/vercel/dist/vc.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Retrieving project…:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Retrieving project…
+Saving
+Overrode Environment Variable DATABASE_URL to Project ofertas-super [264ms]
+Common next commands:
+- `vercel env ls`
+- `vercel env pull`
+ADD DIRECT_URL production
+node.exe : Retrieving project…
+At C:\Users\picala\AppData\Roaming\npm\vercel.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/vercel/dist/vc.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Retrieving project…:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Retrieving project…
+Saving
+Overrode Environment Variable DIRECT_URL to Project ofertas-super [300ms]
+Common next commands:
+- `vercel env ls`
+- `vercel env pull`
+ADD NEXT_PUBLIC_SITE_URL production
+node.exe : Retrieving project…
+At C:\Users\picala\AppData\Roaming\npm\vercel.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/vercel/dist/vc.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Retrieving project…:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+WARNING! NEXT_PUBLIC_ variables can be seen by anyone visiting your site
+Retrieving project…
+Saving
+Overrode Environment Variable NEXT_PUBLIC_SITE_URL to Project ofertas-super [433ms]
+Common next commands:
+- `vercel env ls`
+- `vercel env pull`
+ADD NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY production
+node.exe : Retrieving project…
+At C:\Users\picala\AppData\Roaming\npm\vercel.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/vercel/dist/vc.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Retrieving project…:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+WARNING! The NEXT_PUBLIC_ prefix will make CLERK_PUBLISHABLE_KEY visible to anyone visiting your site
+Retrieving project…
+Saving
+Overrode Environment Variable NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY to Project ofertas-super [281ms]
+Common next commands:
+- `vercel env ls`
+- `vercel env pull`
+ADD CLERK_SECRET_KEY production
+node.exe : Retrieving project…
+At C:\Users\picala\AppData\Roaming\npm\vercel.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/vercel/dist/vc.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Retrieving project…:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Retrieving project…
+Saving
+Overrode Environment Variable CLERK_SECRET_KEY to Project ofertas-super [298ms]
+Common next commands:
+- `vercel env ls`
+- `vercel env pull`
+SKIP ADMIN_EMAILS missing_or_empty
+ADD VTEX_SHA256_HASH production
+node.exe : Retrieving project…
+At C:\Users\picala\AppData\Roaming\npm\vercel.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/vercel/dist/vc.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Retrieving project…:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Retrieving project…
+Saving
+Overrode Environment Variable VTEX_SHA256_HASH to Project ofertas-super [298ms]
+Common next commands:
+- `vercel env ls`
+- `vercel env pull`
+ADD UPSTASH_REDIS_REST_URL production
+node.exe : Retrieving project…
+At C:\Users\picala\AppData\Roaming\npm\vercel.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/vercel/dist/vc.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Retrieving project…:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Retrieving project…
+Saving
+Overrode Environment Variable UPSTASH_REDIS_REST_URL to Project ofertas-super [302ms]
+Common next commands:
+- `vercel env ls`
+- `vercel env pull`
+ADD UPSTASH_REDIS_REST_TOKEN production
+node.exe : Retrieving project…
+At C:\Users\picala\AppData\Roaming\npm\vercel.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/vercel/dist/vc.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Retrieving project…:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Retrieving project…
+Saving
+Overrode Environment Variable UPSTASH_REDIS_REST_TOKEN to Project ofertas-super [300ms]
+Common next commands:
+- `vercel env ls`
+- `vercel env pull`
+ADD DISABLE_PWA production
+node.exe : Retrieving project…
+At C:\Users\picala\AppData\Roaming\npm\vercel.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/vercel/dist/vc.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Retrieving project…:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Retrieving project…
+Saving
+Overrode Environment Variable DISABLE_PWA to Project ofertas-super [307ms]
+Common next commands:
+- `vercel env ls`
+- `vercel env pull`
+Vercel production env add finished 2026-05-18T00:33:26.2278560-03:00

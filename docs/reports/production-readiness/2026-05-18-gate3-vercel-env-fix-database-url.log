@@ -1,0 +1,15 @@
+Fix DATABASE_URL for Prisma PgBouncer mode 2026-05-18T00:36:53.2156802-03:00
+host=aws-1-sa-east-1.pooler.supabase.com; port=6543; query_keys=pgbouncer,connection_limit,pool_timeout
+node.exe : Retrieving project…
+At C:\Users\picala\AppData\Roaming\npm\vercel.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/vercel/dist/vc.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Retrieving project…:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Retrieving project…
+Saving
+Overrode Environment Variable DATABASE_URL to Project ofertas-super [340ms]
+Common next commands:
+- `vercel env ls`
+- `vercel env pull`

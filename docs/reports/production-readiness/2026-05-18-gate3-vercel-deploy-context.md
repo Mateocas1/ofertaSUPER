@@ -1,6 +1,6 @@
 ﻿# Gate 3 - Vercel deploy context - 2026-05-18
 
-Status: `STOPPED_PENDING_VERCEL_DECISION`
+Status: `GREEN`
 
 This gate audited the Vercel deployment context without creating, linking, or deploying a project. No Vercel dashboard/project mutation was performed.
 
@@ -74,3 +74,56 @@ To continue Gate 3, the user must explicitly approve one concrete action:
 ## Claim boundary
 
 This gate does not claim the app is deployed. It only proves the repo is pushed, Vercel CLI is authenticated, and the current blocking issue is the missing/undecided Vercel project plus dashboard envs.
+
+
+---
+
+## Gate execution after user authorization
+
+The user explicitly authorized creating/linking the new Vercel project and
+continuing with envs plus public smoke.
+
+### Project and deployment actions
+
+| Action | Evidence | Result |
+|---|---|---|
+| Create project | `2026-05-18-gate3-vercel-project-add.log` | `ofertas-super` created. |
+| Link checkout | `2026-05-18-gate3-vercel-link.log` | `.vercel/project.json` created locally and ignored by git. |
+| Inspect linked project | `2026-05-18-gate3-vercel-inspect-ofertas-super-post-link.log` | Project ID `prj_Zk5O6U6w2YwKvF1UF6gyTl5Wl7SG`, root directory `.`. |
+| Add Production envs | `2026-05-18-gate3-vercel-env-add-production.log` and `2026-05-18-gate3-vercel-env-ls-post-add.log` | Required public smoke envs configured; `ADMIN_EMAILS` was missing locally and was not invented. |
+| First deploy | `2026-05-18-gate3-vercel-deploy-prod.log` | Failed during `/sitemap.xml` prerender with Prisma/PgBouncer prepared statement error. |
+| Fix DB URL | `2026-05-18-gate3-vercel-env-fix-database-url.log` | Production `DATABASE_URL` reset with `pgbouncer=true`, `connection_limit=3`, `pool_timeout=10`. |
+| Retry deploy after DB fix | `2026-05-18-gate3-vercel-deploy-prod-retry1.log` | Build/deploy ready, but public smoke returned 404 because project framework was still `Other`. |
+| Patch project framework | `2026-05-18-gate3-vercel-api-patch-framework.log`, `2026-05-18-gate3-vercel-inspect-after-framework-patch.log` | Framework set to `Next.js`; output directory returned to Next.js default. |
+| Disable SSO protection | `2026-05-18-gate3-vercel-disable-sso.log`, `2026-05-18-gate3-vercel-protection.json` | New project public access enabled for smoke. |
+| Final production deploy | `2026-05-18-gate3-vercel-deploy-prod-retry2.log` | READY deployment aliased to `https://ofertas-super.vercel.app`. |
+
+### Public smoke evidence
+
+Base URL: `https://ofertas-super.vercel.app`
+
+| Route | Result |
+|---|---|
+| `/` | 200 OK; no framework/Prisma error text detected. |
+| `/buscar?q=leche` | 200 OK; no framework/Prisma error text detected. |
+| `/api/search?q=yerba&limit=1` | 200 OK; returned 1 item and sample EAN `7790710334757`. |
+| `/producto/7790710334757` | 200 OK; no framework/Prisma error text detected. |
+| `/canasta` | 200 OK; no framework/Prisma error text detected. |
+
+Smoke JSON:
+
+- `docs/reports/production-readiness/2026-05-18-gate3-vercel-public-smoke.json`
+
+Screenshot evidence:
+
+- `docs/screenshots/vercel-public-home-2026-05-18.png`
+- `docs/screenshots/vercel-public-search-2026-05-18.png`
+- `docs/screenshots/vercel-public-canasta-2026-05-18.png`
+
+### Remaining limits
+
+- `ADMIN_EMAILS` was not present locally and was not invented, so production
+  admin access remains intentionally unclaimed.
+- GitHub Actions schedules remain paused; ingestion automation is not active.
+- The project is now publicly deployable/smoke-verified, but this is still not a
+  broad production-readiness claim.
