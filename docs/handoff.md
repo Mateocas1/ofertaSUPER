@@ -1,3 +1,18 @@
+# Hardening sprint - P1-A legacy write guard implemented - 2026-05-19
+
+- Implemented first Goal 2 slice from the engineering audit: P1-A legacy write-script guard.
+- Commit: `6d01b9f fix(ingestion): guard legacy write scripts`.
+- Legacy scraper/update paths now default to dry-run. Real legacy writes require `--confirm-write` or `INGESTION_WRITE_APPROVED=true`.
+- `.github/workflows/update-prices.yml` now defaults manual dispatch to `--dry-run`; real writes require `confirm_write: true`; status reporting is limited to confirmed writes.
+- Verification passed: slice test 3/3, `npm test` 24/24, `npm run typecheck` OK, `npm run lint` OK.
+- No build was run. No schedules were re-enabled. No dashboards were touched. Commit remains local unless pushed later.
+- Incident: the RED test exposed the old footgun by hitting the real legacy write path before the guard existed. Read-only DB check found 50 `price_history` rows in the last hour around `2026-05-19T01:19:58Z`-`2026-05-19T01:19:59Z`. No cleanup/delete was performed without user approval.
+- Evidence:
+  - `docs/reports/hardening/2026-05-19-ofertassuper-hardening-sprint.md`
+  - `docs/reports/hardening/2026-05-19-ofertassuper-before-after.md`
+
+---
+
 # Engineering audit - report-only complete - 2026-05-19
 
 - Completed Goal 1 technical audit in report-only mode; no product code, SQL, ingestion, deploy, dashboard, LinkedIn, CV, or portfolio mutation was performed.
