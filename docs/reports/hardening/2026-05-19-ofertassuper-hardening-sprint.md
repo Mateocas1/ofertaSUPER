@@ -1,22 +1,22 @@
 # ofertasSUPER hardening sprint - 2026-05-19
 
-Status: `P1-A IMPLEMENTED, CLEANUP DECISION PENDING`
+Status: `P1-A IMPLEMENTED, P1-D WORKFLOW GUARD IMPLEMENTED, CLEANUP DECISION PENDING`
 
-This sprint started from the Goal 1 audit backlog. No P0 existed, so the selected first work unit was P1-A: guard legacy write scripts.
+This sprint started from the Goal 1 audit backlog. No P0 existed, so the first selected work unit was P1-A: guard legacy write scripts. A second safe, no-DB-write work unit closed the workflow-level part of P1-D while the accidental RED-write cleanup decision remains pending.
 
 ## Scope selected
 
 | Gate | Decision |
 |---|---|
-| Selected slice | P1-A - Guard legacy write scripts |
-| Why first | It had the highest data-safety and interview value: accidental writes are more dangerous than polish/perf cleanup. |
-| Not selected now | P1-B public API fallback, P1-C catalog scalability, P1-D ingestion idempotency, P1-E admin positive path. |
+| Selected slices | P1-A - Guard legacy write scripts; P1-D - workflow-level ingestion/update concurrency guard |
+| Why first | P1-A had the highest data-safety and interview value: accidental writes are more dangerous than polish/perf cleanup. P1-D workflow concurrency is the next safest data-correctness improvement because it is static CI config and performs no DB mutation. |
+| Not selected now | P1-B public API fallback, P1-C catalog scalability, P1-D DB/application-level idempotency, P1-E admin positive path. |
 | Build | Not run. |
 | External dashboards | Not touched. |
 | Schedules | Not re-enabled. |
 | Push | Not pushed. |
 
-## Work unit
+## Work unit 1 - P1-A legacy write guard
 
 Commit: `6d01b9f fix(ingestion): guard legacy write scripts`
 
@@ -40,6 +40,27 @@ Changed files:
   - true path runs `npm run update:prices -- --confirm-write`;
   - scraper status reporting only runs for confirmed real writes.
 - README documents the legacy write-safety boundary.
+
+## Work unit 2 - P1-D workflow concurrency guard
+
+Commit subject: `fix(ingestion): serialize data workflows`
+
+Changed files:
+
+- `.github/workflows/ingest.yml`
+- `.github/workflows/update-prices.yml`
+- `tests/ingestion-concurrency.test.ts`
+- `docs/reports/hardening/2026-05-19-ofertassuper-hardening-sprint.md`
+- `docs/reports/hardening/2026-05-19-ofertassuper-before-after.md`
+- `docs/handoff.md`
+
+What changed:
+
+- `ingest.yml` and `update-prices.yml` now share top-level workflow `concurrency`.
+- The shared group is `ofertas-super-data-jobs`.
+- `cancel-in-progress: false` serializes data jobs instead of cancelling an in-flight ingestion/update.
+- Schedules remain paused; this only hardens manual dispatch and future schedule readiness.
+- This does not claim full DB/application-level idempotency; advisory locks or claim patterns remain a later P1-D slice.
 
 ## TDD evidence
 
@@ -70,6 +91,32 @@ Result after implementation:
 
 - 3/3 tests passed.
 
+### RED - P1-D workflow concurrency
+
+Command:
+
+```bash
+npx tsx --test tests/ingestion-concurrency.test.ts
+```
+
+Result before implementation:
+
+- 1/1 test failed.
+- Failure proved `.github/workflows/ingest.yml` lacked top-level `concurrency`.
+- The same assertion covers `.github/workflows/update-prices.yml`.
+
+### GREEN - P1-D workflow concurrency
+
+Command:
+
+```bash
+npx tsx --test tests/ingestion-concurrency.test.ts
+```
+
+Result after implementation:
+
+- 1/1 test passed.
+
 ## Incident note
 
 During the RED run, the intentionally failing `runStoreScraper()` test exposed the exact production-write footgun by calling the current implementation before dependency injection existed. Because the pre-fix function ignored the test-only `dependencies` option and defaulted `dryRun = false`, it executed the real legacy Disco write path.
@@ -89,7 +136,8 @@ No build was run.
 | Check | Result |
 |---|---|
 | `npx tsx --test tests/legacy-write-safety.test.ts` | 3/3 passing |
-| `npm test` | 24/24 passing |
+| `npx tsx --test tests/ingestion-concurrency.test.ts` | 1/1 passing |
+| `npm test` | 25/25 passing |
 | `npm run typecheck` | exit 0 |
 | `npm run lint` | exit 0 |
 
@@ -100,7 +148,8 @@ No build was run.
 | P1-A legacy write guard | Implemented in `6d01b9f` | Tests and docs included. |
 | P1-B public API fallback/error semantics | Deferred | Separate API contract slice. |
 | P1-C product listing scalability | Deferred | Higher query-design risk; needs focused tests. |
-| P1-D ingestion idempotency/concurrency | Deferred | Separate data-correctness slice. |
+| P1-D workflow-level ingestion/update concurrency | Implemented | Shared GitHub Actions concurrency group serializes manual data jobs without re-enabling schedules. |
+| P1-D DB/application-level idempotency | Deferred | Requires a separate data-correctness slice with advisory lock or staging claim tests. |
 | P1-E production admin positive path | Deferred | Requires real credentials/session. |
 | Cleanup of accidental RED write | Pending user decision | Deletes/rollback require explicit approval. |
 
@@ -110,9 +159,12 @@ Safe:
 
 > Legacy scraper/update paths now default to dry-run and require explicit confirmation before real writes.
 
+> Ingest/update GitHub workflows now share a data-job concurrency group so manual runs do not overlap.
+
 Not safe:
 
 - production-ready ingestion
 - active ingestion schedule readiness
+- full DB/application-level ingestion idempotency
 - no accidental write occurred during the sprint
 - full data rollback completed

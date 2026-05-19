@@ -27,6 +27,15 @@ Observed rows:
 | supermarket | `disco` |
 | sample timestamp range | around `2026-05-19T01:19:53.951Z` to `2026-05-19T01:19:59.212Z` |
 
+Revalidated before any cleanup attempt:
+
+- mode: read-only
+- candidate count: `50`
+- id range: `4945`-`4994`
+- missing expected ids: none
+- same-window `disco` rows: `50`
+- cleanup still not executed
+
 Candidate ids:
 
 ```text

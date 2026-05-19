@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ofertas-super-data-jobs
+  cancel-in-progress: false
+
 jobs:
   ingest-shadow:
     runs-on: ubuntu-latest
