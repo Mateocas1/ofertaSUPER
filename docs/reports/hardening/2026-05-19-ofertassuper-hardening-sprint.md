@@ -1,16 +1,16 @@
 # ofertasSUPER hardening sprint - 2026-05-19
 
-Status: `P1-A IMPLEMENTED, P1-D WORKFLOW GUARD IMPLEMENTED, CLEANUP DECISION PENDING`
+Status: `P1-A IMPLEMENTED, P1-B IMPLEMENTED, P1-D WORKFLOW GUARD IMPLEMENTED, CLEANUP DECISION PENDING`
 
-This sprint started from the Goal 1 audit backlog. No P0 existed, so the first selected work unit was P1-A: guard legacy write scripts. A second safe, no-DB-write work unit closed the workflow-level part of P1-D while the accidental RED-write cleanup decision remains pending.
+This sprint started from the Goal 1 audit backlog. No P0 existed, so the first selected work unit was P1-A: guard legacy write scripts. P1-B normalized public catalog API fallback semantics. A third safe, no-DB-write work unit closed the workflow-level part of P1-D while the accidental RED-write cleanup decision remains pending.
 
 ## Scope selected
 
 | Gate | Decision |
 |---|---|
-| Selected slices | P1-A - Guard legacy write scripts; P1-D - workflow-level ingestion/update concurrency guard |
-| Why first | P1-A had the highest data-safety and interview value: accidental writes are more dangerous than polish/perf cleanup. P1-D workflow concurrency is the next safest data-correctness improvement because it is static CI config and performs no DB mutation. |
-| Not selected now | P1-B public API fallback, P1-C catalog scalability, P1-D DB/application-level idempotency, P1-E admin positive path. |
+| Selected slices | P1-A - Guard legacy write scripts; P1-B - public catalog API fallback semantics; P1-D - workflow-level ingestion/update concurrency guard |
+| Why first | P1-A had the highest data-safety and interview value. P1-B closes a public runtime resilience gap without changing UI. P1-D workflow concurrency is a safe data-correctness improvement because it is static CI config and performs no DB mutation. |
+| Not selected now | P1-C catalog scalability, P1-D DB/application-level idempotency, P1-E admin positive path. |
 | Build | Not run. |
 | External dashboards | Not touched. |
 | Schedules | Not re-enabled. |
@@ -61,6 +61,29 @@ What changed:
 - `cancel-in-progress: false` serializes data jobs instead of cancelling an in-flight ingestion/update.
 - Schedules remain paused; this only hardens manual dispatch and future schedule readiness.
 - This does not claim full DB/application-level idempotency; advisory locks or claim patterns remain a later P1-D slice.
+
+## Work unit 3 - P1-B public catalog API fallback semantics
+
+Commit subject: `fix(api): normalize public catalog fallbacks`
+
+Changed files:
+
+- `src/lib/public-catalog-api.ts`
+- `src/app/api/products/route.ts`
+- `src/app/api/categories/route.ts`
+- `src/app/api/promotions/route.ts`
+- `tests/public-catalog-api.test.ts`
+- `docs/reports/hardening/2026-05-19-ofertassuper-hardening-sprint.md`
+- `docs/reports/hardening/2026-05-19-ofertassuper-before-after.md`
+- `docs/handoff.md`
+
+What changed:
+
+- Public product/category/promotion API runtime failures now fall back to bounded demo data instead of turning dependency failures into bad-request responses.
+- Validation failures remain `400` and do not run loaders.
+- Product list fallback respects query, pagination and supermarket filters through existing demo-data helpers.
+- Promotion fallback respects supermarket/type/wallet filters where possible.
+- This does not claim full coverage for product-detail/history routes; those remain separate if deeper public API coverage is needed.
 
 ## TDD evidence
 
@@ -117,6 +140,31 @@ Result after implementation:
 
 - 1/1 test passed.
 
+### RED - P1-B public API fallback semantics
+
+Command:
+
+```bash
+npx tsx --test tests/public-catalog-api.test.ts
+```
+
+Result before implementation:
+
+- Test failed because `src/lib/public-catalog-api.ts` did not exist.
+- The desired contract was explicit before implementation: validation errors stay `400`; runtime product/category/promotion failures return bounded demo fallbacks.
+
+### GREEN - P1-B public API fallback semantics
+
+Command:
+
+```bash
+npx tsx --test tests/public-catalog-api.test.ts
+```
+
+Result after implementation:
+
+- 4/4 tests passed.
+
 ## Incident note
 
 During the RED run, the intentionally failing `runStoreScraper()` test exposed the exact production-write footgun by calling the current implementation before dependency injection existed. Because the pre-fix function ignored the test-only `dependencies` option and defaulted `dryRun = false`, it executed the real legacy Disco write path.
@@ -136,8 +184,9 @@ No build was run.
 | Check | Result |
 |---|---|
 | `npx tsx --test tests/legacy-write-safety.test.ts` | 3/3 passing |
+| `npx tsx --test tests/public-catalog-api.test.ts` | 4/4 passing |
 | `npx tsx --test tests/ingestion-concurrency.test.ts` | 1/1 passing |
-| `npm test` | 25/25 passing |
+| `npm test` | 29/29 passing |
 | `npm run typecheck` | exit 0 |
 | `npm run lint` | exit 0 |
 
@@ -146,7 +195,7 @@ No build was run.
 | Item | Status | Reason |
 |---|---|---|
 | P1-A legacy write guard | Implemented in `6d01b9f` | Tests and docs included. |
-| P1-B public API fallback/error semantics | Deferred | Separate API contract slice. |
+| P1-B public API fallback/error semantics | Implemented | Product/category/promotion public APIs have tested runtime fallback semantics while preserving 400 validation errors. |
 | P1-C product listing scalability | Deferred | Higher query-design risk; needs focused tests. |
 | P1-D workflow-level ingestion/update concurrency | Implemented | Shared GitHub Actions concurrency group serializes manual data jobs without re-enabling schedules. |
 | P1-D DB/application-level idempotency | Deferred | Requires a separate data-correctness slice with advisory lock or staging claim tests. |
@@ -159,6 +208,8 @@ Safe:
 
 > Legacy scraper/update paths now default to dry-run and require explicit confirmation before real writes.
 
+> Public product/category/promotion APIs preserve validation `400`s but degrade to demo data on catalog runtime failures.
+
 > Ingest/update GitHub workflows now share a data-job concurrency group so manual runs do not overlap.
 
 Not safe:
@@ -166,5 +217,6 @@ Not safe:
 - production-ready ingestion
 - active ingestion schedule readiness
 - full DB/application-level ingestion idempotency
+- full public API integration/E2E coverage for every route
 - no accidental write occurred during the sprint
 - full data rollback completed
