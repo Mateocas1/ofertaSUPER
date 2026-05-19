@@ -8,6 +8,7 @@ import { LoaderCircle, Search } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency } from "@/lib/format";
+import { getPriceFreshnessCopy, type PriceFreshnessStatus } from "@/lib/price-freshness";
 import { cn } from "@/lib/utils";
 
 type SearchSuggestion = {
@@ -17,6 +18,8 @@ type SearchSuggestion = {
   imageUrl: string | null;
   category: string | null;
   minPrice: number | null;
+  bestPriceCheckedAt: string | null;
+  freshnessStatus: PriceFreshnessStatus;
 };
 
 type SearchBarProps = {
@@ -215,7 +218,19 @@ export function SearchBar({
                         {[result.brand, result.category].filter(Boolean).join(" • ") || "Sin datos extra"}
                       </p>
                     </div>
-                    <div className="text-right text-sm font-medium text-foreground">{formatCurrency(result.minPrice)}</div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-foreground">{formatCurrency(result.minPrice)}</p>
+                      {result.freshnessStatus === "stale" ? (
+                        <p className="mt-1 text-xs font-medium text-amber-700">
+                          {getPriceFreshnessCopy({
+                            status: result.freshnessStatus,
+                            checkedAt: result.bestPriceCheckedAt,
+                            ageHours: null,
+                            maxAgeHours: 0,
+                          }).badgeLabel}
+                        </p>
+                      ) : null}
+                    </div>
                   </Link>
                 </li>
               ))}

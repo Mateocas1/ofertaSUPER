@@ -302,7 +302,7 @@ function MarketPulse() {
 
       <div className="mt-5 flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
         <ClockIcon className="size-4 text-foreground" aria-hidden="true" />
-        Datos actualizados hoy 08:30
+        Datos con fecha visible en cada precio
       </div>
     </aside>
   );
@@ -402,6 +402,5 @@ function ClockIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
-
 
 

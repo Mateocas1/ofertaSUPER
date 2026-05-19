@@ -10,7 +10,7 @@ export const HOME_HERO = {
   body: "Buscá productos de supermercados argentinos, compará precios por EAN y descubrí dónde conviene resolver tu compra.",
   searchPlaceholder: "Buscar leche, yerba, arroz, aceite...",
   quickSearches: ["leche", "yerba", "arroz", "aceite"],
-  signals: ["6 fuentes activas", "EAN normalizado", "Actualizado hoy 08:30"],
+  signals: ["6 fuentes configuradas", "EAN normalizado", "Freshness visible"],
 } as const;
 
 export const SMART_BASKET = {
@@ -92,7 +92,7 @@ export const HOME_PRODUCT_ROWS = [
     minPrice: "$ 1.099",
     supermarket: "Vea",
     range: "$ 1.099 - $ 1.349",
-    updatedAt: "Hoy 08:30",
+    updatedAt: "Snapshot demo",
     action: "Agregar",
   },
   {
@@ -103,7 +103,7 @@ export const HOME_PRODUCT_ROWS = [
     minPrice: "$ 2.150",
     supermarket: "Carrefour",
     range: "$ 2.150 - $ 2.599",
-    updatedAt: "Hoy 08:30",
+    updatedAt: "Snapshot demo",
     action: "Agregar",
   },
   {
@@ -114,7 +114,7 @@ export const HOME_PRODUCT_ROWS = [
     minPrice: "$ 1.699",
     supermarket: "Vea",
     range: "$ 1.699 - $ 2.299",
-    updatedAt: "Hoy 08:30",
+    updatedAt: "Snapshot demo",
     action: "Agregar",
   },
   {
@@ -125,7 +125,7 @@ export const HOME_PRODUCT_ROWS = [
     minPrice: "$ 2.849",
     supermarket: "Vea",
     range: "$ 2.849 - $ 3.599",
-    updatedAt: "Hoy 08:30",
+    updatedAt: "Snapshot demo",
     action: "Agregar",
   },
 ] as const;
@@ -189,5 +189,4 @@ export function getApprovedHomeCopy() {
     ...MARKET_PULSE_ITEMS.flatMap((item) => [item.title, item.description, item.value]),
   ].filter(Boolean);
 }
-
 

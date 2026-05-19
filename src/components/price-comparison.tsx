@@ -4,6 +4,7 @@ import { PromotionBadge } from "@/components/promotion-badge";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatDateTime, formatPercent } from "@/lib/format";
+import { getPriceFreshnessCopy, type PriceFreshnessStatus } from "@/lib/price-freshness";
 import { cn } from "@/lib/utils";
 
 type PriceComparisonProps = {
@@ -32,6 +33,7 @@ type PriceComparisonProps = {
     finalPrice: number | null;
     productUrl: string | null;
     lastCheckedAt: string;
+    freshnessStatus: PriceFreshnessStatus;
   }>;
 };
 
@@ -48,7 +50,10 @@ export function PriceComparison({ entries }: PriceComparisonProps) {
     <div className="surface overflow-hidden">
       <div className="border-b border-border/70 px-6 py-5">
         <h2 className="text-2xl font-semibold text-foreground">Comparativa por supermercado</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Precio actual, promo aplicable y precio final cuando se puede estimar.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Precio registrado, promo aplicable y precio final cuando se puede estimar.</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Si el dato esta viejo, tratamos el valor como ultimo precio registrado. Revisalo en la web del super antes de comprar.
+        </p>
       </div>
 
       <div className="overflow-x-auto">
@@ -66,68 +71,81 @@ export function PriceComparison({ entries }: PriceComparisonProps) {
             </tr>
           </thead>
           <tbody>
-            {entries.map((entry) => (
-              <tr key={entry.supermarket.slug} className="border-t border-border/60">
-                <td className="px-6 py-4">
-                  <SupermarketBadge
-                    name={entry.supermarket.name}
-                    slug={entry.supermarket.slug}
-                    logoUrl={entry.supermarket.logoUrl}
-                  />
-                </td>
-                <td className="px-6 py-4 font-semibold text-foreground">{formatCurrency(entry.price)}</td>
-                <td className="px-6 py-4">
-                  {entry.bestPromotion ? (
-                    <div className="space-y-2">
-                      <PromotionBadge type={entry.bestPromotion.type} />
-                      <p className="max-w-44 text-xs leading-5 text-muted-foreground">{entry.bestPromotion.title}</p>
-                    </div>
-                  ) : entry.automaticDiscountPercent ? (
-                    <PromotionBadge
-                      type="percentage"
-                      label={`${formatPercent(entry.automaticDiscountPercent, 0)} OFF`}
+            {entries.map((entry) => {
+              const freshnessCopy = getPriceFreshnessCopy({
+                status: entry.freshnessStatus,
+                checkedAt: entry.lastCheckedAt,
+                ageHours: null,
+                maxAgeHours: 0,
+              });
+              const isStale = entry.freshnessStatus === "stale";
+
+              return (
+                <tr key={entry.supermarket.slug} className={cn("border-t border-border/60", isStale && "bg-amber-50/45")}>
+                  <td className="px-6 py-4">
+                    <SupermarketBadge
+                      name={entry.supermarket.name}
+                      slug={entry.supermarket.slug}
+                      logoUrl={entry.supermarket.logoUrl}
                     />
-                  ) : (
-                    <span className="text-muted-foreground">Sin promo</span>
-                  )}
-                </td>
-                <td className={cn("px-6 py-4 font-semibold", entry.finalPrice !== null ? "text-emerald-700" : "text-muted-foreground")}>
-                  {entry.finalPrice !== null ? formatCurrency(entry.finalPrice) : "No calculable"}
-                </td>
-                <td className="px-6 py-4 text-muted-foreground">{formatCurrency(entry.previousPrice)}</td>
-                <td
-                  className={cn(
-                    "px-6 py-4 font-medium",
-                    entry.deltaPercent !== null && entry.deltaPercent > 0 && "text-rose-700",
-                    entry.deltaPercent !== null && entry.deltaPercent < 0 && "text-emerald-700",
-                  )}
-                >
-                  <div>
-                    <p>{formatPercent(entry.deltaPercent)}</p>
-                    {entry.priceDropAlert ? (
-                      <p className="mt-1 text-xs text-emerald-700">
-                        Ahorra {formatCurrency(entry.priceDropAlert.amountDrop)}
-                      </p>
-                    ) : null}
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-muted-foreground">{formatDateTime(entry.lastCheckedAt)}</td>
-                <td className="px-6 py-4">
-                  {entry.productUrl ? (
-                    <Link
-                      href={entry.productUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-full")}
-                    >
-                      Abrir
-                    </Link>
-                  ) : (
-                    <span className="text-muted-foreground">Sin link</span>
-                  )}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-6 py-4 font-semibold text-foreground">{formatCurrency(entry.price)}</td>
+                  <td className="px-6 py-4">
+                    {entry.bestPromotion ? (
+                      <div className="space-y-2">
+                        <PromotionBadge type={entry.bestPromotion.type} />
+                        <p className="max-w-44 text-xs leading-5 text-muted-foreground">{entry.bestPromotion.title}</p>
+                      </div>
+                    ) : entry.automaticDiscountPercent ? (
+                      <PromotionBadge
+                        type="percentage"
+                        label={`${formatPercent(entry.automaticDiscountPercent, 0)} OFF`}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">Sin promo</span>
+                    )}
+                  </td>
+                  <td className={cn("px-6 py-4 font-semibold", entry.finalPrice !== null ? "text-emerald-700" : "text-muted-foreground")}>
+                    {entry.finalPrice !== null ? formatCurrency(entry.finalPrice) : "No calculable"}
+                  </td>
+                  <td className="px-6 py-4 text-muted-foreground">{formatCurrency(entry.previousPrice)}</td>
+                  <td
+                    className={cn(
+                      "px-6 py-4 font-medium",
+                      entry.deltaPercent !== null && entry.deltaPercent > 0 && "text-rose-700",
+                      entry.deltaPercent !== null && entry.deltaPercent < 0 && "text-emerald-700",
+                    )}
+                  >
+                    <div>
+                      <p>{formatPercent(entry.deltaPercent)}</p>
+                      {entry.priceDropAlert ? (
+                        <p className="mt-1 text-xs text-emerald-700">
+                          Ahorra {formatCurrency(entry.priceDropAlert.amountDrop)}
+                        </p>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-muted-foreground">
+                    <p>{formatDateTime(entry.lastCheckedAt)}</p>
+                    {isStale ? <p className="mt-1 text-xs font-medium text-amber-700">{freshnessCopy.badgeLabel}</p> : null}
+                  </td>
+                  <td className="px-6 py-4">
+                    {entry.productUrl ? (
+                      <Link
+                        href={entry.productUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-full")}
+                      >
+                        Abrir
+                      </Link>
+                    ) : (
+                      <span className="text-muted-foreground">Sin link</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

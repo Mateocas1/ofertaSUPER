@@ -11,6 +11,7 @@ import {
 } from "@/lib/promotions/alerts";
 import { detectAutomaticDiscount, getBestPromotionPrice } from "@/lib/promotions/detect";
 import { calculateProductCandidateReadLimit } from "@/lib/catalog-query-planning";
+import { classifyPriceFreshness, type PriceFreshnessStatus } from "@/lib/price-freshness";
 import { DETAILED_CATEGORIES } from "@/lib/vtex/categories";
 
 type PriceEntryRecord = {
@@ -19,6 +20,7 @@ type PriceEntryRecord = {
     name: string;
     slug: string;
     logo_url: string | null;
+    freshness_sla_hours: number;
   };
   id: number;
   price: Prisma.Decimal | null;
@@ -45,6 +47,8 @@ export type ProductPriceEntry = {
   isAvailable: boolean;
   productUrl: string | null;
   lastCheckedAt: string;
+  freshnessSlaHours: number;
+  freshnessStatus: PriceFreshnessStatus;
 };
 
 export type ProductSummary = {
@@ -58,6 +62,8 @@ export type ProductSummary = {
   priceCount: number;
   automaticDiscountPercent: number | null;
   latestCheckedAt: string | null;
+  bestPriceCheckedAt: string | null;
+  bestPriceFreshnessStatus: PriceFreshnessStatus;
   entries: ProductPriceEntry[];
 };
 
@@ -239,6 +245,10 @@ function mapPriceEntries(entries: PriceEntryRecord[], supermarketFilter?: string
       isAvailable: entry.is_available,
       productUrl: entry.product_url,
       lastCheckedAt: entry.last_checked_at.toISOString(),
+      freshnessSlaHours: entry.supermarket.freshness_sla_hours,
+      freshnessStatus: classifyPriceFreshness(entry.last_checked_at, {
+        maxAgeHours: entry.supermarket.freshness_sla_hours,
+      }).status,
     }))
     .filter((entry) => entry.price !== null)
     .sort((left, right) => (left.price ?? Number.MAX_SAFE_INTEGER) - (right.price ?? Number.MAX_SAFE_INTEGER));
@@ -264,6 +274,7 @@ function mapProductSummary(
   const numericPrices = entries.map((entry) => entry.price).filter((entry): entry is number => entry !== null);
   const minPrice = numericPrices.length > 0 ? Math.min(...numericPrices) : null;
   const maxPrice = numericPrices.length > 0 ? Math.max(...numericPrices) : null;
+  const bestPriceEntry = minPrice === null ? null : entries.find((entry) => entry.price === minPrice) ?? null;
   const automaticDiscountPercent = entries.reduce<number | null>((best, entry) => {
     const discount = detectAutomaticDiscount(entry.price, entry.listPrice);
 
@@ -289,6 +300,8 @@ function mapProductSummary(
     priceCount: entries.length,
     automaticDiscountPercent,
     latestCheckedAt,
+    bestPriceCheckedAt: bestPriceEntry?.lastCheckedAt ?? null,
+    bestPriceFreshnessStatus: bestPriceEntry?.freshnessStatus ?? "unknown",
     entries,
   };
 }
@@ -439,6 +452,7 @@ async function findRawProducts(filters: ProductListFilters) {
               name: true,
               slug: true,
               logo_url: true,
+              freshness_sla_hours: true,
             },
           },
         },
@@ -500,6 +514,7 @@ const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail 
               name: true,
               slug: true,
               logo_url: true,
+              freshness_sla_hours: true,
             },
           },
           price_history: {
@@ -627,6 +642,10 @@ const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail 
       isAvailable: entry.is_available,
       productUrl: entry.product_url,
       lastCheckedAt: entry.last_checked_at.toISOString(),
+      freshnessSlaHours: entry.supermarket.freshness_sla_hours,
+      freshnessStatus: classifyPriceFreshness(entry.last_checked_at, {
+        maxAgeHours: entry.supermarket.freshness_sla_hours,
+      }).status,
       previousPrice: priceMovement.previousPrice,
       deltaPercent: priceMovement.deltaPercent,
       priceDropAlert: priceMovement.priceDropAlert,
@@ -849,6 +868,9 @@ export async function getSearchSuggestions(query: string, limit = 8) {
     imageUrl: item.imageUrl,
     category: item.category,
     minPrice: item.minPrice,
+    latestCheckedAt: item.latestCheckedAt,
+    bestPriceCheckedAt: item.bestPriceCheckedAt,
+    freshnessStatus: item.bestPriceFreshnessStatus,
   }));
 }
 

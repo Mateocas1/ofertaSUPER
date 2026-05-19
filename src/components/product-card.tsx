@@ -7,6 +7,7 @@ import { PromotionBadge } from "@/components/promotion-badge";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatPercent } from "@/lib/format";
+import { getPriceFreshnessCopy, type PriceFreshnessStatus } from "@/lib/price-freshness";
 import { cn } from "@/lib/utils";
 
 type ProductCardProps = {
@@ -20,6 +21,8 @@ type ProductCardProps = {
     maxPrice: number | null;
     priceCount: number;
     automaticDiscountPercent: number | null;
+    bestPriceCheckedAt: string | null;
+    bestPriceFreshnessStatus: PriceFreshnessStatus;
     entries: Array<{
       supermarket: {
         id: number;
@@ -34,6 +37,13 @@ type ProductCardProps = {
 
 export function ProductCard({ product }: ProductCardProps) {
   const topEntries = product.entries.slice(0, 3);
+  const freshnessCopy = getPriceFreshnessCopy({
+    status: product.bestPriceFreshnessStatus,
+    checkedAt: product.bestPriceCheckedAt,
+    ageHours: null,
+    maxAgeHours: 0,
+  });
+  const isStale = product.bestPriceFreshnessStatus === "stale";
 
   return (
     <article className="surface-soft flex h-full flex-col overflow-hidden p-5">
@@ -72,8 +82,9 @@ export function ProductCard({ product }: ProductCardProps) {
 
       <div className="mt-6 flex items-end justify-between gap-4 rounded-[1.5rem] bg-[linear-gradient(135deg,rgba(210,71,38,0.08),rgba(42,111,88,0.06))] p-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Mejor precio</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{freshnessCopy.priceLabel}</p>
           <p className="mt-1 text-2xl font-semibold text-foreground">{formatCurrency(product.minPrice)}</p>
+          {isStale ? <p className="mt-1 text-xs font-medium text-amber-700">{freshnessCopy.badgeLabel}</p> : null}
         </div>
         <div className="text-right">
           <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Rango</p>
@@ -83,6 +94,12 @@ export function ProductCard({ product }: ProductCardProps) {
           <p className="mt-1 text-xs text-muted-foreground">{product.priceCount} supers con precio</p>
         </div>
       </div>
+
+      {isStale ? (
+        <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+          {freshnessCopy.helperText}
+        </p>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {topEntries.map((entry) => (

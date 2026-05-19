@@ -107,7 +107,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <article className="rounded-[1.5rem] border border-border/70 bg-white/75 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Mejor precio</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Mejor precio registrado</p>
                   <p className="mt-2 text-3xl font-semibold text-foreground">{formatCurrency(product.minPrice)}</p>
                   {bestPriceDropAlert ? (
                     <p className="mt-2 text-xs font-medium text-emerald-700">
@@ -116,13 +116,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
                   ) : null}
                 </article>
                 <article className="rounded-[1.5rem] border border-border/70 bg-white/75 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Precio final con promo</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Precio estimado con promo</p>
                   <p className="mt-2 text-3xl font-semibold text-foreground">
                     {hasCalculatedPromoPrice ? formatCurrency(product.bestFinalPrice) : "No calculable"}
                   </p>
                 </article>
                 <article className="rounded-[1.5rem] border border-border/70 bg-white/75 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Maximo actual</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Maximo registrado</p>
                   <p className="mt-2 text-3xl font-semibold text-foreground">{formatCurrency(product.maxPrice)}</p>
                 </article>
                 <article className="rounded-[1.5rem] border border-border/70 bg-white/75 p-4">

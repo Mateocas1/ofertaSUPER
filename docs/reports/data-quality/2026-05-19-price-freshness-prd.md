@@ -1,6 +1,6 @@
 # Price freshness and accuracy PRD - 2026-05-19
 
-Status: `DIAGNOSED / PRD READY / NO FIX APPLIED YET`
+Status: `P0 SLICES IMPLEMENTED / P1+ PENDING`
 
 This PRD starts from a real user-visible mismatch: `Uva rosada x kg.` (`EAN 2320039000009`) shows `$ 2.499` in ofertasSUPER while Carrefour currently exposes `$ 4.299` for the same official product URL.
 
@@ -212,9 +212,65 @@ Implement Slice 1 and Slice 2 first.
 
 Reason: they reduce user trust risk immediately without mutating production data. The app can be honest about stale data before we decide whether to run any active refresh.
 
+## Implementation record - P0 slices
+
+Implemented scope:
+
+| Slice | Status | Evidence |
+|---|---|---|
+| Slice 1 - Freshness model and public copy guard | Implemented | `src/lib/price-freshness.ts`, `tests/price-freshness.test.ts`, `tests/price-freshness-ui.test.ts` |
+| Slice 2 - Search/card freshness visibility | Implemented | `src/lib/catalog.ts`, `src/lib/demo-data.ts`, `src/components/product-card.tsx`, `src/components/search-bar.tsx` |
+| Slice 3 - Product detail stale emphasis | Implemented | `src/components/price-comparison.tsx` |
+| Slice 4 - Read-only drift audit script | Pending | Use the ad-hoc evidence in this PRD until a repeatable script exists. |
+| Slice 5 - Controlled refresh plan | Pending | No active writes or schedule changes were made. |
+
+### Decisions made during implementation
+
+| Decision | Why | Tradeoff |
+|---|---|---|
+| Keep stale products searchable, but label them as stale. | Hiding them would make the catalog look incomplete while the root issue is freshness. | Stale prices can still influence sorting/ranking until a later ranking policy is implemented. |
+| Base DB entry freshness on each supermarket's `freshness_sla_hours`. | The schema already models source-level freshness expectations. | Demo/fallback data uses a simple default because it is not tied to a real source row. |
+| Add freshness metadata to suggestions and product summaries. | Search suggestions and product cards are price-decision surfaces. | API consumers now receive extra fields; existing clients should tolerate additive JSON. |
+| Label stale values as `Ultimo precio registrado`. | This avoids presenting stale values as current prices. | It is more cautious copy, less salesy. That's intentional. |
+| Do not run active ingestion or refresh. | The PRD explicitly says freshness visibility comes before writes. | Prices remain stale until a controlled refresh gate is approved. |
+| Align local Supabase runtime URL instead of masking the route error in code. | Local product smoke exposed Prisma `42P05 prepared statement already exists` because `DATABASE_URL` used the Supabase transaction pooler without `pgbouncer=true`. | This is an environment/deploy gate, not a product-code workaround; Vercel must mirror the same runtime URL shape. |
+
+### Edge cases analyzed
+
+- missing/invalid `last_checked_at` -> `unknown`, not `fresh`;
+- future timestamps -> age is clamped to zero hours instead of showing negative staleness;
+- missing/invalid SLA -> default freshness window;
+- multiple supermarket prices -> card freshness follows the cheapest/best-price entry, not merely the latest checked entry;
+- product detail rows can be mixed: fresh and stale supermarkets are labeled independently;
+- official supermarket link remains visible because checkout price must be verified at the source.
+- Supabase transaction pooler runtime must use `pgbouncer=true`; `DIRECT_URL` stays separate for non-runtime direct/session access.
+
+### Blind spots intentionally left open
+
+- Stale prices are still used for `price-asc` and best-price ordering. A later policy must decide whether very stale entries should be excluded from rankings.
+- The read-only drift audit is not yet a reusable script.
+- The root cause of latest Carrefour runs promoting `0` has not been debugged yet.
+- Public Vercel will only reflect these UI changes after push/deploy.
+- Public Vercel also needs the corrected `DATABASE_URL` parameters; local ignored env files were aligned, but Vercel env vars must be checked manually.
+- No production active ingestion, schedule reactivation, or mass scraping was performed.
+
 ## Evidence collected
 
 Commands were read-only except temporary local probe scripts that were removed after execution.
+
+### Implementation verification - P0 freshness slice
+
+| Evidence | Result |
+|---|---|
+| TDD red check | New freshness/UI tests failed first on missing helper/metadata/copy and `Maximo actual` product-page copy. |
+| Focused freshness tests | `npx tsx --test tests/price-freshness.test.ts tests/price-freshness-ui.test.ts` passed after implementation. |
+| Full automated tests | `npm test` passed `40/40`. |
+| TypeScript | `npm run typecheck` passed. |
+| Lint | `npm run lint` passed. |
+| Local HTTP smoke | Home, `/api/search?q=uva%20rosada&limit=5`, `/producto/2320039000009`, and `/api/products/2320039000009` returned 200 after local `DATABASE_URL` was aligned with `pgbouncer=true&connection_limit=3`. |
+| Build | Not run by explicit project rule. |
+
+### Original diagnosis evidence
 
 | Evidence | Result |
 |---|---|

@@ -1,6 +1,9 @@
 import type { CategorySummary, ProductListFilters, ProductSummary, PromotionSummary } from "@/lib/catalog";
+import { classifyPriceFreshness } from "@/lib/price-freshness";
 
 const checkedAt = "2026-05-14T00:00:00.000Z";
+const freshnessSlaHours = 24;
+const demoFreshnessStatus = classifyPriceFreshness(checkedAt, { maxAgeHours: freshnessSlaHours }).status;
 
 export const demoProducts: ProductSummary[] = [
   {
@@ -14,6 +17,8 @@ export const demoProducts: ProductSummary[] = [
     priceCount: 3,
     automaticDiscountPercent: 17.2,
     latestCheckedAt: checkedAt,
+    bestPriceCheckedAt: checkedAt,
+    bestPriceFreshnessStatus: demoFreshnessStatus,
     entries: [
       {
         supermarket: { id: 1, name: "Disco", slug: "disco", logoUrl: null },
@@ -25,6 +30,8 @@ export const demoProducts: ProductSummary[] = [
         isAvailable: true,
         productUrl: "https://www.disco.com.ar/leche-entera-1l/p",
         lastCheckedAt: checkedAt,
+        freshnessSlaHours,
+        freshnessStatus: demoFreshnessStatus,
       },
       {
         supermarket: { id: 2, name: "Jumbo", slug: "jumbo", logoUrl: null },
@@ -36,6 +43,8 @@ export const demoProducts: ProductSummary[] = [
         isAvailable: true,
         productUrl: "https://www.jumbo.com.ar/leche-entera-1l/p",
         lastCheckedAt: checkedAt,
+        freshnessSlaHours,
+        freshnessStatus: demoFreshnessStatus,
       },
       {
         supermarket: { id: 3, name: "Carrefour", slug: "carrefour", logoUrl: null },
@@ -47,6 +56,8 @@ export const demoProducts: ProductSummary[] = [
         isAvailable: true,
         productUrl: "https://www.carrefour.com.ar/leche-entera-1l/p",
         lastCheckedAt: checkedAt,
+        freshnessSlaHours,
+        freshnessStatus: demoFreshnessStatus,
       },
     ],
   },
@@ -61,6 +72,8 @@ export const demoProducts: ProductSummary[] = [
     priceCount: 3,
     automaticDiscountPercent: 20.3,
     latestCheckedAt: checkedAt,
+    bestPriceCheckedAt: checkedAt,
+    bestPriceFreshnessStatus: demoFreshnessStatus,
     entries: [
       {
         supermarket: { id: 2, name: "Jumbo", slug: "jumbo", logoUrl: null },
@@ -72,6 +85,8 @@ export const demoProducts: ProductSummary[] = [
         isAvailable: true,
         productUrl: "https://www.jumbo.com.ar/yerba-mate-suave-1kg/p",
         lastCheckedAt: checkedAt,
+        freshnessSlaHours,
+        freshnessStatus: demoFreshnessStatus,
       },
       {
         supermarket: { id: 1, name: "Disco", slug: "disco", logoUrl: null },
@@ -83,6 +98,8 @@ export const demoProducts: ProductSummary[] = [
         isAvailable: true,
         productUrl: "https://www.disco.com.ar/yerba-mate-suave-1kg/p",
         lastCheckedAt: checkedAt,
+        freshnessSlaHours,
+        freshnessStatus: demoFreshnessStatus,
       },
       {
         supermarket: { id: 3, name: "Carrefour", slug: "carrefour", logoUrl: null },
@@ -94,6 +111,8 @@ export const demoProducts: ProductSummary[] = [
         isAvailable: true,
         productUrl: "https://www.carrefour.com.ar/yerba-mate-suave-1kg/p",
         lastCheckedAt: checkedAt,
+        freshnessSlaHours,
+        freshnessStatus: demoFreshnessStatus,
       },
     ],
   },
@@ -108,6 +127,8 @@ export const demoProducts: ProductSummary[] = [
     priceCount: 2,
     automaticDiscountPercent: 16.7,
     latestCheckedAt: checkedAt,
+    bestPriceCheckedAt: checkedAt,
+    bestPriceFreshnessStatus: demoFreshnessStatus,
     entries: [
       {
         supermarket: { id: 3, name: "Carrefour", slug: "carrefour", logoUrl: null },
@@ -119,6 +140,8 @@ export const demoProducts: ProductSummary[] = [
         isAvailable: true,
         productUrl: "https://www.carrefour.com.ar/aceite-girasol-900ml/p",
         lastCheckedAt: checkedAt,
+        freshnessSlaHours,
+        freshnessStatus: demoFreshnessStatus,
       },
       {
         supermarket: { id: 1, name: "Disco", slug: "disco", logoUrl: null },
@@ -130,6 +153,8 @@ export const demoProducts: ProductSummary[] = [
         isAvailable: true,
         productUrl: "https://www.disco.com.ar/aceite-girasol-900ml/p",
         lastCheckedAt: checkedAt,
+        freshnessSlaHours,
+        freshnessStatus: demoFreshnessStatus,
       },
     ],
   },
@@ -144,6 +169,8 @@ export const demoProducts: ProductSummary[] = [
     priceCount: 2,
     automaticDiscountPercent: null,
     latestCheckedAt: checkedAt,
+    bestPriceCheckedAt: checkedAt,
+    bestPriceFreshnessStatus: demoFreshnessStatus,
     entries: [
       {
         supermarket: { id: 1, name: "Disco", slug: "disco", logoUrl: null },
@@ -155,6 +182,8 @@ export const demoProducts: ProductSummary[] = [
         isAvailable: true,
         productUrl: "https://www.disco.com.ar/arroz-largo-fino-1kg/p",
         lastCheckedAt: checkedAt,
+        freshnessSlaHours,
+        freshnessStatus: demoFreshnessStatus,
       },
       {
         supermarket: { id: 2, name: "Jumbo", slug: "jumbo", logoUrl: null },
@@ -166,6 +195,8 @@ export const demoProducts: ProductSummary[] = [
         isAvailable: true,
         productUrl: "https://www.jumbo.com.ar/arroz-largo-fino-1kg/p",
         lastCheckedAt: checkedAt,
+        freshnessSlaHours,
+        freshnessStatus: demoFreshnessStatus,
       },
     ],
   },
@@ -268,6 +299,9 @@ function scopeToSupermarket(product: ProductSummary, supermarket?: string) {
     minPrice: prices.length > 0 ? Math.min(...prices) : null,
     maxPrice: prices.length > 0 ? Math.max(...prices) : null,
     priceCount: prices.length,
+    latestCheckedAt: entries.map((entry) => entry.lastCheckedAt).sort((left, right) => right.localeCompare(left))[0] ?? null,
+    bestPriceCheckedAt: entries.find((entry) => entry.price === (prices.length > 0 ? Math.min(...prices) : null))?.lastCheckedAt ?? null,
+    bestPriceFreshnessStatus: entries.find((entry) => entry.price === (prices.length > 0 ? Math.min(...prices) : null))?.freshnessStatus ?? "unknown",
   };
 }
 
@@ -319,5 +353,8 @@ export function getDemoSearchSuggestions(query: string, limit = 8) {
     imageUrl: product.imageUrl,
     category: product.category,
     minPrice: product.minPrice,
+    latestCheckedAt: product.latestCheckedAt,
+    bestPriceCheckedAt: product.bestPriceCheckedAt,
+    freshnessStatus: product.bestPriceFreshnessStatus,
   }));
 }

@@ -1,5 +1,10 @@
 # Hardening sprint - P1-A/P1-B/P1-C/P1-D implemented and cleanup verified - 2026-05-19
 
+- Data-quality follow-up: `docs/reports/data-quality/2026-05-19-price-freshness-prd.md` diagnosed stale Carrefour pricing and now records P0 freshness UI implementation.
+- P0 freshness implementation adds source/SLA-aware freshness classification, removes static "updated today" style home copy, surfaces stale metadata in search suggestions/cards, and highlights stale product-detail rows.
+- Important boundary: no active ingestion, mass scraping, schedule reactivation, or production refresh was performed. Stale prices can still influence ranking until a later policy decides whether to exclude them.
+- Supabase runtime env gate: local product smoke hit Prisma `42P05 prepared statement already exists` until ignored `.env.local` / `.env` `DATABASE_URL` was aligned with `.env.example` (`pgbouncer=true&connection_limit=3`). Vercel must use the same runtime `DATABASE_URL`; keep `DIRECT_URL` separate.
+- Latest P0 freshness verification: `npm test` 40/40, `npm run typecheck` OK, `npm run lint` OK, local HTTP smoke OK for home/search/product/product API. Build intentionally not run.
 - Implemented first Goal 2 slice from the engineering audit: P1-A legacy write-script guard.
 - Commit: `6d01b9f fix(ingestion): guard legacy write scripts`.
 - Legacy scraper/update paths now default to dry-run. Real legacy writes require `--confirm-write` or `INGESTION_WRITE_APPROVED=true`.
