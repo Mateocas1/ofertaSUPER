@@ -1,4 +1,4 @@
-# Hardening sprint - P1-A/P1-B/P1-D workflow hardening implemented - 2026-05-19
+# Hardening sprint - P1-A/P1-B/P1-C/P1-D implemented and cleanup verified - 2026-05-19
 
 - Implemented first Goal 2 slice from the engineering audit: P1-A legacy write-script guard.
 - Commit: `6d01b9f fix(ingestion): guard legacy write scripts`.
@@ -11,8 +11,11 @@
 - Remaining P1-D caveat: this prevents overlapping active reconciliation, but very large future volumes may need a staging-claim design instead of one full-window transaction.
 - Verification passed: legacy write-safety test 3/3, public catalog API test 4/4, catalog query planning test 2/2, ingestion concurrency test 1/1, reconcile lock test 4/4, `npm test` 35/35, `npm run typecheck` OK, `npm run lint` OK, local public API smoke 5/5 on `127.0.0.1:3041`, product-list smoke 2/2 on `127.0.0.1:3042`.
 - No build was run. No schedules were re-enabled. No dashboards were touched. Commit remains local unless pushed later.
-- Incident: the RED test exposed the old footgun by hitting the real legacy write path before the guard existed. Revalidated read-only DB check found exactly 50 `price_history` rows, ids `4945`-`4994`, for `disco`, around `2026-05-19T01:19:53.951Z`-`2026-05-19T01:19:59.212Z`. No cleanup/delete was performed without user approval.
-- Cleanup proposal prepared but not executed: `docs/reports/hardening/2026-05-19-price-history-cleanup-proposal.md`.
+- Incident: the RED test exposed the old footgun by hitting the real legacy write path before the guard existed. Revalidated read-only DB check found exactly 50 `price_history` rows, ids `4945`-`4994`, for `disco`, around `2026-05-19T01:19:53.951Z`-`2026-05-19T01:19:59.212Z`.
+- Cleanup executed after explicit user approval: exactly 50 bounded `public.price_history` rows were deleted in a guarded transaction; post-check found `remaining_candidate_rows = 0`.
+- Cleanup intentionally did not touch `products` or `supermarket_products` because the legacy path used upserts and there was no safe before snapshot.
+- Supabase/Prisma operational gotcha: the first cleanup attempt hit `42P05 prepared statement "s0" already exists`; retry succeeded after adding `pgbouncer=true` in-memory to the one-off Prisma runtime connection. No `.env` file was changed.
+- Cleanup evidence: `docs/reports/hardening/2026-05-19-price-history-cleanup-proposal.md`.
 - Evidence:
   - `docs/reports/hardening/2026-05-19-ofertassuper-hardening-sprint.md`
   - `docs/reports/hardening/2026-05-19-ofertassuper-before-after.md`

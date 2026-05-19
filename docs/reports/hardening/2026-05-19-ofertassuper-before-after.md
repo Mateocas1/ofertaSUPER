@@ -1,6 +1,6 @@
 # ofertasSUPER hardening before/after - 2026-05-19
 
-Status: `P1-A, P1-B, P1-C AND P1-D BEFORE/AFTER RECORDED`
+Status: `P1-A, P1-B, P1-C, P1-D AND CLEANUP BEFORE/AFTER RECORDED`
 
 ## Summary
 
@@ -20,6 +20,7 @@ Status: `P1-A, P1-B, P1-C AND P1-D BEFORE/AFTER RECORDED`
 | Ingestion concurrency test coverage | No static workflow assertion for data-job concurrency. | `tests/ingestion-concurrency.test.ts` proves ingest/update workflows serialize through the shared group. |
 | Active reconciliation race guard | Reconciliation loaded pending candidates before any cross-job lock; overlapping runs could load the same pending rows. | `reconcileStageProducts()` acquires a transaction-scoped advisory lock before loading candidates and reconciles chunks inside that locked transaction. |
 | Reconciliation lock tests | No deterministic test around active reconciliation locking. | `tests/reconcile-lock.test.ts` covers stable lock key, lock success, lock failure and lock-before-load ordering. |
+| Accidental RED-write cleanup | 50 accidental Disco `price_history` rows from the legacy write-safety RED run remained documented but not cleaned. | After explicit approval, the 50 bounded rows were deleted transactionally and post-check confirmed `remaining_candidate_rows = 0`. |
 | README | Warned against active/non-dry-run ingestion generally. | Documents that legacy scraper/update writes require explicit confirmation. |
 
 ## Evidence map
@@ -31,6 +32,7 @@ Status: `P1-A, P1-B, P1-C AND P1-D BEFORE/AFTER RECORDED`
 | P1-C product listing reads broad result sets before pagination | `perf(catalog): bound product listing candidate reads` | `npx tsx --test tests/catalog-query-planning.test.ts` -> 2/2 passing; `npm test` -> 35/35 passing | Product listing now caps candidate reads before loading relation data. |
 | P1-D ingestion lacks explicit cross-job concurrency/idempotency guard | `fix(ingestion): serialize data workflows` | `npx tsx --test tests/ingestion-concurrency.test.ts` -> 1/1 passing; `npm test` -> 25/25 passing | Ingest/update workflows now share a GitHub Actions concurrency group, reducing overlap risk for manual data jobs. |
 | P1-D active reconciliation can load stale pending candidates during overlap | `fix(ingestion): guard active reconciliation lock` | `npx tsx --test tests/reconcile-lock.test.ts` -> 4/4 passing; `npm test` -> 33/33 passing | Active reconciliation acquires a transaction advisory lock before loading candidates, failing fast if another reconcile is in progress. |
+| Accidental RED-write operational residue | docs-only cleanup proposal, then approved execution | Cleanup preflight -> 50 rows, ids `4945`-`4994`; cleanup transaction -> deleted 50; post-check -> 0 remaining | Accidental append-only price history rows were removed without touching product or supermarket product state. |
 
 ## Commands run
 
@@ -53,6 +55,8 @@ No build was run.
 | `npm run lint` | exit 0 |
 | Local public API smoke on Next dev server `127.0.0.1:3041` | passed 5/5 for changed public API surfaces |
 | Local product-list smoke on Next dev server `127.0.0.1:3042` | passed 2/2 after bounded-read change |
+| Cleanup preflight | passed: 50 candidates, ids `4945`-`4994`, `disco`, no missing ids |
+| Cleanup transaction | passed: deleted 50 rows, post-check `remaining_candidate_rows = 0` |
 
 ## Incident before/after
 
@@ -63,11 +67,12 @@ After the fix:
 - the test dependency injection is honored;
 - omitted `dryRun` remains safe;
 - workflow default path is dry-run;
-- no cleanup/delete was executed without approval.
+- no cleanup/delete was executed before approval;
+- after explicit approval, the bounded `price_history` cleanup deleted exactly 50 rows and left 0 matching candidates.
 
 ## Remaining risk
 
-The code-level P1-A risk is reduced, but the accidental RED write remains an operational cleanup decision. Do not claim a clean no-write sprint unless the user either approves cleanup or explicitly accepts documenting it as-is.
+The code-level P1-A risk is reduced and the bounded append-only `price_history` residue was cleaned. Do not claim a perfect full data rollback because `products` and `supermarket_products` were intentionally not reverted without a safe before snapshot.
 
 P1-B is improved for product/category/promotion APIs, but product-detail/history route coverage is not claimed as fully normalized until separate integration tests cover those routes.
 

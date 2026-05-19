@@ -1,8 +1,8 @@
 # Accidental RED-write cleanup proposal - 2026-05-19
 
-Status: `REPORT-ONLY / AWAITING USER APPROVAL`
+Status: `EXECUTED / VERIFIED`
 
-This document identifies the exact rows created when the P1-A RED test exposed the old legacy scraper footgun. It does not execute cleanup.
+This document identifies the exact rows created when the P1-A RED test exposed the old legacy scraper footgun and records the approved bounded cleanup.
 
 ## Root cause
 
@@ -63,7 +63,7 @@ Reason: the legacy path uses upserts and may have updated existing product/super
 
 ## Proposed SQL
 
-Do not run without explicit user approval.
+Executed only after explicit user approval and a fresh read-only preflight matched the expected candidate set exactly.
 
 ```sql
 begin;
@@ -108,9 +108,27 @@ Expected result after cleanup:
 
 - `remaining_candidate_rows = 0`
 
-## Current decision needed
+## Execution result
 
-User must explicitly choose one:
+Cleanup execution:
 
-1. Approve cleanup of the 50 bounded `price_history` rows.
-2. Leave rows in place and keep the incident documented.
+- mode: transactional cleanup through Prisma with `pgbouncer=true` added in-memory to the runtime connection string;
+- table touched: `public.price_history` only;
+- deleted rows: `50`;
+- deleted id range: `4945`-`4994`;
+- supermarket guard: `disco`;
+- timestamp guard: `2026-05-19T01:19:50.000Z` to `2026-05-19T01:20:10.000Z`;
+- first deleted row: id `4945`, `supermarket_product_id = 2534`, `scraped_at = 2026-05-19T01:19:53.951Z`;
+- last deleted row: id `4994`, `supermarket_product_id = 8062`, `scraped_at = 2026-05-19T01:19:59.212Z`;
+- post-check: `remaining_candidate_rows = 0`.
+
+Guardrail result:
+
+- first cleanup attempt failed before completion with PostgreSQL/Prisma error `42P05 prepared statement "s0" already exists`;
+- no partial delete was accepted;
+- root cause was Prisma runtime traffic going through the Supabase pooler without the PgBouncer connection mode flag;
+- the successful retry only added `pgbouncer=true` in-memory for the one-off script and did not edit `.env` or `.env.local`.
+
+## Final decision
+
+The user approved cleanup. The bounded `price_history` cleanup is complete and verified.

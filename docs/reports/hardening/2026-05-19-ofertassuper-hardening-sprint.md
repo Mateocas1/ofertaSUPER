@@ -1,8 +1,8 @@
 # ofertasSUPER hardening sprint - 2026-05-19
 
-Status: `P1-A IMPLEMENTED, P1-B IMPLEMENTED, P1-C BOUNDED, P1-D IMPLEMENTED, CLEANUP DECISION PENDING`
+Status: `P1-A IMPLEMENTED, P1-B IMPLEMENTED, P1-C BOUNDED, P1-D IMPLEMENTED, CLEANUP EXECUTED`
 
-This sprint started from the Goal 1 audit backlog. No P0 existed, so the first selected work unit was P1-A: guard legacy write scripts. P1-B normalized public catalog API fallback semantics. P1-C now adds a bounded candidate-read cap before relation loading. P1-D has both workflow-level serialization and an application/DB-level reconciliation advisory lock while the accidental RED-write cleanup decision remains pending.
+This sprint started from the Goal 1 audit backlog. No P0 existed, so the first selected work unit was P1-A: guard legacy write scripts. P1-B normalized public catalog API fallback semantics. P1-C now adds a bounded candidate-read cap before relation loading. P1-D has both workflow-level serialization and an application/DB-level reconciliation advisory lock. The accidental RED-write `price_history` cleanup was later approved, executed, and verified.
 
 ## Scope selected
 
@@ -258,7 +258,7 @@ Result after implementation:
 
 - 4/4 tests passed.
 
-## Incident note
+## Incident note and cleanup
 
 During the RED run, the intentionally failing `runStoreScraper()` test exposed the exact production-write footgun by calling the current implementation before dependency injection existed. Because the pre-fix function ignored the test-only `dependencies` option and defaulted `dryRun = false`, it executed the real legacy Disco write path.
 
@@ -268,7 +268,19 @@ Read-only verification found:
 - latest rows around `2026-05-19T01:19:58Z` to `2026-05-19T01:19:59Z`
 - sample latest ids: `4990` to `4994` shown by the read-only check
 
-No cleanup/delete was performed because that would be a real DB mutation and needs explicit user approval. The code guard is now fixed so this exact path no longer writes by default.
+After explicit user approval, a fresh read-only preflight matched exactly:
+
+- table: `public.price_history`
+- candidate count: `50`
+- id range: `4945`-`4994`
+- supermarket: `disco`
+- timestamp range: `2026-05-19T01:19:53.951Z` to `2026-05-19T01:19:59.212Z`
+
+The cleanup then deleted exactly those 50 `price_history` rows in a guarded transaction and post-check confirmed `remaining_candidate_rows = 0`.
+
+No `products` or `supermarket_products` rows were deleted or reverted because the legacy path used upserts and there was no safe before snapshot for those tables.
+
+Operational gotcha: the first cleanup attempt failed with `42P05 prepared statement "s0" already exists` through the Supabase pooler. The successful retry added `pgbouncer=true` in-memory for the one-off Prisma runtime connection; no env file was changed.
 
 ## Verification
 
@@ -286,6 +298,8 @@ No build was run.
 | `npm run lint` | exit 0 |
 | Local public API smoke on Next dev server `127.0.0.1:3041` | 5/5 passing: products 200, products validation 400, categories 200, promotions 200, promotions validation 400 |
 | Local product-list smoke on Next dev server `127.0.0.1:3042` | 2/2 passing after P1-C: products 200, products validation 400 |
+| Cleanup preflight | 50 `public.price_history` candidates, ids `4945`-`4994`, `disco`, no missing ids |
+| Cleanup execution | deleted 50 rows in a guarded transaction; post-check `remaining_candidate_rows = 0` |
 
 ## Remaining Goal 2 items
 
@@ -297,7 +311,7 @@ No build was run.
 | P1-D workflow-level ingestion/update concurrency | Implemented | Shared GitHub Actions concurrency group serializes manual data jobs without re-enabling schedules. |
 | P1-D DB/application-level idempotency | Implemented | Active reconciliation now acquires a transaction advisory lock before loading candidates. |
 | P1-E production admin positive path | Deferred | Requires real credentials/session. |
-| Cleanup of accidental RED write | Pending user decision | Deletes/rollback require explicit approval. |
+| Cleanup of accidental RED write | Executed | User approved; exactly 50 bounded `price_history` rows were deleted and post-check confirmed 0 remaining candidates. |
 
 ## Safe claim after this slice
 
@@ -313,6 +327,8 @@ Safe:
 
 > Active reconciliation uses a transaction-scoped advisory lock before loading staging candidates, reducing duplicate promotion/history race risk.
 
+> The accidental RED-test `price_history` rows were cleaned up after explicit approval, with a guarded transaction and post-check evidence.
+
 Not safe:
 
 - production-ready ingestion
@@ -321,4 +337,4 @@ Not safe:
 - full catalog search-index/query optimization
 - full public API integration/E2E coverage for every route
 - no accidental write occurred during the sprint
-- full data rollback completed
+- full data rollback for `products`/`supermarket_products`
