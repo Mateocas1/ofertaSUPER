@@ -10,6 +10,23 @@ type ReconcileStageProductsOptions = {
   dryRun?: boolean;
 };
 
+type AdvisoryLockClient = {
+  $queryRaw<T = unknown>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T>;
+};
+
+type CandidateLoaderClient = {
+  stagingProduct: Prisma.TransactionClient["stagingProduct"];
+};
+
+export const RECONCILE_ADVISORY_LOCK_KEY = 2026051901;
+
+export class ReconcileLockUnavailableError extends Error {
+  constructor() {
+    super("Another ingestion reconciliation is already running.");
+    this.name = "ReconcileLockUnavailableError";
+  }
+}
+
 export type ReconcileSummary = {
   totalCandidates: number;
   totalPending: number;
@@ -202,8 +219,21 @@ function shouldInsertHistory(
   );
 }
 
-async function loadCandidates(batchId: string): Promise<EvaluatedStageCandidate[]> {
-  const products = await db.stagingProduct.findMany({
+export async function ensureReconcileAdvisoryLock(tx: AdvisoryLockClient) {
+  const rows = await tx.$queryRaw<Array<{ locked: boolean }>>`
+    select pg_try_advisory_xact_lock(${RECONCILE_ADVISORY_LOCK_KEY}) as locked
+  `;
+
+  if (rows[0]?.locked !== true) {
+    throw new ReconcileLockUnavailableError();
+  }
+}
+
+async function loadCandidates(
+  batchId: string,
+  client: CandidateLoaderClient,
+): Promise<EvaluatedStageCandidate[]> {
+  const products = await client.stagingProduct.findMany({
     where: {
       run: {
         batch_id: batchId,
@@ -571,64 +601,69 @@ export async function reconcileStageProducts({
 }: ReconcileStageProductsOptions): Promise<ReconcileSummary> {
   const txMaxWaitMs = readPositiveIntEnv("RECONCILE_TX_MAX_WAIT_MS", DEFAULT_TX_MAX_WAIT_MS);
   const txTimeoutMs = readPositiveIntEnv("RECONCILE_TX_TIMEOUT_MS", DEFAULT_TX_TIMEOUT_MS);
-  const resolvedCandidates = candidates ?? (batchId ? await loadCandidates(batchId) : []);
-  const pendingCandidates = resolvedCandidates.filter((candidate) => candidate.status === "PENDING");
-  const supermarketRows = await db.supermarket.findMany({
-    select: {
-      id: true,
-      slug: true,
+
+  return db.$transaction(
+    async (tx) => {
+      await ensureReconcileAdvisoryLock(tx);
+
+      const resolvedCandidates = candidates ?? (batchId ? await loadCandidates(batchId, tx) : []);
+      const pendingCandidates = resolvedCandidates.filter((candidate) => candidate.status === "PENDING");
+      const supermarketRows = await tx.supermarket.findMany({
+        select: {
+          id: true,
+          slug: true,
+        },
+      });
+      const supermarketIdBySlug = new Map(supermarketRows.map((supermarket) => [supermarket.slug, supermarket.id]));
+      const chunks = chunkArray(pendingCandidates, Math.max(batchSize, 1));
+      const summary: ReconcileSummary = {
+        totalCandidates: resolvedCandidates.length,
+        totalPending: pendingCandidates.length,
+        distinctEans: new Set(pendingCandidates.map((candidate) => candidate.ean)).size,
+        newProducts: 0,
+        mergedProducts: 0,
+        supermarketProductsCreated: 0,
+        supermarketProductsUpdated: 0,
+        priceHistoryInserted: 0,
+        promoted: 0,
+        promotedByRunId: {},
+        promotedBySource: {},
+        chunkTimings: [],
+      };
+
+      for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
+        const chunk = chunks[chunkIndex];
+        const chunkStart = Date.now();
+        const chunkResult = await reconcileChunk(tx, chunk, supermarketIdBySlug, dryRun);
+        const chunkDurationMs = Date.now() - chunkStart;
+
+        summary.chunkTimings.push({
+          chunkIndex,
+          chunkSize: chunk.length,
+          durationMs: chunkDurationMs,
+        });
+
+        summary.newProducts += chunkResult.newProducts;
+        summary.mergedProducts += chunkResult.mergedProducts;
+        summary.supermarketProductsCreated += chunkResult.supermarketProductsCreated;
+        summary.supermarketProductsUpdated += chunkResult.supermarketProductsUpdated;
+        summary.priceHistoryInserted += chunkResult.priceHistoryInserted;
+        summary.promoted += chunkResult.promoted;
+
+        for (const [runId, count] of Object.entries(chunkResult.promotedByRunId)) {
+          summary.promotedByRunId[runId] = (summary.promotedByRunId[runId] ?? 0) + count;
+        }
+
+        for (const [sourceSlug, count] of Object.entries(chunkResult.promotedBySource)) {
+          summary.promotedBySource[sourceSlug] = (summary.promotedBySource[sourceSlug] ?? 0) + count;
+        }
+      }
+
+      return summary;
     },
-  });
-  const supermarketIdBySlug = new Map(supermarketRows.map((supermarket) => [supermarket.slug, supermarket.id]));
-  const chunks = chunkArray(pendingCandidates, Math.max(batchSize, 1));
-  const summary: ReconcileSummary = {
-    totalCandidates: resolvedCandidates.length,
-    totalPending: pendingCandidates.length,
-    distinctEans: new Set(pendingCandidates.map((candidate) => candidate.ean)).size,
-    newProducts: 0,
-    mergedProducts: 0,
-    supermarketProductsCreated: 0,
-    supermarketProductsUpdated: 0,
-    priceHistoryInserted: 0,
-    promoted: 0,
-    promotedByRunId: {},
-    promotedBySource: {},
-    chunkTimings: [],
-  };
-
-  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
-    const chunk = chunks[chunkIndex];
-    const chunkStart = Date.now();
-    const chunkResult = await db.$transaction(
-      (tx) => reconcileChunk(tx, chunk, supermarketIdBySlug, dryRun),
-      {
-        maxWait: txMaxWaitMs,
-        timeout: txTimeoutMs,
-      },
-    );
-    const chunkDurationMs = Date.now() - chunkStart;
-
-    summary.chunkTimings.push({
-      chunkIndex,
-      chunkSize: chunk.length,
-      durationMs: chunkDurationMs,
-    });
-
-    summary.newProducts += chunkResult.newProducts;
-    summary.mergedProducts += chunkResult.mergedProducts;
-    summary.supermarketProductsCreated += chunkResult.supermarketProductsCreated;
-    summary.supermarketProductsUpdated += chunkResult.supermarketProductsUpdated;
-    summary.priceHistoryInserted += chunkResult.priceHistoryInserted;
-    summary.promoted += chunkResult.promoted;
-
-    for (const [runId, count] of Object.entries(chunkResult.promotedByRunId)) {
-      summary.promotedByRunId[runId] = (summary.promotedByRunId[runId] ?? 0) + count;
-    }
-
-    for (const [sourceSlug, count] of Object.entries(chunkResult.promotedBySource)) {
-      summary.promotedBySource[sourceSlug] = (summary.promotedBySource[sourceSlug] ?? 0) + count;
-    }
-  }
-
-  return summary;
+    {
+      maxWait: txMaxWaitMs,
+      timeout: txTimeoutMs,
+    },
+  );
 }

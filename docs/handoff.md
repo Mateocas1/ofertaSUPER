@@ -6,8 +6,9 @@
 - `.github/workflows/update-prices.yml` now defaults manual dispatch to `--dry-run`; real writes require `confirm_write: true`; status reporting is limited to confirmed writes.
 - Implemented P1-B public catalog API fallback semantics: `/api/products`, `/api/categories`, and `/api/promotions` now preserve validation `400`s but return bounded demo fallback data when catalog loaders fail.
 - Implemented safe P1-D workflow-level guard: `.github/workflows/ingest.yml` and `.github/workflows/update-prices.yml` share `concurrency.group: ofertas-super-data-jobs` with `cancel-in-progress: false`.
-- This does not close DB/application-level idempotency; advisory lock/staging-claim work remains a separate slice.
-- Verification passed: legacy write-safety test 3/3, public catalog API test 4/4, ingestion concurrency test 1/1, `npm test` 29/29, `npm run typecheck` OK, `npm run lint` OK.
+- Implemented P1-D application/DB-level guard: active reconciliation now acquires a transaction-scoped advisory lock before loading pending staging candidates.
+- Remaining P1-D caveat: this prevents overlapping active reconciliation, but very large future volumes may need a staging-claim design instead of one full-window transaction.
+- Verification passed: legacy write-safety test 3/3, public catalog API test 4/4, ingestion concurrency test 1/1, reconcile lock test 4/4, `npm test` 33/33, `npm run typecheck` OK, `npm run lint` OK, local public API smoke 5/5 on `127.0.0.1:3041`.
 - No build was run. No schedules were re-enabled. No dashboards were touched. Commit remains local unless pushed later.
 - Incident: the RED test exposed the old footgun by hitting the real legacy write path before the guard existed. Revalidated read-only DB check found exactly 50 `price_history` rows, ids `4945`-`4994`, for `disco`, around `2026-05-19T01:19:53.951Z`-`2026-05-19T01:19:59.212Z`. No cleanup/delete was performed without user approval.
 - Cleanup proposal prepared but not executed: `docs/reports/hardening/2026-05-19-price-history-cleanup-proposal.md`.

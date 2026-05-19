@@ -1,16 +1,16 @@
 # ofertasSUPER hardening sprint - 2026-05-19
 
-Status: `P1-A IMPLEMENTED, P1-B IMPLEMENTED, P1-D WORKFLOW GUARD IMPLEMENTED, CLEANUP DECISION PENDING`
+Status: `P1-A IMPLEMENTED, P1-B IMPLEMENTED, P1-D IMPLEMENTED, CLEANUP DECISION PENDING`
 
-This sprint started from the Goal 1 audit backlog. No P0 existed, so the first selected work unit was P1-A: guard legacy write scripts. P1-B normalized public catalog API fallback semantics. A third safe, no-DB-write work unit closed the workflow-level part of P1-D while the accidental RED-write cleanup decision remains pending.
+This sprint started from the Goal 1 audit backlog. No P0 existed, so the first selected work unit was P1-A: guard legacy write scripts. P1-B normalized public catalog API fallback semantics. P1-D now has both workflow-level serialization and an application/DB-level reconciliation advisory lock while the accidental RED-write cleanup decision remains pending.
 
 ## Scope selected
 
 | Gate | Decision |
 |---|---|
-| Selected slices | P1-A - Guard legacy write scripts; P1-B - public catalog API fallback semantics; P1-D - workflow-level ingestion/update concurrency guard |
-| Why first | P1-A had the highest data-safety and interview value. P1-B closes a public runtime resilience gap without changing UI. P1-D workflow concurrency is a safe data-correctness improvement because it is static CI config and performs no DB mutation. |
-| Not selected now | P1-C catalog scalability, P1-D DB/application-level idempotency, P1-E admin positive path. |
+| Selected slices | P1-A - Guard legacy write scripts; P1-B - public catalog API fallback semantics; P1-D - workflow and application/DB-level ingestion concurrency guard |
+| Why first | P1-A had the highest data-safety and interview value. P1-B closes a public runtime resilience gap without changing UI. P1-D closes the most direct race-condition risk before schedules or active ingestion claims. |
+| Not selected now | P1-C catalog scalability, P1-E admin positive path. |
 | Build | Not run. |
 | External dashboards | Not touched. |
 | Schedules | Not re-enabled. |
@@ -60,7 +60,7 @@ What changed:
 - The shared group is `ofertas-super-data-jobs`.
 - `cancel-in-progress: false` serializes data jobs instead of cancelling an in-flight ingestion/update.
 - Schedules remain paused; this only hardens manual dispatch and future schedule readiness.
-- This does not claim full DB/application-level idempotency; advisory locks or claim patterns remain a later P1-D slice.
+- This workflow layer is complemented by the DB transaction advisory lock in work unit 4.
 
 ## Work unit 3 - P1-B public catalog API fallback semantics
 
@@ -84,6 +84,26 @@ What changed:
 - Product list fallback respects query, pagination and supermarket filters through existing demo-data helpers.
 - Promotion fallback respects supermarket/type/wallet filters where possible.
 - This does not claim full coverage for product-detail/history routes; those remain separate if deeper public API coverage is needed.
+
+## Work unit 4 - P1-D reconciliation advisory lock
+
+Commit subject: `fix(ingestion): guard active reconciliation lock`
+
+Changed files:
+
+- `scripts/pipeline/reconcile.ts`
+- `tests/reconcile-lock.test.ts`
+- `docs/reports/hardening/2026-05-19-ofertassuper-hardening-sprint.md`
+- `docs/reports/hardening/2026-05-19-ofertassuper-before-after.md`
+- `docs/handoff.md`
+
+What changed:
+
+- Active reconciliation now opens one interactive transaction and acquires `pg_try_advisory_xact_lock` before loading pending staging candidates.
+- If another reconciliation already owns the lock, the second run fails fast with `ReconcileLockUnavailableError` instead of loading stale pending candidates and risking duplicate promotion/history writes.
+- The lock key is stable and tested: `2026051901`.
+- Candidate loading and chunk reconciliation now happen inside the locked transaction.
+- Tradeoff: this is safer for race prevention, but active reconciliation now holds one transaction for the full reconciliation window. The existing transaction timeout envs remain the tuning gate.
 
 ## TDD evidence
 
@@ -165,6 +185,31 @@ Result after implementation:
 
 - 4/4 tests passed.
 
+### RED - P1-D reconciliation advisory lock
+
+Command:
+
+```bash
+npx tsx --test tests/reconcile-lock.test.ts
+```
+
+Result before implementation:
+
+- 4/4 tests failed.
+- Failures proved there was no stable lock key/export, no lock helper, no lock-unavailable error, and no evidence that reconciliation acquired the lock before loading candidates.
+
+### GREEN - P1-D reconciliation advisory lock
+
+Command:
+
+```bash
+npx tsx --test tests/reconcile-lock.test.ts
+```
+
+Result after implementation:
+
+- 4/4 tests passed.
+
 ## Incident note
 
 During the RED run, the intentionally failing `runStoreScraper()` test exposed the exact production-write footgun by calling the current implementation before dependency injection existed. Because the pre-fix function ignored the test-only `dependencies` option and defaulted `dryRun = false`, it executed the real legacy Disco write path.
@@ -186,9 +231,11 @@ No build was run.
 | `npx tsx --test tests/legacy-write-safety.test.ts` | 3/3 passing |
 | `npx tsx --test tests/public-catalog-api.test.ts` | 4/4 passing |
 | `npx tsx --test tests/ingestion-concurrency.test.ts` | 1/1 passing |
-| `npm test` | 29/29 passing |
+| `npx tsx --test tests/reconcile-lock.test.ts` | 4/4 passing |
+| `npm test` | 33/33 passing |
 | `npm run typecheck` | exit 0 |
 | `npm run lint` | exit 0 |
+| Local public API smoke on Next dev server `127.0.0.1:3041` | 5/5 passing: products 200, products validation 400, categories 200, promotions 200, promotions validation 400 |
 
 ## Remaining Goal 2 items
 
@@ -198,7 +245,7 @@ No build was run.
 | P1-B public API fallback/error semantics | Implemented | Product/category/promotion public APIs have tested runtime fallback semantics while preserving 400 validation errors. |
 | P1-C product listing scalability | Deferred | Higher query-design risk; needs focused tests. |
 | P1-D workflow-level ingestion/update concurrency | Implemented | Shared GitHub Actions concurrency group serializes manual data jobs without re-enabling schedules. |
-| P1-D DB/application-level idempotency | Deferred | Requires a separate data-correctness slice with advisory lock or staging claim tests. |
+| P1-D DB/application-level idempotency | Implemented | Active reconciliation now acquires a transaction advisory lock before loading candidates. |
 | P1-E production admin positive path | Deferred | Requires real credentials/session. |
 | Cleanup of accidental RED write | Pending user decision | Deletes/rollback require explicit approval. |
 
@@ -212,11 +259,13 @@ Safe:
 
 > Ingest/update GitHub workflows now share a data-job concurrency group so manual runs do not overlap.
 
+> Active reconciliation uses a transaction-scoped advisory lock before loading staging candidates, reducing duplicate promotion/history race risk.
+
 Not safe:
 
 - production-ready ingestion
 - active ingestion schedule readiness
-- full DB/application-level ingestion idempotency
+- complete crash/retry idempotency under every operational scenario
 - full public API integration/E2E coverage for every route
 - no accidental write occurred during the sprint
 - full data rollback completed
