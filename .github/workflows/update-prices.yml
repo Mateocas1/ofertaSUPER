@@ -3,6 +3,12 @@ name: Update Prices
 # Scheduled runs are paused until GitHub Actions secrets and ingestion cadence are configured.
 on:
   workflow_dispatch:
+    inputs:
+      confirm_write:
+        description: "Run real update writes. Leave false for dry-run safety."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -29,14 +35,19 @@ jobs:
 
       - name: Update prices
         id: update_prices
-        run: npm run update:prices
+        run: |
+          if [ "${{ inputs.confirm_write }}" = "true" ]; then
+            npm run update:prices -- --confirm-write
+          else
+            npm run update:prices -- --dry-run
+          fi
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
           VTEX_SHA256_HASH: ${{ secrets.VTEX_SHA256_HASH }}
 
       - name: Report scraper status
-        if: always()
+        if: ${{ always() && inputs.confirm_write == true }}
         run: npx tsx scripts/report-scraper-status.ts
         env:
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}

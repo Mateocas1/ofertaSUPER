@@ -93,6 +93,8 @@ npm run probe:vtex -- --source=disco --query=leche --count=1
 INGESTION_V2=shadow npm run ingest -- --dry-run --source=disco --limit=1
 ```
 
+Legacy scraper/update scripts (`scrape:*`, `update:prices`) default to dry-run. Real legacy writes require an explicit `--confirm-write` flag or `INGESTION_WRITE_APPROVED=true`, plus an approval and rollback/cleanup plan.
+
 Do not run active/non-dry-run ingestion without an explicit approval and a rollback/cleanup plan. Do not run local production builds in this repo workflow unless explicitly authorized; Vercel build logs are the current deploy evidence.
 
 ## Architecture map

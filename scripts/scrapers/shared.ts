@@ -14,6 +14,7 @@ type RunStoreScraperOptions = {
   dryRun?: boolean;
   queryTerms?: string[];
   limit?: number;
+  dependencies?: Partial<RunStoreScraperDependencies>;
 };
 
 type ScrapeResult = {
@@ -23,6 +24,15 @@ type ScrapeResult = {
   persisted: number;
   skipped: number;
   sample: NormalizedProduct[];
+};
+
+type LegacyWriteEnv = Record<string, string | undefined>;
+
+type RunStoreScraperDependencies = {
+  resolveQueryTerms: typeof resolveQueryTerms;
+  getSupermarketBySlug: typeof getSupermarketBySlug;
+  fetchVtexProducts: typeof fetchVtexProducts;
+  persistPricing: typeof persistPricing;
 };
 
 async function resolveQueryTerms({ slug, queryTerms, limit }: Pick<RunStoreScraperOptions, "slug" | "queryTerms" | "limit">) {
@@ -127,13 +137,30 @@ async function persistPricing(slug: string, products: NormalizedProduct[]) {
   return { persisted, skipped };
 }
 
-export async function runStoreScraper({ slug, dryRun = false, queryTerms, limit }: RunStoreScraperOptions): Promise<ScrapeResult> {
-  const supermarket = getSupermarketBySlug(slug);
-  const terms = await resolveQueryTerms({ slug, queryTerms, limit });
+function resolveDependencies(overrides: Partial<RunStoreScraperDependencies> = {}): RunStoreScraperDependencies {
+  return {
+    resolveQueryTerms,
+    getSupermarketBySlug,
+    fetchVtexProducts,
+    persistPricing,
+    ...overrides,
+  };
+}
+
+export async function runStoreScraper({
+  slug,
+  dryRun = true,
+  queryTerms,
+  limit,
+  dependencies,
+}: RunStoreScraperOptions): Promise<ScrapeResult> {
+  const resolvedDependencies = resolveDependencies(dependencies);
+  const supermarket = resolvedDependencies.getSupermarketBySlug(slug);
+  const terms = await resolvedDependencies.resolveQueryTerms({ slug, queryTerms, limit });
   const aggregated = new Map<string, NormalizedProduct>();
 
   for (const term of terms) {
-    const products = await fetchVtexProducts({
+    const products = await resolvedDependencies.fetchVtexProducts({
       baseUrl: supermarket.baseUrl,
       query: term,
       count: 50,
@@ -157,7 +184,7 @@ export async function runStoreScraper({ slug, dryRun = false, queryTerms, limit 
     };
   }
 
-  const { persisted, skipped } = await persistPricing(slug, uniqueProducts);
+  const { persisted, skipped } = await resolvedDependencies.persistPricing(slug, uniqueProducts);
 
   return {
     slug,
@@ -169,8 +196,16 @@ export async function runStoreScraper({ slug, dryRun = false, queryTerms, limit 
   };
 }
 
-export function readDryRunFlag() {
-  return process.argv.includes("--dry-run");
+export function isLegacyWriteApproved(argv = process.argv, env: LegacyWriteEnv = process.env) {
+  return argv.includes("--confirm-write") || env.INGESTION_WRITE_APPROVED?.toLowerCase() === "true";
+}
+
+export function readDryRunFlag(argv = process.argv, env: LegacyWriteEnv = process.env) {
+  if (argv.includes("--dry-run")) {
+    return true;
+  }
+
+  return !isLegacyWriteApproved(argv, env);
 }
 
 export function readLimitFlag(defaultLimit = DEFAULT_SEARCH_TERMS.length) {
