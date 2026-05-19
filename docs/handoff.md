@@ -7,6 +7,7 @@
 - Verification passed: slice test 3/3, `npm test` 24/24, `npm run typecheck` OK, `npm run lint` OK.
 - No build was run. No schedules were re-enabled. No dashboards were touched. Commit remains local unless pushed later.
 - Incident: the RED test exposed the old footgun by hitting the real legacy write path before the guard existed. Read-only DB check found 50 `price_history` rows in the last hour around `2026-05-19T01:19:58Z`-`2026-05-19T01:19:59Z`. No cleanup/delete was performed without user approval.
+- Cleanup proposal prepared but not executed: `docs/reports/hardening/2026-05-19-price-history-cleanup-proposal.md`.
 - Evidence:
   - `docs/reports/hardening/2026-05-19-ofertassuper-hardening-sprint.md`
   - `docs/reports/hardening/2026-05-19-ofertassuper-before-after.md`
