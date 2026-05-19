@@ -1,16 +1,16 @@
 # ofertasSUPER hardening sprint - 2026-05-19
 
-Status: `P1-A IMPLEMENTED, P1-B IMPLEMENTED, P1-D IMPLEMENTED, CLEANUP DECISION PENDING`
+Status: `P1-A IMPLEMENTED, P1-B IMPLEMENTED, P1-C BOUNDED, P1-D IMPLEMENTED, CLEANUP DECISION PENDING`
 
-This sprint started from the Goal 1 audit backlog. No P0 existed, so the first selected work unit was P1-A: guard legacy write scripts. P1-B normalized public catalog API fallback semantics. P1-D now has both workflow-level serialization and an application/DB-level reconciliation advisory lock while the accidental RED-write cleanup decision remains pending.
+This sprint started from the Goal 1 audit backlog. No P0 existed, so the first selected work unit was P1-A: guard legacy write scripts. P1-B normalized public catalog API fallback semantics. P1-C now adds a bounded candidate-read cap before relation loading. P1-D has both workflow-level serialization and an application/DB-level reconciliation advisory lock while the accidental RED-write cleanup decision remains pending.
 
 ## Scope selected
 
 | Gate | Decision |
 |---|---|
-| Selected slices | P1-A - Guard legacy write scripts; P1-B - public catalog API fallback semantics; P1-D - workflow and application/DB-level ingestion concurrency guard |
-| Why first | P1-A had the highest data-safety and interview value. P1-B closes a public runtime resilience gap without changing UI. P1-D closes the most direct race-condition risk before schedules or active ingestion claims. |
-| Not selected now | P1-C catalog scalability, P1-E admin positive path. |
+| Selected slices | P1-A - Guard legacy write scripts; P1-B - public catalog API fallback semantics; P1-C - bounded catalog candidate read; P1-D - workflow and application/DB-level ingestion concurrency guard |
+| Why first | P1-A had the highest data-safety and interview value. P1-B closes a public runtime resilience gap without changing UI. P1-C reduces unbounded product-list reads before larger ingestion volume. P1-D closes the most direct race-condition risk before schedules or active ingestion claims. |
+| Not selected now | P1-E admin positive path. |
 | Build | Not run. |
 | External dashboards | Not touched. |
 | Schedules | Not re-enabled. |
@@ -105,6 +105,29 @@ What changed:
 - Candidate loading and chunk reconciliation now happen inside the locked transaction.
 - Tradeoff: this is safer for race prevention, but active reconciliation now holds one transaction for the full reconciliation window. The existing transaction timeout envs remain the tuning gate.
 
+## Work unit 5 - P1-C bounded product-list candidate read
+
+Commit subject: `perf(catalog): bound product listing candidate reads`
+
+Changed files:
+
+- `src/lib/catalog-query-planning.ts`
+- `src/lib/catalog.ts`
+- `tests/catalog-query-planning.test.ts`
+- `docs/reports/hardening/2026-05-19-ofertassuper-hardening-sprint.md`
+- `docs/reports/hardening/2026-05-19-ofertassuper-before-after.md`
+- `docs/handoff.md`
+
+What changed:
+
+- Product listing now applies a bounded Prisma `take` before loading product relation data.
+- Candidate cap is deterministic and tested:
+  - minimum: `200`;
+  - maximum: `500`;
+  - overfetch factor: `page * limit * 4`.
+- Unsafe pagination inputs are normalized before cap calculation.
+- Tradeoff: this is a pragmatic demo/portfolio hardening step, not a full search-index strategy. Deeper scale still needs DB-native filtering/sorting/index design.
+
 ## TDD evidence
 
 ### RED
@@ -185,6 +208,31 @@ Result after implementation:
 
 - 4/4 tests passed.
 
+### RED - P1-C bounded product listing read
+
+Command:
+
+```bash
+npx tsx --test tests/catalog-query-planning.test.ts
+```
+
+Result before implementation:
+
+- Test failed because `src/lib/catalog-query-planning.ts` did not exist.
+- The desired contract was explicit before implementation: product-list candidate reads must have a tested min/max cap instead of an unbounded relation-heavy read.
+
+### GREEN - P1-C bounded product listing read
+
+Command:
+
+```bash
+npx tsx --test tests/catalog-query-planning.test.ts
+```
+
+Result after implementation:
+
+- 2/2 tests passed.
+
 ### RED - P1-D reconciliation advisory lock
 
 Command:
@@ -230,12 +278,14 @@ No build was run.
 |---|---|
 | `npx tsx --test tests/legacy-write-safety.test.ts` | 3/3 passing |
 | `npx tsx --test tests/public-catalog-api.test.ts` | 4/4 passing |
+| `npx tsx --test tests/catalog-query-planning.test.ts` | 2/2 passing |
 | `npx tsx --test tests/ingestion-concurrency.test.ts` | 1/1 passing |
 | `npx tsx --test tests/reconcile-lock.test.ts` | 4/4 passing |
-| `npm test` | 33/33 passing |
+| `npm test` | 35/35 passing |
 | `npm run typecheck` | exit 0 |
 | `npm run lint` | exit 0 |
 | Local public API smoke on Next dev server `127.0.0.1:3041` | 5/5 passing: products 200, products validation 400, categories 200, promotions 200, promotions validation 400 |
+| Local product-list smoke on Next dev server `127.0.0.1:3042` | 2/2 passing after P1-C: products 200, products validation 400 |
 
 ## Remaining Goal 2 items
 
@@ -243,7 +293,7 @@ No build was run.
 |---|---|---|
 | P1-A legacy write guard | Implemented in `6d01b9f` | Tests and docs included. |
 | P1-B public API fallback/error semantics | Implemented | Product/category/promotion public APIs have tested runtime fallback semantics while preserving 400 validation errors. |
-| P1-C product listing scalability | Deferred | Higher query-design risk; needs focused tests. |
+| P1-C product listing scalability | Bounded | Candidate reads are capped before relation loading; full DB-native search/sort remains future work. |
 | P1-D workflow-level ingestion/update concurrency | Implemented | Shared GitHub Actions concurrency group serializes manual data jobs without re-enabling schedules. |
 | P1-D DB/application-level idempotency | Implemented | Active reconciliation now acquires a transaction advisory lock before loading candidates. |
 | P1-E production admin positive path | Deferred | Requires real credentials/session. |
@@ -257,6 +307,8 @@ Safe:
 
 > Public product/category/promotion APIs preserve validation `400`s but degrade to demo data on catalog runtime failures.
 
+> Product listing now bounds relation-heavy candidate reads with a tested cap before in-memory filtering/sorting.
+
 > Ingest/update GitHub workflows now share a data-job concurrency group so manual runs do not overlap.
 
 > Active reconciliation uses a transaction-scoped advisory lock before loading staging candidates, reducing duplicate promotion/history race risk.
@@ -266,6 +318,7 @@ Not safe:
 - production-ready ingestion
 - active ingestion schedule readiness
 - complete crash/retry idempotency under every operational scenario
+- full catalog search-index/query optimization
 - full public API integration/E2E coverage for every route
 - no accidental write occurred during the sprint
 - full data rollback completed

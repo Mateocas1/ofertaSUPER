@@ -10,6 +10,7 @@ import {
   type PriceDropAlert,
 } from "@/lib/promotions/alerts";
 import { detectAutomaticDiscount, getBestPromotionPrice } from "@/lib/promotions/detect";
+import { calculateProductCandidateReadLimit } from "@/lib/catalog-query-planning";
 import { DETAILED_CATEGORIES } from "@/lib/vtex/categories";
 
 type PriceEntryRecord = {
@@ -412,6 +413,7 @@ async function findRawProducts(filters: ProductListFilters) {
 
   return db.product.findMany({
     where,
+    take: calculateProductCandidateReadLimit(filters),
     select: {
       ean: true,
       name: true,
