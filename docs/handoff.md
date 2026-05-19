@@ -16,6 +16,7 @@
 - Cleanup intentionally did not touch `products` or `supermarket_products` because the legacy path used upserts and there was no safe before snapshot.
 - Supabase/Prisma operational gotcha: the first cleanup attempt hit `42P05 prepared statement "s0" already exists`; retry succeeded after adding `pgbouncer=true` in-memory to the one-off Prisma runtime connection. No `.env` file was changed.
 - Cleanup evidence: `docs/reports/hardening/2026-05-19-price-history-cleanup-proposal.md`.
+- Career proof update added: `docs/reports/career-proof/2026-05-19-hardening-proof-update.md` explains problem -> signal -> decision -> solution -> evidence -> safe career claim for the hardening sprint.
 - Evidence:
   - `docs/reports/hardening/2026-05-19-ofertassuper-hardening-sprint.md`
   - `docs/reports/hardening/2026-05-19-ofertassuper-before-after.md`

@@ -30,6 +30,19 @@ ofertasSUPER is a supermarket price and offer comparison app for Argentina. It i
 | Controlled ingestion dry-run | `GREEN` | `docs/reports/production-readiness/2026-05-17-gate4-ingestion-controlled.md` |
 | Admin / Clerk fail-closed checks | `GREEN` | `docs/reports/production-readiness/2026-05-17-gate6-admin-clerk-promotions.md` |
 | Complexity scan | `GREEN` | `docs/reports/production-readiness/2026-05-17-gate7-complexity-report.md` |
+| Hardening proof update | `GREEN` | `docs/reports/career-proof/2026-05-19-hardening-proof-update.md` |
+
+## Recent hardening highlights
+
+The latest hardening sprint focused on engineering risk instead of new features:
+
+- legacy scraper/update writes now default to dry-run and require explicit confirmation;
+- public product/category/promotion APIs keep validation errors as `400` while degrading runtime dependency failures to bounded demo fallbacks;
+- product listing applies a tested candidate-read cap before loading relation-heavy catalog data;
+- ingestion/update workflows share a concurrency group and active reconciliation uses a PostgreSQL advisory lock before loading pending candidates;
+- an accidental RED-test `price_history` write was documented, cleaned up with approval, and verified with a post-check.
+
+Career/interview proof: `docs/reports/career-proof/2026-05-19-hardening-proof-update.md`.
 
 ## Screenshots
 
