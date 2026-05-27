@@ -18,7 +18,7 @@
 | Validación | Zod |
 | Charts | Recharts |
 | Scraper runtime | Node.js scripts (TypeScript) |
-| Scheduling | GitHub Actions manuales; cron deshabilitado hasta rollout revisado |
+| Scheduling | GitHub Actions manuales; schedules deshabilitados hasta rollout revisado |
 | Hosting | Vercel |
 
 ---
@@ -129,7 +129,7 @@ ofertasSUPER/
 │   │   ├── dia.ts
 │   │   └── mas.ts
 │   ├── populateDb.ts               ← Población inicial completa
-│   ├── updatePrices.ts             ← Actualización precios (cron)
+│   ├── updatePrices.ts             ← Actualización precios (manual; schedule pausado)
 │   └── cleanup-history.ts          ← Limpieza price_history >90 días
 ├── src/
 │   ├── app/
@@ -189,8 +189,8 @@ ofertasSUPER/
 │   └── middleware.ts               ← Clerk: proteger /admin/*
 └── .github/workflows/
     ├── populate-db.yml             ← workflow_dispatch manual
-    ├── update-prices.yml           ← cron: '0 0,6,12,18 * * *'
-    └── cleanup.yml                 ← cron mensual: '0 3 1 * *'
+    ├── update-prices.yml           ← workflow_dispatch; schedule pausado
+    └── cleanup.yml                 ← workflow_dispatch; schedule pausado
 ```
 
 ---
@@ -234,7 +234,7 @@ ofertasSUPER/
 - [x] **1.13** — Crear `scripts/populateDb.ts` — ejecuta todos los scrapers secuencialmente
 - [x] **1.14** — Crear `scripts/updatePrices.ts` — re-scrapea EANs ya existentes en DB
 - [x] **1.15** — Crear `.github/workflows/populate-db.yml` (manual dispatch)
-- [x] **1.16** — Crear `.github/workflows/update-prices.yml` (manual; cron pausado hasta rollout revisado)
+- [x] **1.16** — Crear `.github/workflows/update-prices.yml` (manual; schedule pausado hasta rollout revisado)
 - [x] **1.17** — Crear `.env.local` con todas las variables requeridas
 
 ### Gate de salida Fase 1
@@ -330,7 +330,7 @@ ofertasSUPER/
 - [x] **4.4** — Observabilidad scraper: alerta si falla 2+ veces seguido (webhook/email)
 - [x] **4.5** — PWA: `public/manifest.json` + icons + `next-pwa`
 - [x] **4.6** — Script `cleanup-history.ts` — borrar `price_history` > 90 días
-- [x] **4.7** — `.github/workflows/cleanup.yml` — cron mensual
+- [x] **4.7** — `.github/workflows/cleanup.yml` — manual; schedule pausado hasta rollout revisado
 - [x] **4.8** — Responsive audit completo (mobile-first, touch targets ≥44px)
 - [x] **4.9** — Lighthouse CI en Vercel
 
