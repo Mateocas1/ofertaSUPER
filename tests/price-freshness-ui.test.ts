@@ -10,7 +10,7 @@ describe("public price freshness UI contracts", () => {
     const copy = getApprovedHomeCopy().join(" ");
 
     assert.doesNotMatch(copy, /Actualizado hoy|Hoy \d{1,2}:\d{2}|Datos actualizados hoy/i);
-    assert.match(copy, /fecha visible|snapshot|verific/i);
+    assert.match(copy, /frescura visible|registro disponible|verific/i);
   });
 
   it("exposes freshness metadata in search suggestion payloads", () => {
