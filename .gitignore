@@ -52,6 +52,7 @@ next-env.d.ts
 .atl/
 .pi/
 .pi-lens/
+.lighthouseci/
 audit/
 progress.md
 

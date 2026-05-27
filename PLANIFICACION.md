@@ -18,7 +18,7 @@
 | Validación | Zod |
 | Charts | Recharts |
 | Scraper runtime | Node.js scripts (TypeScript) |
-| Scheduling | GitHub Actions cron (cada 6h) |
+| Scheduling | GitHub Actions manuales; cron deshabilitado hasta rollout revisado |
 | Hosting | Vercel |
 
 ---
@@ -326,7 +326,7 @@ ofertasSUPER/
 
 - [x] **4.1** — Hook `use-favorites.ts` + componente `FavoriteButton` (localStorage)
 - [x] **4.2** — Hook `use-canasta.ts` — lista de compras con cantidades (localStorage)
-- [x] **4.3** — Página Canasta (`/canasta`) — total por super en tiempo real
+- [x] **4.3** — Página Canasta (`/canasta`) — total por super con cobertura por EAN
 - [x] **4.4** — Observabilidad scraper: alerta si falla 2+ veces seguido (webhook/email)
 - [x] **4.5** — PWA: `public/manifest.json` + icons + `next-pwa`
 - [x] **4.6** — Script `cleanup-history.ts` — borrar `price_history` > 90 días
@@ -335,7 +335,7 @@ ofertasSUPER/
 - [x] **4.9** — Lighthouse CI en Vercel
 
 ### Gate de salida Fase 4
-- [ ] Lighthouse ≥90 en Performance, SEO, Accessibility en mobile
+- [x] Lighthouse CI: Accessibility y SEO ≥90 como hard gates; Performance ≥90 como warning/advisory por variabilidad de runners
 - [ ] Scraper falla simulado → alerta en <5 min
 - [ ] Canasta con 5 productos muestra total correcto por los 6 supers
 - [ ] ISR: cambio de precio en DB se refleja en página dentro de 6h

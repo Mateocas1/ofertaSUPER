@@ -79,9 +79,9 @@ Copy aceptada:
 
 Senales permitidas:
 
-- `6 fuentes activas`
+- `6 fuentes configuradas`
 - `EAN normalizado` o variante mas humana: `Productos comparables por código`
-- `Actualizado hoy 08:30`
+- `Frescura visible`
 
 No agregar mas metricas arriba del fold sin nueva aprobacion.
 
@@ -121,7 +121,7 @@ Copy:
 - `Mostrando 4 de 4 productos`
 - `Ver todos los productos`
 
-## Mercado vivo
+## Lecturas del catálogo
 
 Rol: capa secundaria.
 
@@ -195,7 +195,7 @@ Evitar:
   3. senales;
   4. canasta inteligente compacta;
   5. resultados;
-  6. mercado vivo.
+  6. lecturas del catálogo.
 
 No usar `h-screen`; si hay secciones altas, usar `min-h-[100dvh]`.
 
@@ -204,7 +204,7 @@ No usar `h-screen`; si hay secciones altas, usar `min-h-[100dvh]`.
 - Usar productos reales de la DB en vez de mockups generados.
 - Usar badges tipograficos propios si no hay logos limpios.
 - Cambiar `EAN normalizado` por `Productos comparables por código` si reduce friccion para usuarios comunes.
-- Mover `Mercado vivo` mas abajo si el primer viewport queda cargado.
+- Mover `Lecturas del catálogo` mas abajo si el primer viewport queda cargado.
 
 ## Siguiente slice recomendado
 
