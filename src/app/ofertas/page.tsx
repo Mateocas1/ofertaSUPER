@@ -67,7 +67,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 							className="surface-soft grid gap-3 p-4 md:grid-cols-4"
 							action="/ofertas"
 						>
+							<label className="sr-only" htmlFor="offers-supermarket-filter">
+								Supermercado
+							</label>
 							<select
+								id="offers-supermarket-filter"
 								name="super"
 								defaultValue={supermarket ?? ""}
 								className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground"
@@ -79,14 +83,22 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 									</option>
 								))}
 							</select>
+							<label className="sr-only" htmlFor="offers-wallet-filter">
+								Billetera o banco
+							</label>
 							<input
+								id="offers-wallet-filter"
 								type="text"
 								name="wallet"
 								defaultValue={wallet ?? ""}
 								placeholder="Billetera o banco"
 								className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
 							/>
+							<label className="sr-only" htmlFor="offers-type-filter">
+								Tipo de promoción
+							</label>
 							<select
+								id="offers-type-filter"
 								name="type"
 								defaultValue={type ?? ""}
 								className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground"

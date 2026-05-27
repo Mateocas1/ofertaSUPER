@@ -4,11 +4,7 @@ import { CanastaPage } from "@/components/canasta-page";
 
 export const metadata: Metadata = {
   title: "Canasta",
-  description: "Canasta local para comparar el total por supermercado con productos reales del catalogo.",
-  robots: {
-    index: false,
-    follow: false,
-  },
+  description: "Canasta local para comparar el total por supermercado con productos reales del catálogo.",
 };
 
 export default function BasketPage() {
