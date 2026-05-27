@@ -9,7 +9,7 @@ const numericParam = z.preprocess((value) => {
   return Number.isFinite(parsed) ? parsed : value;
 }, z.number().nonnegative().optional());
 
-export const productSortSchema = z.enum([
+const productSortSchema = z.enum([
   "relevance",
   "discount",
   "price-asc",

@@ -1,6 +1,6 @@
 const DEFAULT_COUNT = 50;
 
-export type VtexSuggestionVariables = {
+type VtexSuggestionVariables = {
   productOriginVtex: true;
   simulationBehavior: "default";
   hideUnavailableItems: true;
@@ -16,7 +16,7 @@ export type VtexSuggestionVariables = {
   variant: null;
 };
 
-export function buildSuggestionVariables(
+function buildSuggestionVariables(
   query: string,
   count = DEFAULT_COUNT,
 ): VtexSuggestionVariables {
@@ -37,11 +37,11 @@ export function buildSuggestionVariables(
   };
 }
 
-export function encodeQuery(value: unknown) {
+function encodeQuery(value: unknown) {
   return Buffer.from(JSON.stringify(value)).toString("base64");
 }
 
-export function getExtensionsWithQuery(query: string, hash: string, count = DEFAULT_COUNT) {
+function getExtensionsWithQuery(query: string, hash: string, count = DEFAULT_COUNT) {
   return JSON.stringify({
     persistedQuery: {
       version: 1,

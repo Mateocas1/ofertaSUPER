@@ -1,6 +1,6 @@
 import type { NormalizedProduct } from "../../src/lib/vtex/normalize";
 
-export type CandidateAuditSourceSnapshot = {
+type CandidateAuditSourceSnapshot = {
 	id: number;
 	slug: string;
 	name: string;
@@ -8,7 +8,7 @@ export type CandidateAuditSourceSnapshot = {
 	isVtex: boolean;
 };
 
-export type ProductSnapshot = {
+type ProductSnapshot = {
 	ean: string;
 	name: string;
 	brand: string | null;
@@ -18,7 +18,7 @@ export type ProductSnapshot = {
 	category: string | null;
 };
 
-export type SupermarketProductSnapshot = {
+type SupermarketProductSnapshot = {
 	id: number;
 	productEan: string;
 	supermarketId: number;
@@ -33,7 +33,7 @@ export type SupermarketProductSnapshot = {
 	lastCheckedAt: string;
 };
 
-export type PriceHistorySnapshot = {
+type PriceHistorySnapshot = {
 	id: number;
 	supermarketProductId: number;
 	price: number | null;

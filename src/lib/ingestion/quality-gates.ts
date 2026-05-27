@@ -1,4 +1,4 @@
-export type QualityGateSeverity = "BLOCK" | "WARN";
+type QualityGateSeverity = "BLOCK" | "WARN";
 
 export type StageValidationCandidate = {
   ean: string;
@@ -22,7 +22,7 @@ type QualityGate = {
   passes: (candidate: StageValidationCandidate, context: { historicalAverage: number | null }) => boolean;
 };
 
-export const QUALITY_GATES: QualityGate[] = [
+const QUALITY_GATES: QualityGate[] = [
   {
     id: "valid_ean",
     severity: "BLOCK",

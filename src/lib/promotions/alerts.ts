@@ -17,7 +17,7 @@ function roundCurrency(value: number) {
   return Math.round(value * 100) / 100;
 }
 
-export function detectPriceDrop(currentPrice: number | null, previousPrice: number | null): PriceDropAlert | null {
+function detectPriceDrop(currentPrice: number | null, previousPrice: number | null): PriceDropAlert | null {
   if (
     currentPrice === null ||
     previousPrice === null ||

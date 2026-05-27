@@ -37,7 +37,7 @@ export function getDatabaseEndpoint(databaseUrl = process.env.DATABASE_URL): Dat
   }
 }
 
-export async function canReachDatabase(databaseUrl = process.env.DATABASE_URL) {
+async function canReachDatabase(databaseUrl = process.env.DATABASE_URL) {
   const endpoint = getDatabaseEndpoint(databaseUrl);
 
   if (!endpoint) {

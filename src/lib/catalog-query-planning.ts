@@ -5,7 +5,7 @@ type ProductCandidateReadInput = {
 
 export const MIN_PRODUCT_CANDIDATE_READ_LIMIT = 200;
 export const MAX_PRODUCT_CANDIDATE_READ_LIMIT = 500;
-export const PRODUCT_CANDIDATE_OVERSAMPLE_FACTOR = 4;
+const PRODUCT_CANDIDATE_OVERSAMPLE_FACTOR = 4;
 
 function normalizePositiveInteger(value: number | undefined, fallback: number) {
   return Number.isInteger(value) && value !== undefined && value > 0 ? value : fallback;

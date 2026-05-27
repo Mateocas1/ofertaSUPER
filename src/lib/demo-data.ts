@@ -5,7 +5,7 @@ const checkedAt = "2026-05-14T00:00:00.000Z";
 const freshnessSlaHours = 24;
 const demoFreshnessStatus = classifyPriceFreshness(checkedAt, { maxAgeHours: freshnessSlaHours }).status;
 
-export const demoProducts: ProductSummary[] = [
+const demoProducts: ProductSummary[] = [
   {
     ean: "7790001000011",
     name: "Leche entera larga vida 1L",
@@ -246,14 +246,6 @@ export const demoPromotions: PromotionSummary[] = [
     productCount: 2,
   },
 ];
-
-export const demoProductPage = {
-  items: demoProducts,
-  total: demoProducts.length,
-  page: 1,
-  limit: demoProducts.length,
-  totalPages: 1,
-};
 
 function normalizeSearchText(value: string | null | undefined) {
   return (value ?? "")

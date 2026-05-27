@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const promotionTypeSchema = z.enum([
+const promotionTypeSchema = z.enum([
   "2x1",
   "2nd_50",
   "wallet_discount",

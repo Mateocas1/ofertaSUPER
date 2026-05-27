@@ -1,4 +1,4 @@
-export type IngestionMode = "off" | "shadow" | "active";
+type IngestionMode = "off" | "shadow" | "active";
 
 export type IngestionOptions = {
 	mode: IngestionMode;
@@ -110,7 +110,7 @@ export function compareExpectedEans(expected: string[], actual: string[]) {
 	};
 }
 
-export function resolveMode(env: Env = process.env): IngestionMode {
+function resolveMode(env: Env = process.env): IngestionMode {
 	const rawMode = (env.INGESTION_V2 ?? "shadow").toLowerCase();
 
 	if (rawMode === "off" || rawMode === "shadow" || rawMode === "active") {

@@ -63,7 +63,7 @@ function getNow() {
   return new Date();
 }
 
-export function getPromotionLifecycleStatus(
+function getPromotionLifecycleStatus(
   promotion: {
     is_active: boolean;
     start_date: Date | null;

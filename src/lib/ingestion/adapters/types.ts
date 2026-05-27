@@ -1,8 +1,8 @@
 import type { NormalizedProduct } from "@/lib/vtex/normalize";
 
-export type SourceAdapterType = "vtex" | "custom";
+type SourceAdapterType = "vtex" | "custom";
 
-export type HealthErrorType = "hash_invalid" | "timeout" | "blocked" | "network" | "unknown";
+type HealthErrorType = "hash_invalid" | "timeout" | "blocked" | "network" | "unknown";
 
 export type HealthResult = {
   slug: string;
