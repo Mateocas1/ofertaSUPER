@@ -312,7 +312,7 @@ This checkpoint is for safe continuation only. It is not a production-ready or d
 - Hero: mantiene b?squeda primero, H1 aprobado, CTA y chips r?pidos.
 - Canasta inteligente: queda como firma visual con productos, ranking, cobertura y estado humano.
 - Resultados: usa filas/cards de producto funcionales, sin virar a ecommerce gen?rico.
-- Mercado vivo: se mantiene liviano y secundario.
+- Lecturas del catálogo: se mantiene liviano y secundario.
 - Diferencia intencional: thumbnails de producto son miniaturas code-native o placeholder `Sin foto`, no packshots reales.
 
 ## Riesgos / pendientes
