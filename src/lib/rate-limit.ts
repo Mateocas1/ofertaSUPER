@@ -38,7 +38,7 @@ function getClientIp(request: NextRequest) {
   return request.headers.get("x-real-ip") ?? "unknown";
 }
 
-export async function checkRateLimit(request: NextRequest, scope = "api"): Promise<RateLimitState> {
+async function checkRateLimit(request: NextRequest, scope = "api"): Promise<RateLimitState> {
   if (!ratelimit) {
     return { ...FALLBACK_RATE_LIMIT_STATE, reset: Date.now() + 60_000 };
   }

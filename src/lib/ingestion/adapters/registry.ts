@@ -16,7 +16,3 @@ export function getSourceAdapter(slug: string) {
 
   return adapter;
 }
-
-export function listSourceAdapters() {
-  return Array.from(adapterRegistry.values());
-}

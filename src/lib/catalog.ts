@@ -32,7 +32,7 @@ type PriceEntryRecord = {
   last_checked_at: Date;
 };
 
-export type ProductPriceEntry = {
+type ProductPriceEntry = {
   supermarket: {
     id: number;
     name: string;
@@ -93,7 +93,7 @@ export type ProductDetail = {
   promotions: PromotionSummary[];
 };
 
-export type HistorySeries = {
+type HistorySeries = {
   slug: string;
   name: string;
   color: string;

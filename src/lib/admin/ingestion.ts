@@ -4,10 +4,10 @@ import { cache } from "react";
 import { db } from "@/lib/db";
 import { getFreshnessSnapshot, type FreshnessSnapshot } from "@/lib/ingestion/sla";
 
-export type IngestionRunStatus = "RUNNING" | "SUCCESS" | "PARTIAL" | "FAILED" | "NO_DATA";
+type IngestionRunStatus = "RUNNING" | "SUCCESS" | "PARTIAL" | "FAILED" | "NO_DATA";
 export type IngestionHealthState = "healthy" | "blocked" | "hash_invalid" | "timeout" | "network" | "unknown" | "no_data";
 
-export type AdminIngestionOverview = {
+type AdminIngestionOverview = {
   latestRunAt: string | null;
   healthySources: number;
   blockedSources: number;
@@ -19,7 +19,7 @@ export type AdminIngestionOverview = {
   averageQualityScore30d: number;
 };
 
-export type AdminIngestionRunStat = {
+type AdminIngestionRunStat = {
   supermarketId: number;
   name: string;
   slug: string;

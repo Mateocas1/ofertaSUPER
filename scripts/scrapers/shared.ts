@@ -196,7 +196,7 @@ export async function runStoreScraper({
   };
 }
 
-export function isLegacyWriteApproved(argv = process.argv, env: LegacyWriteEnv = process.env) {
+function isLegacyWriteApproved(argv = process.argv, env: LegacyWriteEnv = process.env) {
   return argv.includes("--confirm-write") || env.INGESTION_WRITE_APPROVED?.toLowerCase() === "true";
 }
 

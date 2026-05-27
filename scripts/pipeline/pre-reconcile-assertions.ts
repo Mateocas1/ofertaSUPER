@@ -2,7 +2,7 @@ import { compareExpectedEans } from "../ingest-options";
 
 type CandidateStatus = "PENDING" | "REJECTED" | string;
 
-export type PreReconcileCandidate = {
+type PreReconcileCandidate = {
 	ean: string;
 	price: number | null;
 	status: CandidateStatus;

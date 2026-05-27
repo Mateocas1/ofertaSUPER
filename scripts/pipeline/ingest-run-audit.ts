@@ -50,17 +50,17 @@ export type AuditRunRow = {
 	errorSummary: string | null;
 };
 
-export type AuditStagingRow = {
+type AuditStagingRow = {
 	runId: number;
 	ean: string;
 	status: string;
 };
 
-export type AuditProductRow =
+type AuditProductRow =
 	IngestRunSnapshot["snapshots"]["products"][number];
-export type AuditSupermarketProductRow =
+type AuditSupermarketProductRow =
 	IngestRunSnapshot["snapshots"]["supermarketProducts"][number];
-export type AuditPriceHistoryRow =
+type AuditPriceHistoryRow =
 	IngestRunSnapshot["snapshots"]["priceHistory"]["latest"][number];
 
 export type IngestRunAuditRepository = {

@@ -5,10 +5,10 @@ import { db } from "@/lib/db";
 const DEFAULT_FRESHNESS_TARGET_PERCENT = 95;
 const DEFAULT_FRESHNESS_ALERT_PERCENT = 80;
 
-export type FreshnessMeasurementBasis = "production" | "shadow";
-export type FreshnessMeasurementMode = "production" | "shadow" | "mixed";
+type FreshnessMeasurementBasis = "production" | "shadow";
+type FreshnessMeasurementMode = "production" | "shadow" | "mixed";
 
-export type FreshnessSourceMetric = {
+type FreshnessSourceMetric = {
   supermarketId: number;
   name: string;
   slug: string;

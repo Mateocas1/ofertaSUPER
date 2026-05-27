@@ -13,7 +13,7 @@ type FetchVtexProductsOptions = {
   retries?: number;
 };
 
-export type VtexProbeErrorType = "hash_invalid" | "timeout" | "blocked" | "network" | "unknown";
+type VtexProbeErrorType = "hash_invalid" | "timeout" | "blocked" | "network" | "unknown";
 
 export type VtexProbeResult = {
   isHealthy: boolean;

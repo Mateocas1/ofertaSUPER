@@ -162,7 +162,6 @@ ofertasSUPER/
 │   │   ├── search-bar.tsx
 │   │   ├── supermarket-badge.tsx
 │   │   ├── promotion-badge.tsx
-│   │   ├── category-nav.tsx
 │   │   └── favorite-button.tsx
 │   ├── lib/
 │   │   ├── vtex/
@@ -272,7 +271,7 @@ ofertasSUPER/
 - [x] **2.13** — Componente `PriceComparison` — tabla: super | precio | precio anterior | Δ% | link
 - [x] **2.14** — Componente `PriceChart` — Recharts LineChart lazy-loaded
 - [x] **2.15** — Componente `SearchBar` — combobox con debounce 300ms + flyout resultados
-- [x] **2.16** — Componente `CategoryNav` — navegación por categorías con iconos
+- [x] **2.16** — Navegación por categorías resuelta desde páginas y filtros públicos
 - [x] **2.17** — Página Home (`/`) — hero con buscador, categorías, top deals, ofertas del día
 - [x] **2.18** — Página Producto (`/producto/[ean]`) — tabla + chart + promos + ISR 6h
 - [x] **2.19** — Página Categoría (`/categoria/[slug]`) — grid + filtros (super, precio, solo ofertas)

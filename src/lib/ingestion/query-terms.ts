@@ -75,7 +75,7 @@ function deriveCompactTerms(value: string) {
   return derived;
 }
 
-export function expandIngestionQueryTerms(rawTerms: string[]) {
+function expandIngestionQueryTerms(rawTerms: string[]) {
   const expanded = new Set<string>();
 
   for (const term of rawTerms) {
