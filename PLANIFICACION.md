@@ -234,7 +234,7 @@ ofertasSUPER/
 - [x] **1.13** — Crear `scripts/populateDb.ts` — ejecuta todos los scrapers secuencialmente
 - [x] **1.14** — Crear `scripts/updatePrices.ts` — re-scrapea EANs ya existentes en DB
 - [x] **1.15** — Crear `.github/workflows/populate-db.yml` (manual dispatch)
-- [x] **1.16** — Crear `.github/workflows/update-prices.yml` (cron cada 6h)
+- [x] **1.16** — Crear `.github/workflows/update-prices.yml` (manual; cron pausado hasta rollout revisado)
 - [x] **1.17** — Crear `.env.local` con todas las variables requeridas
 
 ### Gate de salida Fase 1
