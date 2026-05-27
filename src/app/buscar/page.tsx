@@ -67,13 +67,15 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
             <form className="surface-soft grid gap-3 p-4 md:grid-cols-3" action="/buscar">
               <input type="hidden" name="q" value={query} />
-              <select name="super" defaultValue={supermarket ?? ""} className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground">
+              <label className="sr-only" htmlFor="search-supermarket-filter">Supermercado</label>
+              <select id="search-supermarket-filter" name="super" defaultValue={supermarket ?? ""} className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground">
                 <option value="">Todos los supers</option>
                 {SUPERMARKETS.map((item) => (
                   <option key={item.slug} value={item.slug}>{item.name}</option>
                 ))}
               </select>
-              <select name="sort" defaultValue={sort ?? "relevance"} className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground">
+              <label className="sr-only" htmlFor="search-sort-filter">Ordenar resultados</label>
+              <select id="search-sort-filter" name="sort" defaultValue={sort ?? "relevance"} className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground">
                 <option value="relevance">Relevancia</option>
                 <option value="discount">Mayor descuento</option>
                 <option value="price-asc">Precio más bajo</option>
@@ -87,6 +89,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
 
         {query ? (
           <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+            <h2 className="sr-only">Resultados de búsqueda</h2>
             {result.items.map((product) => (
               <ProductCard key={product.ean} product={product} />
             ))}
