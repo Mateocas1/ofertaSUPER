@@ -48,4 +48,12 @@ tmp-dev-server*.log
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
+# local agent/runtime artifacts
+.atl/
+.pi/
+.pi-lens/
+audit/
+progress.md
+
+# local Supabase CLI link/cache
+supabase/.temp/
