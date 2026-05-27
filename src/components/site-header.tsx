@@ -53,6 +53,7 @@ export function SiteHeader() {
 
         <Link
           href="/canasta"
+          aria-label="Ver canasta"
           className="inline-flex items-center gap-2 rounded-[0.65rem] border border-primary/45 bg-card px-3 py-2.5 text-sm font-semibold text-foreground transition duration-200 hover:border-primary hover:text-primary active:translate-y-px"
         >
           <BasketIcon className="size-4" aria-hidden="true" />

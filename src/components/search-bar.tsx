@@ -39,6 +39,7 @@ export function SearchBar({
   const [results, setResults] = useState<SearchSuggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [hasInteracted, setHasInteracted] = useState(false);
   const [isPending, startTransition] = useTransition();
   const deferredQuery = useDeferredValue(query);
   const resultsId = `${searchId}-results`;
@@ -46,6 +47,8 @@ export function SearchBar({
 
   useEffect(() => {
     setQuery(defaultValue);
+    setHasInteracted(false);
+    setOpen(false);
   }, [defaultValue]);
 
   useEffect(() => {
@@ -74,7 +77,7 @@ export function SearchBar({
       const payload = (await response.json()) as { items: SearchSuggestion[] };
       startTransition(() => {
         setResults(payload.items);
-        setOpen(true);
+        setOpen(hasInteracted);
       });
     }, 300);
 
@@ -82,7 +85,7 @@ export function SearchBar({
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [deferredQuery]);
+  }, [deferredQuery, hasInteracted]);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -148,9 +151,13 @@ export function SearchBar({
           <input
             id={`${searchId}-${variant}`}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setHasInteracted(true);
+              setQuery(event.target.value);
+            }}
             onKeyDown={handleKeyDown}
             onFocus={() => {
+              setHasInteracted(true);
               if (results.length > 0) {
                 setOpen(true);
               }
@@ -193,20 +200,19 @@ export function SearchBar({
           className="absolute inset-x-0 top-[calc(100%+0.75rem)] z-50 overflow-hidden rounded-[1.5rem] border border-border/70 bg-white/95 shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur"
         >
           {results.length > 0 ? (
-            <ul>
-              {results.map((result, index) => (
-                <li key={result.ean} role="presentation">
-                  <Link
-                    id={`${searchId}-option-${index}`}
-                    href={`/producto/${result.ean}`}
-                    role="option"
-                    aria-selected={index === activeIndex}
-                    className={cn(
-                      "flex min-h-16 items-center gap-4 border-t border-border/50 px-4 py-3 first:border-t-0 hover:bg-muted/50 focus-visible:bg-muted/50",
-                      index === activeIndex && "bg-muted/50",
-                    )}
-                    onMouseEnter={() => setActiveIndex(index)}
-                  >
+            results.map((result, index) => (
+              <Link
+                key={result.ean}
+                id={`${searchId}-option-${index}`}
+                href={`/producto/${result.ean}`}
+                role="option"
+                aria-selected={index === activeIndex}
+                className={cn(
+                  "flex min-h-16 items-center gap-4 border-t border-border/50 px-4 py-3 first:border-t-0 hover:bg-muted/50 focus-visible:bg-muted/50",
+                  index === activeIndex && "bg-muted/50",
+                )}
+                onMouseEnter={() => setActiveIndex(index)}
+              >
                     <div className="relative size-14 overflow-hidden rounded-2xl border border-border/70 bg-muted/40">
                       {result.imageUrl ? (
                         <Image src={result.imageUrl} alt={result.name} fill sizes="56px" className="object-cover" unoptimized />
@@ -231,10 +237,8 @@ export function SearchBar({
                         </p>
                       ) : null}
                     </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+              </Link>
+            ))
           ) : (
             <div className="px-4 py-5 text-sm text-muted-foreground">Sin coincidencias por ahora.</div>
           )}
