@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { UserButton } from "@clerk/nextjs";
+import { ClerkProvider, UserButton } from "@clerk/nextjs";
 import { notFound } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -31,8 +31,9 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="px-6 py-8 md:py-10">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+    <ClerkProvider>
+      <div className="px-6 py-8 md:py-10">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <section className="surface p-6 md:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -63,7 +64,8 @@ export default async function AdminLayout({
         </section>
 
         {children}
+        </div>
       </div>
-    </div>
+    </ClerkProvider>
   );
 }
