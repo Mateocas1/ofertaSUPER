@@ -47,8 +47,8 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   }
 
   return createMetadata({
-    title: `${product.name} desde ${formatCurrency(product.minPrice)}`,
-    description: `Compara ${product.name} en supermercados argentinos y revisa su historial de precio reciente.`,
+    title: `${product.name} desde ${formatCurrency(product.displayPrice)}`,
+    description: `Compara ${product.name} en supermercados argentinos y revisa su historial de precio registrado.`,
     path: `/producto/${ean}`,
   });
 }
@@ -62,7 +62,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
   }
 
   const hasCalculatedPromoPrice =
-    product.bestFinalPrice !== null && product.minPrice !== null && product.bestFinalPrice < product.minPrice;
+    product.bestFinalPrice !== null && product.displayPrice !== null && product.bestFinalPrice < product.displayPrice;
+  const displayPriceLabel = product.displayPriceFreshnessStatus === "fresh" ? "Mejor precio reciente" : "Ultimo precio registrado";
   const bestPriceDropAlert = product.bestPriceDropAlert;
   const structuredData = buildProductPageSchema(product);
 
@@ -107,8 +108,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <article className="rounded-[1.5rem] border border-border/70 bg-white/75 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Mejor precio registrado</p>
-                  <p className="mt-2 text-3xl font-semibold text-foreground">{formatCurrency(product.minPrice)}</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{displayPriceLabel}</p>
+                  <p className="mt-2 text-3xl font-semibold text-foreground">{formatCurrency(product.displayPrice)}</p>
                   {bestPriceDropAlert ? (
                     <p className="mt-2 text-xs font-medium text-emerald-700">
                       Bajo {formatPercent(-bestPriceDropAlert.percentDrop)} vs ultimo registro

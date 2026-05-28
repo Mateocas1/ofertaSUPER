@@ -19,6 +19,9 @@ type ProductCardProps = {
     category: string | null;
     minPrice: number | null;
     maxPrice: number | null;
+    displayPrice?: number | null;
+    displayPriceCheckedAt?: string | null;
+    displayPriceFreshnessStatus?: PriceFreshnessStatus;
     priceCount: number;
     automaticDiscountPercent: number | null;
     bestPriceCheckedAt: string | null;
@@ -37,13 +40,16 @@ type ProductCardProps = {
 
 export function ProductCard({ product }: ProductCardProps) {
   const topEntries = product.entries.slice(0, 3);
+  const displayPrice = product.displayPrice ?? product.minPrice;
+  const displayPriceCheckedAt = product.displayPriceCheckedAt ?? product.bestPriceCheckedAt;
+  const displayPriceFreshnessStatus = product.displayPriceFreshnessStatus ?? product.bestPriceFreshnessStatus;
   const freshnessCopy = getPriceFreshnessCopy({
-    status: product.bestPriceFreshnessStatus,
-    checkedAt: product.bestPriceCheckedAt,
+    status: displayPriceFreshnessStatus,
+    checkedAt: displayPriceCheckedAt,
     ageHours: null,
     maxAgeHours: 0,
   });
-  const isStale = product.bestPriceFreshnessStatus === "stale";
+  const isStale = displayPriceFreshnessStatus === "stale";
 
   return (
     <article className="surface-soft flex h-full flex-col overflow-hidden p-5">
@@ -83,23 +89,17 @@ export function ProductCard({ product }: ProductCardProps) {
       <div className="mt-6 flex items-end justify-between gap-4 rounded-[1.5rem] bg-[linear-gradient(135deg,rgba(210,71,38,0.08),rgba(42,111,88,0.06))] p-4">
         <div>
           <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{freshnessCopy.priceLabel}</p>
-          <p className="mt-1 text-2xl font-semibold text-foreground">{formatCurrency(product.minPrice)}</p>
+          <p className="mt-1 text-2xl font-semibold text-foreground">{formatCurrency(displayPrice)}</p>
           {isStale ? <p className="mt-1 text-xs font-medium text-amber-700">{freshnessCopy.badgeLabel}</p> : null}
         </div>
         <div className="text-right">
           <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Rango</p>
           <p className="mt-1 text-sm font-medium text-foreground">
-            {formatCurrency(product.minPrice)} - {formatCurrency(product.maxPrice)}
+            {formatCurrency(displayPrice)} - {formatCurrency(product.maxPrice)}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">{product.priceCount} supers con precio</p>
         </div>
       </div>
-
-      {isStale ? (
-        <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-          {freshnessCopy.helperText}
-        </p>
-      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {topEntries.map((entry) => (

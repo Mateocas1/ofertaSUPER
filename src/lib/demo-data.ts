@@ -1,4 +1,11 @@
 import type { CategorySummary, ProductListFilters, ProductSummary, PromotionSummary } from "@/lib/catalog";
+import {
+  comparePublicProducts,
+  getBestDisplayPriceEntry,
+  getRankFreshnessStatus,
+  isComparablePriceEntry,
+  isFreshComparablePriceEntry,
+} from "@/lib/catalog-freshness-policy";
 import { classifyPriceFreshness } from "@/lib/price-freshness";
 
 const checkedAt = "2026-05-14T00:00:00.000Z";
@@ -14,8 +21,15 @@ const demoProducts: ProductSummary[] = [
     category: "Lacteos",
     minPrice: 1200,
     maxPrice: 1450,
+    freshMinPrice: demoFreshnessStatus === "fresh" ? 1200 : null,
+    displayPrice: 1200,
+    displayPriceCheckedAt: checkedAt,
+    displayPriceFreshnessStatus: demoFreshnessStatus,
+    hasFreshPrice: demoFreshnessStatus === "fresh",
+    stalePriceCount: demoFreshnessStatus === "stale" ? 3 : 0,
+    rankFreshnessStatus: demoFreshnessStatus,
     priceCount: 3,
-    automaticDiscountPercent: 17.2,
+    automaticDiscountPercent: demoFreshnessStatus === "fresh" ? 17.2 : null,
     latestCheckedAt: checkedAt,
     bestPriceCheckedAt: checkedAt,
     bestPriceFreshnessStatus: demoFreshnessStatus,
@@ -69,8 +83,15 @@ const demoProducts: ProductSummary[] = [
     category: "Almacen",
     minPrice: 3100,
     maxPrice: 3890,
+    freshMinPrice: demoFreshnessStatus === "fresh" ? 3100 : null,
+    displayPrice: 3100,
+    displayPriceCheckedAt: checkedAt,
+    displayPriceFreshnessStatus: demoFreshnessStatus,
+    hasFreshPrice: demoFreshnessStatus === "fresh",
+    stalePriceCount: demoFreshnessStatus === "stale" ? 3 : 0,
+    rankFreshnessStatus: demoFreshnessStatus,
     priceCount: 3,
-    automaticDiscountPercent: 20.3,
+    automaticDiscountPercent: demoFreshnessStatus === "fresh" ? 20.3 : null,
     latestCheckedAt: checkedAt,
     bestPriceCheckedAt: checkedAt,
     bestPriceFreshnessStatus: demoFreshnessStatus,
@@ -124,8 +145,15 @@ const demoProducts: ProductSummary[] = [
     category: "Almacen",
     minPrice: 1750,
     maxPrice: 2100,
+    freshMinPrice: demoFreshnessStatus === "fresh" ? 1750 : null,
+    displayPrice: 1750,
+    displayPriceCheckedAt: checkedAt,
+    displayPriceFreshnessStatus: demoFreshnessStatus,
+    hasFreshPrice: demoFreshnessStatus === "fresh",
+    stalePriceCount: demoFreshnessStatus === "stale" ? 2 : 0,
+    rankFreshnessStatus: demoFreshnessStatus,
     priceCount: 2,
-    automaticDiscountPercent: 16.7,
+    automaticDiscountPercent: demoFreshnessStatus === "fresh" ? 16.7 : null,
     latestCheckedAt: checkedAt,
     bestPriceCheckedAt: checkedAt,
     bestPriceFreshnessStatus: demoFreshnessStatus,
@@ -166,6 +194,13 @@ const demoProducts: ProductSummary[] = [
     category: "Almacen",
     minPrice: 980,
     maxPrice: 1180,
+    freshMinPrice: demoFreshnessStatus === "fresh" ? 980 : null,
+    displayPrice: 980,
+    displayPriceCheckedAt: checkedAt,
+    displayPriceFreshnessStatus: demoFreshnessStatus,
+    hasFreshPrice: demoFreshnessStatus === "fresh",
+    stalePriceCount: demoFreshnessStatus === "stale" ? 2 : 0,
+    rankFreshnessStatus: demoFreshnessStatus,
     priceCount: 2,
     automaticDiscountPercent: null,
     latestCheckedAt: checkedAt,
@@ -283,37 +318,49 @@ function scopeToSupermarket(product: ProductSummary, supermarket?: string) {
     return null;
   }
 
-  const prices = entries.map((entry) => entry.price).filter((price): price is number => price !== null);
+  const comparableEntries = entries.filter(isComparablePriceEntry);
+  const freshEntries = comparableEntries.filter(isFreshComparablePriceEntry);
+  const prices = comparableEntries.map((entry) => entry.price).filter((price): price is number => price !== null);
+  const freshPrices = freshEntries.map((entry) => entry.price).filter((price): price is number => price !== null);
+  const displayEntry = getBestDisplayPriceEntry(entries);
 
   return {
     ...product,
     entries,
     minPrice: prices.length > 0 ? Math.min(...prices) : null,
     maxPrice: prices.length > 0 ? Math.max(...prices) : null,
-    priceCount: prices.length,
+    freshMinPrice: freshPrices.length > 0 ? Math.min(...freshPrices) : null,
+    displayPrice: displayEntry?.price ?? null,
+    displayPriceCheckedAt: displayEntry?.lastCheckedAt ?? null,
+    displayPriceFreshnessStatus: displayEntry?.freshnessStatus ?? "unknown",
+    hasFreshPrice: freshEntries.length > 0,
+    stalePriceCount: entries.filter((entry) => entry.freshnessStatus === "stale").length,
+    rankFreshnessStatus: getRankFreshnessStatus(entries),
+    priceCount: entries.length,
+    automaticDiscountPercent: freshEntries.reduce<number | null>((best, entry) => {
+      const price = entry.price;
+      const listPrice = entry.listPrice;
+
+      if (price === null || listPrice === null || listPrice <= price) {
+        return best;
+      }
+
+      const percentOff = ((listPrice - price) / listPrice) * 100;
+      return best === null ? percentOff : Math.max(best, percentOff);
+    }, null),
     latestCheckedAt: entries.map((entry) => entry.lastCheckedAt).sort((left, right) => right.localeCompare(left))[0] ?? null,
-    bestPriceCheckedAt: entries.find((entry) => entry.price === (prices.length > 0 ? Math.min(...prices) : null))?.lastCheckedAt ?? null,
-    bestPriceFreshnessStatus: entries.find((entry) => entry.price === (prices.length > 0 ? Math.min(...prices) : null))?.freshnessStatus ?? "unknown",
+    bestPriceCheckedAt: displayEntry?.lastCheckedAt ?? null,
+    bestPriceFreshnessStatus: displayEntry?.freshnessStatus ?? "unknown",
   };
 }
 
-function sortDemoProducts(products: ProductSummary[], sort: ProductListFilters["sort"]) {
-  const ordered = [...products];
-
-  switch (sort) {
-    case "discount":
-      return ordered.sort((a, b) => (b.automaticDiscountPercent ?? 0) - (a.automaticDiscountPercent ?? 0));
-    case "price-asc":
-      return ordered.sort((a, b) => (a.minPrice ?? Number.POSITIVE_INFINITY) - (b.minPrice ?? Number.POSITIVE_INFINITY));
-    case "price-desc":
-      return ordered.sort((a, b) => (b.minPrice ?? Number.NEGATIVE_INFINITY) - (a.minPrice ?? Number.NEGATIVE_INFINITY));
-    case "updated":
-      return ordered.sort(
-        (a, b) => Date.parse(b.latestCheckedAt ?? "1970-01-01") - Date.parse(a.latestCheckedAt ?? "1970-01-01"),
-      );
-    default:
-      return ordered;
-  }
+function sortDemoProducts(products: ProductSummary[], filters: ProductListFilters) {
+  return products.toSorted((left, right) =>
+    comparePublicProducts(left, right, {
+      query: filters.query,
+      sort: filters.sort,
+    }),
+  );
 }
 
 export function getDemoProductPage(filters: ProductListFilters = {}) {
@@ -324,7 +371,7 @@ export function getDemoProductPage(filters: ProductListFilters = {}) {
     .filter((product) => matchesQuery(product, query))
     .map((product) => scopeToSupermarket(product, filters.supermarket))
     .filter((product): product is ProductSummary => product !== null);
-  const sorted = sortDemoProducts(scopedProducts, filters.sort);
+  const sorted = sortDemoProducts(scopedProducts, filters);
   const offset = (page - 1) * limit;
   const items = sorted.slice(offset, offset + limit);
 
@@ -344,9 +391,10 @@ export function getDemoSearchSuggestions(query: string, limit = 8) {
     brand: product.brand,
     imageUrl: product.imageUrl,
     category: product.category,
-    minPrice: product.minPrice,
+    minPrice: product.displayPrice,
+    displayPrice: product.displayPrice,
     latestCheckedAt: product.latestCheckedAt,
-    bestPriceCheckedAt: product.bestPriceCheckedAt,
-    freshnessStatus: product.bestPriceFreshnessStatus,
+    bestPriceCheckedAt: product.displayPriceCheckedAt,
+    freshnessStatus: product.displayPriceFreshnessStatus,
   }));
 }

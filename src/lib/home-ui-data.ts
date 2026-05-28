@@ -80,7 +80,7 @@ export const SMART_BASKET = {
 			badge: null,
 		},
 	],
-	note: "Precios por unidad. Cobertura por EAN.",
+	note: "Vista ilustrativa con últimos registros disponibles. Verificá fecha y fuente en cada producto.",
 } as const;
 
 export const HOME_PRODUCT_ROWS = [

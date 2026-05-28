@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { ProductCard } from "@/components/product-card";
+import { StaleResultsNotice } from "@/components/stale-results-notice";
 import { getCategoryBySlug, listProducts } from "@/lib/catalog";
 import { getSingleParam } from "@/lib/page-params";
 import { createMetadata } from "@/lib/seo/metadata";
@@ -48,6 +49,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     limit: 24,
     page: 1,
   });
+  const allResultsAreStale = result.items.length > 0 && result.items.every((product) => product.rankFreshnessStatus !== "fresh");
 
   return (
     <div className="px-6 py-8 md:py-10">
@@ -92,6 +94,8 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
             </form>
           </div>
         </section>
+
+        {allResultsAreStale ? <StaleResultsNotice context="productos de esta categoría" /> : null}
 
         <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           {result.items.map((product) => (
