@@ -38,7 +38,7 @@ Interpretation: the previous rollout proved the **safe write path**, not broad f
 | Area | Current state |
 |---|---|
 | Public honesty | Stale prices are labeled instead of being marketed as live/current. |
-| Phase 4.1 write safety | Active ingestion requires exact source/term/count/expected-EAN gates, `--confirm-write`, and post-write audits. |
+| Phase 4.1 write safety | Active ingestion requires exact source/term/count/expected-EAN gates plus either `--confirm-write` or `INGESTION_ACTIVE_WRITE_APPROVED=true`; post-write audits were used for Phase 4.1. |
 | Controlled canary evidence | Disco, Vea, DIA, MAS, Carrefour and Jumbo completed count=5 with DB/API/cache evidence. |
 | Redis remediation | Production Redis was corrected and validated for cache purge/rate limiting during Phase 4.1. |
 | CI/deploy hygiene | GitHub/Vercel checks were brought green for the merged work; production deploys from `master`. |
@@ -77,7 +77,7 @@ Some gaps cannot be made mathematically perfect. They need honest product design
 | Public first impression | Home and prominent listing/search surfaces do not lead with stale badges or stale cheap prices. |
 | Ranking trust | Default ranking, best-price selection and offers avoid stale-first behavior. |
 | Detail honesty | Product detail keeps row-level stale warnings, timestamps and source links. |
-| Coverage | 5,000–10,000 source-product rows, with at least 500 high-demand EANs covered across 3+ sources where available. |
+| Coverage | Refresh all existing rows first (currently 4,955 source-product rows), then expand via discovery toward 5,000–10,000 rows, with at least 500 high-demand EANs covered across 3+ sources where available. |
 | Freshness SLA | ≥95% of publicly rankable source-product rows refreshed within the approved SLA, or automatically hidden/demoted. |
 | Refresh safety | Existing-row refresh and discovery are separate modes with separate gates. |
 | Schedules | Recurring jobs are enabled only after manual broad refresh evidence is GREEN. |
@@ -213,6 +213,7 @@ Requirements:
 - All-stale result pages show one page-level snapshot warning.
 - Product detail keeps row-level stale labels and source links.
 - Search suggestions include freshness metadata and do not imply current price.
+- Home real-looking prices, totals and rankings must be fresh-backed, removed, or explicitly labeled as snapshot/illustrative.
 - Basket/canasta language removes `actual` unless computed from fresh rows.
 - JSON-LD does not advertise stale prices as current `Offer` data without freshness constraints.
 
@@ -223,7 +224,8 @@ Tests:
 - all-stale search page shows snapshot warning;
 - product detail still renders stale row warnings;
 - canasta copy has no `actual` overclaim;
-- public copy guard includes home/search/ofertas/canasta/schema copy.
+- public copy guard includes home/search/ofertas/canasta/schema copy;
+- home static figures are either fresh-backed, removed, or labeled as illustrative/snapshot.
 
 ### P1 — read-only freshness baseline
 
@@ -282,6 +284,7 @@ Required gates:
 - explicit term group or existing-row chunk;
 - explicit chunk size/count;
 - expected EAN set or signed candidate snapshot;
+- active write approval that is explicit: manual runs use `--confirm-write`; CI/scheduled runs may use `INGESTION_ACTIVE_WRITE_APPROVED=true` only after a scoped workflow guard proves source/scope/chunk/expected candidates;
 - active dry-run exercising the same candidate set before write;
 - same-run candidate/write equality;
 - positive price and sane delta thresholds;
@@ -369,6 +372,36 @@ Operational gaps to close before “final”:
 - Treat `Ingest Shadow` as ops-mutating, not read-only.
 - Do not schedule cleanup until retention/evidence policy is approved.
 
+### P8 — public page/API reliability
+
+“No API errors” needs an explicit smoke matrix, not a generic deploy check.
+
+Required smoke matrix after every production-facing change:
+
+| Surface | Probe | Expected healthy result | Degraded contract |
+|---|---|---|---|
+| Home | `GET /` | `200`, no stale-first hero claim, no runtime exception. | Static/marketing content may render; no fake current prices. |
+| Search page | `GET /buscar?q=leche` | `200`, product grid or clear empty/degraded state. | If DB is unavailable, demo/snapshot fallback must be visibly neutral and not claim freshness. |
+| Offers page | `GET /ofertas` | `200`, promos/discounted products render or empty state. | Must not 500 on catalog errors; fallback/empty state preferred. |
+| Basket | `GET /canasta` | `200`, client basket UI loads. | Local-only state remains usable; no current-price claim when data is unavailable. |
+| Methodology | `GET /metodologia` | `200`, freshness/coverage explanation visible. | Should remain static and reliable. |
+| Category page | `GET /categoria/<known-slug>` | `200` for a known category; `404` only for unknown slugs. | Catalog failure should produce a controlled empty/degraded state, not a server exception. |
+| Product detail | `GET /producto/<known-ean>` | `200` for a known EAN; stale status and source links visible. | Unknown EAN returns `404`; DB failure should not expose raw errors. |
+| Search API | `GET /api/search?q=leche&limit=5` | `200`, JSON `{ items: [...] }`, rate-limit headers. | DB failure may return demo suggestions, but never freshness-overclaiming data. |
+| Products API | `GET /api/products?limit=5` | `200`, product-page JSON or controlled validation error for bad params. | Catalog failure returns controlled fallback/empty page, not 500. |
+| Product detail API | `GET /api/products/<known-ean>` | `200` JSON for known EAN; `404` for unknown EAN. | DB failure must become a controlled error/fallback policy before final. |
+| Product history API | `GET /api/products/<known-ean>/history?days=90` | `200` JSON array for known EAN; `400` only for invalid query; `404` for unknown EAN. | DB failure must not leak raw errors. |
+| Categories API | `GET /api/categories` | `200`, JSON `{ items: [...] }`. | Existing demo fallback is acceptable if clearly not used for freshness claims. |
+| Promotions API | `GET /api/promotions` | `200`, JSON `{ items: [...] }`. | Existing demo fallback is acceptable if not presented as live. |
+
+Implementation requirements:
+
+- Add automated route/API smoke tests or scripts that select a known category slug and known EAN from the DB/demo fixture.
+- Define which routes may use demo fallback and how that fallback is labeled.
+- Wrap public server pages that currently call catalog loaders directly (`/ofertas`, `/categoria/[slug]`, `/producto/[ean]`) with controlled error/empty-state policy before final.
+- Keep `400` for validation errors and `404` for true not-found; treat unexpected `500` as a blocker.
+- Verify Redis-down behavior: browsing may continue, but rate-limit/cache/alert operational checks must fail the rollout gate.
+
 ## Active rollout runbook
 
 Use this only after P0–P3 are implemented and reviewed.
@@ -383,10 +416,11 @@ Use this only after P0–P3 are implemented and reviewed.
 8. Run the active write with explicit confirmation.
 9. Run post-write DB audit.
 10. Run API/cache/PWA sample audit.
-11. Generate rollback artifact and verify rollback feasibility.
-12. Commit sanitized report.
-13. Fresh reviewer audits evidence.
-14. Expand only one dimension at a time: source, term group, or chunk size.
+11. Run the public page/API smoke matrix.
+12. Generate rollback artifact and verify rollback feasibility.
+13. Commit sanitized report.
+14. Fresh reviewer audits evidence.
+15. Expand only one dimension at a time: source, term group, or chunk size.
 
 Stop immediately on any failed predicate.
 
@@ -394,7 +428,7 @@ Stop immediately on any failed predicate.
 
 ### UX and copy
 
-- [ ] Home first viewport has no stale badge.
+- [ ] Home first viewport has no stale badge, and any real-looking totals/prices are fresh-backed, removed, or explicitly snapshot/illustrative.
 - [ ] Default search/listing demotes stale cheap prices.
 - [ ] Product cards do not repeat noisy stale helper copy in dense grids.
 - [ ] All-stale result pages show one clear snapshot warning.
@@ -408,13 +442,13 @@ Stop immediately on any failed predicate.
 
 - [ ] Existing rows for all six sources are refreshed or explicitly marked unavailable.
 - [ ] ≥95% of publicly rankable rows are within the approved SLA.
-- [ ] At least 5,000 source-product rows are refreshed in the current SLA window or intentionally hidden/demoted.
+- [ ] All existing source-product rows are refreshed or intentionally hidden/demoted first; discovery then expands refreshed coverage from the current 4,955 rows toward 5,000–10,000 rows.
 - [ ] At least 500 high-demand EANs have multi-source coverage where market data supports it.
 - [ ] Missing source rows are documented as not found/unavailable, not silently ignored.
 
 ### Ingestion safety
 
-- [ ] No active write can run without source, scope/chunk, expected candidates and `--confirm-write`.
+- [ ] No active write can run without source, scope/chunk, expected candidates and explicit approval: `--confirm-write` manually, or a scoped `INGESTION_ACTIVE_WRITE_APPROVED=true` workflow gate for CI/schedules.
 - [ ] Refresh mode cannot create new products or source rows.
 - [ ] Discovery mode has caps, review and rollback delete plan.
 - [ ] Every active chunk has pre-write snapshot and post-write audit.
@@ -430,7 +464,7 @@ Stop immediately on any failed predicate.
 - [ ] Alerts exist for stuck runs, old staging rows, source failure, high rejection rate, stale % regression, Redis failure and cache purge failure.
 - [ ] Alert delivery has been tested.
 - [ ] GitHub Actions/Vercel branch/deploy gates are aligned with `master`.
-- [ ] Production deploy, smoke checks and public API checks are green after changes.
+- [ ] Production deploy, public page smoke matrix, public API smoke matrix and cache/PWA checks are green after changes.
 
 ## Recommended PR sequence
 
@@ -498,7 +532,7 @@ Only after manual broad refresh is GREEN.
 | Public stale threshold | Use source SLA; if 12h is too strict operationally, change SLA deliberately and update copy. |
 | Stale display in default results | Demote, do not hide globally. Hide only from hero/offers/best-price prominence. |
 | `price-asc` behavior | Sort within freshness buckets: fresh cheap first, stale cheap second. |
-| First coverage target | 5,000 source-product rows refreshed, then expand toward 10,000. |
+| First coverage target | Refresh all existing rows first (currently 4,955), then expand via discovery beyond 5,000 toward 10,000. |
 | First data scope | Existing DB rows first, then staples/dairy/cleaning/beverages. |
 | Fresh/perishable scope | Delay until packaged staples are stable. |
 | Discovery product creation | Disabled by default; enable only under capped discovery mode. |
