@@ -1,169 +1,235 @@
-# Production freshness PRD — from honest stale data to a finished price platform
+# Production freshness PRD — finish ofertasSUPER without fake freshness
 
 Status: `PROPOSED / NO DATA WRITES`
 
-This PRD defines the next production-hardening goal: stop leading with stale prices in public first-impression surfaces, then build a measured rollout that gives ofertasSUPER a genuinely fresh, broad catalog without reintroducing unsafe ingestion.
+This PRD defines the path from the current honest-but-stale product to a production-grade price platform. It intentionally separates what can be fixed with UI/data policy from what cannot be guaranteed by scraping.
 
 ## Executive decision
 
-The current app is safer and more honest than before, but it is **not globally fresh yet**.
+ofertasSUPER is now safer and more honest than before, but it is **not globally fresh**.
 
-| Question | Answer |
+| Question | Decision |
 |---|---|
-| Why does production still show `Dato viejo`? | Because Phase 4.1 refreshed only a controlled `leche`, `count=5`, per-source slice. Most catalog rows are still older than the freshness SLA. |
-| Was the previous work wasted? | No. It removed misleading live/current claims, added freshness labels, fixed CI/deploy/env/cache issues, and created fail-closed ingestion safety gates. |
-| What is still missing for “100% finished”? | A product policy for stale items, a scalable catalog coverage plan, a controlled bulk refresh rollout, schedules with monitoring, and acceptance gates proving freshness at scale. |
-| Recommended next move | First clean public first-impression surfaces; then run a reviewed freshness rollout with measurable coverage targets. |
+| Why does production still show `Dato viejo`? | Because the catalog is mostly old. Phase 4.1 refreshed only a controlled `leche`, `count=5`, per-source slice. With the current 12h SLA, even that slice ages out quickly. |
+| Is this a UI bug? | Not primarily. The UI is telling the truth. The deeper issue is missing broad refresh, freshness-aware ranking, and schedules. |
+| Can we promise every supermarket price is always current? | No. Official catalogs move, VTEX endpoints can drift/block, and checkout prices can differ. The fix is a measured freshness SLA plus honest fallback behavior. |
+| What is the best next move? | First stop stale prices from leading public first-impression surfaces. Then run a read-only baseline, implement chunked refresh modes, refresh existing rows broadly, and only then enable schedules. |
+| What must stay forbidden? | No all-source active write, no schedule reactivation, no live/current/global freshness copy, and no legacy broad writer until it has the same safety gates. |
 
-## What we actually solved so far
+## Evidence snapshot
+
+Read-only exploration found this current shape:
+
+| Item | Current evidence |
+|---|---|
+| Products | 2,759 |
+| Source-product rows | 4,955 |
+| Price-history rows | 4,973 |
+| Ingestion runs | 63 |
+| Global active `RUNNING` runs | 0 |
+| Global `PENDING` staging rows | 0 |
+| Fresh rows under current 12h SLA | 0 / 4,955 at the explored snapshot |
+| Phase 4.1 coverage | About 30 source-product rows: six sources × five `leche` candidates |
+
+Interpretation: the previous rollout proved the **safe write path**, not broad freshness.
+
+## What is already solved
 
 | Area | Current state |
 |---|---|
-| Public honesty | Stale prices are labeled as stale instead of being presented as current/live. |
-| Active write safety | Active ingestion now needs exact source/term/count/expected-EAN gates plus post-write audits. |
-| Count=5 rollout | `leche`, five candidates per source, all six sources completed with DB/API/cache audits. |
-| Redis/cache | Production Redis was fixed and validated for cache purge/rate limiting. |
-| CI/deploy | GitHub/Vercel checks pass; production deploys from `master`. |
-| Code hygiene | Confirmed dead code was removed; `ruff`, `vulture`, `knip`, tests, typecheck, lint and build are clean. |
+| Public honesty | Stale prices are labeled instead of being marketed as live/current. |
+| Phase 4.1 write safety | Active ingestion requires exact source/term/count/expected-EAN gates, `--confirm-write`, and post-write audits. |
+| Controlled canary evidence | Disco, Vea, DIA, MAS, Carrefour and Jumbo completed count=5 with DB/API/cache evidence. |
+| Redis remediation | Production Redis was corrected and validated for cache purge/rate limiting during Phase 4.1. |
+| CI/deploy hygiene | GitHub/Vercel checks were brought green for the merged work; production deploys from `master`. |
+| Repo hygiene | Dead code/dependencies were cleaned and validated with tests/typecheck/lint/build/static audit. |
 
-What we did **not** solve yet:
+## What is not solved
 
-- global catalog freshness;
-- broad product coverage;
-- recurring safe ingestion schedules;
-- guarantee that “best price” rankings exclude stale values;
-- production-grade monitoring and alerting for freshness drift.
+- Global catalog freshness.
+- Broad product coverage.
+- Recurring safe ingestion schedules.
+- Freshness-aware ranking and price computation.
+- Search/listing/cache/PWA freshness verification after writes.
+- Production monitoring/alerting that proves freshness does not silently rot.
+- A safe policy for new products/source rows outside explicit allowlists.
+- A hardened replacement for the legacy `update-prices` write path.
 
-## Product goal
+## Non-fix realities
 
-A normal user should be able to open `https://ofertas-super.vercel.app/`, search common supermarket products, and trust that:
+Some gaps cannot be made mathematically perfect. They need honest product design.
 
-1. prominent prices are recent enough to compare;
-2. stale prices do not lead rankings without warning;
-3. every price has an official supermarket source link when available;
-4. the product explains coverage gaps instead of hiding them;
-5. ingestion freshness is monitored and recoverable.
+| Reality | Product response |
+|---|---|
+| A scraped price may differ from checkout price. | Show official source link, timestamp, and freshness label; never claim checkout guarantee. |
+| VTEX search is not a complete catalog dump. | Treat search/category crawling as discovery with coverage targets, not “all products forever”. |
+| Source APIs/hash may change or block. | Probe before writes; alert and stop instead of guessing. |
+| Some products lack universal EAN/source mapping. | Separate existing-row refresh from discovery; require allowlists or reviewed creation policy. |
+| A 12h SLA plus manual jobs guarantees stale data after 12h. | Either run schedules more often than the SLA or explicitly adjust/publicly explain the SLA. |
+| Redis can fail open in the app. | Treat Redis as optional for UX continuity but mandatory for production freshness operations. |
 
-## Definition of “production final”
+## Production-final definition
 
-“100% finished” cannot mean literally every SKU from every supermarket forever. Retail catalogs are dynamic, search APIs drift, products disappear, and some EANs are source-specific.
-
-For this project, production final should mean:
+“100% finished” means no known blind spot remains unhandled by either a fix, a guard, or an explicit no-fix product boundary.
 
 | Gate | Target |
 |---|---|
-| Public first impression | Home and featured sections show no stale badges. |
-| Search trust | Search results either show fresh prices or clearly degrade stale rows below fresh ones. |
-| Core staples coverage | At least 500–1,000 high-demand EANs have coverage across 3+ sources where available. |
-| Broad catalog coverage | At least 5,000–10,000 source-product rows across the six configured sources. |
-| Freshness SLA | ≥95% of publicly rankable source-product rows refreshed within their source SLA or hidden/demoted. |
-| Source health | Six sources probe healthy before scheduled refresh runs. |
-| Rollback | Every active rollout has snapshot, post-write audit, and rollback verification. |
-| Monitoring | Freshness, failures, promoted count, rejection rate, Redis health and API latency are visible. |
-| Claims | Public copy never says live/current/global freshness unless the gates above pass continuously. |
+| Public first impression | Home and prominent listing/search surfaces do not lead with stale badges or stale cheap prices. |
+| Ranking trust | Default ranking, best-price selection and offers avoid stale-first behavior. |
+| Detail honesty | Product detail keeps row-level stale warnings, timestamps and source links. |
+| Coverage | 5,000–10,000 source-product rows, with at least 500 high-demand EANs covered across 3+ sources where available. |
+| Freshness SLA | ≥95% of publicly rankable source-product rows refreshed within the approved SLA, or automatically hidden/demoted. |
+| Refresh safety | Existing-row refresh and discovery are separate modes with separate gates. |
+| Schedules | Recurring jobs are enabled only after manual broad refresh evidence is GREEN. |
+| Operations | Redis, DB, source health, cache purge, stuck-run detection, staging cleanup, deploy and alerts are verified. |
+| Claims | Public copy never says live/current/global freshness unless the continuous gates above pass. |
 
-## Two-track strategy
+## Product policy
 
-### Track A — immediate public trust cleanup
+### Freshness statuses
 
-Goal: the portfolio first impression should not start with `Dato viejo`.
+Use source-product `last_checked_at` plus source SLA.
 
-| Requirement | Acceptance criteria |
-|---|---|
-| Hide stale badges from home preview surfaces. | Home/product preview sections use only curated non-stale rows or neutral copy like `Último registro disponible`; no `Dato viejo` above the fold. |
-| Demote stale rows in listing/search ranking. | When `sort=relevance` or default listing is used, fresh rows rank ahead of stale rows. |
-| Preserve honesty on detail pages. | Product detail still labels stale source rows; no stale information is hidden where a user makes a precise decision. |
-| Methodology remains explicit. | `/metodologia` explains stored records, source freshness and coverage. |
-
-Non-goal: this track does not pretend data is fresh. It prevents stale records from dominating the public first impression.
-
-### Track B — real freshness rollout
-
-Goal: create and maintain a large, fresh catalog under controlled ingestion.
-
-| Phase | Purpose | Output |
+| Status | Meaning | Public treatment |
 |---|---|---|
-| B0 — read-only baseline | Measure current freshness, coverage and drift. | Baseline report: rows/source, EAN overlap, stale %, drift sample, top categories. |
-| B1 — catalog seed taxonomy | Define how we discover products beyond one query. | Terms/category plan, expected volume, rate limits, exclusions. |
-| B2 — tooling expansion | Generalize count=5 gates to larger batches. | Candidate audit and post-write audit support batch windows/chunks. |
-| B3 — controlled bulk refresh | Refresh source by source, chunk by chunk. | Fresh rows for approved terms/categories with audit artifacts. |
-| B4 — ranking policy | Prevent stale data from winning rankings. | Freshness-aware sorting, filters and tests. |
-| B5 — schedules | Re-enable recurring jobs only after gates pass. | Scheduled workflows with concurrency, alerts, dry-run fallback and rollback policy. |
+| `fresh` | Checked within the approved SLA. | Eligible for best-price, offers, home/listing prominence and structured data. |
+| `stale` | Checked outside the SLA. | Demote from default ranking and best-price hero; show warning on cards/detail. |
+| `unknown` | Timestamp missing or unavailable. | Treat like stale for ranking; explain as limited coverage. |
+| `unavailable` | Source/product not currently found or blocked. | Do not show as comparable price; keep audit trail. |
 
-## What we need to scrape “all” or a very large catalog
+### Recommended rankability policy
 
-### 1. Product discovery strategy
+Default policy for the next implementation PR:
 
-VTEX search is not a full database dump. We need a controlled discovery method.
+1. Fresh rows win default ranking over stale rows.
+2. Stale cheap prices do **not** determine the public “best price” unless no fresh price exists.
+3. If all rows are stale, show a compact page-level snapshot warning instead of repeating loud card warnings everywhere.
+4. Product detail remains fully honest: stale rows stay visible with timestamps and source links.
+5. `price-asc` sorts by price **inside freshness buckets** by default: fresh cheap prices first, then stale cheap prices.
+6. Promo/offers surfaces use fresh entries only unless explicitly labeled as historical/snapshot.
 
-| Method | Pros | Cons | Recommendation |
-|---|---|---|---|
-| Query-term crawl | Easy to control; works with current adapter. | Can miss products not covered by terms. | Use first for staples and portfolio completeness. |
-| Category crawl | Better breadth by department. | More pagination/API behavior to validate per source. | Add after query-term crawl is safe. |
-| Existing DB refresh | Fastest way to make current catalog fresh. | Does not discover missing products. | Mandatory first bulk refresh. |
-| Official sitemap/category pages | Potential breadth. | Scraping/rate-limit/legal variability. | Research per source before use. |
+### Public copy policy
 
-Recommended seed order:
+Allowed:
 
-1. refresh existing DB rows;
-2. expand with high-demand search terms;
-3. expand with category crawl if VTEX endpoint supports stable pagination;
-4. only then consider long-tail discovery.
+- `precio registrado`
+- `último registro disponible`
+- `lecturas del catálogo`
+- `dato viejo`
+- `puede estar desactualizado`
+- `ver en el supermercado`
 
-### 2. Taxonomy for high-demand terms
+Forbidden until continuous gates pass:
 
-Start with controlled term groups instead of “all at once”.
+- `precio actual`
+- `precio en vivo`
+- `tiempo real`
+- `todos los precios actualizados`
+- `mejor total actual`
+- global “fresh/current” claims.
 
-| Group | Example terms | Why first |
+## Data policy
+
+### Existing-row refresh mode
+
+Purpose: make current catalog rows fresh without expanding the catalog.
+
+Rules:
+
+- No new `products` rows.
+- No new `supermarket_products` rows.
+- Every candidate must match an existing product + source row before write.
+- Missing/unavailable rows are recorded in audit output, not silently ignored.
+- Candidate/write EAN equality remains mandatory.
+- Rollback plan is generated per chunk.
+
+### Discovery mode
+
+Purpose: add coverage after existing rows are safely fresh.
+
+Rules:
+
+- Separate command/mode from refresh.
+- Explicit caps per source/term/category.
+- New product/source-row creation requires quality gates:
+  - valid EAN;
+  - source URL;
+  - sane positive price;
+  - duplicate detection;
+  - mojibake/encoding checks;
+  - brand/name/category normalization;
+  - rollback delete plan;
+  - sampled manual review for each new category/source group.
+
+### Legacy writer policy
+
+The legacy `update-prices` path must not be used for production freshness until one of these happens:
+
+1. it is hardened with the same snapshot/expected-EAN/post-write/rollback gates; or
+2. it is deprecated and replaced by the generalized ingestion v2 refresh path.
+
+Reason: it can write many rows based on oldest product names without the Phase 4.1 candidate equality model.
+
+## Data discovery strategy
+
+VTEX search is not a guaranteed full catalog export. Use layered discovery.
+
+| Layer | Purpose | When allowed |
 |---|---|---|
-| Staples | leche, yerba, arroz, aceite, azúcar, fideos, harina, huevos | High user value and easy sanity checks. |
-| Dairy | leche, yogur, queso, manteca, crema | Strong EAN overlap and recurring purchases. |
+| Existing DB refresh | Make current public catalog trustworthy. | First. |
+| High-demand query terms | Add user-relevant staples and repeat purchases. | After existing-row refresh tooling is green. |
+| Category crawl/pagination | Broaden catalog by supermarket category. | Only after per-source endpoint behavior is researched. |
+| Long-tail crawl | Maximize coverage. | Last; lower priority than stable freshness. |
+
+Recommended seed groups:
+
+| Group | Example terms | Notes |
+|---|---|---|
+| Staples | leche, yerba, arroz, aceite, azúcar, fideos, harina, huevos | First production scope. |
+| Dairy | yogur, queso, manteca, crema | Good EAN overlap. |
 | Cleaning | detergente, jabón, lavandina, suavizante | Useful basket comparisons. |
-| Beverages | agua, gaseosa, jugo, cerveza | Common price comparison behavior. |
-| Pantry | conservas, salsa, café, galletitas | Large catalog expansion. |
-| Fresh/perishable | carne, pollo, fruta, verdura | More source-specific EANs; run later with stricter review. |
+| Beverages | agua, gaseosa, jugo, cerveza | High search value. |
+| Pantry | conservas, salsa, café, galletitas | Broad expansion. |
+| Fresh/perishable | carne, pollo, fruta, verdura | Later; more source-specific and volatile. |
 
-### 3. Batch model
+## Engineering requirements
 
-The current count=5 tooling is safe but too small. For production freshness we need chunked batches.
+### P0 — public first-impression cleanup
 
-| Batch | Suggested size | Gate |
-|---|---:|---|
-| Canary | 5/source | Existing Phase 4.1 gate. |
-| Small batch | 25/source/term group | Exact candidate/write equality, no high drift without manual review. |
-| Medium batch | 100/source/window | Snapshot chunking, audit summary, API/cache sample. |
-| Broad refresh | 500–1,000/source/day | Only after small/medium batches are green. |
+Goal: stale data no longer dominates public UX while the catalog is being repaired.
 
-Never jump from count=5 to all-source/all-catalog in one run.
+Requirements:
 
-### 4. Data model and API policy
+- Add freshness-aware product summary fields, preferably additive:
+  - `hasFreshPrice`;
+  - `freshMinPrice`;
+  - `freshBestPriceEntry`;
+  - `stalePriceCount`;
+  - `rankFreshnessStatus`;
+  - `displayPriceKind`.
+- Default list/search ranking demotes stale products.
+- `minPrice`, discount and best-price display stop being silently stale-first.
+- Product cards use compact stale treatment in dense grids.
+- All-stale result pages show one page-level snapshot warning.
+- Product detail keeps row-level stale labels and source links.
+- Search suggestions include freshness metadata and do not imply current price.
+- Basket/canasta language removes `actual` unless computed from fresh rows.
+- JSON-LD does not advertise stale prices as current `Offer` data without freshness constraints.
 
-Current schema can support a broader rollout, but production final needs clearer policy.
+Tests:
 
-| Area | Needed policy |
-|---|---|
-| Freshness status | Stored per source-product from `last_checked_at` and source SLA. |
-| Ranking | Fresh entries first; stale entries excluded or demoted depending on threshold. |
-| Missing source rows | Default fail-closed for controlled refresh; explicit allowlists only when audited. |
-| Product creation | Allow new global products only in a separate discovery phase, not a refresh phase. |
-| Price history | Insert only when price/list price changes or freshness policy requires traceability. |
-| Cache | Purge product-detail/search/listing keys after active writes. |
+- fresh result outranks stale cheap result in default search/listing;
+- explicit `price-asc` respects freshness buckets;
+- all-stale search page shows snapshot warning;
+- product detail still renders stale row warnings;
+- canasta copy has no `actual` overclaim;
+- public copy guard includes home/search/ofertas/canasta/schema copy.
 
-## Required engineering work
+### P1 — read-only freshness baseline
 
-### P0 — first-impression stale cleanup
+Add a reusable read-only baseline script/report.
 
-- Add freshness-aware home/listing selection.
-- Do not show `Dato viejo` in home hero/product preview.
-- Keep detail-page stale warnings.
-- Tests:
-  - home copy has no `Dato viejo`;
-  - stale rows are demoted in default search/listing;
-  - methodology still explains stale records.
-
-### P1 — reusable freshness baseline audit
-
-Add a read-only script, for example:
+Example:
 
 ```bash
 npm run audit:freshness-baseline -- --output=docs/reports/data-quality/<date>-freshness-baseline.json
@@ -172,16 +238,22 @@ npm run audit:freshness-baseline -- --output=docs/reports/data-quality/<date>-fr
 Report:
 
 - rows per source;
-- stale/fresh/unknown counts;
-- newest/oldest `last_checked_at`;
+- fresh/stale/unknown/unavailable counts;
+- oldest/newest `last_checked_at`;
+- current SLA per source;
 - EAN overlap matrix;
-- top stale public-ranking examples;
-- source API probe status;
-- Redis/API latency sanity.
+- stale examples currently winning public rankings;
+- products with stale cheap price but fresher expensive price;
+- source health/hash probe status;
+- Redis ping and public API latency sanity;
+- search/product cache-key coverage notes;
+- global `RUNNING` runs and `PENDING` staging rows.
 
-### P2 — reusable live drift audit
+### P2 — read-only live drift audit
 
-Add a read-only script, for example:
+Add or extend a reusable drift script.
+
+Example:
 
 ```bash
 npm run audit:price-drift -- --source=carrefour --terms="leche,yerba,arroz" --count=25 --output=...
@@ -190,152 +262,258 @@ npm run audit:price-drift -- --source=carrefour --terms="leche,yerba,arroz" --co
 Report:
 
 - fetched live candidates;
-- matched existing DB rows;
-- price/list-price drift;
-- missing source rows;
-- candidate EAN duplicates;
+- matched DB rows;
+- unmatched products/source rows;
+- price/list-price drift buckets;
 - suspicious deltas;
-- mojibake/metadata quality.
+- duplicate EANs;
+- zero/null/negative prices;
+- mojibake/metadata issues;
+- source URL validity;
+- no secrets printed.
 
-### P3 — chunked refresh tooling
+### P3 — generalized chunked refresh tooling
 
-Generalize existing Phase 4 tooling:
+Generalize the Phase 4.1 safety model without weakening it.
 
-- candidate snapshots per chunk;
-- expected EAN gates per chunk;
-- allow partial source progress without hiding failures;
-- post-write audit per chunk and aggregate;
-- rollback verification per chunk;
-- structured artifacts that can be committed as sanitized summaries.
+Required gates:
 
-### P4 — active rollout runbook
+- exactly one source per active write;
+- explicit term group or existing-row chunk;
+- explicit chunk size/count;
+- expected EAN set or signed candidate snapshot;
+- active dry-run exercising the same candidate set before write;
+- same-run candidate/write equality;
+- positive price and sane delta thresholds;
+- no new product/source rows in refresh mode;
+- post-write DB audit per chunk;
+- API/cache audit sample per chunk;
+- rollback artifact per chunk;
+- aggregate report per source/term group.
 
-Run sequence:
+Batch ladder:
 
-1. freeze code and confirm branch/commit;
-2. run baseline audit;
-3. run source health probes;
-4. run one source, one term group, one chunk;
-5. post-write DB/API/cache audit;
-6. repeat only after GREEN;
-7. commit sanitized report;
-8. fresh reviewer audit;
-9. expand chunk size only after evidence.
+| Batch | Suggested size | Expansion rule |
+|---|---:|---|
+| Canary | 5/source | Already proven for `leche`; keep for new source/category behavior. |
+| Small | 25/source/term group | Requires candidate/write equality + post-write audit GREEN. |
+| Medium | 100/source/window | Requires chunked transactions and aggregate audit GREEN. |
+| Broad | 500–1,000/source/day | Only after repeated medium GREEN evidence. |
+
+Do not jump directly from count=5 to all-source/all-catalog.
+
+### P4 — rollback and incident recovery
+
+Broad refresh needs executable recovery, not only review notes.
+
+Requirements:
+
+- pre-write snapshot per touched source-product row;
+- price-history mutation summary;
+- generated rollback plan;
+- rollback command requiring explicit confirmation;
+- rollback verification excluding normal freshness-SLA expectations;
+- created-row cleanup only for discovery mode and only with explicit approval;
+- stop-on-first-failed-predicate rule preserved.
 
 ### P5 — schedules and monitoring
 
-Schedules are allowed only after broad refresh gates pass.
+Schedules remain off until manual broad refresh passes.
 
 Minimum schedule design:
 
 | Workflow | Cadence | Behavior |
 |---|---|---|
-| Source health probe | hourly or every 6h | read-only; alerts on source/hash/Redis failure. |
-| Existing-row refresh | daily or twice daily | chunked, source-serialized, no new products. |
-| Discovery crawl | weekly/manual | expands catalog; separate review policy. |
-| Cleanup/history retention | monthly | only after tested retention policy. |
+| Source health probe | hourly or every 6h | Read-only, alerts on hash/block/source/Redis failure. |
+| Existing-row refresh | daily or twice daily depending on SLA | Source-serialized, chunked, no new products. |
+| Discovery crawl | weekly/manual | Separate reviewed policy; capped new rows. |
+| Cleanup/history retention | monthly/manual until proven | Dry-run first; preserve incident evidence. |
 
-Monitoring gates:
+Monitoring requirements:
 
-- active job concurrency lock;
-- max runtime;
-- promoted/rejected ratio;
-- stale % by source;
-- API latency after cache purge;
-- Redis availability;
-- alert on `RUNNING` jobs stuck or `PENDING` staging rows.
+- stuck `RUNNING` ingestion-run alert;
+- old `PENDING` staging-row alert;
+- source health/hash/block alert;
+- high rejection-rate alert;
+- stale % by source alert;
+- Redis ping/latency alert;
+- cache purge failure alert;
+- public API latency alert after writes;
+- alert delivery test to the chosen human channel;
+- thresholds that do not spam during intentional rollout phases.
 
-## Acceptance criteria for “finished”
+### P6 — Redis/cache/PWA correctness
 
-### Public UX
+Current app behavior fails open when Redis is absent. That is acceptable for public browsing but not enough for operational freshness.
+
+Requirements:
+
+- Verify Vercel and GitHub Upstash envs without printing secrets.
+- Verify Redis `PING` before any scheduled write.
+- Verify rate-limit decrement before schedule enablement.
+- Fix or document `metrics --dry-run` Redis dedupe side effect.
+- Purge and verify product detail cache keys.
+- Purge/expire and verify search/listing cache keys.
+- Validate PWA/browser stale content behavior after a write.
+- If purge fails: retry once, wait TTL, recheck, then stop if stale content remains.
+
+### P7 — CI/deploy/ops hardening
+
+Operational gaps to close before “final”:
+
+- Align Lighthouse push trigger with repo default branch `master` or require PR/manual Lighthouse for release gates.
+- Keep accessibility/SEO hard-gated; performance can remain advisory unless the user chooses otherwise.
+- Confirm production envs point to the approved Supabase/Vercel/Upstash/Clerk targets without printing secrets.
+- Run `npx prisma migrate status --schema prisma/schema.prisma` before active broad writes.
+- Preserve Supabase RLS/server-side Prisma posture.
+- Treat `Ingest Shadow` as ops-mutating, not read-only.
+- Do not schedule cleanup until retention/evidence policy is approved.
+
+## Active rollout runbook
+
+Use this only after P0–P3 are implemented and reviewed.
+
+1. Confirm branch, commit, PR, approved issue and clean working tree.
+2. Confirm no global active `RUNNING` runs and no old active-source `PENDING` staging rows.
+3. Confirm Supabase project/ref and DB URLs point to the approved environment.
+4. Run baseline audit.
+5. Run source health probes.
+6. Run one source + one chunk/term group in active dry-run.
+7. Review candidate snapshot and expected EAN/value equality.
+8. Run the active write with explicit confirmation.
+9. Run post-write DB audit.
+10. Run API/cache/PWA sample audit.
+11. Generate rollback artifact and verify rollback feasibility.
+12. Commit sanitized report.
+13. Fresh reviewer audits evidence.
+14. Expand only one dimension at a time: source, term group, or chunk size.
+
+Stop immediately on any failed predicate.
+
+## Acceptance criteria
+
+### UX and copy
 
 - [ ] Home first viewport has no stale badge.
-- [ ] Search/listing default ranking demotes stale prices.
-- [ ] Product detail keeps stale warning and official source links.
-- [ ] Methodology explains freshness and coverage clearly.
+- [ ] Default search/listing demotes stale cheap prices.
+- [ ] Product cards do not repeat noisy stale helper copy in dense grids.
+- [ ] All-stale result pages show one clear snapshot warning.
+- [ ] Product detail keeps stale row warnings and official source links.
+- [ ] Canasta copy avoids `actual` unless all computed prices are fresh.
+- [ ] JSON-LD does not overclaim stale offers.
+- [ ] `/metodologia` explains freshness, stale data, coverage and source links.
 - [ ] Public copy has no live/current/global freshness overclaim.
 
-### Data coverage
+### Data freshness and coverage
 
-- [ ] Existing DB rows refreshed for all six sources or explicitly marked unavailable.
-- [ ] At least 5,000 source-product rows refreshed in the last SLA window.
-- [ ] At least 500 high-demand EANs have multi-source coverage where the market supports it.
-- [ ] Missing source rows are documented as not found, not silently ignored.
+- [ ] Existing rows for all six sources are refreshed or explicitly marked unavailable.
+- [ ] ≥95% of publicly rankable rows are within the approved SLA.
+- [ ] At least 5,000 source-product rows are refreshed in the current SLA window or intentionally hidden/demoted.
+- [ ] At least 500 high-demand EANs have multi-source coverage where market data supports it.
+- [ ] Missing source rows are documented as not found/unavailable, not silently ignored.
 
-### Safety
+### Ingestion safety
 
-- [ ] No active write can run without source, term group, chunk size, expected EANs and `--confirm-write`.
+- [ ] No active write can run without source, scope/chunk, expected candidates and `--confirm-write`.
+- [ ] Refresh mode cannot create new products or source rows.
+- [ ] Discovery mode has caps, review and rollback delete plan.
 - [ ] Every active chunk has pre-write snapshot and post-write audit.
-- [ ] Rollback verification works for a sampled chunk.
+- [ ] Rollback command/verification exists and is sampled before broad rollout.
 - [ ] No all-source concurrent writes.
+- [ ] Legacy `update-prices` is hardened or kept out of production freshness scheduling.
 
 ### Operations
 
-- [ ] Production Redis is healthy.
-- [ ] Scheduled jobs are enabled only after a successful manual broad refresh.
-- [ ] Alerts exist for failed source probes, high rejection rate, stale % regression and stuck jobs.
-- [ ] Production deploy, CI and smoke checks are green after changes.
+- [ ] Redis ping, cache purge and rate-limit behavior are verified.
+- [ ] Product-detail, search/listing and PWA cache behavior are verified after writes.
+- [ ] Source health probes are GREEN before writes.
+- [ ] Alerts exist for stuck runs, old staging rows, source failure, high rejection rate, stale % regression, Redis failure and cache purge failure.
+- [ ] Alert delivery has been tested.
+- [ ] GitHub Actions/Vercel branch/deploy gates are aligned with `master`.
+- [ ] Production deploy, smoke checks and public API checks are green after changes.
 
-## Risks and mitigations
-
-| Risk | Mitigation |
-|---|---|
-| VTEX API/hash changes | Keep source health probes and hash-specific failure classification. |
-| Product drift between audit and write | Expected-EAN gate and same-run candidate equality. |
-| Too many new products from discovery | Separate refresh vs discovery modes; discovery requires new-product policy. |
-| Stale data still affects best-price ordering | Freshness-aware ranking before schedules. |
-| Rate limiting/source blocking | Source-serialized chunks, backoff, max requests per run. |
-| Reviewer overload | Chunked PRs and sanitized aggregate reports. |
-
-## Recommended next implementation plan
+## Recommended PR sequence
 
 ### PR 1 — public stale first-impression cleanup
 
-Small product/code PR.
+No DB writes.
 
-- Home/listing selection avoids stale-leading items.
-- Default ranking demotes stale rows.
-- Tests prove no `Dato viejo` appears on home first-impression surfaces.
-- No DB writes.
+- Freshness-aware ranking/display fields.
+- Stale demotion for default search/listing/offers.
+- Compact card stale treatment and all-stale page warning.
+- Canasta/schema copy guard.
+- Tests for stale cheap price not winning default UX.
 
-### PR 2 — read-only freshness/drift audits
+### PR 2 — read-only baseline/drift audits
 
-Tooling PR.
+No DB writes.
 
 - Add `audit:freshness-baseline`.
-- Add or extend `audit:price-drift`.
-- Produce local/sanitized example report.
-- No DB writes.
+- Add/extend `audit:price-drift`.
+- Produce sanitized sample report.
+- Include current DB freshness snapshot and public stale-ranking examples.
 
-### PR 3 — chunked refresh rollout design
+### PR 3 — refresh-existing mode and chunked gates
 
-Runbook + tooling hardening PR.
+Tooling only; no broad active write in the PR itself.
 
-- Generalize count=5 to chunked windows.
+- Generalize count=5 gates.
+- Add refresh-existing mode that cannot create rows.
+- Add candidate snapshot/hash/equality model.
 - Add aggregate post-write audit.
-- Fresh reviewer before any active write.
+- Add rollback plan output.
 
-### PR 4+ — controlled active refresh
+### PR 4 — operations hardening
+
+No broad active write until reviewed.
+
+- CI branch trigger alignment.
+- Redis/cache/search/PWA verification tooling.
+- Stuck-run and staging alert checks.
+- Legacy update-prices deprecation/hardening decision.
+
+### PR 5+ — controlled active refresh reports
 
 Operational rollout PRs/reports.
 
-- One source/term group at a time.
+- One source, one term group/chunk at a time.
 - Increase chunk size only after GREEN evidence.
+- Commit sanitized reports.
+- Fresh reviewer before expansion.
 - Schedules remain off until broad refresh is proven.
 
-## Open decisions before active refresh
+### PR N — schedules
 
-1. What is the public rankability threshold: hide stale after 72h, 7d, or source SLA?
-2. Should unavailable/missing products remain visible with `Sin cobertura`, or be hidden from default results?
-3. What is the first production coverage target: 1,000, 5,000, or 10,000 source-product rows?
-4. Are fresh/perishable categories in scope for the first broad rollout, or delayed until packaged staples are stable?
-5. What alert channel should production schedules use?
+Only after manual broad refresh is GREEN.
 
-## Bottom line
+- Source health schedule first.
+- Existing-row refresh schedule second.
+- Discovery schedule later, if needed.
+- Cleanup schedule last, after retention policy is approved.
 
-To finish ofertasSUPER “for real”, we need both:
+## Open decisions with recommended defaults
 
-1. **a clean public UX policy** so stale records do not dominate the first impression; and
-2. **a measured ingestion program** that refreshes existing rows, expands coverage deliberately, and only then re-enables schedules.
+| Decision | Recommended default |
+|---|---|
+| Public stale threshold | Use source SLA; if 12h is too strict operationally, change SLA deliberately and update copy. |
+| Stale display in default results | Demote, do not hide globally. Hide only from hero/offers/best-price prominence. |
+| `price-asc` behavior | Sort within freshness buckets: fresh cheap first, stale cheap second. |
+| First coverage target | 5,000 source-product rows refreshed, then expand toward 10,000. |
+| First data scope | Existing DB rows first, then staples/dairy/cleaning/beverages. |
+| Fresh/perishable scope | Delay until packaged staples are stable. |
+| Discovery product creation | Disabled by default; enable only under capped discovery mode. |
+| Alert channel | Pick one human-monitored channel before schedules; prove delivery. |
+| Cleanup retention | Keep manual until rollback/incident evidence needs are settled. |
 
-The app is now safe enough to build this next phase. It is not yet fresh enough to claim production-final price accuracy.
+## Done means
+
+This phase is complete only when every known blind spot has one of these statuses:
+
+1. **fixed** — code/tooling/docs changed and verified;
+2. **guarded** — cannot run unsafely because a gate stops it;
+3. **monitored** — production drift/failure alerts a human;
+4. **explicit no-fix** — the project documents the limitation and does not overclaim.
+
+Until then, the correct public stance is:
+
+> ofertasSUPER shows stored supermarket catalog readings with freshness labels. Some records may be stale. The product is being hardened toward broader monitored freshness, but it does not promise live checkout prices.
