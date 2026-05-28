@@ -27,6 +27,8 @@
     "cleanup:staging": "tsx scripts/cleanup-staging.ts",
     "audit:ingest-candidates": "tsx scripts/audit-ingest-candidates.ts",
     "audit:ingest-run": "tsx scripts/audit-ingest-run.ts",
+    "audit:freshness-baseline": "tsx scripts/audit-freshness-baseline.ts",
+    "audit:price-drift": "tsx scripts/audit-price-drift.ts",
     "metrics:ingestion": "tsx scripts/pipeline/metrics.ts"
   },
   "prisma": {
