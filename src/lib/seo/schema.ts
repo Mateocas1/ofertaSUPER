@@ -34,7 +34,7 @@ function buildOfferSchema(
 ): JsonLdNode | null {
   const resolvedPrice = entry.finalPrice ?? entry.price;
 
-  if (resolvedPrice === null) {
+  if (resolvedPrice === null || entry.freshnessStatus !== "fresh") {
     return null;
   }
 

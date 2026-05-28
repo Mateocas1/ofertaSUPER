@@ -33,6 +33,7 @@ describe("demo catalog fallback", () => {
         imageUrl: null,
         category: "Almacen",
         minPrice: 3100,
+        displayPrice: 3100,
         latestCheckedAt: "2026-05-14T00:00:00.000Z",
         bestPriceCheckedAt: "2026-05-14T00:00:00.000Z",
         freshnessStatus: "stale",

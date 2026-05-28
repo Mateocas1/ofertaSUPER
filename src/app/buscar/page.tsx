@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { ProductCard } from "@/components/product-card";
 import { SearchBar } from "@/components/search-bar";
+import { StaleResultsNotice } from "@/components/stale-results-notice";
 import { isCatalogRuntimeAvailable } from "@/lib/catalog-availability";
 import { listProducts } from "@/lib/catalog";
 import { getDemoProductPage } from "@/lib/demo-data";
@@ -47,6 +48,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       ? await withFallback(listProducts(filters), fallbackResult)
       : fallbackResult
     : { items: [], total: 0 };
+  const allResultsAreStale = result.items.length > 0 && result.items.every((product) => product.rankFreshnessStatus !== "fresh");
 
   return (
     <div className="px-6 py-8 md:py-10">
@@ -86,6 +88,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             </form>
           </div>
         </section>
+
+        {query && allResultsAreStale ? <StaleResultsNotice context="resultados" /> : null}
 
         {query ? (
           <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">

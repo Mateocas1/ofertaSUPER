@@ -10,7 +10,18 @@ import {
   type PriceDropAlert,
 } from "@/lib/promotions/alerts";
 import { detectAutomaticDiscount, getBestPromotionPrice } from "@/lib/promotions/detect";
-import { calculateProductCandidateReadLimit } from "@/lib/catalog-query-planning";
+import {
+  comparePriceEntriesForDisplay,
+  comparePublicProducts,
+  getBestDisplayPriceEntry,
+  getRankFreshnessStatus,
+  isComparablePriceEntry,
+  isFreshComparablePriceEntry,
+} from "@/lib/catalog-freshness-policy";
+import {
+  calculateProductCandidateReadLimit,
+  calculateSourceProductCandidateReadLimit,
+} from "@/lib/catalog-query-planning";
 import { classifyPriceFreshness, type PriceFreshnessStatus } from "@/lib/price-freshness";
 import { DETAILED_CATEGORIES } from "@/lib/vtex/categories";
 
@@ -59,6 +70,13 @@ export type ProductSummary = {
   category: string | null;
   minPrice: number | null;
   maxPrice: number | null;
+  freshMinPrice: number | null;
+  displayPrice: number | null;
+  displayPriceCheckedAt: string | null;
+  displayPriceFreshnessStatus: PriceFreshnessStatus;
+  hasFreshPrice: boolean;
+  stalePriceCount: number;
+  rankFreshnessStatus: PriceFreshnessStatus;
   priceCount: number;
   automaticDiscountPercent: number | null;
   latestCheckedAt: string | null;
@@ -77,6 +95,12 @@ export type ProductDetail = {
   category: string | null;
   minPrice: number | null;
   maxPrice: number | null;
+  freshMinPrice: number | null;
+  displayPrice: number | null;
+  displayPriceCheckedAt: string | null;
+  displayPriceFreshnessStatus: PriceFreshnessStatus;
+  hasFreshPrice: boolean;
+  stalePriceCount: number;
   automaticDiscountPercent: number | null;
   bestFinalPrice: number | null;
   bestPriceDropAlert: PriceDropAlert | null;
@@ -251,7 +275,7 @@ function mapPriceEntries(entries: PriceEntryRecord[], supermarketFilter?: string
       }).status,
     }))
     .filter((entry) => entry.price !== null)
-    .sort((left, right) => (left.price ?? Number.MAX_SAFE_INTEGER) - (right.price ?? Number.MAX_SAFE_INTEGER));
+    .sort(comparePriceEntriesForDisplay);
 }
 
 function mapProductSummary(
@@ -271,11 +295,20 @@ function mapProductSummary(
     return null;
   }
 
-  const numericPrices = entries.map((entry) => entry.price).filter((entry): entry is number => entry !== null);
+  const comparableEntries = entries.filter(isComparablePriceEntry);
+
+  if (comparableEntries.length === 0) {
+    return null;
+  }
+
+  const freshEntries = comparableEntries.filter(isFreshComparablePriceEntry);
+  const numericPrices = comparableEntries.map((entry) => entry.price).filter((entry): entry is number => entry !== null);
+  const freshPrices = freshEntries.map((entry) => entry.price).filter((entry): entry is number => entry !== null);
   const minPrice = numericPrices.length > 0 ? Math.min(...numericPrices) : null;
   const maxPrice = numericPrices.length > 0 ? Math.max(...numericPrices) : null;
-  const bestPriceEntry = minPrice === null ? null : entries.find((entry) => entry.price === minPrice) ?? null;
-  const automaticDiscountPercent = entries.reduce<number | null>((best, entry) => {
+  const freshMinPrice = freshPrices.length > 0 ? Math.min(...freshPrices) : null;
+  const displayPriceEntry = getBestDisplayPriceEntry(comparableEntries);
+  const automaticDiscountPercent = freshEntries.reduce<number | null>((best, entry) => {
     const discount = detectAutomaticDiscount(entry.price, entry.listPrice);
 
     if (discount === null) {
@@ -285,9 +318,10 @@ function mapProductSummary(
     return best === null ? discount.percentOff : Math.max(best, discount.percentOff);
   }, null);
 
-  const latestCheckedAt = entries
+  const latestCheckedAt = comparableEntries
     .map((entry) => entry.lastCheckedAt)
     .sort((left, right) => right.localeCompare(left))[0] ?? null;
+  const rankFreshnessStatus = getRankFreshnessStatus(comparableEntries);
 
   return {
     ean: product.ean,
@@ -297,81 +331,29 @@ function mapProductSummary(
     category: product.category,
     minPrice,
     maxPrice,
-    priceCount: entries.length,
+    freshMinPrice,
+    displayPrice: displayPriceEntry?.price ?? null,
+    displayPriceCheckedAt: displayPriceEntry?.lastCheckedAt ?? null,
+    displayPriceFreshnessStatus: displayPriceEntry?.freshnessStatus ?? "unknown",
+    hasFreshPrice: freshEntries.length > 0,
+    stalePriceCount: comparableEntries.filter((entry) => entry.freshnessStatus === "stale").length,
+    rankFreshnessStatus,
+    priceCount: comparableEntries.length,
     automaticDiscountPercent,
     latestCheckedAt,
-    bestPriceCheckedAt: bestPriceEntry?.lastCheckedAt ?? null,
-    bestPriceFreshnessStatus: bestPriceEntry?.freshnessStatus ?? "unknown",
-    entries,
+    bestPriceCheckedAt: displayPriceEntry?.lastCheckedAt ?? null,
+    bestPriceFreshnessStatus: displayPriceEntry?.freshnessStatus ?? "unknown",
+    entries: comparableEntries,
   };
 }
 
-function scoreProduct(summary: ProductSummary, query: string) {
-  const normalized = query.toLowerCase();
-  const name = summary.name.toLowerCase();
-  const brand = summary.brand?.toLowerCase() ?? "";
-
-  if (summary.ean === query) {
-    return 100;
-  }
-
-  if (name === normalized) {
-    return 95;
-  }
-
-  if (name.startsWith(normalized)) {
-    return 80;
-  }
-
-  if (brand.startsWith(normalized)) {
-    return 70;
-  }
-
-  if (name.includes(normalized)) {
-    return 50;
-  }
-
-  if (brand.includes(normalized)) {
-    return 35;
-  }
-
-  return 0;
-}
-
 function sortProducts(items: ProductSummary[], filters: ProductListFilters) {
-  const query = filters.query?.trim();
-  const sort = filters.sort ?? (query ? "relevance" : "discount");
-
-  return items.toSorted((left, right) => {
-    switch (sort) {
-      case "price-asc":
-        return (left.minPrice ?? Number.MAX_SAFE_INTEGER) - (right.minPrice ?? Number.MAX_SAFE_INTEGER);
-      case "price-desc":
-        return (right.minPrice ?? -1) - (left.minPrice ?? -1);
-      case "updated":
-        return (right.latestCheckedAt ?? "").localeCompare(left.latestCheckedAt ?? "");
-      case "relevance": {
-        const rightScore = query ? scoreProduct(right, query) : 0;
-        const leftScore = query ? scoreProduct(left, query) : 0;
-
-        if (rightScore !== leftScore) {
-          return rightScore - leftScore;
-        }
-
-        return left.name.localeCompare(right.name, "es");
-      }
-      default: {
-        const rightDiscount = right.automaticDiscountPercent ?? -1;
-        const leftDiscount = left.automaticDiscountPercent ?? -1;
-
-        if (rightDiscount !== leftDiscount) {
-          return rightDiscount - leftDiscount;
-        }
-
-        return (left.minPrice ?? Number.MAX_SAFE_INTEGER) - (right.minPrice ?? Number.MAX_SAFE_INTEGER);
-      }
-    }
-  });
+  return items.toSorted((left, right) =>
+    comparePublicProducts(left, right, {
+      query: filters.query,
+      sort: filters.sort,
+    }),
+  );
 }
 
 function filterProducts(items: ProductSummary[], filters: ProductListFilters) {
@@ -380,11 +362,13 @@ function filterProducts(items: ProductSummary[], filters: ProductListFilters) {
       return false;
     }
 
-    if (filters.minPrice !== undefined && (item.minPrice === null || item.minPrice < filters.minPrice)) {
+    const publicPrice = item.displayPrice ?? item.minPrice;
+
+    if (filters.minPrice !== undefined && (publicPrice === null || publicPrice < filters.minPrice)) {
       return false;
     }
 
-    if (filters.maxPrice !== undefined && (item.minPrice === null || item.minPrice > filters.maxPrice)) {
+    if (filters.maxPrice !== undefined && (publicPrice === null || publicPrice > filters.maxPrice)) {
       return false;
     }
 
@@ -392,8 +376,8 @@ function filterProducts(items: ProductSummary[], filters: ProductListFilters) {
   });
 }
 
-async function findRawProducts(filters: ProductListFilters) {
-  const where: Prisma.ProductWhereInput = {
+function buildProductWhere(filters: ProductListFilters): Prisma.ProductWhereInput {
+  return {
     AND: [
       filters.query
         ? {
@@ -417,16 +401,49 @@ async function findRawProducts(filters: ProductListFilters) {
                   slug: filters.supermarket,
                 },
                 price: { not: null },
+                is_available: true,
               },
             },
           }
         : {},
     ],
   };
+}
+
+async function findFreshnessRankedCandidateEans(filters: ProductListFilters) {
+  const productCandidateLimit = calculateProductCandidateReadLimit(filters);
+  const sourceRows = await db.supermarketProduct.findMany({
+    where: {
+      price: { not: null },
+      is_available: true,
+      supermarket: filters.supermarket
+        ? {
+            slug: filters.supermarket,
+          }
+        : undefined,
+      product: buildProductWhere(filters),
+    },
+    orderBy: [{ last_checked_at: "desc" }, { id: "asc" }],
+    take: calculateSourceProductCandidateReadLimit(filters),
+    select: {
+      product_ean: true,
+    },
+  });
+
+  return Array.from(new Set(sourceRows.map((row) => row.product_ean))).slice(0, productCandidateLimit);
+}
+
+async function findRawProducts(filters: ProductListFilters) {
+  const candidateEans = await findFreshnessRankedCandidateEans(filters);
+
+  if (candidateEans.length === 0) {
+    return [];
+  }
 
   return db.product.findMany({
-    where,
-    take: calculateProductCandidateReadLimit(filters),
+    where: {
+      AND: [buildProductWhere(filters), { ean: { in: candidateEans } }],
+    },
     select: {
       ean: true,
       name: true,
@@ -617,49 +634,55 @@ const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail 
 
   const promotions = rawPromotions.map(mapPromotionSummary);
 
-  const priceEntries = product.supermarket_products.map((entry) => {
-    const currentPrice = toNumber(entry.price);
-    const previousPrice = toNumber(entry.price_history[1]?.price ?? null);
-    const priceMovement = comparePriceAgainstHistory(currentPrice, previousPrice);
-    const automaticDiscount = detectAutomaticDiscount(currentPrice, toNumber(entry.list_price));
-    const applicablePromotions = promotions.filter(
-      (promotion) => promotion.supermarket.id === entry.supermarket.id,
-    );
-    const bestPromotionResult = getBestPromotionPrice(currentPrice, applicablePromotions);
+  const priceEntries = product.supermarket_products
+    .map((entry) => {
+      const currentPrice = toNumber(entry.price);
+      const previousPrice = toNumber(entry.price_history[1]?.price ?? null);
+      const priceMovement = comparePriceAgainstHistory(currentPrice, previousPrice);
+      const automaticDiscount = detectAutomaticDiscount(currentPrice, toNumber(entry.list_price));
+      const applicablePromotions = promotions.filter(
+        (promotion) => promotion.supermarket.id === entry.supermarket.id,
+      );
+      const bestPromotionResult = getBestPromotionPrice(currentPrice, applicablePromotions);
 
-    return {
-      supermarket: {
-        id: entry.supermarket.id,
-        name: entry.supermarket.name,
-        slug: entry.supermarket.slug,
-        logoUrl: entry.supermarket.logo_url,
-      },
-      supermarketProductId: entry.id,
-      price: currentPrice,
-      listPrice: toNumber(entry.list_price),
-      referencePrice: toNumber(entry.reference_price),
-      referenceUnit: entry.reference_unit,
-      isAvailable: entry.is_available,
-      productUrl: entry.product_url,
-      lastCheckedAt: entry.last_checked_at.toISOString(),
-      freshnessSlaHours: entry.supermarket.freshness_sla_hours,
-      freshnessStatus: classifyPriceFreshness(entry.last_checked_at, {
-        maxAgeHours: entry.supermarket.freshness_sla_hours,
-      }).status,
-      previousPrice: priceMovement.previousPrice,
-      deltaPercent: priceMovement.deltaPercent,
-      priceDropAlert: priceMovement.priceDropAlert,
-      automaticDiscountPercent: automaticDiscount?.percentOff ?? null,
-      bestPromotion: bestPromotionResult?.promotion ?? null,
-      finalPrice: bestPromotionResult?.finalPrice ?? null,
-    };
-  });
+      return {
+        supermarket: {
+          id: entry.supermarket.id,
+          name: entry.supermarket.name,
+          slug: entry.supermarket.slug,
+          logoUrl: entry.supermarket.logo_url,
+        },
+        supermarketProductId: entry.id,
+        price: currentPrice,
+        listPrice: toNumber(entry.list_price),
+        referencePrice: toNumber(entry.reference_price),
+        referenceUnit: entry.reference_unit,
+        isAvailable: entry.is_available,
+        productUrl: entry.product_url,
+        lastCheckedAt: entry.last_checked_at.toISOString(),
+        freshnessSlaHours: entry.supermarket.freshness_sla_hours,
+        freshnessStatus: classifyPriceFreshness(entry.last_checked_at, {
+          maxAgeHours: entry.supermarket.freshness_sla_hours,
+        }).status,
+        previousPrice: priceMovement.previousPrice,
+        deltaPercent: priceMovement.deltaPercent,
+        priceDropAlert: priceMovement.priceDropAlert,
+        automaticDiscountPercent: automaticDiscount?.percentOff ?? null,
+        bestPromotion: bestPromotionResult?.promotion ?? null,
+        finalPrice: bestPromotionResult?.finalPrice ?? null,
+      };
+    })
+    .toSorted(comparePriceEntriesForDisplay);
 
-  const prices = priceEntries.map((entry) => entry.price).filter((entry): entry is number => entry !== null);
-  const finalPrices = priceEntries
+  const comparableEntries = priceEntries.filter(isComparablePriceEntry);
+  const freshEntries = comparableEntries.filter(isFreshComparablePriceEntry);
+  const prices = comparableEntries.map((entry) => entry.price).filter((entry): entry is number => entry !== null);
+  const freshPrices = freshEntries.map((entry) => entry.price).filter((entry): entry is number => entry !== null);
+  const finalPrices = freshEntries
     .map((entry) => entry.finalPrice)
     .filter((entry): entry is number => entry !== null);
-  const automaticDiscountPercent = priceEntries.reduce<number | null>((best, entry) => {
+  const displayPriceEntry = getBestDisplayPriceEntry(priceEntries);
+  const automaticDiscountPercent = freshEntries.reduce<number | null>((best, entry) => {
     if (entry.automaticDiscountPercent === null) {
       return best;
     }
@@ -679,9 +702,15 @@ const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail 
     category: product.category,
     minPrice: prices.length > 0 ? Math.min(...prices) : null,
     maxPrice: prices.length > 0 ? Math.max(...prices) : null,
+    freshMinPrice: freshPrices.length > 0 ? Math.min(...freshPrices) : null,
+    displayPrice: displayPriceEntry?.price ?? null,
+    displayPriceCheckedAt: displayPriceEntry?.lastCheckedAt ?? null,
+    displayPriceFreshnessStatus: displayPriceEntry?.freshnessStatus ?? "unknown",
+    hasFreshPrice: freshEntries.length > 0,
+    stalePriceCount: priceEntries.filter((entry) => entry.freshnessStatus === "stale").length,
     automaticDiscountPercent,
     bestFinalPrice: finalPrices.length > 0 ? Math.min(...finalPrices) : null,
-    bestPriceDropAlert: getBiggestPriceDropAlert(priceEntries.map((entry) => entry.priceDropAlert)),
+    bestPriceDropAlert: getBiggestPriceDropAlert(freshEntries.map((entry) => entry.priceDropAlert)),
     priceEntries,
     promotions,
   };
@@ -867,10 +896,11 @@ export async function getSearchSuggestions(query: string, limit = 8) {
     brand: item.brand,
     imageUrl: item.imageUrl,
     category: item.category,
-    minPrice: item.minPrice,
+    minPrice: item.displayPrice,
+    displayPrice: item.displayPrice,
     latestCheckedAt: item.latestCheckedAt,
-    bestPriceCheckedAt: item.bestPriceCheckedAt,
-    freshnessStatus: item.bestPriceFreshnessStatus,
+    bestPriceCheckedAt: item.displayPriceCheckedAt,
+    freshnessStatus: item.displayPriceFreshnessStatus,
   }));
 }
 

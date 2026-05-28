@@ -5,11 +5,14 @@ import { describe, it } from "node:test";
 const PUBLIC_COPY_FILES = [
 	"src/app/page.tsx",
 	"src/app/ofertas/page.tsx",
+	"src/app/producto/[ean]/page.tsx",
+	"src/components/canasta-page.tsx",
 	"src/lib/home-ui-data.ts",
+	"src/lib/seo/schema.ts",
 ] as const;
 
 const UNBACKED_LIVE_PRICE_PATTERN =
-	/\b(Mercado vivo|precio actual|precio real|en vivo|Actualizado hoy|Datos actualizados hoy|última semana|ultima semana)\b/i;
+	/\b(Mercado vivo|precio actual|precio real|precios actuales|mejor total actual|en vivo|Actualizado hoy|Datos actualizados hoy|última semana|ultima semana)\b/i;
 
 describe("public price copy claims", () => {
 	it("keeps public surfaces away from unbacked live/current price language", () => {

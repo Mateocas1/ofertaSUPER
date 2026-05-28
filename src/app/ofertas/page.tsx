@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { ProductCard } from "@/components/product-card";
 import { PromotionBadge } from "@/components/promotion-badge";
+import { StaleResultsNotice } from "@/components/stale-results-notice";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { getPromotions, listProducts } from "@/lib/catalog";
 import { getSingleParam } from "@/lib/page-params";
@@ -43,6 +44,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 			page: 1,
 		}),
 	]);
+	const allDiscountedProductsAreStale =
+		discountedProducts.items.length > 0 && discountedProducts.items.every((product) => product.rankFreshnessStatus !== "fresh");
 
 	return (
 		<div className="px-6 py-8 md:py-10">
@@ -174,11 +177,17 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 								Productos con list price por encima del precio registrado
 							</h2>
 						</div>
+						{allDiscountedProductsAreStale ? <StaleResultsNotice context="descuentos detectados" /> : null}
 						<div className="grid gap-5 md:grid-cols-2">
 							{discountedProducts.items.map((product) => (
 								<ProductCard key={product.ean} product={product} />
 							))}
 						</div>
+						{discountedProducts.items.length === 0 ? (
+							<article className="rounded-[1.5rem] border border-dashed border-border bg-white/70 p-5 text-sm text-muted-foreground">
+								No hay descuentos automáticos recientes con estos filtros.
+							</article>
+						) : null}
 					</div>
 				</section>
 			</div>

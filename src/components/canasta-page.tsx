@@ -19,6 +19,8 @@ type CanastaProduct = {
   brand: string | null;
   imageUrl: string | null;
   minPrice: number | null;
+  freshMinPrice: number | null;
+  hasFreshPrice: boolean;
   priceEntries: Array<{
     supermarket: {
       id: number;
@@ -29,6 +31,7 @@ type CanastaProduct = {
     price: number | null;
     isAvailable: boolean;
     productUrl: string | null;
+    freshnessStatus: "fresh" | "stale" | "unknown";
   }>;
 };
 
@@ -77,7 +80,7 @@ function buildSupermarketSummaries(items: CanastaItem[], productsByEan: Record<s
     for (const summary of summaries) {
       const entry = product.priceEntries.find((candidate) => candidate.supermarket.slug === summary.slug);
 
-      if (entry && entry.price !== null && entry.isAvailable) {
+      if (entry && entry.price !== null && entry.isAvailable && entry.freshnessStatus === "fresh") {
         summary.coveredItems += 1;
         summary.total += entry.price * item.qty;
       } else {
@@ -86,7 +89,7 @@ function buildSupermarketSummaries(items: CanastaItem[], productsByEan: Record<s
     }
   }
 
-  return summaries.toSorted((left, right) => {
+  return summaries.filter((summary) => summary.coveredItems > 0).toSorted((left, right) => {
     if (left.missingItems !== right.missingItems) {
       return left.missingItems - right.missingItems;
     }
@@ -197,7 +200,7 @@ export function CanastaPage() {
               <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Canasta activa</p>
               <h1 className="mt-2 text-4xl font-semibold text-foreground md:text-5xl">{distinctItems} productos, {totalItems} unidades</h1>
               <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">
-                Ajusta cantidades y compara cuanto costaria resolver la canasta en cada supermercado con la cobertura actual.
+                Ajusta cantidades y compara cuanto costaría resolver la canasta con registros recientes disponibles por supermercado.
               </p>
             </div>
 
@@ -226,7 +229,7 @@ export function CanastaPage() {
         <div className="space-y-4">
           {items.map((item) => {
             const product = productsByEan[item.ean];
-            const lineTotal = product?.minPrice !== null && product?.minPrice !== undefined ? product.minPrice * item.qty : null;
+            const lineTotal = product?.freshMinPrice !== null && product?.freshMinPrice !== undefined ? product.freshMinPrice * item.qty : null;
 
             return (
               <article key={item.ean} className="surface-soft p-5">
@@ -265,7 +268,7 @@ export function CanastaPage() {
                       </p>
 
                       <p className="mt-3 text-sm text-muted-foreground">
-                        Mejor total actual: <strong className="text-foreground">{formatCurrency(lineTotal)}</strong>
+                        Total con registro reciente: <strong className="text-foreground">{formatCurrency(lineTotal)}</strong>
                       </p>
                     </div>
                   </div>
@@ -364,7 +367,7 @@ export function CanastaPage() {
         <section className="surface-soft p-6">
           <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Lectura rapida</p>
           <ul className="mt-4 space-y-3 text-sm leading-6 text-muted-foreground">
-            <li>El total suma precios actuales por supermercado, no descuentos condicionales de billeteras o bancos.</li>
+            <li>El total suma registros recientes por supermercado, no descuentos condicionales de billeteras o bancos.</li>
             <li>Si un super no tiene precio disponible para un item, se marca como faltante y el total queda parcial.</li>
             <li>La canasta vive en tu navegador, sin cuenta ni persistencia en base de datos.</li>
           </ul>

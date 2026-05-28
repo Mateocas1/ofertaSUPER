@@ -18,6 +18,7 @@ type SearchSuggestion = {
   imageUrl: string | null;
   category: string | null;
   minPrice: number | null;
+  displayPrice?: number | null;
   bestPriceCheckedAt: string | null;
   freshnessStatus: PriceFreshnessStatus;
 };
@@ -225,7 +226,7 @@ export function SearchBar({
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium text-foreground">{formatCurrency(result.minPrice)}</p>
+                      <p className="text-sm font-medium text-foreground">{formatCurrency(result.displayPrice ?? result.minPrice)}</p>
                       {result.freshnessStatus === "stale" ? (
                         <p className="mt-1 text-xs font-medium text-amber-700">
                           {getPriceFreshnessCopy({
