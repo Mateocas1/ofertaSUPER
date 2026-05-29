@@ -23,11 +23,18 @@ const sampleProduct: NormalizedProduct = {
   isAvailable: true,
 };
 
-test("legacy scrapers default to dry-run unless writes are explicitly confirmed", () => {
+test("legacy scrapers default to dry-run and reject production freshness writes", () => {
   assert.equal(readDryRunFlag(["node", "script"], {}), true);
-  assert.equal(readDryRunFlag(["node", "script", "--confirm-write"], {}), false);
+  assert.equal(readDryRunFlag(["node", "script", "--confirm-write"], {}), true);
   assert.equal(readDryRunFlag(["node", "script", "--confirm-write", "--dry-run"], {}), true);
-  assert.equal(readDryRunFlag(["node", "script"], { INGESTION_WRITE_APPROVED: "true" }), false);
+  assert.equal(readDryRunFlag(["node", "script"], { INGESTION_WRITE_APPROVED: "true" }), true);
+  assert.equal(
+    readDryRunFlag(["node", "script", "--confirm-write"], {
+      INGESTION_WRITE_APPROVED: "true",
+      LEGACY_PRICE_WRITE_APPROVED: "true",
+    }),
+    false,
+  );
 });
 
 test("runStoreScraper does not persist when dryRun is omitted", async () => {
@@ -58,11 +65,13 @@ test("runStoreScraper does not persist when dryRun is omitted", async () => {
   assert.equal(result.fetched, 1);
 });
 
-test("update prices workflow keeps manual writes behind an explicit confirmation input", async () => {
+test("update prices workflow is dry-run only and does not report fake write status", async () => {
   const workflow = await readFile(".github/workflows/update-prices.yml", "utf8");
 
   assert.match(workflow, /confirm_write:/);
+  assert.match(workflow, /Deprecated legacy path/);
   assert.match(workflow, /--dry-run/);
-  assert.match(workflow, /--confirm-write/);
-  assert.match(workflow, /inputs\.confirm_write == true/);
+  assert.doesNotMatch(workflow, /--confirm-write/);
+  assert.match(workflow, /LEGACY_PRICE_WRITE_APPROVED: "false"/);
+  assert.doesNotMatch(workflow, /report-scraper-status/);
 });

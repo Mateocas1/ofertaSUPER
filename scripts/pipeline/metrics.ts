@@ -66,14 +66,14 @@ async function sendWebhookAlert(title: string, details: string[], options: { ded
     return false;
   }
 
+  if (options.dryRun) {
+    return true;
+  }
+
   const shouldSend = await shouldSendAlert(options.dedupeKey);
 
   if (!shouldSend) {
     return false;
-  }
-
-  if (options.dryRun) {
-    return true;
   }
 
   const response = await fetch(webhookUrl, {

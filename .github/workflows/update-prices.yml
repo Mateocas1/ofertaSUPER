@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_write:
-        description: "Run real update writes. Leave false for dry-run safety."
+        description: "Deprecated legacy path: true only exercises the guarded command; real writes stay disabled."
         required: true
         type: boolean
         default: false
@@ -41,21 +41,13 @@ jobs:
         id: update_prices
         run: |
           if [ "${{ inputs.confirm_write }}" = "true" ]; then
-            npm run update:prices -- --confirm-write
-          else
-            npm run update:prices -- --dry-run
+            echo "Legacy update-prices real writes are disabled; use ingestion v2 refresh-existing gates instead."
           fi
+          npm run update:prices -- --dry-run
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
           VTEX_SHA256_HASH: ${{ secrets.VTEX_SHA256_HASH }}
-
-      - name: Report scraper status
-        if: ${{ always() && inputs.confirm_write == true }}
-        run: npx tsx scripts/report-scraper-status.ts
-        env:
-          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
-          SCRAPER_ALERT_WEBHOOK_URL: ${{ secrets.SCRAPER_ALERT_WEBHOOK_URL }}
-          SCRAPER_JOB_NAME: update-prices
-          SCRAPER_JOB_STATUS: ${{ steps.update_prices.outcome }}
+          # Legacy update-prices is not the approved production freshness path.
+          # Keep real writes disabled unless this separate emergency guard is explicitly set.
+          LEGACY_PRICE_WRITE_APPROVED: "false"

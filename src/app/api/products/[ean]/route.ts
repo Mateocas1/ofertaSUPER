@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getProductDetail } from "@/lib/catalog";
+import { buildProductDetailCacheKey } from "@/lib/cache-keys";
 import { getCachedJson, setCachedJson } from "@/lib/redis";
 import { rejectIfRateLimited, withRateLimitHeaders } from "@/lib/rate-limit";
 
@@ -20,7 +21,7 @@ export async function GET(
   }
 
   const { ean } = await context.params;
-  const cacheKey = `product:detail:${ean}`;
+  const cacheKey = buildProductDetailCacheKey(ean);
   const cached = await getCachedJson(cacheKey);
 
   if (cached) {
