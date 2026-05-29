@@ -30,6 +30,7 @@
     "audit:ingest-aggregate": "tsx scripts/audit-ingest-aggregate.ts",
     "audit:freshness-baseline": "tsx scripts/audit-freshness-baseline.ts",
     "audit:price-drift": "tsx scripts/audit-price-drift.ts",
+    "audit:ops-freshness": "tsx scripts/audit-ops-freshness.ts",
     "metrics:ingestion": "tsx scripts/pipeline/metrics.ts"
   },
   "prisma": {

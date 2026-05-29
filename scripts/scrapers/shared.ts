@@ -197,7 +197,10 @@ export async function runStoreScraper({
 }
 
 function isLegacyWriteApproved(argv = process.argv, env: LegacyWriteEnv = process.env) {
-  return argv.includes("--confirm-write") || env.INGESTION_WRITE_APPROVED?.toLowerCase() === "true";
+  return (
+    (argv.includes("--confirm-write") || env.INGESTION_WRITE_APPROVED?.toLowerCase() === "true") &&
+    env.LEGACY_PRICE_WRITE_APPROVED?.toLowerCase() === "true"
+  );
 }
 
 export function readDryRunFlag(argv = process.argv, env: LegacyWriteEnv = process.env) {
