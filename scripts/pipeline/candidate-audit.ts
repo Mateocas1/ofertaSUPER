@@ -1,5 +1,12 @@
 import type { NormalizedProduct } from "../../src/lib/vtex/normalize";
 
+import {
+	buildCandidateRollbackPlan,
+	buildCandidateSnapshotHash,
+	type CandidateRollbackPlan,
+	type CandidateWriteMode,
+} from "./candidate-snapshot";
+
 type CandidateAuditSourceSnapshot = {
 	id: number;
 	slug: string;
@@ -70,18 +77,23 @@ export type CandidateAuditOptions = {
 	now?: () => Date;
 	mojibakeWaivers?: MojibakeWaiver[];
 	allowMissingSupermarketProductEans?: string[];
+	writeMode?: CandidateWriteMode;
 };
 
 export type CandidateAudit = {
+	schemaVersion: 1;
 	createdAt: string;
+	writeMode: CandidateWriteMode;
 	source: string;
 	term: string;
 	count: number;
 	queryLimit: number;
+	candidateHash: string;
 	candidateEans: string[];
 	candidates: NormalizedProduct[];
 	mojibakeWaivers: MojibakeWaiver[];
 	allowMissingSupermarketProductEans: string[];
+	rollbackPlan: CandidateRollbackPlan | null;
 	snapshots: {
 		source: CandidateAuditSourceSnapshot;
 		products: ProductSnapshot[];
@@ -123,16 +135,19 @@ function findDuplicates(values: string[]) {
 	return Array.from(duplicates).sort();
 }
 
-function requireExactlyFiveDistinctCandidates(candidates: NormalizedProduct[]) {
+function requireDistinctCandidateCount(
+	candidates: NormalizedProduct[],
+	expectedCount: number,
+) {
 	const eans = candidates.map((candidate) => candidate.ean);
 	const distinctEans = new Set(eans);
 
 	if (
-		candidates.length !== EXPECTED_CANDIDATE_COUNT ||
-		distinctEans.size !== EXPECTED_CANDIDATE_COUNT
+		candidates.length !== expectedCount ||
+		distinctEans.size !== expectedCount
 	) {
 		throw new Error(
-			`candidate audit requires exactly 5 distinct candidate EANs; received candidates=${candidates.length} distinct=${distinctEans.size}`,
+			`candidate audit requires exactly ${expectedCount} distinct candidate EANs; received candidates=${candidates.length} distinct=${distinctEans.size}`,
 		);
 	}
 
@@ -140,9 +155,13 @@ function requireExactlyFiveDistinctCandidates(candidates: NormalizedProduct[]) {
 
 	if (duplicates.length > 0) {
 		throw new Error(
-			`candidate audit requires exactly 5 distinct candidate EANs; duplicates=${duplicates.join(",")}`,
+			`candidate audit requires exactly ${expectedCount} distinct candidate EANs; duplicates=${duplicates.join(",")}`,
 		);
 	}
+}
+
+function requireExactlyFiveDistinctCandidates(candidates: NormalizedProduct[]) {
+	requireDistinctCandidateCount(candidates, EXPECTED_CANDIDATE_COUNT);
 }
 
 function requirePositiveCandidatePrices(candidates: NormalizedProduct[]) {
@@ -251,6 +270,7 @@ export async function buildCandidateAudit({
 	now = () => new Date(),
 	mojibakeWaivers = [],
 	allowMissingSupermarketProductEans = [],
+	writeMode = "phase4-count5",
 }: CandidateAuditOptions): Promise<CandidateAudit> {
 	if (!source || source.includes(",")) {
 		throw new Error("candidate audit requires exactly one source");
@@ -260,8 +280,14 @@ export async function buildCandidateAudit({
 		throw new Error("candidate audit requires exactly one term");
 	}
 
-	if (count !== EXPECTED_CANDIDATE_COUNT) {
+	if (writeMode === "phase4-count5" && count !== EXPECTED_CANDIDATE_COUNT) {
 		throw new Error("candidate audit requires --count=5");
+	}
+
+	if (writeMode === "refresh-existing" && count > 25) {
+		throw new Error(
+			"candidate audit refresh-existing count must be at most 25",
+		);
 	}
 
 	const sourceSnapshot = await repository.getSourceBySlug(source);
@@ -276,7 +302,11 @@ export async function buildCandidateAudit({
 
 	assertAllowedWaivers(source, mojibakeWaivers);
 	const candidates = await fetchCandidates();
-	requireExactlyFiveDistinctCandidates(candidates);
+	if (writeMode === "phase4-count5") {
+		requireExactlyFiveDistinctCandidates(candidates);
+	} else {
+		requireDistinctCandidateCount(candidates, count);
+	}
 	requirePositiveCandidatePrices(candidates);
 	requireNoUnwaivedMojibake(candidates, mojibakeWaivers);
 
@@ -298,10 +328,14 @@ export async function buildCandidateAudit({
 	const missingSupermarketProductEans = candidateEans.filter(
 		(ean) => !supermarketProductEans.has(ean),
 	);
-	requireAllowedMissingSupermarketProducts(
-		missingSupermarketProductEans,
-		allowMissingSupermarketProductEans,
-	);
+	if (writeMode === "refresh-existing") {
+		requireNoMissingRows("supermarket_products", missingSupermarketProductEans);
+	} else {
+		requireAllowedMissingSupermarketProducts(
+			missingSupermarketProductEans,
+			allowMissingSupermarketProductEans,
+		);
+	}
 
 	const supermarketProductIds = supermarketProducts.map(
 		(product) => product.id,
@@ -311,18 +345,30 @@ export async function buildCandidateAudit({
 		repository.getMaxPriceHistoryId(),
 	]);
 
-	return {
+	const audit: CandidateAudit = {
+		schemaVersion: 1,
 		createdAt: now().toISOString(),
+		writeMode,
 		source,
 		term,
 		count,
 		queryLimit,
+		candidateHash: buildCandidateSnapshotHash({
+			source,
+			term,
+			count,
+			queryLimit,
+			writeMode,
+			candidates,
+		}),
 		candidateEans: uniqueSorted(candidateEans),
 		candidates,
 		mojibakeWaivers,
-		allowMissingSupermarketProductEans: uniqueSorted(
-			allowMissingSupermarketProductEans,
-		),
+		allowMissingSupermarketProductEans:
+			writeMode === "refresh-existing"
+				? []
+				: uniqueSorted(allowMissingSupermarketProductEans),
+		rollbackPlan: null,
 		snapshots: {
 			source: sourceSnapshot,
 			products: products.sort((a, b) => a.ean.localeCompare(b.ean)),
@@ -336,5 +382,10 @@ export async function buildCandidateAudit({
 				),
 			},
 		},
+	};
+
+	return {
+		...audit,
+		rollbackPlan: buildCandidateRollbackPlan(audit),
 	};
 }

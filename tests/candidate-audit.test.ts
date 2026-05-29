@@ -124,9 +124,13 @@ describe("Phase 4 candidate audit", () => {
 			now,
 		});
 
+		assert.equal(audit.schemaVersion, 1);
+		assert.equal(audit.writeMode, "phase4-count5");
 		assert.equal(audit.source, "carrefour");
 		assert.equal(audit.term, "leche");
 		assert.equal(audit.count, 5);
+		assert.match(audit.candidateHash, /^[a-f0-9]{64}$/);
+		assert.equal(audit.rollbackPlan?.requiresConfirmation, true);
 		assert.deepEqual(audit.candidateEans, eans);
 		assert.deepEqual(audit.allowMissingSupermarketProductEans, []);
 		assert.equal(audit.createdAt, "2026-05-26T12:00:00.000Z");
@@ -152,6 +156,41 @@ describe("Phase 4 candidate audit", () => {
 		assert.equal(audit.snapshots.products.length, 5);
 		assert.equal(audit.snapshots.supermarketProducts.length, 4);
 		assert.equal(audit.snapshots.priceHistory.latest.length, 4);
+	});
+
+	it("supports bounded refresh-existing candidate snapshots without missing source rows", async () => {
+		const audit = await buildCandidateAudit({
+			source: "carrefour",
+			term: "leche",
+			count: 3,
+			queryLimit: 1,
+			writeMode: "refresh-existing",
+			fetchCandidates: async () => eans.slice(0, 3).map((ean) => product(ean)),
+			repository: repository(),
+			now,
+		});
+
+		assert.equal(audit.writeMode, "refresh-existing");
+		assert.deepEqual(audit.candidateEans, ["111", "222", "333"]);
+		assert.deepEqual(audit.allowMissingSupermarketProductEans, []);
+		assert.equal(audit.snapshots.supermarketProducts.length, 3);
+	});
+
+	it("rejects refresh-existing snapshots that would create source rows", async () => {
+		await assert.rejects(
+			buildCandidateAudit({
+				source: "jumbo",
+				term: "leche",
+				count: 5,
+				queryLimit: 1,
+				writeMode: "refresh-existing",
+				fetchCandidates: async () => eans.map((ean) => product(ean)),
+				repository: repositoryMissingLastSupermarketProduct(),
+				allowMissingSupermarketProductEans: ["555"],
+				now,
+			}),
+			/missing existing supermarket_products: 555/,
+		);
 	});
 
 	it("rejects candidate sets that are not exactly five distinct EANs", async () => {
@@ -198,6 +237,7 @@ describe("Phase 4 candidate audit", () => {
 		assert.match(cliScript, /dryRun:\s*true/);
 		assert.match(cliScript, /buildCandidateAudit/);
 		assert.match(cliScript, /--allow-missing-supermarket-product-eans/);
+		assert.match(cliScript, /--write-mode/);
 	});
 
 	it("rejects duplicate CLI flags and invalid numeric flags before DB/network work", () => {

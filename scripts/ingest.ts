@@ -13,7 +13,11 @@ import {
 } from "./ingest-options";
 import { runHealthCheck } from "./pipeline/health-check";
 import { evaluateAndSendIngestionAlerts } from "./pipeline/metrics";
-import { assertPhase4PreReconcileGate } from "./pipeline/pre-reconcile-assertions";
+import {
+	assertChunkPreReconcileGate,
+	assertPhase4PreReconcileGate,
+} from "./pipeline/pre-reconcile-assertions";
+import { buildCandidateSnapshotHash } from "./pipeline/candidate-snapshot";
 import {
 	reconcileStageProducts,
 	type ReconcileSummary,
@@ -51,6 +55,7 @@ type SourceSummary = {
 
 type SourceExecution = {
 	runId?: number;
+	candidateHash: string | null;
 	summary: SourceSummary;
 	candidates: EvaluatedStageCandidate[];
 };
@@ -127,6 +132,8 @@ async function main() {
 		queryLimit,
 		queryTerms,
 		expectedEans,
+		candidateHash,
+		writeMode,
 		reconcileBatchSize,
 		sourceFilter,
 	} = options;
@@ -195,6 +202,7 @@ async function main() {
 
 						return {
 							runId,
+							candidateHash: null,
 							candidates: [],
 							summary: {
 								slug: source.slug,
@@ -243,6 +251,14 @@ async function main() {
 					});
 					validateMs = Date.now() - validateStartedAt;
 					const status = validation.rejected > 0 ? "PARTIAL" : "SUCCESS";
+					const executionCandidateHash = buildCandidateSnapshotHash({
+						source: source.slug,
+						term: queryTerms?.[0] ?? "",
+						count,
+						queryLimit,
+						writeMode,
+						candidates: validation.candidates,
+					});
 					const durationMs = Date.now() - startedAt;
 
 					if (!dryRun) {
@@ -264,6 +280,7 @@ async function main() {
 
 					return {
 						runId,
+						candidateHash: executionCandidateHash,
 						candidates: validation.candidates,
 						summary: {
 							slug: source.slug,
@@ -309,6 +326,7 @@ async function main() {
 
 					return {
 						runId,
+						candidateHash: null,
 						candidates: [],
 						summary: {
 							slug: source.slug,
@@ -353,10 +371,18 @@ async function main() {
 	if (mode === "active" && !requestedSourceHealthFailed) {
 		if (expectedEans?.length) {
 			try {
-				assertPhase4PreReconcileGate({
-					expectedEans,
-					executions,
-				});
+				if (writeMode === "refresh-existing") {
+					assertChunkPreReconcileGate({
+						expectedEans,
+						expectedCandidateHash: candidateHash,
+						executions,
+					});
+				} else {
+					assertPhase4PreReconcileGate({
+						expectedEans,
+						executions,
+					});
+				}
 			} catch (error) {
 				const message =
 					error instanceof Error
@@ -392,6 +418,8 @@ async function main() {
 				? executions.flatMap((execution) => execution.candidates)
 				: undefined,
 			dryRun,
+			writeMode:
+				writeMode === "refresh-existing" ? "refresh-existing" : "standard",
 		});
 		reconcileMs = Date.now() - reconcileStartedAt;
 		const activeReconcileSummary = reconcileSummary;
@@ -443,6 +471,7 @@ async function main() {
 			{
 				batchId,
 				mode,
+				writeMode,
 				dryRun,
 				timing: {
 					totalPipelineMs,
@@ -475,6 +504,7 @@ async function main() {
 				metrics: metricsSummary,
 				sources: executions.map((execution) => ({
 					runId: execution.runId ?? null,
+					candidateHash: execution.candidateHash,
 					...execution.summary,
 				})),
 			},

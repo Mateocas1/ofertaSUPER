@@ -130,9 +130,135 @@ describe("ingestion CLI safety options", () => {
 		assert.deepEqual(options.sourceFilter, ["carrefour", "dia"]);
 		assert.deepEqual(options.queryTerms, ["uva rosada", "leche"]);
 		assert.deepEqual(options.expectedEans, ["111", "222", "333"]);
+		assert.equal(options.writeMode, "phase4-count5");
+		assert.equal(options.candidateHash, null);
 		assert.equal(options.count, 7);
 		assert.equal(options.queryLimit, 3);
 		assert.equal(options.reconcileBatchSize, 25);
+	});
+
+	it("fails closed on unknown active write mode", () => {
+		assert.throws(
+			() =>
+				parseIngestionOptions(
+					[
+						"node",
+						"scripts/ingest.ts",
+						"--write-mode=refresh_existing",
+						"--source=carrefour",
+						"--terms=leche",
+						"--count=5",
+						"--expected-eans=111,222,333,444,555",
+						"--confirm-write",
+					],
+					{ INGESTION_V2: "active" },
+				),
+			/--write-mode=phase4-count5 or --write-mode=refresh-existing/,
+		);
+	});
+
+	it("accepts active refresh-existing writes only with an explicit bounded chunk", () => {
+		const options = parseIngestionOptions(
+			[
+				"node",
+				"scripts/ingest.ts",
+				"--write-mode=refresh-existing",
+				"--source=carrefour",
+				"--terms=leche",
+				"--count=3",
+				"--expected-eans=111,222,333",
+				"--candidate-hash=abcdef",
+				"--confirm-write",
+			],
+			{ INGESTION_V2: "active" },
+		);
+
+		assert.equal(options.writeMode, "refresh-existing");
+		assert.equal(options.candidateHash, "abcdef");
+		assert.deepEqual(validateIngestionSafety(options), { ok: true });
+	});
+
+	it("rejects unsafe refresh-existing active write shapes", () => {
+		const base = [
+			"node",
+			"scripts/ingest.ts",
+			"--write-mode=refresh-existing",
+			"--source=carrefour",
+			"--terms=leche",
+			"--count=3",
+			"--expected-eans=111,222,333",
+			"--confirm-write",
+		];
+
+		assert.deepEqual(
+			validateIngestionSafety(
+				parseIngestionOptions(base, {
+					INGESTION_V2: "active",
+				}),
+			),
+			{
+				ok: false,
+				reason:
+					"refresh-existing writes require --candidate-hash from the candidate snapshot",
+			},
+		);
+		const baseWithHash = [...base, "--candidate-hash=abcdef"];
+		assert.deepEqual(
+			validateIngestionSafety(
+				parseIngestionOptions(
+					baseWithHash.filter((arg) => arg !== "--expected-eans=111,222,333"),
+					{
+						INGESTION_V2: "active",
+					},
+				),
+			),
+			{
+				ok: false,
+				reason:
+					"refresh-existing writes require at least one --expected-eans value",
+			},
+		);
+		assert.deepEqual(
+			validateIngestionSafety(
+				parseIngestionOptions(
+					baseWithHash.map((arg) =>
+						arg === "--expected-eans=111,222,333"
+							? "--expected-eans=111,222,222"
+							: arg,
+					),
+					{ INGESTION_V2: "active" },
+				),
+			),
+			{
+				ok: false,
+				reason: "refresh-existing writes require distinct --expected-eans",
+			},
+		);
+		assert.deepEqual(
+			validateIngestionSafety(
+				parseIngestionOptions(
+					baseWithHash.map((arg) => (arg === "--count=3" ? "--count=4" : arg)),
+					{ INGESTION_V2: "active" },
+				),
+			),
+			{
+				ok: false,
+				reason: "refresh-existing --count must equal --expected-eans length",
+			},
+		);
+		assert.deepEqual(
+			validateIngestionSafety(
+				parseIngestionOptions(
+					baseWithHash.map((arg) => (arg === "--count=3" ? "--count=26" : arg)),
+					{ INGESTION_V2: "active" },
+				),
+			),
+			{
+				ok: false,
+				reason:
+					"refresh-existing writes are capped at --count=25 for this rollout",
+			},
+		);
 	});
 
 	it("requires expected EANs and exactly one query term for active writes", () => {

@@ -3,11 +3,14 @@ import { Prisma } from "@prisma/client";
 import { db } from "../../src/lib/db";
 import type { EvaluatedStageCandidate } from "./validate";
 
+type ReconcileWriteMode = "standard" | "refresh-existing";
+
 type ReconcileStageProductsOptions = {
   batchId?: string;
   batchSize?: number;
   candidates?: EvaluatedStageCandidate[];
   dryRun?: boolean;
+  writeMode?: ReconcileWriteMode;
 };
 
 type AdvisoryLockClient = {
@@ -199,6 +202,111 @@ function buildProtectiveMerge(
 
 function supermarketProductKey(ean: string, supermarketId: number) {
   return `${ean}:${supermarketId}`;
+}
+
+export type RefreshExistingPreflightViolations = {
+  missingProductEans: string[];
+  missingSupermarketProducts: Array<{ ean: string; sourceSlug: string }>;
+};
+
+export function findRefreshExistingPreflightViolations({
+  candidates,
+  supermarketIdBySlug,
+  existingProductEans,
+  existingSupermarketProductKeys,
+}: {
+  candidates: EvaluatedStageCandidate[];
+  supermarketIdBySlug: Map<string, number>;
+  existingProductEans: Iterable<string>;
+  existingSupermarketProductKeys: Iterable<string>;
+}): RefreshExistingPreflightViolations {
+  const productEans = new Set(existingProductEans);
+  const supermarketProductKeys = new Set(existingSupermarketProductKeys);
+  const missingProductEans = new Set<string>();
+  const missingSupermarketProducts: RefreshExistingPreflightViolations["missingSupermarketProducts"] = [];
+
+  for (const candidate of candidates) {
+    if (!productEans.has(candidate.ean)) {
+      missingProductEans.add(candidate.ean);
+    }
+
+    const supermarketId = supermarketIdBySlug.get(candidate.sourceSlug);
+
+    if (!supermarketId) {
+      missingSupermarketProducts.push({ ean: candidate.ean, sourceSlug: candidate.sourceSlug });
+      continue;
+    }
+
+    if (!supermarketProductKeys.has(supermarketProductKey(candidate.ean, supermarketId))) {
+      missingSupermarketProducts.push({ ean: candidate.ean, sourceSlug: candidate.sourceSlug });
+    }
+  }
+
+  return {
+    missingProductEans: Array.from(missingProductEans).sort(),
+    missingSupermarketProducts: missingSupermarketProducts.toSorted(
+      (left, right) => left.ean.localeCompare(right.ean) || left.sourceSlug.localeCompare(right.sourceSlug),
+    ),
+  };
+}
+
+function formatMissingSupermarketProducts(
+  values: RefreshExistingPreflightViolations["missingSupermarketProducts"],
+) {
+  return values.length > 0
+    ? values.map((value) => `${value.sourceSlug}:${value.ean}`).join(",")
+    : "none";
+}
+
+function assertNoRefreshExistingViolations(violations: RefreshExistingPreflightViolations) {
+  if (violations.missingProductEans.length > 0 || violations.missingSupermarketProducts.length > 0) {
+    throw new Error(
+      `refresh-existing mode refuses to create rows: missingProducts=${violations.missingProductEans.join(",") || "none"} missingSupermarketProducts=${formatMissingSupermarketProducts(violations.missingSupermarketProducts)}`,
+    );
+  }
+}
+
+async function assertRefreshExistingPreflight(
+  tx: Prisma.TransactionClient,
+  candidates: EvaluatedStageCandidate[],
+  supermarketIdBySlug: Map<string, number>,
+) {
+  if (candidates.length === 0) {
+    return;
+  }
+
+  const eans = Array.from(new Set(candidates.map((candidate) => candidate.ean)));
+  const supermarketIds = Array.from(
+    new Set(
+      candidates
+        .map((candidate) => supermarketIdBySlug.get(candidate.sourceSlug))
+        .filter((value): value is number => typeof value === "number"),
+    ),
+  );
+  const [products, supermarketProducts] = await Promise.all([
+    tx.product.findMany({
+      where: { ean: { in: eans } },
+      select: { ean: true },
+    }),
+    tx.supermarketProduct.findMany({
+      where: {
+        product_ean: { in: eans },
+        supermarket_id: { in: supermarketIds },
+      },
+      select: { product_ean: true, supermarket_id: true },
+    }),
+  ]);
+
+  assertNoRefreshExistingViolations(
+    findRefreshExistingPreflightViolations({
+      candidates,
+      supermarketIdBySlug,
+      existingProductEans: products.map((product) => product.ean),
+      existingSupermarketProductKeys: supermarketProducts.map((product) =>
+        supermarketProductKey(product.product_ean, product.supermarket_id),
+      ),
+    }),
+  );
 }
 
 function normalizeComparablePrice(value: Prisma.Decimal | number | null) {
@@ -598,6 +706,7 @@ export async function reconcileStageProducts({
   batchSize = 500,
   candidates,
   dryRun = false,
+  writeMode = "standard",
 }: ReconcileStageProductsOptions): Promise<ReconcileSummary> {
   const txMaxWaitMs = readPositiveIntEnv("RECONCILE_TX_MAX_WAIT_MS", DEFAULT_TX_MAX_WAIT_MS);
   const txTimeoutMs = readPositiveIntEnv("RECONCILE_TX_TIMEOUT_MS", DEFAULT_TX_TIMEOUT_MS);
@@ -615,6 +724,11 @@ export async function reconcileStageProducts({
         },
       });
       const supermarketIdBySlug = new Map(supermarketRows.map((supermarket) => [supermarket.slug, supermarket.id]));
+
+      if (writeMode === "refresh-existing") {
+        await assertRefreshExistingPreflight(tx, pendingCandidates, supermarketIdBySlug);
+      }
+
       const chunks = chunkArray(pendingCandidates, Math.max(batchSize, 1));
       const summary: ReconcileSummary = {
         totalCandidates: resolvedCandidates.length,

@@ -9,6 +9,7 @@ import {
 	type CandidateAuditRepository,
 	type MojibakeWaiver,
 } from "./pipeline/candidate-audit";
+import type { CandidateWriteMode } from "./pipeline/candidate-snapshot";
 import { stageSourceProducts } from "./pipeline/stage";
 
 type CliOptions = {
@@ -16,6 +17,7 @@ type CliOptions = {
 	term: string;
 	count: number;
 	queryLimit: number;
+	writeMode: CandidateWriteMode;
 	output: string | null;
 	mojibakeWaivers: MojibakeWaiver[];
 	allowMissingSupermarketProductEans: string[];
@@ -70,6 +72,23 @@ function readOptionalListFlags(argv: string[], flagName: string) {
 	);
 }
 
+function rejectWriteFlags(argv: string[]) {
+	const forbidden = [
+		"--confirm-write",
+		"--active",
+		"--write",
+		"--reconcile",
+		"--purge-cache",
+	];
+	const found = argv.find((entry) =>
+		forbidden.some((flag) => entry === flag || entry.startsWith(`${flag}=`)),
+	);
+
+	if (found) {
+		throw new Error(`candidate audit is read-only and rejects ${found}`);
+	}
+}
+
 function readPositiveIntegerFlag(
 	argv: string[],
 	flagName: string,
@@ -90,6 +109,19 @@ function readPositiveIntegerFlag(
 	}
 
 	return parsed;
+}
+
+function parseWriteMode(argv: string[]): CandidateWriteMode {
+	const raw =
+		readOptionalSingleFlagValue(argv, "--write-mode") ?? "phase4-count5";
+
+	if (raw === "phase4-count5" || raw === "refresh-existing") {
+		return raw;
+	}
+
+	throw new Error(
+		"candidate audit requires --write-mode=phase4-count5 or --write-mode=refresh-existing",
+	);
 }
 
 function parseMojibakeWaivers(rawValues: string[] | null): MojibakeWaiver[] {
@@ -114,10 +146,12 @@ function parseMojibakeWaivers(rawValues: string[] | null): MojibakeWaiver[] {
 }
 
 function parseCliOptions(argv = process.argv): CliOptions {
+	rejectWriteFlags(argv);
 	const source = readRequiredSingleListFlag(argv, "--source");
 	const term = readRequiredSingleListFlag(argv, "--terms");
 	const count = readPositiveIntegerFlag(argv, "--count", 5);
 	const queryLimit = readPositiveIntegerFlag(argv, "--limit", 1);
+	const writeMode = parseWriteMode(argv);
 	const output = readOptionalSingleFlagValue(argv, "--output");
 	const mojibakeWaivers = parseMojibakeWaivers(
 		readOptionalListFlags(argv, "--allow-mojibake-waiver"),
@@ -127,8 +161,14 @@ function parseCliOptions(argv = process.argv): CliOptions {
 		"--allow-missing-supermarket-product-eans",
 	);
 
-	if (count !== 5) {
+	if (writeMode === "phase4-count5" && count !== 5) {
 		throw new Error("candidate audit requires --count=5");
+	}
+
+	if (writeMode === "refresh-existing" && count > 25) {
+		throw new Error(
+			"candidate audit refresh-existing count must be at most 25",
+		);
 	}
 
 	if (queryLimit !== 1) {
@@ -140,6 +180,7 @@ function parseCliOptions(argv = process.argv): CliOptions {
 		term,
 		count,
 		queryLimit,
+		writeMode,
 		output,
 		mojibakeWaivers,
 		allowMissingSupermarketProductEans,
@@ -305,6 +346,7 @@ async function main() {
 		mojibakeWaivers: options.mojibakeWaivers,
 		allowMissingSupermarketProductEans:
 			options.allowMissingSupermarketProductEans,
+		writeMode: options.writeMode,
 		repository: createPrismaCandidateAuditRepository(),
 		fetchCandidates: async () => {
 			const stage = await stageSourceProducts({

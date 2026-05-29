@@ -6,6 +6,7 @@ import {
   RECONCILE_ADVISORY_LOCK_KEY,
   ReconcileLockUnavailableError,
   ensureReconcileAdvisoryLock,
+  findRefreshExistingPreflightViolations,
 } from "../scripts/pipeline/reconcile";
 
 describe("reconcile advisory lock guard", () => {
@@ -47,5 +48,53 @@ describe("reconcile advisory lock guard", () => {
     assert.ok(lockIndex >= 0, "reconcileStageProducts must acquire the advisory lock inside the transaction");
     assert.ok(loadIndex >= 0, "reconcileStageProducts must load candidates inside the locked transaction");
     assert.ok(lockIndex < loadIndex, "lock must be acquired before loading pending candidates");
+  });
+
+  it("detects refresh-existing rows that would be created before writes", () => {
+    const candidate = {
+      id: 1,
+      runId: 42,
+      sourceSlug: "carrefour",
+      ean: "111",
+      name: "Producto",
+      brand: null,
+      description: null,
+      imageUrl: null,
+      images: [],
+      category: null,
+      skuId: "sku",
+      sellerId: "1",
+      productUrl: "https://example.test/111",
+      price: 100,
+      listPrice: 100,
+      referencePrice: null,
+      referenceUnit: null,
+      isAvailable: true,
+      qualityScore: 1,
+      qualityFlags: [],
+      status: "PENDING" as const,
+    };
+
+    assert.deepEqual(
+      findRefreshExistingPreflightViolations({
+        candidates: [candidate],
+        supermarketIdBySlug: new Map([["carrefour", 7]]),
+        existingProductEans: [],
+        existingSupermarketProductKeys: [],
+      }),
+      {
+        missingProductEans: ["111"],
+        missingSupermarketProducts: [{ ean: "111", sourceSlug: "carrefour" }],
+      },
+    );
+    assert.deepEqual(
+      findRefreshExistingPreflightViolations({
+        candidates: [candidate],
+        supermarketIdBySlug: new Map([["carrefour", 7]]),
+        existingProductEans: ["111"],
+        existingSupermarketProductKeys: ["111:7"],
+      }),
+      { missingProductEans: [], missingSupermarketProducts: [] },
+    );
   });
 });

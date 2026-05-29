@@ -1,4 +1,7 @@
 type IngestionMode = "off" | "shadow" | "active";
+type IngestionWriteMode = "phase4-count5" | "refresh-existing";
+
+const REFRESH_EXISTING_MAX_COUNT = 25;
 
 export type IngestionOptions = {
 	mode: IngestionMode;
@@ -8,6 +11,8 @@ export type IngestionOptions = {
 	sourceFilter: string[] | null;
 	queryTerms: string[] | null;
 	expectedEans: string[] | null;
+	candidateHash: string | null;
+	writeMode: IngestionWriteMode;
 	count: number;
 	activeWriteConfirmed: boolean;
 	activeAllSourcesApproved: boolean;
@@ -120,6 +125,18 @@ function resolveMode(env: Env = process.env): IngestionMode {
 	return "shadow";
 }
 
+function resolveWriteMode(argv: string[]): IngestionWriteMode {
+	const rawMode = readFlagValue(argv, "--write-mode") ?? "phase4-count5";
+
+	if (rawMode === "phase4-count5" || rawMode === "refresh-existing") {
+		return rawMode;
+	}
+
+	throw new Error(
+		"ingestion requires --write-mode=phase4-count5 or --write-mode=refresh-existing",
+	);
+}
+
 export function parseIngestionOptions(
 	argv: string[] = process.argv,
 	env: Env = process.env,
@@ -136,6 +153,8 @@ export function parseIngestionOptions(
 		sourceFilter: readListFlag(argv, "--source"),
 		queryTerms: readListFlag(argv, "--terms"),
 		expectedEans: readListFlag(argv, "--expected-eans"),
+		candidateHash: readFlagValue(argv, "--candidate-hash") ?? null,
+		writeMode: resolveWriteMode(argv),
 		count: readPositiveNumberFlag(argv, "--count", DEFAULT_FETCH_COUNT),
 		activeWriteConfirmed:
 			hasFlag(argv, "--confirm-write") ||
@@ -180,6 +199,51 @@ export function validateIngestionSafety(
 			ok: false,
 			reason: "active ingestion writes require exactly one --terms=<query>",
 		};
+	}
+
+	if (options.writeMode === "refresh-existing") {
+		if (!options.candidateHash) {
+			return {
+				ok: false,
+				reason:
+					"refresh-existing writes require --candidate-hash from the candidate snapshot",
+			};
+		}
+
+		if (!options.expectedEans || options.expectedEans.length === 0) {
+			return {
+				ok: false,
+				reason:
+					"refresh-existing writes require at least one --expected-eans value",
+			};
+		}
+
+		if (options.count > REFRESH_EXISTING_MAX_COUNT) {
+			return {
+				ok: false,
+				reason:
+					"refresh-existing writes are capped at --count=25 for this rollout",
+			};
+		}
+
+		if (options.count !== options.expectedEans.length) {
+			return {
+				ok: false,
+				reason: "refresh-existing --count must equal --expected-eans length",
+			};
+		}
+
+		if (
+			compareExpectedEans(options.expectedEans, options.expectedEans)
+				.duplicateExpected.length > 0
+		) {
+			return {
+				ok: false,
+				reason: "refresh-existing writes require distinct --expected-eans",
+			};
+		}
+
+		return { ok: true };
 	}
 
 	if (options.queryTerms[0] !== "leche") {
