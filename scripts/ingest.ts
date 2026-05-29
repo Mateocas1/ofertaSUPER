@@ -134,6 +134,8 @@ async function main() {
 		expectedEans,
 		candidateHash,
 		writeMode,
+		candidateSelection,
+		scanCount,
 		reconcileBatchSize,
 		sourceFilter,
 	} = options;
@@ -153,6 +155,10 @@ async function main() {
 	const pipelineStartedAt = Date.now();
 	const sources = await getActiveSources(sourceFilter);
 	const limit = pLimit(2);
+	const stageFetchCount =
+		candidateSelection === "existing-only" ? scanCount : count;
+	const stageFilterEans =
+		candidateSelection === "existing-only" ? expectedEans ?? undefined : undefined;
 
 	const executions = await Promise.all(
 		sources.map((source) =>
@@ -238,7 +244,8 @@ async function main() {
 						dryRun,
 						queryLimit,
 						queryTerms: queryTerms ?? undefined,
-						count,
+						count: stageFetchCount,
+						filterEans: stageFilterEans,
 					});
 					stageMs = Date.now() - stageStartedAt;
 
@@ -472,6 +479,8 @@ async function main() {
 				batchId,
 				mode,
 				writeMode,
+				candidateSelection,
+				scanCount: stageFetchCount,
 				dryRun,
 				timing: {
 					totalPipelineMs,

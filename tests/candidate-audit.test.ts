@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 
 import {
 	buildCandidateAudit,
+	isCandidateAuditError,
 	type CandidateAuditRepository,
 } from "../scripts/pipeline/candidate-audit";
 import type { NormalizedProduct } from "../src/lib/vtex/normalize";
@@ -171,9 +172,114 @@ describe("Phase 4 candidate audit", () => {
 		});
 
 		assert.equal(audit.writeMode, "refresh-existing");
+		assert.equal(audit.selection.mode, "strict");
 		assert.deepEqual(audit.candidateEans, ["111", "222", "333"]);
 		assert.deepEqual(audit.allowMissingSupermarketProductEans, []);
 		assert.equal(audit.snapshots.supermarketProducts.length, 3);
+	});
+
+	it("selects an explicit existing-only refresh chunk and records skipped live candidates", async () => {
+		const scannedEans = ["111", "222", "999", "333", "444", "555"];
+		const audit = await buildCandidateAudit({
+			source: "vea",
+			term: "leche",
+			count: 5,
+			queryLimit: 1,
+			writeMode: "refresh-existing",
+			selectionMode: "existing-only",
+			scanCount: 6,
+			fetchCandidates: async () => scannedEans.map((ean) => product(ean)),
+			repository: repository({
+				getProductsByEan: async (requestedEans) =>
+					requestedEans
+						.filter((ean) => ean !== "999")
+						.map((ean) => ({
+							ean,
+							name: `Stored ${ean}`,
+							brand: null,
+							description: null,
+							imageUrl: null,
+							images: [],
+							category: null,
+						})),
+			}),
+			now,
+		});
+
+		assert.equal(audit.selection.mode, "existing-only");
+		assert.equal(audit.selection.scanCount, 6);
+		assert.equal(audit.selection.selectedCount, 5);
+		assert.deepEqual(audit.candidateEans, ["111", "222", "333", "444", "555"]);
+		assert.deepEqual(audit.selection.skippedCandidates, [
+			{ ean: "999", name: "Leche 999", reasons: ["missing_product"] },
+		]);
+		assert.equal(audit.candidates.some((candidate) => candidate.ean === "999"), false);
+		assert.equal(audit.snapshots.products.length, 5);
+		assert.equal(audit.snapshots.supermarketProducts.length, 5);
+	});
+
+	it("emits structured failure details for missing rows", async () => {
+		try {
+			await buildCandidateAudit({
+				source: "carrefour",
+				term: "leche",
+				count: 5,
+				queryLimit: 1,
+				fetchCandidates: async () => eans.map((ean) => product(ean)),
+				repository: repository({
+					getProductsByEan: async (requestedEans) =>
+						requestedEans.slice(1).map((ean) => ({
+							ean,
+							name: `Stored ${ean}`,
+							brand: null,
+							description: null,
+							imageUrl: null,
+							images: [],
+							category: null,
+						})),
+				}),
+				now,
+			});
+			assert.fail("expected candidate audit to fail");
+		} catch (error) {
+			assert.equal(isCandidateAuditError(error), true);
+			if (!isCandidateAuditError(error)) {
+				throw error;
+			}
+			assert.equal(error.report.status, "FAIL");
+			assert.deepEqual(error.report.missingProducts, ["111"]);
+			assert.deepEqual(error.report.selectedCandidateEans, eans);
+			assert.equal(error.report.candidateHash, null);
+		}
+	});
+
+	it("fails existing-only selection when the scan window cannot fill the requested chunk", async () => {
+		await assert.rejects(
+			buildCandidateAudit({
+				source: "vea",
+				term: "leche",
+				count: 5,
+				queryLimit: 1,
+				writeMode: "refresh-existing",
+				selectionMode: "existing-only",
+				scanCount: 5,
+				fetchCandidates: async () => eans.map((ean) => product(ean)),
+				repository: repository({
+					getProductsByEan: async (requestedEans) =>
+						requestedEans.slice(1).map((ean) => ({
+							ean,
+							name: `Stored ${ean}`,
+							brand: null,
+							description: null,
+							imageUrl: null,
+							images: [],
+							category: null,
+						})),
+				}),
+				now,
+			}),
+			/existing-only selected 4 of 5 existing candidates/,
+		);
 	});
 
 	it("rejects refresh-existing snapshots that would create source rows", async () => {
@@ -238,6 +344,9 @@ describe("Phase 4 candidate audit", () => {
 		assert.match(cliScript, /buildCandidateAudit/);
 		assert.match(cliScript, /--allow-missing-supermarket-product-eans/);
 		assert.match(cliScript, /--write-mode/);
+		assert.match(cliScript, /--candidate-selection/);
+		assert.match(cliScript, /--scan-count/);
+		assert.match(cliScript, /isCandidateAuditError/);
 	});
 
 	it("rejects duplicate CLI flags and invalid numeric flags before DB/network work", () => {

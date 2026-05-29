@@ -131,8 +131,10 @@ describe("ingestion CLI safety options", () => {
 		assert.deepEqual(options.queryTerms, ["uva rosada", "leche"]);
 		assert.deepEqual(options.expectedEans, ["111", "222", "333"]);
 		assert.equal(options.writeMode, "phase4-count5");
+		assert.equal(options.candidateSelection, "strict");
 		assert.equal(options.candidateHash, null);
 		assert.equal(options.count, 7);
+		assert.equal(options.scanCount, 7);
 		assert.equal(options.queryLimit, 3);
 		assert.equal(options.reconcileBatchSize, 25);
 	});
@@ -175,6 +177,31 @@ describe("ingestion CLI safety options", () => {
 
 		assert.equal(options.writeMode, "refresh-existing");
 		assert.equal(options.candidateHash, "abcdef");
+		assert.deepEqual(validateIngestionSafety(options), { ok: true });
+	});
+
+	it("accepts existing-only refresh windows with exact selected EAN gates", () => {
+		const expectedEans = Array.from({ length: 25 }, (_, index) => String(index + 1)).join(",");
+		const options = parseIngestionOptions(
+			[
+				"node",
+				"scripts/ingest.ts",
+				"--write-mode=refresh-existing",
+				"--candidate-selection=existing-only",
+				"--source=vea",
+				"--terms=leche",
+				"--count=25",
+				"--scan-count=30",
+				`--expected-eans=${expectedEans}`,
+				"--candidate-hash=abcdef",
+				"--confirm-write",
+			],
+			{ INGESTION_V2: "active" },
+		);
+
+		assert.equal(options.candidateSelection, "existing-only");
+		assert.equal(options.count, 25);
+		assert.equal(options.scanCount, 30);
 		assert.deepEqual(validateIngestionSafety(options), { ok: true });
 	});
 
@@ -257,6 +284,40 @@ describe("ingestion CLI safety options", () => {
 				ok: false,
 				reason:
 					"refresh-existing writes are capped at --count=25 for this rollout",
+			},
+		);
+		assert.deepEqual(
+			validateIngestionSafety(
+				parseIngestionOptions(
+					[
+						...baseWithHash,
+						"--candidate-selection=existing-only",
+						"--scan-count=2",
+					],
+					{ INGESTION_V2: "active" },
+				),
+			),
+			{
+				ok: false,
+				reason:
+					"existing-only refresh scan count must be at least --count",
+			},
+		);
+		assert.deepEqual(
+			validateIngestionSafety(
+				parseIngestionOptions(
+					[
+						...baseWithHash,
+						"--candidate-selection=existing-only",
+						"--scan-count=51",
+					],
+					{ INGESTION_V2: "active" },
+				),
+			),
+			{
+				ok: false,
+				reason:
+					"existing-only refresh scan count is capped at --scan-count=50 for this rollout",
 			},
 		);
 	});
@@ -376,6 +437,7 @@ describe("ingestion CLI safety options", () => {
 		assert.match(ingestScript, /assertSafeIngestionOptions/);
 		assert.match(ingestScript, /shouldFailForRequestedSourceHealth/);
 		assert.match(ingestScript, /queryTerms:\s*queryTerms \?\? undefined/);
-		assert.match(ingestScript, /count,/);
+		assert.match(ingestScript, /count:\s*stageFetchCount/);
+		assert.match(ingestScript, /filterEans:\s*stageFilterEans/);
 	});
 });
