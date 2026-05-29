@@ -5,6 +5,7 @@ export type IngestRunSnapshot = CandidateAudit;
 export type IngestWriteJson = {
 	batchId: string;
 	mode: string;
+	writeMode?: string;
 	dryRun: boolean;
 	sourceCount: number;
 	totals: {
@@ -32,6 +33,7 @@ export type IngestWriteJson = {
 	sources: Array<{
 		runId?: number | null;
 		slug: string;
+		candidateHash?: string | null;
 		queriesSent: number;
 	}>;
 };
@@ -56,8 +58,7 @@ type AuditStagingRow = {
 	status: string;
 };
 
-type AuditProductRow =
-	IngestRunSnapshot["snapshots"]["products"][number];
+type AuditProductRow = IngestRunSnapshot["snapshots"]["products"][number];
 type AuditSupermarketProductRow =
 	IngestRunSnapshot["snapshots"]["supermarketProducts"][number];
 type AuditPriceHistoryRow =
@@ -96,8 +97,13 @@ export type IngestRunAudit = {
 	mode: IngestRunAuditMode;
 	runId: number;
 	source: string;
+	writeMode: IngestRunSnapshot["writeMode"];
 	touchedEans: string[];
 	warnings: string[];
+	createdRows: {
+		newProducts: number;
+		supermarketProductsCreated: number;
+	};
 };
 
 type IngestRunAuditOptions = {
@@ -107,7 +113,9 @@ type IngestRunAuditOptions = {
 	repository: IngestRunAuditRepository;
 };
 
-const EXPECTED_COUNT = 5;
+function expectedCount(snapshot: IngestRunSnapshot) {
+	return snapshot.candidateEans.length;
+}
 
 function sorted(values: string[]) {
 	return [...values].sort();
@@ -190,9 +198,14 @@ function assertWriteJsonShape(
 	snapshot: IngestRunSnapshot,
 	writeJson: IngestWriteJson,
 ) {
+	const count = expectedCount(snapshot);
 	assertCondition(
 		writeJson.mode === "active",
 		"write JSON mode must be active",
+	);
+	assertCondition(
+		writeJson.writeMode === snapshot.writeMode,
+		"write JSON writeMode must match snapshot",
 	);
 	assertCondition(
 		writeJson.dryRun === false,
@@ -203,16 +216,16 @@ function assertWriteJsonShape(
 		"write JSON sourceCount must be 1",
 	);
 	assertCondition(
-		writeJson.totals.fetched === EXPECTED_COUNT,
-		"write JSON totals.fetched must be 5",
+		writeJson.totals.fetched === count,
+		`write JSON totals.fetched must be ${count}`,
 	);
 	assertCondition(
-		writeJson.totals.staged === EXPECTED_COUNT,
-		"write JSON totals.staged must be 5",
+		writeJson.totals.staged === count,
+		`write JSON totals.staged must be ${count}`,
 	);
 	assertCondition(
-		writeJson.totals.promoted === EXPECTED_COUNT,
-		"write JSON totals.promoted must be 5",
+		writeJson.totals.promoted === count,
+		`write JSON totals.promoted must be ${count}`,
 	);
 	assertCondition(
 		writeJson.totals.rejected === 0,
@@ -227,19 +240,21 @@ function assertWriteJsonShape(
 		"write JSON reconciliation is required",
 	);
 	assertCondition(
-		writeJson.reconciliation.totalCandidates === EXPECTED_COUNT,
-		"reconciliation.totalCandidates must be 5",
+		writeJson.reconciliation.totalCandidates === count,
+		`reconciliation.totalCandidates must be ${count}`,
 	);
 	assertCondition(
-		writeJson.reconciliation.distinctEans === EXPECTED_COUNT,
-		"reconciliation.distinctEans must be 5",
+		writeJson.reconciliation.distinctEans === count,
+		`reconciliation.distinctEans must be ${count}`,
 	);
 	assertCondition(
 		writeJson.reconciliation.newProducts === 0,
 		"reconciliation.newProducts must be 0",
 	);
 	const expectedCreatedSupermarketProducts =
-		allowedMissingSupermarketProductEans(snapshot).length;
+		snapshot.writeMode === "refresh-existing"
+			? 0
+			: allowedMissingSupermarketProductEans(snapshot).length;
 	assertCondition(
 		writeJson.reconciliation.supermarketProductsCreated ===
 			expectedCreatedSupermarketProducts,
@@ -247,17 +262,16 @@ function assertWriteJsonShape(
 	);
 	assertCondition(
 		writeJson.reconciliation.supermarketProductsUpdated ===
-			EXPECTED_COUNT - expectedCreatedSupermarketProducts,
-		`reconciliation.supermarketProductsUpdated must be ${EXPECTED_COUNT - expectedCreatedSupermarketProducts}`,
+			count - expectedCreatedSupermarketProducts,
+		`reconciliation.supermarketProductsUpdated must be ${count - expectedCreatedSupermarketProducts}`,
 	);
 	assertCondition(
-		writeJson.reconciliation.promoted === EXPECTED_COUNT,
-		"reconciliation.promoted must be 5",
+		writeJson.reconciliation.promoted === count,
+		`reconciliation.promoted must be ${count}`,
 	);
 	assertCondition(
-		writeJson.reconciliation.promotedBySource[snapshot.source] ===
-			EXPECTED_COUNT,
-		"reconciliation.promotedBySource must include source=5",
+		writeJson.reconciliation.promotedBySource[snapshot.source] === count,
+		`reconciliation.promotedBySource must include source=${count}`,
 	);
 	assertCondition(
 		(writeJson.metrics?.sentAlerts ?? []).length === 0,
@@ -266,12 +280,17 @@ function assertWriteJsonShape(
 	const source = sourceEntry(writeJson, snapshot.source);
 	assertCondition(source !== null, "write JSON must include snapshot source");
 	assertCondition(
+		source.candidateHash === snapshot.candidateHash,
+		"write JSON source candidateHash must match snapshot",
+	);
+	assertCondition(
 		source.queriesSent === 1,
 		"write JSON source queriesSent must be 1",
 	);
 }
 
 function assertRunRow(run: AuditRunRow, snapshot: IngestRunSnapshot) {
+	const count = expectedCount(snapshot);
 	assertCondition(
 		run.status === "SUCCESS",
 		"ingestion_run status must be SUCCESS",
@@ -285,16 +304,16 @@ function assertRunRow(run: AuditRunRow, snapshot: IngestRunSnapshot) {
 		"ingestion_run queries_sent must be 1",
 	);
 	assertCondition(
-		run.productsFetched === EXPECTED_COUNT,
-		"ingestion_run products_fetched must be 5",
+		run.productsFetched === count,
+		`ingestion_run products_fetched must be ${count}`,
 	);
 	assertCondition(
-		run.productsStaged === EXPECTED_COUNT,
-		"ingestion_run products_staged must be 5",
+		run.productsStaged === count,
+		`ingestion_run products_staged must be ${count}`,
 	);
 	assertCondition(
-		run.productsPromoted === EXPECTED_COUNT,
-		"ingestion_run products_promoted must be 5",
+		run.productsPromoted === count,
+		`ingestion_run products_promoted must be ${count}`,
 	);
 	assertCondition(
 		run.productsRejected === 0,
@@ -310,10 +329,8 @@ function assertStagingRows(
 	rows: AuditStagingRow[],
 	snapshot: IngestRunSnapshot,
 ) {
-	assertCondition(
-		rows.length === EXPECTED_COUNT,
-		"staging row count must be 5",
-	);
+	const count = expectedCount(snapshot);
+	assertCondition(rows.length === count, `staging row count must be ${count}`);
 	assertEqualStringSets(
 		"staging EAN set",
 		rows.map((row) => row.ean),
@@ -336,7 +353,7 @@ function assertCurrentSupermarketProducts(
 	snapshot: IngestRunSnapshot,
 ) {
 	assertCondition(
-		rows.length === EXPECTED_COUNT,
+		rows.length === expectedCount(snapshot),
 		"current supermarket_products set must match snapshot EAN set",
 	);
 	assertEqualStringSets(
@@ -422,7 +439,7 @@ function assertCurrentProducts(
 	snapshot: IngestRunSnapshot,
 ) {
 	assertCondition(
-		rows.length === EXPECTED_COUNT,
+		rows.length === expectedCount(snapshot),
 		"current products set must match snapshot EAN set",
 	);
 	assertEqualStringSets(
@@ -645,8 +662,10 @@ export async function buildIngestRunAudit({
 			mode,
 			runId,
 			source: snapshot.source,
+			writeMode: snapshot.writeMode,
 			touchedEans: sorted(snapshot.candidateEans),
 			warnings: [],
+			createdRows: { newProducts: 0, supermarketProductsCreated: 0 },
 		};
 	}
 
@@ -687,7 +706,13 @@ export async function buildIngestRunAudit({
 		mode,
 		runId,
 		source: snapshot.source,
+		writeMode: snapshot.writeMode,
 		touchedEans: sorted(snapshot.candidateEans),
 		warnings,
+		createdRows: {
+			newProducts: writeJson.reconciliation?.newProducts ?? 0,
+			supermarketProductsCreated:
+				writeJson.reconciliation?.supermarketProductsCreated ?? 0,
+		},
 	};
 }

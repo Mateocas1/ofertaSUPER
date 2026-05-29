@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+	assertChunkPreReconcileGate,
 	assertPhase4PreReconcileGate,
 	type PreReconcileSourceExecution,
 } from "../scripts/pipeline/pre-reconcile-assertions";
@@ -29,6 +30,58 @@ function execution(
 		...overrides,
 	};
 }
+
+describe("generalized chunk pre-reconcile gate", () => {
+	it("accepts variable-size chunks with exact expected EAN and hash matches", () => {
+		assert.doesNotThrow(() =>
+			assertChunkPreReconcileGate({
+				expectedEans: ["111", "222", "333"],
+				expectedCandidateHash: "abc123",
+				executions: [
+					execution({
+						candidateHash: "abc123",
+						candidates: ["111", "222", "333"].map((ean) =>
+							pendingCandidate(ean),
+						),
+					}),
+				],
+			}),
+		);
+	});
+
+	it("rejects variable chunks with duplicate expected EANs or hash mismatch", () => {
+		assert.throws(
+			() =>
+				assertChunkPreReconcileGate({
+					expectedEans: ["111", "222", "222"],
+					executions: [
+						execution({
+							candidates: ["111", "222", "333"].map((ean) =>
+								pendingCandidate(ean),
+							),
+						}),
+					],
+				}),
+			/expected distinct EAN allowlist before reconciliation/,
+		);
+		assert.throws(
+			() =>
+				assertChunkPreReconcileGate({
+					expectedEans: ["111", "222", "333"],
+					expectedCandidateHash: "abc123",
+					executions: [
+						execution({
+							candidateHash: "wrong",
+							candidates: ["111", "222", "333"].map((ean) =>
+								pendingCandidate(ean),
+							),
+						}),
+					],
+				}),
+			/candidate hash mismatch before reconciliation/,
+		);
+	});
+});
 
 describe("Phase 4 pre-reconcile gate", () => {
 	it("accepts one source, one query, five pending candidates, positive prices, and exact EAN match", () => {
