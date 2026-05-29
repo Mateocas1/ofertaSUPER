@@ -25,6 +25,12 @@ function snapshot(): IngestRunSnapshot {
 		queryLimit: 1,
 		candidateHash: "candidate-hash",
 		candidateEans,
+		selection: {
+			mode: "strict",
+			scanCount: candidateEans.length,
+			selectedCount: candidateEans.length,
+			skippedCandidates: [],
+		},
 		candidates: candidateEans.map((ean, index) => ({
 			ean,
 			name: `Leche ${ean}`,

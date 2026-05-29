@@ -11,6 +11,7 @@ type StageSourceProductsOptions = {
   queryTerms?: string[];
   queryLimit?: number;
   count?: number;
+  filterEans?: string[];
 };
 
 export type StageSourceProductsResult = {
@@ -33,13 +34,18 @@ export async function stageSourceProducts({
   queryTerms,
   queryLimit,
   count = 50,
+  filterEans,
 }: StageSourceProductsOptions): Promise<StageSourceProductsResult> {
   const adapter = getSourceAdapter(slug);
   const terms = queryTerms?.length ? queryTerms : await adapter.getDefaultTerms(queryLimit);
-  const products = await adapter.fetchProducts(terms, {
+  const fetchedProducts = await adapter.fetchProducts(terms, {
     count,
     queryLimit,
   });
+  const filterSet = filterEans?.length ? new Set(filterEans) : null;
+  const products = filterSet
+    ? fetchedProducts.filter((product) => filterSet.has(product.ean))
+    : fetchedProducts;
 
   if (!dryRun) {
     if (!runId) {
@@ -78,7 +84,7 @@ export async function stageSourceProducts({
     slug,
     terms,
     queriesSent: terms.length,
-    productsFetched: products.length,
+    productsFetched: fetchedProducts.length,
     productsStaged: products.length,
     products,
   };

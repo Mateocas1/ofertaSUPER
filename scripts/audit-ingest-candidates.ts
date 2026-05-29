@@ -6,7 +6,9 @@ import { dirname } from "node:path";
 import { db } from "../src/lib/db";
 import {
 	buildCandidateAudit,
+	isCandidateAuditError,
 	type CandidateAuditRepository,
+	type CandidateSelectionMode,
 	type MojibakeWaiver,
 } from "./pipeline/candidate-audit";
 import type { CandidateWriteMode } from "./pipeline/candidate-snapshot";
@@ -18,6 +20,8 @@ type CliOptions = {
 	count: number;
 	queryLimit: number;
 	writeMode: CandidateWriteMode;
+	candidateSelection: CandidateSelectionMode;
+	scanCount: number;
 	output: string | null;
 	mojibakeWaivers: MojibakeWaiver[];
 	allowMissingSupermarketProductEans: string[];
@@ -145,6 +149,19 @@ function parseMojibakeWaivers(rawValues: string[] | null): MojibakeWaiver[] {
 	});
 }
 
+function parseCandidateSelectionMode(argv: string[]): CandidateSelectionMode {
+	const raw =
+		readOptionalSingleFlagValue(argv, "--candidate-selection") ?? "strict";
+
+	if (raw === "strict" || raw === "existing-only") {
+		return raw;
+	}
+
+	throw new Error(
+		"candidate audit requires --candidate-selection=strict or --candidate-selection=existing-only",
+	);
+}
+
 function parseCliOptions(argv = process.argv): CliOptions {
 	rejectWriteFlags(argv);
 	const source = readRequiredSingleListFlag(argv, "--source");
@@ -152,6 +169,8 @@ function parseCliOptions(argv = process.argv): CliOptions {
 	const count = readPositiveIntegerFlag(argv, "--count", 5);
 	const queryLimit = readPositiveIntegerFlag(argv, "--limit", 1);
 	const writeMode = parseWriteMode(argv);
+	const candidateSelection = parseCandidateSelectionMode(argv);
+	const scanCount = readPositiveIntegerFlag(argv, "--scan-count", count);
 	const output = readOptionalSingleFlagValue(argv, "--output");
 	const mojibakeWaivers = parseMojibakeWaivers(
 		readOptionalListFlags(argv, "--allow-mojibake-waiver"),
@@ -175,12 +194,20 @@ function parseCliOptions(argv = process.argv): CliOptions {
 		throw new Error("candidate audit requires --limit=1");
 	}
 
+	if (candidateSelection === "existing-only" && writeMode !== "refresh-existing") {
+		throw new Error(
+			"candidate audit existing-only selection requires --write-mode=refresh-existing",
+		);
+	}
+
 	return {
 		source,
 		term,
 		count,
 		queryLimit,
 		writeMode,
+		candidateSelection,
+		scanCount,
 		output,
 		mojibakeWaivers,
 		allowMissingSupermarketProductEans,
@@ -338,39 +365,50 @@ async function writeJson(path: string | null, value: unknown) {
 
 async function main() {
 	const options = parseCliOptions();
-	const audit = await buildCandidateAudit({
-		source: options.source,
-		term: options.term,
-		count: options.count,
-		queryLimit: options.queryLimit,
-		mojibakeWaivers: options.mojibakeWaivers,
-		allowMissingSupermarketProductEans:
-			options.allowMissingSupermarketProductEans,
-		writeMode: options.writeMode,
-		repository: createPrismaCandidateAuditRepository(),
-		fetchCandidates: async () => {
-			const stage = await stageSourceProducts({
-				slug: options.source,
-				dryRun: true,
-				queryTerms: [options.term],
-				queryLimit: options.queryLimit,
-				count: options.count,
-			});
 
-			if (stage.queriesSent !== 1) {
-				throw new Error(
-					`candidate audit expected one VTEX query; got ${stage.queriesSent}`,
-				);
-			}
+	try {
+		const audit = await buildCandidateAudit({
+			source: options.source,
+			term: options.term,
+			count: options.count,
+			queryLimit: options.queryLimit,
+			mojibakeWaivers: options.mojibakeWaivers,
+			allowMissingSupermarketProductEans:
+				options.allowMissingSupermarketProductEans,
+			writeMode: options.writeMode,
+			selectionMode: options.candidateSelection,
+			scanCount: options.scanCount,
+			repository: createPrismaCandidateAuditRepository(),
+			fetchCandidates: async () => {
+				const stage = await stageSourceProducts({
+					slug: options.source,
+					dryRun: true,
+					queryTerms: [options.term],
+					queryLimit: options.queryLimit,
+					count: options.scanCount,
+				});
 
-			return stage.products;
-		},
-	});
+				if (stage.queriesSent !== 1) {
+					throw new Error(
+						`candidate audit expected one VTEX query; got ${stage.queriesSent}`,
+					);
+				}
 
-	await writeJson(options.output, audit);
+				return stage.products;
+			},
+		});
+
+		await writeJson(options.output, audit);
+	} catch (error) {
+		if (options.output && isCandidateAuditError(error)) {
+			await writeJson(options.output, error.report);
+		}
+
+		throw error;
+	}
 }
 
 main().catch((error) => {
-	console.error(error);
+	console.error(error instanceof Error ? error.message : error);
 	process.exit(1);
 });

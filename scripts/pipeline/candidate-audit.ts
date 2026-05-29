@@ -67,6 +67,25 @@ export type MojibakeWaiver = {
 	reason: string;
 };
 
+export type CandidateSelectionMode = "strict" | "existing-only";
+type CandidateSkipReason =
+	| "missing_product"
+	| "missing_supermarket_product"
+	| "not_selected_overflow";
+
+type CandidateSkippedCandidate = {
+	ean: string;
+	name: string;
+	reasons: CandidateSkipReason[];
+};
+
+type CandidateAuditSelection = {
+	mode: CandidateSelectionMode;
+	scanCount: number;
+	selectedCount: number;
+	skippedCandidates: CandidateSkippedCandidate[];
+};
+
 export type CandidateAuditOptions = {
 	source: string;
 	term: string;
@@ -78,6 +97,8 @@ export type CandidateAuditOptions = {
 	mojibakeWaivers?: MojibakeWaiver[];
 	allowMissingSupermarketProductEans?: string[];
 	writeMode?: CandidateWriteMode;
+	selectionMode?: CandidateSelectionMode;
+	scanCount?: number;
 };
 
 export type CandidateAudit = {
@@ -91,6 +112,7 @@ export type CandidateAudit = {
 	candidateHash: string;
 	candidateEans: string[];
 	candidates: NormalizedProduct[];
+	selection: CandidateAuditSelection;
 	mojibakeWaivers: MojibakeWaiver[];
 	allowMissingSupermarketProductEans: string[];
 	rollbackPlan: CandidateRollbackPlan | null;
@@ -105,8 +127,45 @@ export type CandidateAudit = {
 	};
 };
 
+export type CandidateAuditFailureReport = {
+	schemaVersion: 1;
+	audit: "ingest-candidates";
+	status: "FAIL";
+	createdAt: string;
+	message: string;
+	writeMode: CandidateWriteMode;
+	source: string;
+	term: string;
+	count: number;
+	queryLimit: number;
+	selection: CandidateAuditSelection;
+	candidateHash: null;
+	candidateEans: string[];
+	selectedCandidateEans: string[];
+	missingProducts: string[];
+	missingSupermarketProducts: string[];
+	candidates: NormalizedProduct[];
+};
+
+export class CandidateAuditError extends Error {
+	readonly report: CandidateAuditFailureReport;
+
+	constructor(message: string, report: CandidateAuditFailureReport) {
+		super(message);
+		this.name = "CandidateAuditError";
+		this.report = report;
+	}
+}
+
+export function isCandidateAuditError(
+	error: unknown,
+): error is CandidateAuditError {
+	return error instanceof CandidateAuditError;
+}
+
 const EXPECTED_CANDIDATE_COUNT = 5;
 const MAX_ALLOWED_MISSING_SUPERMARKET_PRODUCTS = 1;
+const MAX_EXISTING_ONLY_SCAN_COUNT = 50;
 const MOJIBAKE_PATTERN = /Ã|Â|�/;
 
 type CandidateMetadataField =
@@ -226,14 +285,6 @@ function requireNoUnwaivedMojibake(
 	}
 }
 
-function requireNoMissingRows(label: string, missing: string[]) {
-	if (missing.length > 0) {
-		throw new Error(
-			`candidate audit missing existing ${label}: ${missing.join(",")}`,
-		);
-	}
-}
-
 function requireAllowedMissingSupermarketProducts(
 	missing: string[],
 	allowed: string[],
@@ -260,6 +311,101 @@ function requireAllowedMissingSupermarketProducts(
 	}
 }
 
+function buildSkippedCandidate(
+	candidate: NormalizedProduct,
+	reasons: CandidateSkipReason[],
+): CandidateSkippedCandidate {
+	return {
+		ean: candidate.ean,
+		name: candidate.name,
+		reasons,
+	};
+}
+
+function buildFailureReport({
+	message,
+	writeMode,
+	source,
+	term,
+	count,
+	queryLimit,
+	selection,
+	selectedCandidates,
+	missingProducts,
+	missingSupermarketProducts,
+	candidates,
+	now,
+}: {
+	message: string;
+	writeMode: CandidateWriteMode;
+	source: string;
+	term: string;
+	count: number;
+	queryLimit: number;
+	selection: CandidateAuditSelection;
+	selectedCandidates: NormalizedProduct[];
+	missingProducts: string[];
+	missingSupermarketProducts: string[];
+	candidates: NormalizedProduct[];
+	now: () => Date;
+}): CandidateAuditFailureReport {
+	return {
+		schemaVersion: 1,
+		audit: "ingest-candidates",
+		status: "FAIL",
+		createdAt: now().toISOString(),
+		message,
+		writeMode,
+		source,
+		term,
+		count,
+		queryLimit,
+		selection,
+		candidateHash: null,
+		candidateEans: uniqueSorted(candidates.map((candidate) => candidate.ean)),
+		selectedCandidateEans: uniqueSorted(
+			selectedCandidates.map((candidate) => candidate.ean),
+		),
+		missingProducts: uniqueSorted(missingProducts),
+		missingSupermarketProducts: uniqueSorted(missingSupermarketProducts),
+		candidates,
+	};
+}
+
+function throwCandidateAuditError(input: Parameters<typeof buildFailureReport>[0]) {
+	throw new CandidateAuditError(input.message, buildFailureReport(input));
+}
+
+function assertSelectionOptions({
+	writeMode,
+	selectionMode,
+	count,
+	scanCount,
+}: {
+	writeMode: CandidateWriteMode;
+	selectionMode: CandidateSelectionMode;
+	count: number;
+	scanCount: number;
+}) {
+	if (selectionMode === "existing-only" && writeMode !== "refresh-existing") {
+		throw new Error(
+			"candidate audit existing-only selection requires --write-mode=refresh-existing",
+		);
+	}
+
+	if (selectionMode === "existing-only" && scanCount < count) {
+		throw new Error(
+			"candidate audit existing-only --scan-count must be at least --count",
+		);
+	}
+
+	if (selectionMode === "existing-only" && scanCount > MAX_EXISTING_ONLY_SCAN_COUNT) {
+		throw new Error(
+			`candidate audit existing-only --scan-count must be at most ${MAX_EXISTING_ONLY_SCAN_COUNT}`,
+		);
+	}
+}
+
 export async function buildCandidateAudit({
 	source,
 	term,
@@ -271,6 +417,8 @@ export async function buildCandidateAudit({
 	mojibakeWaivers = [],
 	allowMissingSupermarketProductEans = [],
 	writeMode = "phase4-count5",
+	selectionMode = "strict",
+	scanCount = count,
 }: CandidateAuditOptions): Promise<CandidateAudit> {
 	if (!source || source.includes(",")) {
 		throw new Error("candidate audit requires exactly one source");
@@ -290,6 +438,8 @@ export async function buildCandidateAudit({
 		);
 	}
 
+	assertSelectionOptions({ writeMode, selectionMode, count, scanCount });
+
 	const sourceSnapshot = await repository.getSourceBySlug(source);
 
 	if (!sourceSnapshot) {
@@ -302,7 +452,9 @@ export async function buildCandidateAudit({
 
 	assertAllowedWaivers(source, mojibakeWaivers);
 	const candidates = await fetchCandidates();
-	if (writeMode === "phase4-count5") {
+	if (selectionMode === "existing-only") {
+		requireDistinctCandidateCount(candidates, scanCount);
+	} else if (writeMode === "phase4-count5") {
 		requireExactlyFiveDistinctCandidates(candidates);
 	} else {
 		requireDistinctCandidateCount(candidates, count);
@@ -310,34 +462,146 @@ export async function buildCandidateAudit({
 	requirePositiveCandidatePrices(candidates);
 	requireNoUnwaivedMojibake(candidates, mojibakeWaivers);
 
-	const candidateEans = candidates.map((candidate) => candidate.ean);
+	const scannedCandidateEans = candidates.map((candidate) => candidate.ean);
 	const [products, supermarketProducts] = await Promise.all([
-		repository.getProductsByEan(candidateEans),
-		repository.getSupermarketProducts(candidateEans, sourceSnapshot.id),
+		repository.getProductsByEan(scannedCandidateEans),
+		repository.getSupermarketProducts(scannedCandidateEans, sourceSnapshot.id),
 	]);
 
 	const productEans = new Set(products.map((product) => product.ean));
 	const supermarketProductEans = new Set(
 		supermarketProducts.map((product) => product.productEan),
 	);
+	const missingProductEans = scannedCandidateEans.filter(
+		(ean) => !productEans.has(ean),
+	);
+	const missingSupermarketProductEans = scannedCandidateEans.filter(
+		(ean) => productEans.has(ean) && !supermarketProductEans.has(ean),
+	);
+	let selectedCandidates = candidates;
+	let skippedCandidates: CandidateSkippedCandidate[] = [];
 
-	requireNoMissingRows(
-		"products",
-		candidateEans.filter((ean) => !productEans.has(ean)),
-	);
-	const missingSupermarketProductEans = candidateEans.filter(
-		(ean) => !supermarketProductEans.has(ean),
-	);
-	if (writeMode === "refresh-existing") {
-		requireNoMissingRows("supermarket_products", missingSupermarketProductEans);
+	if (selectionMode === "existing-only") {
+		const selectableCandidates: NormalizedProduct[] = [];
+
+		for (const candidate of candidates) {
+			const reasons: CandidateSkipReason[] = [];
+
+			if (!productEans.has(candidate.ean)) {
+				reasons.push("missing_product");
+			} else if (!supermarketProductEans.has(candidate.ean)) {
+				reasons.push("missing_supermarket_product");
+			}
+
+			if (reasons.length > 0) {
+				skippedCandidates.push(buildSkippedCandidate(candidate, reasons));
+			} else {
+				selectableCandidates.push(candidate);
+			}
+		}
+
+		selectedCandidates = selectableCandidates.slice(0, count);
+		skippedCandidates = [
+			...skippedCandidates,
+			...selectableCandidates
+				.slice(count)
+				.map((candidate) =>
+					buildSkippedCandidate(candidate, ["not_selected_overflow"]),
+				),
+		];
+
+		if (selectedCandidates.length !== count) {
+			const selection: CandidateAuditSelection = {
+				mode: selectionMode,
+				scanCount: candidates.length,
+				selectedCount: selectedCandidates.length,
+				skippedCandidates,
+			};
+			const message = `candidate audit existing-only selected ${selectedCandidates.length} of ${count} existing candidates`;
+
+			throwCandidateAuditError({
+				message,
+				writeMode,
+				source,
+				term,
+				count,
+				queryLimit,
+				selection,
+				selectedCandidates,
+				missingProducts: missingProductEans,
+				missingSupermarketProducts: missingSupermarketProductEans,
+				candidates,
+				now,
+			});
+		}
 	} else {
-		requireAllowedMissingSupermarketProducts(
-			missingSupermarketProductEans,
-			allowMissingSupermarketProductEans,
-		);
+		if (missingProductEans.length > 0) {
+			const message = `candidate audit missing existing products: ${missingProductEans.join(",")}`;
+
+			throwCandidateAuditError({
+				message,
+				writeMode,
+				source,
+				term,
+				count,
+				queryLimit,
+				selection: {
+					mode: selectionMode,
+					scanCount: candidates.length,
+					selectedCount: candidates.length,
+					skippedCandidates: [],
+				},
+				selectedCandidates: candidates,
+				missingProducts: missingProductEans,
+				missingSupermarketProducts: missingSupermarketProductEans,
+				candidates,
+				now,
+			});
+		}
+
+		if (writeMode === "refresh-existing") {
+			if (missingSupermarketProductEans.length > 0) {
+				const message = `candidate audit missing existing supermarket_products: ${missingSupermarketProductEans.join(",")}`;
+
+				throwCandidateAuditError({
+					message,
+					writeMode,
+					source,
+					term,
+					count,
+					queryLimit,
+					selection: {
+						mode: selectionMode,
+						scanCount: candidates.length,
+						selectedCount: candidates.length,
+						skippedCandidates: [],
+					},
+					selectedCandidates: candidates,
+					missingProducts: missingProductEans,
+					missingSupermarketProducts: missingSupermarketProductEans,
+					candidates,
+					now,
+				});
+			}
+		} else {
+			requireAllowedMissingSupermarketProducts(
+				missingSupermarketProductEans,
+				allowMissingSupermarketProductEans,
+			);
+		}
 	}
 
-	const supermarketProductIds = supermarketProducts.map(
+	const selectedCandidateEans = selectedCandidates.map(
+		(candidate) => candidate.ean,
+	);
+	const selectedCandidateEanSet = new Set(selectedCandidateEans);
+	const selectedProducts = products.filter((product) =>
+		selectedCandidateEanSet.has(product.ean),
+	);
+	const selectedSupermarketProducts = supermarketProducts.filter((product) =>
+		selectedCandidateEanSet.has(product.productEan),
+	);
+	const supermarketProductIds = selectedSupermarketProducts.map(
 		(product) => product.id,
 	);
 	const [latestPriceHistory, maxPriceHistoryId] = await Promise.all([
@@ -359,10 +623,16 @@ export async function buildCandidateAudit({
 			count,
 			queryLimit,
 			writeMode,
-			candidates,
+			candidates: selectedCandidates,
 		}),
-		candidateEans: uniqueSorted(candidateEans),
-		candidates,
+		candidateEans: uniqueSorted(selectedCandidateEans),
+		candidates: selectedCandidates,
+		selection: {
+			mode: selectionMode,
+			scanCount: candidates.length,
+			selectedCount: selectedCandidates.length,
+			skippedCandidates,
+		},
 		mojibakeWaivers,
 		allowMissingSupermarketProductEans:
 			writeMode === "refresh-existing"
@@ -371,8 +641,8 @@ export async function buildCandidateAudit({
 		rollbackPlan: null,
 		snapshots: {
 			source: sourceSnapshot,
-			products: products.sort((a, b) => a.ean.localeCompare(b.ean)),
-			supermarketProducts: supermarketProducts.sort((a, b) =>
+			products: selectedProducts.sort((a, b) => a.ean.localeCompare(b.ean)),
+			supermarketProducts: selectedSupermarketProducts.sort((a, b) =>
 				a.productEan.localeCompare(b.productEan),
 			),
 			priceHistory: {

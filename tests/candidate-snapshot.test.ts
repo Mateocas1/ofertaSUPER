@@ -41,6 +41,12 @@ function audit(): CandidateAudit {
 		candidateHash: "hash",
 		candidateEans,
 		candidates: candidateEans.map((ean, index) => product(ean, 100 + index)),
+		selection: {
+			mode: "strict",
+			scanCount: candidateEans.length,
+			selectedCount: candidateEans.length,
+			skippedCandidates: [],
+		},
 		mojibakeWaivers: [],
 		allowMissingSupermarketProductEans: [],
 		rollbackPlan: null,

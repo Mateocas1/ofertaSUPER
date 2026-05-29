@@ -1,7 +1,9 @@
 type IngestionMode = "off" | "shadow" | "active";
 type IngestionWriteMode = "phase4-count5" | "refresh-existing";
+type CandidateSelectionMode = "strict" | "existing-only";
 
 const REFRESH_EXISTING_MAX_COUNT = 25;
+const REFRESH_EXISTING_MAX_SCAN_COUNT = 50;
 
 export type IngestionOptions = {
 	mode: IngestionMode;
@@ -13,7 +15,9 @@ export type IngestionOptions = {
 	expectedEans: string[] | null;
 	candidateHash: string | null;
 	writeMode: IngestionWriteMode;
+	candidateSelection: CandidateSelectionMode;
 	count: number;
+	scanCount: number;
 	activeWriteConfirmed: boolean;
 	activeAllSourcesApproved: boolean;
 };
@@ -137,10 +141,24 @@ function resolveWriteMode(argv: string[]): IngestionWriteMode {
 	);
 }
 
+function resolveCandidateSelection(argv: string[]): CandidateSelectionMode {
+	const rawMode = readFlagValue(argv, "--candidate-selection") ?? "strict";
+
+	if (rawMode === "strict" || rawMode === "existing-only") {
+		return rawMode;
+	}
+
+	throw new Error(
+		"ingestion requires --candidate-selection=strict or --candidate-selection=existing-only",
+	);
+}
+
 export function parseIngestionOptions(
 	argv: string[] = process.argv,
 	env: Env = process.env,
 ): IngestionOptions {
+	const count = readPositiveNumberFlag(argv, "--count", DEFAULT_FETCH_COUNT);
+
 	return {
 		mode: resolveMode(env),
 		dryRun: hasFlag(argv, "--dry-run"),
@@ -155,7 +173,9 @@ export function parseIngestionOptions(
 		expectedEans: readListFlag(argv, "--expected-eans"),
 		candidateHash: readFlagValue(argv, "--candidate-hash") ?? null,
 		writeMode: resolveWriteMode(argv),
-		count: readPositiveNumberFlag(argv, "--count", DEFAULT_FETCH_COUNT),
+		candidateSelection: resolveCandidateSelection(argv),
+		count,
+		scanCount: readPositiveNumberFlag(argv, "--scan-count", count),
 		activeWriteConfirmed:
 			hasFlag(argv, "--confirm-write") ||
 			readBooleanEnv(env, "INGESTION_ACTIVE_WRITE_APPROVED"),
@@ -233,6 +253,24 @@ export function validateIngestionSafety(
 			};
 		}
 
+		if (options.candidateSelection === "existing-only") {
+			if (options.scanCount < options.count) {
+				return {
+					ok: false,
+					reason:
+						"existing-only refresh scan count must be at least --count",
+				};
+			}
+
+			if (options.scanCount > REFRESH_EXISTING_MAX_SCAN_COUNT) {
+				return {
+					ok: false,
+					reason:
+						"existing-only refresh scan count is capped at --scan-count=50 for this rollout",
+				};
+			}
+		}
+
 		if (
 			compareExpectedEans(options.expectedEans, options.expectedEans)
 				.duplicateExpected.length > 0
@@ -244,6 +282,14 @@ export function validateIngestionSafety(
 		}
 
 		return { ok: true };
+	}
+
+	if (options.candidateSelection !== "strict") {
+		return {
+			ok: false,
+			reason:
+				"candidate selection modes other than strict require --write-mode=refresh-existing",
+		};
 	}
 
 	if (options.queryTerms[0] !== "leche") {
