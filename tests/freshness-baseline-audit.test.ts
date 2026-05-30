@@ -41,6 +41,22 @@ function createRepository(): FreshnessBaselineRepository {
 					lastCheckedAt: "2026-05-20T00:00:00.000Z",
 				},
 				{
+					productEan: "3333333333333",
+					productName: "",
+					sourceSlug: "disco",
+					price: 1500,
+					isAvailable: true,
+					lastCheckedAt: "2026-05-20T00:00:00.000Z",
+				},
+				{
+					productEan: "",
+					productName: "Producto sin EAN",
+					sourceSlug: "disco",
+					price: 1300,
+					isAvailable: true,
+					lastCheckedAt: "2026-05-20T00:00:00.000Z",
+				},
+				{
 					productEan: "0000000000000",
 					productName: "Aceite viejo no disponible",
 					sourceSlug: "jumbo",
@@ -49,10 +65,34 @@ function createRepository(): FreshnessBaselineRepository {
 					lastCheckedAt: "2026-05-20T00:00:00.000Z",
 				},
 				{
-					productEan: "3333333333333",
+					productEan: "4444444444444",
+					productName: "Producto sin precio",
+					sourceSlug: "jumbo",
+					price: null,
+					isAvailable: true,
+					lastCheckedAt: "2026-05-20T00:00:00.000Z",
+				},
+				{
+					productEan: "5555555555555",
+					productName: "Producto precio invalido",
+					sourceSlug: "jumbo",
+					price: 0,
+					isAvailable: true,
+					lastCheckedAt: "2026-05-20T00:00:00.000Z",
+				},
+				{
+					productEan: "6666666666666",
 					productName: "Arroz sin fecha",
 					sourceSlug: "jumbo",
 					price: 900,
+					isAvailable: true,
+					lastCheckedAt: null,
+				},
+				{
+					productEan: null,
+					productName: null,
+					sourceSlug: "jumbo",
+					price: null,
 					isAvailable: false,
 					lastCheckedAt: null,
 				},
@@ -65,7 +105,7 @@ function createRepository(): FreshnessBaselineRepository {
 }
 
 describe("freshness baseline audit", () => {
-	it("builds production-only source freshness counts and samples", async () => {
+	it("builds production-only denominator and exclusion bucket metrics", async () => {
 		const report = await buildFreshnessBaselineReport({
 			repository: createRepository(),
 			now: fixedNow,
@@ -75,13 +115,45 @@ describe("freshness baseline audit", () => {
 
 		assert.equal(report.audit, "freshness-baseline");
 		assert.equal(report.filters.basis, "production");
-		assert.equal(report.summary.totalRows, 4);
+		assert.equal(report.summary.totalRows, 9);
 		assert.equal(report.summary.freshRows, 1);
-		assert.equal(report.summary.staleRows, 2);
-		assert.equal(report.summary.unknownRows, 1);
+		assert.equal(report.summary.staleRows, 6);
+		assert.equal(report.summary.unknownRows, 2);
 		assert.equal(report.summary.unavailableRows, 2);
-		assert.equal(report.summary.overallFreshnessPercent, 25);
+		assert.equal(report.summary.overallFreshnessPercent, 11.11);
 		assert.equal(report.status, "WARN");
+		assert.equal(report.denominators.primary.publicRankableRows, 3);
+		assert.equal(report.denominators.primary.excludedRows, 6);
+		assert.equal(report.denominators.secondary.allExistingRows, 9);
+		assert.equal(
+			report.denominators.primary.exclusionBucketSemantics,
+			"reasonCounts",
+		);
+		assert.deepEqual(report.denominators.primary.exclusionBuckets.global, {
+			unavailable: 2,
+			missingPrice: 2,
+			invalidPrice: 1,
+			missingProductName: 2,
+			missingProductEan: 2,
+			unknownNonRankable: 0,
+		});
+		assert.deepEqual(
+			report.denominators.primary.exclusionBuckets.bySource.find(
+				(source) => source.slug === "disco",
+			),
+			{
+				slug: "disco",
+				totalRows: 4,
+				publicRankableRows: 2,
+				excludedRows: 2,
+				unavailable: 0,
+				missingPrice: 0,
+				invalidPrice: 0,
+				missingProductName: 1,
+				missingProductEan: 1,
+				unknownNonRankable: 0,
+			},
+		);
 		assert.equal(
 			report.sources.find((source) => source.slug === "disco")?.freshRows,
 			1,
@@ -89,7 +161,10 @@ describe("freshness baseline audit", () => {
 		assert.equal(report.stalePublicRankingExamples[0]?.ean, "2222222222222");
 		assert.ok(
 			report.stalePublicRankingExamples.every(
-				(example) => example.ean !== "0000000000000",
+				(example) =>
+					example.ean !== "0000000000000" &&
+					example.ean !== "3333333333333" &&
+					example.ean !== "",
 			),
 		);
 	});

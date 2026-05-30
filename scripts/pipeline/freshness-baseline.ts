@@ -13,8 +13,8 @@ type FreshnessBaselineSource = {
 };
 
 type FreshnessBaselineRow = {
-	productEan: string;
-	productName: string;
+	productEan: string | null;
+	productName: string | null;
 	sourceSlug: string;
 	price: number | null;
 	isAvailable: boolean;
@@ -43,6 +43,15 @@ export type FreshnessBaselineOptions = {
 
 type FreshnessBaselineStatus = "PASS" | "WARN" | "FAIL";
 
+type ExclusionBuckets = {
+	unavailable: number;
+	missingPrice: number;
+	invalidPrice: number;
+	missingProductName: number;
+	missingProductEan: number;
+	unknownNonRankable: number;
+};
+
 type SourceSummary = {
 	slug: string;
 	name: string;
@@ -53,6 +62,9 @@ type SourceSummary = {
 	unknownRows: number;
 	unavailableRows: number;
 	freshnessPercent: number;
+	publicRankableRows: number;
+	excludedRows: number;
+	exclusionBuckets: ExclusionBuckets;
 	oldestCheckAt: string | null;
 	latestCheckAt: string | null;
 	ageBuckets: {
@@ -92,6 +104,27 @@ export type FreshnessBaselineReport = {
 		unknownRows: number;
 		unavailableRows: number;
 		overallFreshnessPercent: number;
+	};
+	denominators: {
+		primary: {
+			publicRankableRows: number;
+			excludedRows: number;
+			exclusionBucketSemantics: "reasonCounts";
+			exclusionBuckets: {
+				global: ExclusionBuckets;
+				bySource: Array<
+					{
+						slug: string;
+						totalRows: number;
+						publicRankableRows: number;
+						excludedRows: number;
+					} & ExclusionBuckets
+				>;
+			};
+		};
+		secondary: {
+			allExistingRows: number;
+		};
 	};
 	sources: SourceSummary[];
 	eanOverlap: Array<{
@@ -160,6 +193,49 @@ function ageBucket(
 	return "overThirtyDays" as const;
 }
 
+function createEmptyExclusionBuckets(): ExclusionBuckets {
+	return {
+		unavailable: 0,
+		missingPrice: 0,
+		invalidPrice: 0,
+		missingProductName: 0,
+		missingProductEan: 0,
+		unknownNonRankable: 0,
+	};
+}
+
+function hasText(value: string | null | undefined): value is string {
+	return typeof value === "string" && value.trim().length > 0;
+}
+
+function assessRankability(row: FreshnessBaselineRow) {
+	const reasons: Array<keyof ExclusionBuckets> = [];
+
+	if (!row.isAvailable) {
+		reasons.push("unavailable");
+	}
+
+	if (row.price === null) {
+		reasons.push("missingPrice");
+	} else if (!Number.isFinite(row.price) || row.price <= 0) {
+		reasons.push("invalidPrice");
+	}
+
+	if (!hasText(row.productName)) {
+		reasons.push("missingProductName");
+	}
+
+	if (!hasText(row.productEan)) {
+		reasons.push("missingProductEan");
+	}
+
+	if (reasons.length === 0) {
+		return { isPublicRankable: true, reasons };
+	}
+
+	return { isPublicRankable: false, reasons };
+}
+
 function summarizeSource(
 	source: FreshnessBaselineSource,
 	rows: FreshnessBaselineRow[],
@@ -167,10 +243,13 @@ function summarizeSource(
 	now: Date,
 ): SourceSummary {
 	const buckets = emptyBuckets();
+	const exclusionBuckets = createEmptyExclusionBuckets();
 	let freshRows = 0;
 	let staleRows = 0;
 	let unknownRows = 0;
 	let unavailableRows = 0;
+	let publicRankableRows = 0;
+	let excludedRows = 0;
 
 	const classified = rows.map((row) => {
 		if (!row.isAvailable) {
@@ -181,6 +260,17 @@ function summarizeSource(
 			now,
 			maxAgeHours: source.freshnessSlaHours,
 		});
+		const rankability = assessRankability(row);
+
+		if (rankability.isPublicRankable) {
+			publicRankableRows += 1;
+		} else {
+			excludedRows += 1;
+
+			for (const reason of rankability.reasons) {
+				exclusionBuckets[reason] += 1;
+			}
+		}
 
 		if (freshness.status === "fresh") {
 			freshRows += 1;
@@ -196,6 +286,7 @@ function summarizeSource(
 			row,
 			status: freshness.status,
 			checkedAt: freshness.checkedAt,
+			rankability,
 		};
 	});
 
@@ -216,6 +307,9 @@ function summarizeSource(
 		unknownRows,
 		unavailableRows,
 		freshnessPercent: percent(freshRows, rows.length),
+		publicRankableRows,
+		excludedRows,
+		exclusionBuckets,
 		oldestCheckAt: oldest,
 		latestCheckAt: latest,
 		ageBuckets: buckets,
@@ -226,8 +320,8 @@ function summarizeSource(
 				)
 				.slice(0, sampleSize)
 				.map((entry) => ({
-					ean: entry.row.productEan,
-					name: entry.row.productName,
+					ean: entry.row.productEan ?? "",
+					name: entry.row.productName ?? "",
 					lastCheckedAt: entry.checkedAt,
 					status: entry.status,
 				})),
@@ -239,12 +333,17 @@ function buildEanOverlap(rows: FreshnessBaselineRow[], sampleSize: number) {
 	const byEan = new Map<string, { name: string; sources: Set<string> }>();
 
 	for (const row of rows) {
-		const current = byEan.get(row.productEan) ?? {
-			name: row.productName,
+		if (!hasText(row.productEan)) {
+			continue;
+		}
+
+		const ean = row.productEan.trim();
+		const current = byEan.get(ean) ?? {
+			name: row.productName ?? "",
 			sources: new Set<string>(),
 		};
 		current.sources.add(row.sourceSlug);
-		byEan.set(row.productEan, current);
+		byEan.set(ean, current);
 	}
 
 	return Array.from(byEan.entries())
@@ -278,14 +377,10 @@ function buildStaleExamples(
 
 			return { row, freshness };
 		})
-		.filter(
-			(entry) =>
-				entry.freshness.status === "stale" &&
-				entry.row.isAvailable &&
-				entry.row.price !== null &&
-				Number.isFinite(entry.row.price) &&
-				entry.row.price > 0,
-		)
+		.filter((entry) => {
+			const rankability = assessRankability(entry.row);
+			return entry.freshness.status === "stale" && rankability.isPublicRankable;
+		})
 		.toSorted(
 			(left, right) =>
 				(left.row.price ?? Number.MAX_SAFE_INTEGER) -
@@ -293,8 +388,8 @@ function buildStaleExamples(
 		)
 		.slice(0, sampleSize)
 		.map((entry) => ({
-			ean: entry.row.productEan,
-			name: entry.row.productName,
+			ean: entry.row.productEan ?? "",
+			name: entry.row.productName ?? "",
 			source: entry.row.sourceSlug,
 			price: entry.row.price,
 			lastCheckedAt: entry.freshness.checkedAt,
@@ -382,6 +477,34 @@ export async function buildFreshnessBaselineReport({
 		summary.totalRows,
 	);
 	const sourceBySlug = new Map(sources.map((source) => [source.slug, source]));
+	const globalExclusions = sourceSummaries.reduce(
+		(accumulator, source) => ({
+			unavailable:
+				accumulator.unavailable + source.exclusionBuckets.unavailable,
+			missingPrice:
+				accumulator.missingPrice + source.exclusionBuckets.missingPrice,
+			invalidPrice:
+				accumulator.invalidPrice + source.exclusionBuckets.invalidPrice,
+			missingProductName:
+				accumulator.missingProductName +
+				source.exclusionBuckets.missingProductName,
+			missingProductEan:
+				accumulator.missingProductEan +
+				source.exclusionBuckets.missingProductEan,
+			unknownNonRankable:
+				accumulator.unknownNonRankable +
+				source.exclusionBuckets.unknownNonRankable,
+		}),
+		createEmptyExclusionBuckets(),
+	);
+	const publicRankableRows = sourceSummaries.reduce(
+		(total, source) => total + source.publicRankableRows,
+		0,
+	);
+	const excludedRows = sourceSummaries.reduce(
+		(total, source) => total + source.excludedRows,
+		0,
+	);
 
 	return {
 		schemaVersion: 1,
@@ -401,6 +524,26 @@ export async function buildFreshnessBaselineReport({
 			stagingState,
 		),
 		summary,
+		denominators: {
+			primary: {
+				publicRankableRows,
+				excludedRows,
+				exclusionBucketSemantics: "reasonCounts",
+				exclusionBuckets: {
+					global: globalExclusions,
+					bySource: sourceSummaries.map((source) => ({
+						slug: source.slug,
+						totalRows: source.totalRows,
+						publicRankableRows: source.publicRankableRows,
+						excludedRows: source.excludedRows,
+						...source.exclusionBuckets,
+					})),
+				},
+			},
+			secondary: {
+				allExistingRows: summary.totalRows,
+			},
+		},
 		sources: sourceSummaries,
 		eanOverlap: buildEanOverlap(rows, sampleSize),
 		stalePublicRankingExamples: buildStaleExamples(
