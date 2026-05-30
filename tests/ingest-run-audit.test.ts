@@ -420,6 +420,120 @@ describe("Phase 4 ingest run audit", () => {
 		);
 	});
 
+	it("allows existing-only refresh audits to fetch a larger scan window", async () => {
+		const refreshSnapshot = refreshExistingSnapshot();
+		refreshSnapshot.selection = {
+			mode: "existing-only",
+			scanCount: 5,
+			selectedCount: 3,
+			skippedCandidates: [
+				{ ean: "444", name: "Leche 444", reasons: ["missing_supermarket_product"] },
+				{ ean: "555", name: "Leche 555", reasons: ["missing_product"] },
+			],
+		};
+		const refreshWriteJson = writeJson({
+			writeMode: "refresh-existing",
+			totals: {
+				fetched: 5,
+				staged: 3,
+				promoted: 3,
+				rejected: 0,
+				failedSources: 0,
+			},
+			reconciliation: {
+				totalCandidates: 3,
+				distinctEans: 3,
+				newProducts: 0,
+				mergedProducts: 3,
+				supermarketProductsCreated: 0,
+				supermarketProductsUpdated: 3,
+				priceHistoryInserted: 3,
+				promoted: 3,
+				promotedByRunId: { "42": 3 },
+				promotedBySource: { [source]: 3 },
+			},
+			sources: [
+				{
+					runId: 42,
+					slug: source,
+					candidateHash: "refresh-hash",
+					queriesSent: 1,
+				},
+			],
+		});
+		const selected = new Set(refreshSnapshot.candidateEans);
+		const audit = await buildIngestRunAudit({
+			mode: "post-write",
+			snapshot: refreshSnapshot,
+			writeJson: refreshWriteJson,
+			repository: repository({
+				findRunById: async (id) => ({
+					id,
+					batchId: "batch-1",
+					sourceSlug: source,
+					startedAt: "2026-05-26T12:01:00.000Z",
+					status: "SUCCESS",
+					queriesSent: 1,
+					productsFetched: 5,
+					productsStaged: 3,
+					productsPromoted: 3,
+					productsRejected: 0,
+					errorSummary: null,
+				}),
+				getStagingRowsForRun: async () =>
+					refreshSnapshot.candidateEans.map((ean) => ({
+						runId: 42,
+						ean,
+						status: "PROMOTED",
+					})),
+				getCurrentProductsByEan: async () =>
+					refreshSnapshot.snapshots.products.map((row) => ({
+						...row,
+						brand: "Marca",
+						description: "Leche entera",
+						category: "Lácteos",
+					})),
+				getCurrentSupermarketProducts: async () =>
+					refreshSnapshot.snapshots.supermarketProducts.map((row, index) => ({
+						...row,
+						price: 100 + index,
+						listPrice: 120 + index,
+						referencePrice: 100 + index,
+						skuId: `sku-${row.productEan}`,
+						sellerId: "seller",
+						productUrl: `https://example.test/${row.productEan}`,
+						lastCheckedAt: "2026-05-26T12:02:00.000Z",
+					})),
+				getLatestPriceHistory: async () =>
+					candidateEans
+						.filter((ean) => selected.has(ean))
+						.map((_ean, index) => ({
+							id: index + 1000,
+							supermarketProductId: index + 100,
+							price: 100 + index,
+							listPrice: 120 + index,
+							scrapedAt: "2026-05-26T12:02:00.000Z",
+						})),
+				getPostSnapshotPriceHistoryRows: async () =>
+					candidateEans
+						.filter((ean) => selected.has(ean))
+						.map((_ean, index) => ({
+							id: index + 1000,
+							supermarketProductId: index + 100,
+							price: 100 + index,
+							listPrice: 120 + index,
+							scrapedAt: "2026-05-26T12:02:00.000Z",
+						})),
+			}),
+		});
+
+		assert.equal(audit.status, "PASS");
+		assert.deepEqual(audit.createdRows, {
+			newProducts: 0,
+			supermarketProductsCreated: 0,
+		});
+	});
+
 	it("allows one explicitly allowlisted created source row", async () => {
 		const createdSourceRowSnapshot = snapshotWithAllowlistedMissingSourceRow();
 		const createdSourceRowWriteJson = writeJson();

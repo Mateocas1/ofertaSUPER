@@ -117,6 +117,12 @@ function expectedCount(snapshot: IngestRunSnapshot) {
 	return snapshot.candidateEans.length;
 }
 
+function expectedFetchedCount(snapshot: IngestRunSnapshot) {
+	return snapshot.selection.mode === "existing-only"
+		? snapshot.selection.scanCount
+		: expectedCount(snapshot);
+}
+
 function sorted(values: string[]) {
 	return [...values].sort();
 }
@@ -216,8 +222,8 @@ function assertWriteJsonShape(
 		"write JSON sourceCount must be 1",
 	);
 	assertCondition(
-		writeJson.totals.fetched === count,
-		`write JSON totals.fetched must be ${count}`,
+		writeJson.totals.fetched === expectedFetchedCount(snapshot),
+		`write JSON totals.fetched must be ${expectedFetchedCount(snapshot)}`,
 	);
 	assertCondition(
 		writeJson.totals.staged === count,
@@ -304,8 +310,8 @@ function assertRunRow(run: AuditRunRow, snapshot: IngestRunSnapshot) {
 		"ingestion_run queries_sent must be 1",
 	);
 	assertCondition(
-		run.productsFetched === count,
-		`ingestion_run products_fetched must be ${count}`,
+		run.productsFetched === expectedFetchedCount(snapshot),
+		`ingestion_run products_fetched must be ${expectedFetchedCount(snapshot)}`,
 	);
 	assertCondition(
 		run.productsStaged === count,
