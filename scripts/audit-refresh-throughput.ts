@@ -24,6 +24,14 @@ export function parseRefreshThroughputCliOptions(argv = process.argv): CliOption
 	};
 }
 
+export function throughputAssumptionsFromCliOptions(options: CliOptions): RefreshThroughputAssumptions {
+	return {
+		rowsPerChunk: options.rowsPerChunk, chunksPerRun: options.chunksPerRun, cadenceHours: options.cadenceHours, slaHours: options.slaHours, skipMarginRuns: options.skipMarginRuns,
+		p50RuntimeMinutes: options.p50RuntimeMinutes, p95RuntimeMinutes: options.p95RuntimeMinutes, maxRuntimeMinutes: options.maxRuntimeMinutes,
+		githubTimeoutMinutes: options.githubTimeoutMinutes, rateLimitRequestsPerMinute: options.rateLimitRequestsPerMinute,
+	};
+}
+
 async function writeJson(output: string | null, report: unknown) {
 	const serialized = `${JSON.stringify(report, null, 2)}\n`;
 	if (!output) return process.stdout.write(serialized);
@@ -35,7 +43,7 @@ async function writeJson(output: string | null, report: unknown) {
 async function main() {
 	const options = parseRefreshThroughputCliOptions();
 	const baseline = JSON.parse(await readFile(options.input, "utf8"));
-	const report = buildRefreshThroughputReport({ input: { ...inputFromFreshnessBaselineReport(baseline), targetPercent: options.targetPercent }, assumptions: options });
+	const report = buildRefreshThroughputReport({ input: { ...inputFromFreshnessBaselineReport(baseline), targetPercent: options.targetPercent }, assumptions: throughputAssumptionsFromCliOptions(options) });
 	await writeJson(options.output, report);
 	if (report.status === "FAIL") process.exitCode = 1;
 }
