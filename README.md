@@ -2,7 +2,7 @@
 
 ofertasSUPER is a supermarket price and offer comparison app for Argentina. It is built around a search-first home, product comparison by EAN, a local smart basket, public catalog APIs, VTEX ingestion tooling, and guarded admin surfaces.
 
-> Status: portfolio/readiness project with a smoke-verified public Vercel demo. It is not a production-ready launch claim; operational limits remain documented in `docs/handoff.md` and `docs/reports/production-readiness/`.
+> Status: portfolio/readiness project with a smoke-verified public Vercel demo. This is not a launch or live-ops sign-off; operational limits remain documented in `docs/handoff.md` and `docs/reports/production-readiness/`.
 
 ## Demo
 
@@ -126,12 +126,12 @@ Do not run active/non-dry-run ingestion without an explicit approval and a rollb
 
 Defensible: this repo demonstrates a full-stack price comparison product with search, catalog APIs, basket UX, VTEX ingestion tooling, Prisma/Supabase modeling, admin guardrails, documented readiness gates, and a smoke-verified public Vercel demo.
 
-Not defensible yet: production-ready launch, complete E2E coverage, active ingestion approved/running, production admin positive path fully validated, custom domain/backups/monitoring closed, or scheduled ingestion cadence configured.
+Not defensible yet: launch sign-off, complete E2E coverage, active ingestion approved/running, production admin positive path fully validated, custom domain/backups/monitoring closed, or scheduled ingestion cadence configured.
 
 ## Main pending items
 
 - Add/verify `ADMIN_EMAILS` and validate the authenticated admin positive path in production Clerk.
 - Decide and test any active ingestion writes with explicit approval.
 - Keep scheduled GitHub Actions paused until repository secrets and ingestion cadence are intentionally configured.
-- Add launch-ops items before any production-ready claim: custom domain if desired, backups, monitoring/alerts, and broader E2E.
+- Add launch-ops items before any launch-readiness claim: custom domain if desired, backups, monitoring/alerts, and broader E2E.
 - Consider a future basket batch endpoint to remove the N+1 product-fetch pattern documented in Gate 7.
