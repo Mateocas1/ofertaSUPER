@@ -32,6 +32,26 @@ export type FreshnessBaselineRepository = {
 	getStagingState(): Promise<FreshnessBaselineStagingState>;
 };
 
+export type DenominatorDeltaSnapshot = {
+	globalPublicRankableRows: number;
+	sources: Array<{
+		slug: string;
+		publicRankableRows: number;
+	}>;
+};
+
+export type DenominatorDeltaExplanation =
+	| { scope: "global"; reason: string }
+	| { scope: "source"; slug: string; reason: string };
+
+export type DenominatorDeltaOptions = {
+	previous?: DenominatorDeltaSnapshot;
+	requireComparison?: boolean;
+	explanations?: DenominatorDeltaExplanation[];
+	maxShrinkPercent?: number;
+	maxShrinkRows?: number;
+};
+
 export type FreshnessBaselineOptions = {
 	repository: FreshnessBaselineRepository;
 	sourceSlugs?: string[];
@@ -39,6 +59,7 @@ export type FreshnessBaselineOptions = {
 	now?: Date;
 	targetPercent?: number;
 	failUnderPercent?: number | null;
+	denominatorDelta?: DenominatorDeltaOptions;
 };
 
 type FreshnessBaselineStatus = "PASS" | "WARN" | "FAIL";
@@ -50,6 +71,18 @@ type ExclusionBuckets = {
 	missingProductName: number;
 	missingProductEan: number;
 	unknownNonRankable: number;
+};
+
+export type DenominatorDeltaReport = {
+	status: FreshnessBaselineStatus | "NOT_COMPARED";
+	requireComparison: boolean;
+	thresholds: {
+		maxShrinkPercent: number;
+		maxShrinkRows: number;
+	};
+	current: DenominatorDeltaSnapshot;
+	previous: DenominatorDeltaSnapshot | null;
+	blockers: string[];
 };
 
 type SourceSummary = {
@@ -105,6 +138,7 @@ export type FreshnessBaselineReport = {
 		unavailableRows: number;
 		overallFreshnessPercent: number;
 	};
+	denominatorDeltas: DenominatorDeltaReport;
 	denominators: {
 		primary: {
 			publicRankableRows: number;
@@ -234,6 +268,111 @@ function assessRankability(row: FreshnessBaselineRow) {
 	}
 
 	return { isPublicRankable: false, reasons };
+}
+
+function hasExplanation(
+	explanations: DenominatorDeltaExplanation[],
+	scope: "global" | "source",
+	slug: string | null,
+) {
+	return explanations.some((explanation) => {
+		if (scope === "global") {
+			return explanation.scope === "global";
+		}
+
+		return explanation.scope === "source" && explanation.slug === slug;
+	});
+}
+
+function buildDeltaBlocker(options: {
+	scope: "global" | "source";
+	slug: string | null;
+	previous: number;
+	current: number;
+	maxShrinkPercent: number;
+	maxShrinkRows: number;
+	explained: boolean;
+}) {
+	const shrinkRows = Math.max(0, options.previous - options.current);
+	const rawShrinkPercent =
+		options.previous > 0 ? (shrinkRows / options.previous) * 100 : 0;
+	const exceedsThreshold =
+		shrinkRows > 0 &&
+		(shrinkRows > options.maxShrinkRows ||
+			rawShrinkPercent > options.maxShrinkPercent);
+
+	if (!exceedsThreshold || options.explained) {
+		return null;
+	}
+
+	const label = options.scope === "global" ? "global" : options.slug;
+	const shrinkPercent = Number(rawShrinkPercent.toFixed(2));
+	return `${label} public-rankable denominator shrank by ${shrinkRows} rows (${shrinkPercent}%) without an approved explanation`;
+}
+
+export function evaluateFreshnessDenominatorDeltas({
+	current,
+	previous = undefined,
+	requireComparison = false,
+	explanations = [],
+	maxShrinkPercent = 1,
+	maxShrinkRows = 10,
+}: DenominatorDeltaOptions & {
+	current: DenominatorDeltaSnapshot;
+}): DenominatorDeltaReport {
+	if (!previous) {
+		return {
+			status: requireComparison ? "FAIL" : "NOT_COMPARED",
+			requireComparison,
+			thresholds: { maxShrinkPercent, maxShrinkRows },
+			current,
+			previous: null,
+			blockers: requireComparison
+				? ["previous denominator input is required for denominator comparison"]
+				: [],
+		};
+	}
+
+	const currentBySource = new Map(
+		current.sources.map((source) => [source.slug, source.publicRankableRows]),
+	);
+	const previousBySource = new Map(
+		previous.sources.map((source) => [source.slug, source.publicRankableRows]),
+	);
+	const sourceSlugs = Array.from(
+		new Set([...currentBySource.keys(), ...previousBySource.keys()]),
+	).sort();
+	const blockers = [
+		buildDeltaBlocker({
+			scope: "global",
+			slug: null,
+			previous: previous.globalPublicRankableRows,
+			current: current.globalPublicRankableRows,
+			maxShrinkPercent,
+			maxShrinkRows,
+			explained: hasExplanation(explanations, "global", null),
+		}),
+		...sourceSlugs.map((slug) =>
+			buildDeltaBlocker({
+				scope: "source",
+				slug,
+				previous: previousBySource.get(slug) ?? 0,
+				current: currentBySource.get(slug) ?? 0,
+				maxShrinkPercent,
+				maxShrinkRows,
+				explained: hasExplanation(explanations, "source", slug),
+			}),
+		),
+	].filter((blocker): blocker is string => Boolean(blocker));
+
+	return {
+		status: blockers.length > 0 ? "FAIL" : "PASS",
+		requireComparison,
+		thresholds: { maxShrinkPercent, maxShrinkRows },
+		current,
+		previous,
+		blockers,
+	};
 }
 
 function summarizeSource(
@@ -401,7 +540,12 @@ function chooseStatus(
 	targetPercent: number,
 	failUnderPercent: number | null,
 	stagingState: FreshnessBaselineStagingState,
+	denominatorDeltas: DenominatorDeltaReport,
 ): FreshnessBaselineStatus {
+	if (denominatorDeltas.status === "FAIL") {
+		return "FAIL";
+	}
+
 	if (failUnderPercent !== null && freshnessPercent < failUnderPercent) {
 		return "FAIL";
 	}
@@ -420,6 +564,7 @@ export async function buildFreshnessBaselineReport({
 	now = new Date(),
 	targetPercent = 95,
 	failUnderPercent = null,
+	denominatorDelta = {},
 }: FreshnessBaselineOptions): Promise<FreshnessBaselineReport> {
 	const sources = await repository.listSources(
 		sourceSlugs.length > 0 ? sourceSlugs : undefined,
@@ -505,6 +650,17 @@ export async function buildFreshnessBaselineReport({
 		(total, source) => total + source.excludedRows,
 		0,
 	);
+	const currentDenominatorSnapshot: DenominatorDeltaSnapshot = {
+		globalPublicRankableRows: publicRankableRows,
+		sources: sourceSummaries.map((source) => ({
+			slug: source.slug,
+			publicRankableRows: source.publicRankableRows,
+		})),
+	};
+	const denominatorDeltas = evaluateFreshnessDenominatorDeltas({
+		current: currentDenominatorSnapshot,
+		...denominatorDelta,
+	});
 
 	return {
 		schemaVersion: 1,
@@ -522,8 +678,10 @@ export async function buildFreshnessBaselineReport({
 			targetPercent,
 			failUnderPercent,
 			stagingState,
+			denominatorDeltas,
 		),
 		summary,
+		denominatorDeltas,
 		denominators: {
 			primary: {
 				publicRankableRows,
