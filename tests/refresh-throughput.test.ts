@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseRefreshThroughputCliOptions } from "../scripts/audit-refresh-throughput";
+import { parseRefreshThroughputCliOptions, throughputAssumptionsFromCliOptions } from "../scripts/audit-refresh-throughput";
 import { buildRefreshThroughputReport, inputFromFreshnessBaselineReport } from "../scripts/pipeline/refresh-throughput";
 
 const input = { basis: "production" as const, targetPercent: 95, primaryDenominatorRows: 180, sourceDenominators: [{ slug: "vea", publicRankableRows: 80 }, { slug: "disco", publicRankableRows: 100 }] };
@@ -41,7 +41,9 @@ describe("refresh throughput capacity", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(report.stopConditions.join("\n"), /p95 runtime margin/);
 		assert.match(report.stopConditions.join("\n"), /max runtime exceeds/);
-		assert.deepEqual(parseRefreshThroughputCliOptions(["node", "script", "--input=a0-denominator.json", "--output=a0-throughput.json", "--rows-per-chunk=18"]), { input: "a0-denominator.json", output: "a0-throughput.json", targetPercent: 95, rowsPerChunk: 18, chunksPerRun: 1, cadenceHours: 6, slaHours: 12, skipMarginRuns: 0, p50RuntimeMinutes: 0, p95RuntimeMinutes: 0, maxRuntimeMinutes: 0, githubTimeoutMinutes: 360, rateLimitRequestsPerMinute: 0 });
+		const options = parseRefreshThroughputCliOptions(["node", "script", "--input=a0-denominator.json", "--output=a0-throughput.json", "--rows-per-chunk=18"]);
+		assert.deepEqual(options, { input: "a0-denominator.json", output: "a0-throughput.json", targetPercent: 95, rowsPerChunk: 18, chunksPerRun: 1, cadenceHours: 6, slaHours: 12, skipMarginRuns: 0, p50RuntimeMinutes: 0, p95RuntimeMinutes: 0, maxRuntimeMinutes: 0, githubTimeoutMinutes: 360, rateLimitRequestsPerMinute: 0 });
+		assert.deepEqual(Object.keys(throughputAssumptionsFromCliOptions(options)).sort(), ["cadenceHours", "chunksPerRun", "githubTimeoutMinutes", "maxRuntimeMinutes", "p50RuntimeMinutes", "p95RuntimeMinutes", "rateLimitRequestsPerMinute", "rowsPerChunk", "skipMarginRuns", "slaHours"]);
 		assert.throws(() => parseRefreshThroughputCliOptions(["node", "script", "--input=x", "--confirm-write"]), /read-only/);
 	});
 });
