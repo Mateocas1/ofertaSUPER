@@ -27,7 +27,7 @@ export async function buildDirectRefreshFeasibilityReport({ repository, fetchPro
 	sampleSize?: number;
 	now?: Date;
 }): Promise<DirectRefreshFeasibilityReport> {
-	const sources = sourceSlugs?.length ? sourceSlugs.map((slug) => ({ slug })) : await repository.listSources();
+	const sources = await repository.listSources(sourceSlugs?.length ? sourceSlugs : undefined);
 	const summaries = await Promise.all(sources.map(async (source) => {
 		const rows = await repository.listOldestPublicRankableRows(source.slug, sampleSize);
 		const decisions = await Promise.all(rows.map((row) => evaluateRow({ row, repository, fetchProducts })));
