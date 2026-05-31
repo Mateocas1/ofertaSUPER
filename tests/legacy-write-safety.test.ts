@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import { readDryRunFlag, runStoreScraper } from "../scripts/scrapers/shared";
@@ -63,6 +63,50 @@ test("runStoreScraper does not persist when dryRun is omitted", async () => {
   assert.equal(persistCalls, 0);
   assert.equal(result.persisted, 0);
   assert.equal(result.fetched, 1);
+});
+
+test("static guards inventory mutating workflows and package scripts before cron enablement", async () => {
+  const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
+    scripts: Record<string, string>;
+  };
+  const mutatingPackageScripts = Object.keys(packageJson.scripts).filter((scriptName) =>
+    /^(ingest|populate|update:prices|db:seed|cleanup:)/.test(scriptName),
+  );
+
+  assert.deepEqual(mutatingPackageScripts.sort(), [
+    "cleanup:history",
+    "cleanup:staging",
+    "db:seed",
+    "ingest",
+    "populate",
+    "update:prices",
+  ]);
+
+  const workflowNames = (await readdir(".github/workflows")).filter((fileName) =>
+    fileName.endsWith(".yml") || fileName.endsWith(".yaml"),
+  );
+  const workflowEntries = await Promise.all(
+    workflowNames.map(async (fileName) => ({
+      fileName,
+      content: await readFile(`.github/workflows/${fileName}`, "utf8"),
+    })),
+  );
+  const allWorkflows = workflowEntries
+    .map((entry) => `# ${entry.fileName}\n${entry.content}`)
+    .join("\n---\n");
+  const mutatingCommandPattern =
+    /npm run (?:ingest|update:prices|populate|db:seed|cleanup:[a-z-]+)|\bpsql\b|\bVACUUM\b/i;
+
+  for (const entry of workflowEntries.filter((workflow) =>
+    mutatingCommandPattern.test(workflow.content),
+  )) {
+    assert.match(entry.content, /workflow_dispatch:/, `${entry.fileName} must stay manual-only before cron enablement`);
+    assert.doesNotMatch(entry.content, /^\s*schedule:/m, `${entry.fileName} must not define a mutating schedule before enablement`);
+  }
+
+  assert.doesNotMatch(allWorkflows, /INGESTION_ACTIVE_WRITE_APPROVED:\s*["']?true/i);
+  assert.doesNotMatch(allWorkflows, /INGESTION_V2:\s*["']?active/i);
+  assert.equal(workflowEntries.find((entry) => /refresh-existing/i.test(entry.fileName)), undefined);
 });
 
 test("update prices workflow is dry-run only and does not report fake write status", async () => {

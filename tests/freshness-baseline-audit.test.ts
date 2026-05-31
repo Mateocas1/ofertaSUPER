@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { parseFreshnessBaselineCliOptions } from "../scripts/audit-freshness-baseline";
 import {
 	buildFreshnessBaselineReport,
+	evaluateFreshnessDenominatorDeltas,
 	type FreshnessBaselineRepository,
 } from "../scripts/pipeline/freshness-baseline";
 
@@ -167,6 +168,100 @@ describe("freshness baseline audit", () => {
 					example.ean !== "",
 			),
 		);
+	});
+
+	it("fails denominator delta checks on unresolved public-rankable shrinkage", async () => {
+		const current = {
+			globalPublicRankableRows: 98,
+			sources: [
+				{ slug: "disco", publicRankableRows: 39 },
+				{ slug: "jumbo", publicRankableRows: 59 },
+			],
+		};
+		const previous = {
+			globalPublicRankableRows: 130,
+			sources: [
+				{ slug: "disco", publicRankableRows: 50 },
+				{ slug: "jumbo", publicRankableRows: 59 },
+				{ slug: "mas", publicRankableRows: 21 },
+			],
+		};
+		const unresolved = evaluateFreshnessDenominatorDeltas({
+			current,
+			previous,
+			requireComparison: true,
+		});
+
+		assert.equal(unresolved.status, "FAIL");
+		assert.match(
+			unresolved.blockers.join("\n"),
+			/global public-rankable denominator shrank/,
+		);
+		assert.match(
+			unresolved.blockers.join("\n"),
+			/disco public-rankable denominator shrank/,
+		);
+		assert.match(
+			unresolved.blockers.join("\n"),
+			/mas public-rankable denominator shrank/,
+		);
+
+		const explained = evaluateFreshnessDenominatorDeltas({
+			current,
+			previous,
+			requireComparison: true,
+			explanations: [
+				{ scope: "global", reason: "source availability policy reviewed" },
+				{
+					scope: "source",
+					slug: "disco",
+					reason: "source availability policy reviewed",
+				},
+				{
+					scope: "source",
+					slug: "mas",
+					reason: "source availability policy reviewed",
+				},
+			],
+		});
+
+		assert.equal(explained.status, "PASS");
+		assert.equal(explained.blockers.length, 0);
+
+		const roundingEdgeCase = evaluateFreshnessDenominatorDeltas({
+			current: {
+				globalPublicRankableRows: 989,
+				sources: [{ slug: "disco", publicRankableRows: 989 }],
+			},
+			previous: {
+				globalPublicRankableRows: 999,
+				sources: [{ slug: "disco", publicRankableRows: 999 }],
+			},
+			requireComparison: true,
+		});
+
+		assert.equal(roundingEdgeCase.status, "FAIL");
+		assert.match(roundingEdgeCase.blockers.join("\n"), /1%/);
+
+		const missingPrevious = evaluateFreshnessDenominatorDeltas({
+			current,
+			requireComparison: true,
+		});
+
+		assert.equal(missingPrevious.status, "FAIL");
+		assert.match(missingPrevious.blockers.join("\n"), /previous denominator/i);
+	});
+
+	it("reports denominator delta failures in baseline status when comparison is required", async () => {
+		const report = await buildFreshnessBaselineReport({
+			repository: createRepository(),
+			now: fixedNow,
+			denominatorDelta: { requireComparison: true, previous: { globalPublicRankableRows: 20, sources: [{ slug: "disco", publicRankableRows: 15 }, { slug: "jumbo", publicRankableRows: 5 }] } },
+		});
+
+		assert.equal(report.denominatorDeltas.status, "FAIL");
+		assert.equal(report.status, "FAIL");
+		assert.match(report.denominatorDeltas.blockers.join("\n"), /global public-rankable denominator shrank/);
 	});
 
 	it("fails under an explicit freshness threshold and rejects unknown source filters", async () => {
