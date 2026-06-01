@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { parseDirectRefreshPrewriteGateCliOptions } from "../scripts/audit-direct-refresh-prewrite-gate";
 import {
 	buildCarrefourDirectRefreshPrewriteGate,
+	buildPrewriteReportHash,
 	type DirectRefreshPrewriteExistingRow,
 } from "../scripts/pipeline/direct-refresh-prewrite-gate";
 
@@ -150,7 +151,10 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			99,
 		);
 		assert.equal(report.futureConfirmation.required, true);
-		assert.match(report.futureConfirmation.hashSemantics, /timestamped evidence hash/);
+		assert.match(
+			report.futureConfirmation.hashSemantics,
+			/timestamped evidence hash/,
+		);
 		assert.equal(report.futureConfirmation.shape.source, "carrefour");
 		assert.match(report.futureConfirmation.shape.reportHash, /^[a-f0-9]{64}$/);
 		assert.deepEqual(report.futureConfirmation.shape.rowIds, ["1"]);
@@ -177,6 +181,28 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				.map((change) => change.field)
 				.join(","),
 			/price/,
+		);
+	});
+
+	it("hashes the timestamped report payload without self-referential confirmation", async () => {
+		const buildReport = (now: string) =>
+			buildCarrefourDirectRefreshPrewriteGate({
+				repository: repository([passRow]),
+				now: new Date(now),
+				fetchDirectProducts: async () => [live()],
+			});
+		const first = await buildReport("2026-06-01T00:00:00.000Z");
+		const second = await buildReport("2026-06-01T00:01:00.000Z");
+		const firstHashPayload: Record<string, unknown> = { ...first };
+		delete firstHashPayload.futureConfirmation;
+
+		assert.notEqual(
+			first.futureConfirmation.shape.reportHash,
+			second.futureConfirmation.shape.reportHash,
+		);
+		assert.equal(
+			first.futureConfirmation.shape.reportHash,
+			buildPrewriteReportHash(firstHashPayload),
 		);
 	});
 
