@@ -326,7 +326,7 @@ export async function buildCarrefourDirectRefreshPrewriteGate({
 		).length,
 		failClosedReasons,
 	};
-	const baseReport = {
+	const reportWithoutConfirmation = {
 		schemaVersion: 1 as const,
 		audit: "carrefour-direct-refresh-prewrite-gate" as const,
 		status:
@@ -334,6 +334,7 @@ export async function buildCarrefourDirectRefreshPrewriteGate({
 			rows.every((row) => row.guards.status === "PASS")
 				? ("PASS" as const)
 				: ("FAIL" as const),
+		generatedAt,
 		basis: "production" as const,
 		dryRun: true as const,
 		writeBoundary: WRITE_BOUNDARY,
@@ -364,7 +365,7 @@ export async function buildCarrefourDirectRefreshPrewriteGate({
 	};
 	const confirmationShape = {
 		source: CARREFOUR_SOURCE,
-		reportHash: buildPrewriteReportHash(baseReport),
+		reportHash: buildPrewriteReportHash(reportWithoutConfirmation),
 		rowIds: passRows.map((row) => row.rowId).sort(),
 		skuIds: uniqueSorted(passRows.map((row) => row.lookup.value ?? "")).filter(
 			Boolean,
@@ -375,8 +376,7 @@ export async function buildCarrefourDirectRefreshPrewriteGate({
 	};
 
 	return {
-		...baseReport,
-		generatedAt,
+		...reportWithoutConfirmation,
 		futureConfirmation: {
 			required: true,
 			hashSemantics:
@@ -738,7 +738,7 @@ function uniqueSorted(values: string[]) {
 	return Array.from(new Set(values)).sort();
 }
 
-function buildPrewriteReportHash(value: unknown) {
+export function buildPrewriteReportHash(value: unknown) {
 	return createHash("sha256").update(stableJson(value)).digest("hex");
 }
 
