@@ -1,9 +1,18 @@
 import type { SupermarketDefinition } from "@/lib/supermarkets";
 import { resolveIngestionQueryTerms } from "@/lib/ingestion/query-terms";
-import { fetchVtexProducts, probeVtexHash } from "@/lib/vtex/client";
+import {
+	fetchVtexDirectProducts,
+	fetchVtexProducts,
+	probeVtexHash,
+} from "@/lib/vtex/client";
 import type { NormalizedProduct } from "@/lib/vtex/normalize";
 
-import type { FetchOptions, HealthResult, SourceAdapter } from "./types";
+import type {
+	DirectLookup,
+	FetchOptions,
+	HealthResult,
+	SourceAdapter,
+} from "./types";
 
 export class VtexSourceAdapter implements SourceAdapter {
   readonly slug: string;
@@ -29,7 +38,10 @@ export class VtexSourceAdapter implements SourceAdapter {
     };
   }
 
-  async fetchProducts(terms: string[], options: FetchOptions = {}): Promise<NormalizedProduct[]> {
+	async fetchProducts(
+		terms: string[],
+		options: FetchOptions = {},
+	): Promise<NormalizedProduct[]> {
     const count = options.count ?? 50;
     const uniqueProducts = new Map<string, NormalizedProduct>();
 
@@ -47,6 +59,15 @@ export class VtexSourceAdapter implements SourceAdapter {
 
     return Array.from(uniqueProducts.values());
   }
+
+	async fetchDirectProducts(
+		lookup: DirectLookup,
+	): Promise<NormalizedProduct[]> {
+		return fetchVtexDirectProducts({
+			baseUrl: this.supermarket.baseUrl,
+			lookup,
+		});
+	}
 
   getDefaultTerms(limit?: number) {
     return resolveIngestionQueryTerms({

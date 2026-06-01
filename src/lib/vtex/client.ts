@@ -1,6 +1,10 @@
 import axios from "axios";
 
-import { buildVtexRequest } from "./encode";
+import {
+	buildVtexCatalogSearchRequest,
+	buildVtexRequest,
+	type VtexCatalogLookup,
+} from "./encode";
 import { normalizeProduct, type NormalizedProduct } from "./normalize";
 
 type LooseRecord = Record<string, unknown>;
@@ -13,7 +17,18 @@ type FetchVtexProductsOptions = {
   retries?: number;
 };
 
-type VtexProbeErrorType = "hash_invalid" | "timeout" | "blocked" | "network" | "unknown";
+type FetchVtexDirectProductsOptions = {
+	baseUrl: string;
+	lookup: VtexCatalogLookup;
+	retries?: number;
+};
+
+type VtexProbeErrorType =
+	| "hash_invalid"
+	| "timeout"
+	| "blocked"
+	| "network"
+	| "unknown";
 
 export type VtexProbeResult = {
   isHealthy: boolean;
@@ -29,7 +44,14 @@ class VtexRequestError extends Error {
   readonly hashValid: boolean;
   readonly responseTimeMs: number;
 
-  constructor(message: string, options: { errorType: VtexProbeErrorType; hashValid: boolean; responseTimeMs: number }) {
+	constructor(
+		message: string,
+		options: {
+			errorType: VtexProbeErrorType;
+			hashValid: boolean;
+			responseTimeMs: number;
+		},
+	) {
     super(message);
     this.name = "VtexRequestError";
     this.errorType = options.errorType;
@@ -72,7 +94,9 @@ function getRequestDelayMs() {
 }
 
 function pickUserAgent() {
-  const configured = process.env.VTEX_USER_AGENTS?.split("|").map((entry) => entry.trim()).filter(Boolean);
+	const configured = process.env.VTEX_USER_AGENTS?.split("|")
+		.map((entry) => entry.trim())
+		.filter(Boolean);
   const pool = configured?.length ? configured : DEFAULT_USER_AGENTS;
 
   return pool[Math.floor(Math.random() * pool.length)];
@@ -107,7 +131,11 @@ function detectBlockedPayload(payload: unknown) {
   }
 
   const normalized = payload.toLowerCase();
-  return normalized.includes("captcha") || normalized.includes("access denied") || normalized.includes("<html");
+	return (
+		normalized.includes("captcha") ||
+		normalized.includes("access denied") ||
+		normalized.includes("<html")
+	);
 }
 
 function classifyAxiosError(error: unknown, responseTimeMs: number) {
@@ -131,12 +159,19 @@ function classifyAxiosError(error: unknown, responseTimeMs: number) {
       });
     }
 
-    if (status === 403 || status === 429 || detectBlockedPayload(typeof data === "string" ? data : null)) {
-      return new VtexRequestError(`VTEX source blocked with status ${status ?? "unknown"}`, {
+		if (
+			status === 403 ||
+			status === 429 ||
+			detectBlockedPayload(typeof data === "string" ? data : null)
+		) {
+			return new VtexRequestError(
+				`VTEX source blocked with status ${status ?? "unknown"}`,
+				{
         errorType: "blocked",
         hashValid: true,
         responseTimeMs,
-      });
+				},
+			);
     }
 
     return new VtexRequestError(error.message, {
@@ -146,11 +181,14 @@ function classifyAxiosError(error: unknown, responseTimeMs: number) {
     });
   }
 
-  return new VtexRequestError(error instanceof Error ? error.message : "Unknown VTEX error", {
+	return new VtexRequestError(
+		error instanceof Error ? error.message : "Unknown VTEX error",
+		{
     errorType: "unknown",
     hashValid: true,
     responseTimeMs,
-  });
+		},
+	);
 }
 
 function isCandidateProduct(value: unknown): value is LooseRecord {
@@ -191,6 +229,91 @@ function extractProductRecords(payload: unknown): LooseRecord[] {
   return products;
 }
 
+async function requestVtexCatalogPayload({
+	baseUrl,
+	lookup,
+}: {
+	baseUrl: string;
+	lookup: VtexCatalogLookup;
+}) {
+	const request = buildVtexCatalogSearchRequest(lookup);
+	const url = new URL(request.pathname, baseUrl);
+	url.search = request.search;
+	const startedAt = Date.now();
+
+	try {
+		await sleep(getRequestDelayMs());
+		const response = await http.get(url.toString(), {
+			headers: {
+				"user-agent": pickUserAgent(),
+				"accept-language": "es-AR,es;q=0.9,en;q=0.7",
+				referer: `${new URL(baseUrl).origin}/`,
+				origin: new URL(baseUrl).origin,
+			},
+			transformResponse: [(value) => value],
+			responseType: "text",
+		});
+		const responseTimeMs = Date.now() - startedAt;
+		const contentType = String(
+			response.headers["content-type"] ?? "",
+		).toLowerCase();
+		const rawData = response.data;
+
+		if (typeof rawData !== "string") {
+			throw new VtexRequestError("Unexpected VTEX catalog payload type", {
+				errorType: "unknown",
+				hashValid: true,
+				responseTimeMs,
+			});
+		}
+
+		if (!contentType.includes("json") && detectBlockedPayload(rawData)) {
+			throw new VtexRequestError(
+				"VTEX catalog returned an HTML or anti-bot page",
+				{
+					errorType: "blocked",
+					hashValid: true,
+					responseTimeMs,
+				},
+			);
+		}
+
+		let payload: unknown;
+
+		try {
+			payload = JSON.parse(rawData);
+		} catch {
+			if (detectBlockedPayload(rawData)) {
+				throw new VtexRequestError(
+					"VTEX catalog returned a blocked HTML response",
+					{
+						errorType: "blocked",
+						hashValid: true,
+						responseTimeMs,
+					},
+				);
+			}
+
+			throw new VtexRequestError("VTEX catalog returned invalid JSON", {
+				errorType: "unknown",
+				hashValid: true,
+				responseTimeMs,
+			});
+		}
+
+		return {
+			payload,
+			responseTimeMs,
+		};
+	} catch (error) {
+		if (error instanceof VtexRequestError) {
+			throw error;
+		}
+
+		throw classifyAxiosError(error, Date.now() - startedAt);
+	}
+}
+
 async function requestVtexPayload({
   baseUrl,
   query,
@@ -220,7 +343,9 @@ async function requestVtexPayload({
       responseType: "text",
     });
     const responseTimeMs = Date.now() - startedAt;
-    const contentType = String(response.headers["content-type"] ?? "").toLowerCase();
+		const contentType = String(
+			response.headers["content-type"] ?? "",
+		).toLowerCase();
     const rawData = response.data;
 
     if (typeof rawData !== "string") {
@@ -331,6 +456,39 @@ export async function probeVtexHash({
   }
 }
 
+export function normalizeVtexCatalogPayload(payload: unknown, baseUrl: string) {
+	const rawProducts = extractProductRecords(payload);
+	return rawProducts
+		.map((product) => normalizeProduct(product, baseUrl))
+		.filter((product): product is NormalizedProduct => Boolean(product));
+}
+
+export async function fetchVtexDirectProducts({
+	baseUrl,
+	lookup,
+	retries = 3,
+}: FetchVtexDirectProductsOptions): Promise<NormalizedProduct[]> {
+	let lastError: unknown;
+
+	for (let attempt = 1; attempt <= retries; attempt += 1) {
+		try {
+			const { payload } = await requestVtexCatalogPayload({
+				baseUrl,
+				lookup,
+			});
+
+			return normalizeVtexCatalogPayload(payload, baseUrl);
+		} catch (error) {
+			lastError = error;
+			if (attempt < retries) {
+				await sleep(400 * attempt);
+			}
+		}
+	}
+
+	throw lastError;
+}
+
 export async function fetchVtexProducts({
   baseUrl,
   query,
@@ -357,7 +515,9 @@ export async function fetchVtexProducts({
         .map((product) => normalizeProduct(product, baseUrl))
         .filter((product): product is NormalizedProduct => Boolean(product));
 
-      return Array.from(new Map(normalized.map((product) => [product.ean, product])).values());
+			return Array.from(
+				new Map(normalized.map((product) => [product.ean, product])).values(),
+			);
     } catch (error) {
       lastError = error;
       if (attempt < retries) {
