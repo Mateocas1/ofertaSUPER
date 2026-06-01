@@ -9,14 +9,118 @@ import {
 } from "../src/lib/promotions/detect";
 import { withFallback } from "../src/lib/safe-data";
 import { searchQuerySchema } from "../src/lib/schemas/search";
-import { buildVtexRequest } from "../src/lib/vtex/encode";
+import { normalizeVtexCatalogPayload } from "../src/lib/vtex/client";
+import {
+	buildVtexCatalogSearchRequest,
+	buildVtexRequest,
+} from "../src/lib/vtex/encode";
 import { normalizeProduct } from "../src/lib/vtex/normalize";
-import { getCachedJsonWithClient, setCachedJsonWithClient } from "../src/lib/redis";
+import {
+	getCachedJsonWithClient,
+	setCachedJsonWithClient,
+} from "../src/lib/redis";
 import { limitRequestOrFallback } from "../src/lib/rate-limit";
 
 describe("VTEX request builder", () => {
+	it("builds direct catalog lookup URLs without productSuggestions or persisted hash", () => {
+		const sku = buildVtexCatalogSearchRequest({
+			kind: "sku-id",
+			value: "12345",
+		});
+		const ean = buildVtexCatalogSearchRequest({
+			kind: "ean",
+			value: "7790001000011",
+		});
+
+		assert.equal(sku.pathname, "/api/catalog_system/pub/products/search");
+		assert.equal(sku.search, "fq=skuId:12345");
+		assert.equal(ean.search, "fq=alternateIds_Ean:7790001000011");
+		assert.doesNotMatch(
+			`${sku.pathname}?${sku.search}`,
+			/productSuggestions|extensions|sha256Hash|_v\/segment\/graphql/,
+		);
+		assert.doesNotMatch(
+			`${ean.pathname}?${ean.search}`,
+			/productSuggestions|extensions|sha256Hash|_v\/segment\/graphql/,
+		);
+	});
+
+	it("normalizes direct catalog search payloads", () => {
+		const products = normalizeVtexCatalogPayload(
+			[
+				{
+					productName: "Leche Directa 1L",
+					brand: "Directa",
+					linkText: "leche-directa-1l",
+					categories: ["/Almacen/Lacteos/"],
+					items: [
+						{
+							itemId: "sku-direct",
+							referenceId: [{ Value: "7790001000099" }],
+							sellers: [
+								{
+									sellerId: "1",
+									commertialOffer: {
+										Price: 900,
+										ListPrice: 1000,
+										AvailableQuantity: 4,
+									},
+								},
+							],
+						},
+					],
+				},
+			],
+			"https://www.carrefour.com.ar",
+		);
+
+		assert.equal(products.length, 1);
+		assert.equal(products[0].ean, "7790001000099");
+		assert.equal(products[0].skuId, "sku-direct");
+		assert.equal(
+			products[0].productUrl,
+			"https://www.carrefour.com.ar/leche-directa-1l/p",
+		);
+		assert.equal(products[0].price, 900);
+	});
+
+	it("preserves multiple direct catalog products so ambiguity is visible", () => {
+		const payload = ["sku-a", "sku-b"].map((skuId) => ({
+			productName: `Producto ${skuId}`,
+			linkText: skuId,
+			items: [
+				{
+					itemId: skuId,
+					referenceId: [{ Value: "7790001000099" }],
+					sellers: [
+						{
+							sellerId: "1",
+							commertialOffer: {
+								Price: 900,
+								ListPrice: 900,
+								AvailableQuantity: 1,
+							},
+						},
+					],
+				},
+			],
+		}));
+
+		const products = normalizeVtexCatalogPayload(
+			payload,
+			"https://www.carrefour.com.ar",
+		);
+
+		assert.equal(products.length, 2);
+		assert.deepEqual(
+			products.map((product) => product.skuId),
+			["sku-a", "sku-b"],
+		);
+	});
+
   it("keeps the SHA256 persisted query server-side and encodes productSuggestions variables", () => {
-    const hash = "3eca26a431d4646a8bbce2644b78d3ca734bf8b4ba46afe4269621b64b0fb67d";
+		const hash =
+			"3eca26a431d4646a8bbce2644b78d3ca734bf8b4ba46afe4269621b64b0fb67d";
     const request = buildVtexRequest("leche", hash, 12);
     const params = new URLSearchParams(request.search);
     const extensions = JSON.parse(params.get("extensions") ?? "{}") as {
@@ -25,7 +129,9 @@ describe("VTEX request builder", () => {
       };
       variables?: string;
     };
-    const variables = JSON.parse(Buffer.from(extensions.variables ?? "", "base64").toString("utf8")) as {
+		const variables = JSON.parse(
+			Buffer.from(extensions.variables ?? "", "base64").toString("utf8"),
+		) as {
       fullText?: string;
       count?: number;
       productOriginVtex?: boolean;
@@ -43,10 +149,13 @@ describe("VTEX request builder", () => {
 
 describe("safe data fallback", () => {
   it("returns fallback data when a runtime dependency is unavailable", async () => {
-    const value = await withFallback(Promise.reject(new Error("database unavailable")), {
+		const value = await withFallback(
+			Promise.reject(new Error("database unavailable")),
+			{
       items: [],
       total: 0,
-    });
+			},
+		);
 
     assert.deepEqual(value, { items: [], total: 0 });
   });
@@ -61,16 +170,21 @@ describe("safe data fallback", () => {
       },
     };
 
-    await assert.doesNotReject(() => setCachedJsonWithClient(failingClient, "key", { ok: true }, 60));
+		await assert.doesNotReject(() =>
+			setCachedJsonWithClient(failingClient, "key", { ok: true }, 60),
+		);
     assert.equal(await getCachedJsonWithClient(failingClient, "key"), null);
   });
 
   it("fails open when the rate-limit backend is unavailable", async () => {
-    const state = await limitRequestOrFallback({
+		const state = await limitRequestOrFallback(
+			{
       limit: async () => {
         throw new Error("rate limit backend unavailable");
       },
-    }, "product-detail:unknown");
+			},
+			"product-detail:unknown",
+		);
 
     assert.equal(state.success, true);
     assert.equal(state.limit, 60);
@@ -88,10 +202,31 @@ describe("promotion calculations", () => {
   });
 
   it("calculates common promotion unit prices and picks the best one", () => {
-    assert.equal(calculatePromotionalUnitPrice(1000, { type: "2x1", discountValue: null }), 500);
-    assert.equal(calculatePromotionalUnitPrice(1000, { type: "2nd_50", discountValue: null }), 750);
-    assert.equal(calculatePromotionalUnitPrice(1000, { type: "wallet_discount", discountValue: 30 }), 700);
-    assert.equal(calculatePromotionalUnitPrice(1000, { type: "percentage", discountValue: 120 }), null);
+		assert.equal(
+			calculatePromotionalUnitPrice(1000, { type: "2x1", discountValue: null }),
+			500,
+		);
+		assert.equal(
+			calculatePromotionalUnitPrice(1000, {
+				type: "2nd_50",
+				discountValue: null,
+			}),
+			750,
+		);
+		assert.equal(
+			calculatePromotionalUnitPrice(1000, {
+				type: "wallet_discount",
+				discountValue: 30,
+			}),
+			700,
+		);
+		assert.equal(
+			calculatePromotionalUnitPrice(1000, {
+				type: "percentage",
+				discountValue: 120,
+			}),
+			null,
+		);
 
     const best = getBestPromotionPrice(1000, [
       { type: "2nd_50", discountValue: null, name: "second" },
@@ -148,8 +283,13 @@ describe("VTEX product normalizer", () => {
     assert.equal(product?.price, 1200);
     assert.equal(product?.listPrice, 1500);
     assert.equal(product?.isAvailable, true);
-    assert.equal(product?.productUrl, "https://www.disco.com.ar/leche-entera-1l/p");
-    assert.deepEqual(product?.images, ["https://www.disco.com.ar/arquivos/leche.jpg"]);
+		assert.equal(
+			product?.productUrl,
+			"https://www.disco.com.ar/leche-entera-1l/p",
+		);
+		assert.deepEqual(product?.images, [
+			"https://www.disco.com.ar/arquivos/leche.jpg",
+		]);
   });
 
   it("rejects products without a valid EAN", () => {

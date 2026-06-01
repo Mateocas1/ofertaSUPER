@@ -1,5 +1,8 @@
 const DEFAULT_COUNT = 50;
 
+export type VtexCatalogLookupKind = "sku-id" | "ean";
+export type VtexCatalogLookup = { kind: VtexCatalogLookupKind; value: string };
+
 type VtexSuggestionVariables = {
   productOriginVtex: true;
   simulationBehavior: "default";
@@ -41,7 +44,11 @@ function encodeQuery(value: unknown) {
   return Buffer.from(JSON.stringify(value)).toString("base64");
 }
 
-function getExtensionsWithQuery(query: string, hash: string, count = DEFAULT_COUNT) {
+function getExtensionsWithQuery(
+	query: string,
+	hash: string,
+	count = DEFAULT_COUNT,
+) {
   return JSON.stringify({
     persistedQuery: {
       version: 1,
@@ -53,7 +60,11 @@ function getExtensionsWithQuery(query: string, hash: string, count = DEFAULT_COU
   });
 }
 
-export function buildVtexRequest(query: string, hash: string, count = DEFAULT_COUNT) {
+export function buildVtexRequest(
+	query: string,
+	hash: string,
+	count = DEFAULT_COUNT,
+) {
   const searchParams = new URLSearchParams({
     workspace: "master",
     maxAge: "medium",
@@ -69,4 +80,12 @@ export function buildVtexRequest(query: string, hash: string, count = DEFAULT_CO
     pathname: "/_v/segment/graphql/v1",
     search: searchParams.toString(),
   };
+}
+export function buildVtexCatalogSearchRequest(lookup: VtexCatalogLookup) {
+	const field = lookup.kind === "sku-id" ? "skuId" : "alternateIds_Ean";
+
+	return {
+		pathname: "/api/catalog_system/pub/products/search",
+		search: `fq=${field}:${encodeURIComponent(lookup.value)}`,
+	};
 }
