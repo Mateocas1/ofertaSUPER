@@ -32,6 +32,7 @@
     "audit:price-drift": "tsx scripts/audit-price-drift.ts",
     "audit:ops-freshness": "tsx scripts/audit-ops-freshness.ts",
     "audit:direct-refresh-manifest": "tsx scripts/audit-direct-refresh-manifest.ts",
+    "audit:direct-refresh-prewrite-gate": "tsx scripts/audit-direct-refresh-prewrite-gate.ts",
     "metrics:ingestion": "tsx scripts/pipeline/metrics.ts"
   },
   "prisma": {
