@@ -77,7 +77,7 @@ export function parseDirectRefreshPrewriteGateCliOptions(
 	};
 }
 
-function createRepository(): DirectRefreshPrewriteRepository {
+export function createDirectRefreshPrewriteRepository(): DirectRefreshPrewriteRepository {
 	const mapRows = (
 		rows: Array<{
 			id: number;
@@ -237,7 +237,7 @@ async function writeJson(output: string | null, report: unknown) {
 async function main() {
 	const options = parseDirectRefreshPrewriteGateCliOptions();
 	const report = await buildCarrefourDirectRefreshPrewriteGate({
-		repository: createRepository(),
+		repository: createDirectRefreshPrewriteRepository(),
 		sourceSlug: options.source,
 		sampleSize: options.sampleSize,
 		fetchDirectProducts: async (_sourceSlug, lookup) =>

@@ -1,0 +1,371 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
+import {
+	CARREFOUR_ACTIVE_WRITE_CONFIRMATION,
+	CARREFOUR_ACTIVE_WRITE_LOCK_KEY,
+	assertFreshPrewriteRerunMatches,
+	executeCarrefourActiveWrite,
+	parseCarrefourActiveWriteCliOptions,
+	validatePrewriteReportForActiveWrite,
+	type ActiveWriteRepository,
+	type ActiveWriteTransaction,
+} from "../scripts/pipeline/direct-refresh-active-write";
+import {
+	buildCarrefourDirectRefreshPrewriteGate,
+	type DirectRefreshPrewriteExistingRow,
+} from "../scripts/pipeline/direct-refresh-prewrite-gate";
+
+function rows(): DirectRefreshPrewriteExistingRow[] {
+	return Array.from({ length: 10 }, (_, index) => {
+		const n = index + 1;
+		return {
+			id: String(n),
+			sourceSlug: "carrefour",
+			supermarketId: 4,
+			ean: `77900000000${n.toString().padStart(2, "0")}`,
+			skuId: `sku-${n}`,
+			sellerId: "1",
+			productUrl: `https://www.carrefour.com.ar/p-${n}/p`,
+			lastCheckedAt: "2026-05-01T00:00:00.000Z",
+			price: 1000,
+			listPrice: 1000,
+			referencePrice: null,
+			referenceUnit: null,
+			isAvailable: true,
+			product: {
+				ean: `77900000000${n.toString().padStart(2, "0")}`,
+				name: `Producto ${n}`,
+				brand: "Vieja",
+				description: null,
+				imageUrl: null,
+				images: [],
+				category: "Test",
+			},
+			latestPriceHistory: {
+				id: n,
+				supermarketProductId: n,
+				price: 1000,
+				listPrice: 1000,
+				scrapedAt: "2026-05-01T00:00:00.000Z",
+			},
+		};
+	});
+}
+function repository(existingRows = rows()) {
+	return {
+		async getSource() {
+			return {
+				id: 4,
+				slug: "carrefour",
+				baseUrl: "https://www.carrefour.com.ar",
+			};
+		},
+		async listOldestPublicRankableRows() {
+			return existingRows;
+		},
+		async findRowsBySourceSku(_sourceSlug: string, skuId: string) {
+			return existingRows.filter((row) => row.skuId === skuId);
+		},
+		async getMaxPriceHistoryId() {
+			return 99;
+		},
+	};
+}
+async function prewrite(now = "2026-06-01T00:00:00.000Z") {
+	return buildCarrefourDirectRefreshPrewriteGate({
+		repository: repository(),
+		now: new Date(now),
+		fetchDirectProducts: async (_sourceSlug, lookup) => {
+			const row = rows().find((entry) => entry.skuId === lookup.value);
+			return [
+				{
+					ean: row?.ean ?? "",
+					name: `${row?.product?.name} Nuevo`,
+					brand: "Nueva",
+					description: "Nueva",
+					imageUrl: "https://www.carrefour.com.ar/new.jpg",
+					images: ["https://www.carrefour.com.ar/new.jpg"],
+					category: "Test",
+					skuId: lookup.value,
+					sellerId: "1",
+					productUrl: row?.productUrl ?? null,
+					price: 1100,
+					listPrice: 1100,
+					referencePrice: null,
+					referenceUnit: null,
+					isAvailable: true,
+				},
+			];
+		},
+	});
+}
+function argv(
+	report: Awaited<ReturnType<typeof prewrite>>,
+	extra: string[] = [],
+) {
+	return [
+		"node",
+		"script",
+		"--source=carrefour",
+		"--count=10",
+		"--prewrite-report=prewrite.json",
+		`--prewrite-report-hash=${report.futureConfirmation.shape.reportHash}`,
+		`--row-ids=${report.futureConfirmation.shape.rowIds.join(",")}`,
+		`--product-eans=${report.futureConfirmation.shape.productEans.join(",")}`,
+		`--sku-ids=${report.futureConfirmation.shape.skuIds.join(",")}`,
+		`--confirm-write=${CARREFOUR_ACTIVE_WRITE_CONFIRMATION}`,
+		"--output=write.json",
+		...extra,
+	];
+}
+function tx(overrides: Partial<ActiveWriteTransaction> = {}) {
+	const base: ActiveWriteTransaction = {
+		async acquireAdvisoryLock() {
+			return true;
+		},
+		async readNoCreateCounts() {
+			return {
+				productCount: 100,
+				supermarketProductCount: 200,
+				priceHistoryMaxId: 99,
+			};
+		},
+		async readSelectedRowsByExactIdentity(identities) {
+			return identities.map((identity) => ({
+				rowId: identity.rowId,
+				productEan: identity.productEan,
+				skuId: identity.skuId,
+				product: {
+					ean: identity.productEan,
+					name: "Producto",
+					brand: "Vieja",
+					description: null,
+					imageUrl: null,
+					images: [],
+					category: "Test",
+				},
+				supermarketProduct: {
+					id: Number(identity.rowId),
+					productEan: identity.productEan,
+					supermarketId: 4,
+					price: 1000,
+					listPrice: 1000,
+					referencePrice: null,
+					referenceUnit: null,
+					isAvailable: true,
+					skuId: identity.skuId,
+					sellerId: "1",
+					productUrl: "https://www.carrefour.com.ar/p/p",
+					productUrlHost: "carrefour.com.ar",
+					lastCheckedAt: "2026-05-01T00:00:00.000Z",
+				},
+				latestPriceHistory: null,
+			}));
+		},
+		async updateProductByEan() {
+			return 1;
+		},
+		async updateSupermarketProductByExactIdentity() {
+			return 1;
+		},
+		async insertPriceHistory(rowId) {
+			return Number(rowId) + 1000;
+		},
+	};
+	return { ...base, ...overrides };
+}
+function repo(transaction: ActiveWriteTransaction): ActiveWriteRepository {
+	return {
+		async withTransaction(fn) {
+			return fn(transaction);
+		},
+	};
+}
+
+describe("Carrefour active refresh writer contract", () => {
+	it("parses exact confirmation flags and rejects unsafe shapes", async () => {
+		const report = await prewrite();
+		const parsed = parseCarrefourActiveWriteCliOptions(argv(report));
+		assert.equal(parsed.source, "carrefour");
+		assert.equal(parsed.count, 10);
+		assert.deepEqual(parsed.rowIds, report.futureConfirmation.shape.rowIds);
+		for (const bad of [
+			["--source=dia"],
+			["--count=9"],
+			["--dry-run"],
+			["--cron=true"],
+			["--stage"],
+			["--unknown=true"],
+			["--confirm-write=nope"],
+		]) {
+			assert.throws(
+				() => parseCarrefourActiveWriteCliOptions(argv(report, bad)),
+				/carrefour|count|rejects|confirmation|exactly one|unknown/,
+			);
+		}
+	});
+
+	it("validates PASS/fresh/exact 10 prewrite reports and confirmation", async () => {
+		const report = await prewrite();
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		assert.doesNotThrow(() =>
+			validatePrewriteReportForActiveWrite(
+				report,
+				options,
+				new Date("2026-06-01T00:10:00.000Z"),
+			),
+		);
+		assert.throws(
+			() =>
+				validatePrewriteReportForActiveWrite(
+					{ ...report, status: "FAIL" },
+					options,
+					new Date("2026-06-01T00:10:00.000Z"),
+				),
+			/PASS/,
+		);
+		assert.throws(
+			() =>
+				validatePrewriteReportForActiveWrite(
+					report,
+					options,
+					new Date("2026-06-01T00:16:00.000Z"),
+				),
+			/stale/,
+		);
+		assert.throws(
+			() =>
+				validatePrewriteReportForActiveWrite(
+					report,
+					{ ...options, rowIds: [...options.rowIds].reverse() },
+					new Date("2026-06-01T00:10:00.000Z"),
+				),
+			/row ids/,
+		);
+	});
+
+	it("blocks transaction when fresh prewrite rerun drifts", async () => {
+		const report = await prewrite();
+		const drift = await prewrite("2026-06-01T00:01:00.000Z");
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		assert.throws(
+			() => assertFreshPrewriteRerunMatches(report, drift, options),
+			/hash drift|hash mismatch/,
+		);
+	});
+
+	it("executes selected-row-only transaction and emits write report schema", async () => {
+		const report = await prewrite();
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		let lockKey = 0;
+		let historyInserts = 0;
+		const writeReport = await executeCarrefourActiveWrite({
+			repository: repo(
+				tx({
+					async acquireAdvisoryLock(key) {
+						lockKey = key;
+						return true;
+					},
+					async insertPriceHistory(rowId) {
+						historyInserts += 1;
+						return Number(rowId) + 1000;
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date(report.generatedAt),
+		});
+		assert.equal(lockKey, CARREFOUR_ACTIVE_WRITE_LOCK_KEY);
+		assert.equal(writeReport.report, "carrefour-direct-refresh-active-write");
+		assert.equal(writeReport.issue, 45);
+		assert.equal(writeReport.umbrellaIssue, 44);
+		assert.equal(writeReport.summary.rows, 10);
+		assert.equal(writeReport.summary.priceHistoryInserted, historyInserts);
+		assert.equal(writeReport.noCreate.productDelta, 0);
+		assert.equal(writeReport.rows.length, 10);
+	});
+
+	it("fails closed when lock, selected rows, update counts, or no-create assertions fail", async () => {
+		const report = await prewrite();
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		const startedAt = new Date(report.generatedAt);
+		await assert.rejects(
+			() =>
+				executeCarrefourActiveWrite({
+					repository: repo(
+						tx({
+							async acquireAdvisoryLock() {
+								return false;
+							},
+						}),
+					),
+					prewriteReport: report,
+					options,
+					startedAt,
+				}),
+			/lock/,
+		);
+		await assert.rejects(
+			() =>
+				executeCarrefourActiveWrite({
+					repository: repo(
+						tx({
+							async readSelectedRowsByExactIdentity() {
+								return [];
+							},
+						}),
+					),
+					prewriteReport: report,
+					options,
+					startedAt,
+				}),
+			/missing/,
+		);
+		await assert.rejects(
+			() =>
+				executeCarrefourActiveWrite({
+					repository: repo(
+						tx({
+							async updateProductByEan() {
+								return 0;
+							},
+						}),
+					),
+					prewriteReport: report,
+					options,
+					startedAt,
+				}),
+			/product update count/,
+		);
+		let countCalls = 0;
+		await assert.rejects(
+			() =>
+				executeCarrefourActiveWrite({
+					repository: repo(
+						tx({
+							async readNoCreateCounts() {
+								countCalls += 1;
+								return countCalls === 1
+									? {
+											productCount: 100,
+											supermarketProductCount: 200,
+											priceHistoryMaxId: 99,
+										}
+									: {
+											productCount: 101,
+											supermarketProductCount: 200,
+											priceHistoryMaxId: 99,
+										};
+							},
+						}),
+					),
+					prewriteReport: report,
+					options,
+					startedAt,
+				}),
+			/no-create/,
+		);
+	});
+});
