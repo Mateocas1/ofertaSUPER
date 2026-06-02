@@ -5,6 +5,7 @@ import { parseDirectRefreshPostwriteCliOptions } from "../scripts/audit-direct-r
 import type { ActiveWriteReport } from "../scripts/pipeline/direct-refresh-active-write";
 import {
 	buildCarrefourDirectRefreshPostwriteAudit,
+	buildDirectRefreshPostwriteAudit,
 	type DirectRefreshPostwriteRepository,
 } from "../scripts/pipeline/direct-refresh-postwrite-audit";
 
@@ -146,6 +147,36 @@ function writeReport(
 	};
 }
 
+function veaWriteReport(
+	overrides: Partial<ActiveWriteReport> = {},
+): ActiveWriteReport {
+	const base = writeReport();
+	const rows = base.rows.map((row) => ({
+		...row,
+		live: row.live
+			? {
+					...row.live,
+					productUrl: "https://www.vea.com.ar/leche/p",
+					productUrlHost: "vea.com.ar",
+				}
+			: row.live,
+	}));
+	return {
+		...base,
+		report: "vea-direct-refresh-active-write",
+		issue: 54,
+		umbrellaIssue: undefined,
+		source: {
+			slug: "vea",
+			supermarketId: 5,
+			expectedHost: "vea.com.ar",
+		},
+		transaction: { advisoryLockKey: 54205410, acquired: true },
+		rows,
+		...overrides,
+	};
+}
+
 function repository(
 	report = writeReport(),
 	overrides: Partial<DirectRefreshPostwriteRepository> = {},
@@ -201,6 +232,67 @@ describe("Carrefour active refresh post-write audit", () => {
 		assert.equal(audit.summary.priceHistoryRowsFound, 8);
 		assert.equal(audit.noCreate.productDelta, 0);
 		assert.equal(audit.noCreate.supermarketProductDelta, 0);
+	});
+
+	it("passes Vea audits with source-specific report metadata", async () => {
+		const report = veaWriteReport();
+		let historyScope: number[] = [];
+		const audit = await buildDirectRefreshPostwriteAudit({
+			source: "vea",
+			repository: repository(report, {
+				async readPriceHistoryRowsAboveId(_maxId, supermarketProductIds) {
+					historyScope = supermarketProductIds;
+					return report.rows
+						.filter((row) => row.insertedPriceHistoryId !== null)
+						.map((row) => ({
+							id: row.insertedPriceHistoryId ?? 0,
+							supermarketProductId: Number(row.rowId),
+							price: row.live?.price ?? null,
+							listPrice: row.live?.listPrice ?? null,
+							scrapedAt: report.committedAt,
+						}));
+				},
+			}),
+			writeReport: report,
+			now: new Date("2026-06-01T00:05:00.000Z"),
+		});
+
+		assert.equal(audit.status, "PASS");
+		assert.equal(audit.audit, "vea-direct-refresh-postwrite-audit");
+		assert.equal(audit.writeReport.source, "vea");
+		assert.equal(audit.writeReport.issue, 54);
+		assert.equal(audit.writeReport.umbrellaIssue, undefined);
+		assert.deepEqual(
+			historyScope,
+			report.rows.map((row) => Number(row.rowId)),
+		);
+		assert.equal(audit.summary.passRows, 10);
+		assert.equal(audit.summary.failRows, 0);
+	});
+
+	it("fails closed when Vea audit receives mismatched report source metadata", async () => {
+		const report = veaWriteReport({
+			report: "carrefour-direct-refresh-active-write",
+			issue: 45,
+			umbrellaIssue: 44,
+			source: {
+				slug: "carrefour",
+				supermarketId: 4,
+				expectedHost: "carrefour.com.ar",
+			},
+		});
+		const audit = await buildDirectRefreshPostwriteAudit({
+			source: "vea",
+			repository: repository(report),
+			writeReport: report,
+		});
+
+		const reasons = audit.summary.failClosedReasons.join("\n");
+		assert.equal(audit.status, "FAIL");
+		assert.match(reasons, /type is not Vea active write/);
+		assert.match(reasons, /issue linkage mismatch/);
+		assert.match(reasons, /source is not vea/);
+		assert.match(reasons, /expected host is not vea\.com\.ar/);
 	});
 
 	it("rejects invalid write report schema, status, source, count, and no-create deltas", async () => {
@@ -323,7 +415,17 @@ describe("Carrefour active refresh post-write audit", () => {
 				"--write-report=write.json",
 				"--output=audit.json",
 			]),
-			{ writeReport: "write.json", output: "audit.json" },
+			{ source: "carrefour", writeReport: "write.json", output: "audit.json" },
+		);
+		assert.deepEqual(
+			parseDirectRefreshPostwriteCliOptions([
+				"node",
+				"script",
+				"--source=vea",
+				"--write-report=write.json",
+				"--output=audit.json",
+			]),
+			{ source: "vea", writeReport: "write.json", output: "audit.json" },
 		);
 		for (const argv of [
 			["node", "script", "--write-report=write.json"],
@@ -332,7 +434,21 @@ describe("Carrefour active refresh post-write audit", () => {
 				"script",
 				"--write-report=write.json",
 				"--output=audit.json",
-				"--source=carrefour",
+				"--source=carrefour,vea",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--source=dia",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--all-source",
 			],
 			[
 				"node",

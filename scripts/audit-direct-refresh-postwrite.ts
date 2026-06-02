@@ -7,19 +7,30 @@ import { pathToFileURL } from "node:url";
 import { db } from "../src/lib/db";
 import type { ActiveWriteReport } from "./pipeline/direct-refresh-active-write";
 import {
-	buildCarrefourDirectRefreshPostwriteAudit,
+	buildDirectRefreshPostwriteAudit,
 	type DirectRefreshPostwriteRepository,
 } from "./pipeline/direct-refresh-postwrite-audit";
 import {
 	dateToIso,
 	decimalToNumber,
+	getOptionalSingleFlag,
 	getRequiredSingleFlag,
 } from "./pipeline/audit-utils";
+import type { DirectRefreshPostwriteSource } from "./pipeline/direct-refresh-postwrite-audit";
 
-type CliOptions = { writeReport: string; output: string };
+type CliOptions = {
+	source: DirectRefreshPostwriteSource;
+	writeReport: string;
+	output: string;
+};
+
+const DEFAULT_SOURCE: DirectRefreshPostwriteSource = "carrefour";
+const ALLOWED_SOURCES = new Set<DirectRefreshPostwriteSource>([
+	"carrefour",
+	"vea",
+]);
 
 const FORBIDDEN_FLAGS = [
-	"--source",
 	"--confirm-write",
 	"--active",
 	"--write",
@@ -53,7 +64,7 @@ export function parseDirectRefreshPostwriteCliOptions(
 		throw new Error(
 			`direct-refresh post-write audit rejects ${foundForbidden}`,
 		);
-	const allowed = new Set(REQUIRED_FLAGS);
+	const allowed = new Set([...REQUIRED_FLAGS, "--source"]);
 	const unknown = argv
 		.slice(2)
 		.find(
@@ -65,13 +76,30 @@ export function parseDirectRefreshPostwriteCliOptions(
 		const matches = argv.filter((entry) => entry.startsWith(`${flag}=`));
 		if (matches.length !== 1) throw new Error(`expected exactly one ${flag}`);
 	}
+	const source = parseSource(argv);
 	return {
+		source,
 		writeReport: getRequiredSingleFlag(argv, "--write-report"),
 		output: getRequiredSingleFlag(argv, "--output"),
 	};
 }
 
-export function createPostwriteRepository(): DirectRefreshPostwriteRepository {
+function parseSource(argv: string[]): DirectRefreshPostwriteSource {
+	const rawSource = getOptionalSingleFlag(argv, "--source") ?? DEFAULT_SOURCE;
+	if (rawSource.includes(",")) {
+		throw new Error("direct-refresh post-write audit requires one source only");
+	}
+	if (!ALLOWED_SOURCES.has(rawSource as DirectRefreshPostwriteSource)) {
+		throw new Error(
+			`direct-refresh post-write audit rejects source ${rawSource}`,
+		);
+	}
+	return rawSource as DirectRefreshPostwriteSource;
+}
+
+export function createPostwriteRepository(
+	sourceSlug: DirectRefreshPostwriteSource = DEFAULT_SOURCE,
+): DirectRefreshPostwriteRepository {
 	return {
 		async readNoCreateCounts() {
 			const [productCount, supermarketProductCount, maxHistory] =
@@ -91,7 +119,7 @@ export function createPostwriteRepository(): DirectRefreshPostwriteRepository {
 			const dbRows = await db.supermarketProduct.findMany({
 				where: {
 					id: { in: ids },
-					supermarket: { slug: "carrefour" },
+					supermarket: { slug: sourceSlug },
 				},
 				select: {
 					id: true,
@@ -158,9 +186,13 @@ export function createPostwriteRepository(): DirectRefreshPostwriteRepository {
 					},
 				}));
 		},
-		async readPriceHistoryRowsAboveId(maxId) {
+		async readPriceHistoryRowsAboveId(maxId, supermarketProductIds) {
 			const rows = await db.priceHistory.findMany({
-				where: maxId === null ? {} : { id: { gt: maxId } },
+				where: {
+					...(maxId === null ? {} : { id: { gt: maxId } }),
+					supermarket_product_id: { in: supermarketProductIds },
+					supermarket_product: { supermarket: { slug: sourceSlug } },
+				},
 				orderBy: { id: "asc" },
 				select: {
 					id: true,
@@ -191,8 +223,9 @@ async function writeJson(output: string, report: unknown) {
 }
 async function main() {
 	const options = parseDirectRefreshPostwriteCliOptions();
-	const report = await buildCarrefourDirectRefreshPostwriteAudit({
-		repository: createPostwriteRepository(),
+	const report = await buildDirectRefreshPostwriteAudit({
+		source: options.source,
+		repository: createPostwriteRepository(options.source),
 		writeReport: await readWriteReport(options.writeReport),
 	});
 	await writeJson(options.output, report);
