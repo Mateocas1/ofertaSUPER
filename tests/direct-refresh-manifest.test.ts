@@ -37,6 +37,13 @@ function repository(rows: DirectRefreshManifestExistingRow[]) {
 					baseUrl: "https://www.vea.com.ar",
 				};
 			}
+			if (sourceSlug === "disco") {
+				return {
+					id: 30,
+					slug: "disco",
+					baseUrl: "https://www.disco.com.ar",
+				};
+			}
 			return null;
 		},
 		async listOldestPublicRankableRows(sourceSlug: string, sampleSize: number) {
@@ -225,6 +232,47 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		assert.equal(report.rows[0].guards.carrefourHostOnly, true);
 	});
 
+	it("supports Disco allowlisted source with source-specific host guards", async () => {
+		const discoRow: DirectRefreshManifestExistingRow = {
+			...passRow,
+			id: "3",
+			sourceSlug: "disco",
+			supermarketId: 30,
+			productUrl: "https://www.disco.com.ar/leche-1/p",
+		};
+		const lookups: Array<{ sourceSlug: string; kind: string; value: string }> =
+			[];
+		const report = await buildDirectRefreshManifestDryRun({
+			sourceSlug: "disco",
+			repository: repository([discoRow]),
+			fetchDirectProducts: async (sourceSlug, lookup) => {
+				lookups.push({ sourceSlug, kind: lookup.kind, value: lookup.value });
+				return [
+					{
+						ean: "7790001000011",
+						skuId: "sku-1",
+						productUrl: "https://www.disco.com.ar/leche-1/p",
+						price: 990,
+						listPrice: 1100,
+						isAvailable: true,
+					},
+				];
+			},
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(report.audit, "disco-direct-refresh-manifest-dry-run");
+		assert.equal(report.source.slug, "disco");
+		assert.equal(report.source.expectedHost, "disco.com.ar");
+		assert.match(report.identity.guards.join("\n"), /existing Disco row/);
+		assert.match(report.identity.guards.join("\n"), /disco\.com\.ar/);
+		assert.deepEqual(lookups, [
+			{ sourceSlug: "disco", kind: "sku-id", value: "sku-1" },
+		]);
+		assert.equal(report.rows[0].sourceSlug, "disco");
+		assert.equal(report.rows[0].guards.carrefourHostOnly, true);
+	});
+
 	it("rejects unsupported scope before repository or network work", async () => {
 		await assert.rejects(
 			() =>
@@ -279,6 +327,14 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 				"--sample-size=10",
 			]),
 			{ source: "vea", sampleSize: 10, output: null },
+		);
+		assert.deepEqual(
+			parseDirectRefreshManifestCliOptions([
+				"node",
+				"script",
+				"--source=disco",
+			]),
+			{ source: "disco", sampleSize: 10, output: null },
 		);
 		assert.deepEqual(parseDirectRefreshManifestCliOptions(["node", "script"]), {
 			source: "carrefour",

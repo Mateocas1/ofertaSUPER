@@ -127,6 +127,11 @@ const SOURCE_CONFIGS = {
 		displayName: "Vea",
 		expectedHost: "vea.com.ar",
 	},
+	disco: {
+		slug: "disco",
+		displayName: "Disco",
+		expectedHost: "disco.com.ar",
+	},
 } as const;
 type DirectRefreshSourceSlug = keyof typeof SOURCE_CONFIGS;
 type DirectRefreshExpectedHost =
