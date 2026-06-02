@@ -28,6 +28,7 @@ const DEFAULT_SOURCE: DirectRefreshPostwriteSource = "carrefour";
 const ALLOWED_SOURCES = new Set<DirectRefreshPostwriteSource>([
 	"carrefour",
 	"vea",
+	"disco",
 ]);
 
 const FORBIDDEN_FLAGS = [

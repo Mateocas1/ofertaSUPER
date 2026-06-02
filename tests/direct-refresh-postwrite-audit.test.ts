@@ -177,6 +177,36 @@ function veaWriteReport(
 	};
 }
 
+function discoWriteReport(
+	overrides: Partial<ActiveWriteReport> = {},
+): ActiveWriteReport {
+	const base = writeReport();
+	const rows = base.rows.map((row) => ({
+		...row,
+		live: row.live
+			? {
+					...row.live,
+					productUrl: "https://www.disco.com.ar/leche/p",
+					productUrlHost: "disco.com.ar",
+				}
+			: row.live,
+	}));
+	return {
+		...base,
+		report: "disco-direct-refresh-active-write",
+		issue: 61,
+		umbrellaIssue: undefined,
+		source: {
+			slug: "disco",
+			supermarketId: 1,
+			expectedHost: "disco.com.ar",
+		},
+		transaction: { advisoryLockKey: 61204510, acquired: true },
+		rows,
+		...overrides,
+	};
+}
+
 function repository(
 	report = writeReport(),
 	overrides: Partial<DirectRefreshPostwriteRepository> = {},
@@ -293,6 +323,66 @@ describe("Carrefour active refresh post-write audit", () => {
 		assert.match(reasons, /issue linkage mismatch/);
 		assert.match(reasons, /source is not vea/);
 		assert.match(reasons, /expected host is not vea\.com\.ar/);
+	});
+
+	it("passes Disco audits with source-specific report metadata", async () => {
+		const report = discoWriteReport();
+		let historyScope: number[] = [];
+		const audit = await buildDirectRefreshPostwriteAudit({
+			source: "disco",
+			repository: repository(report, {
+				async readPriceHistoryRowsAboveId(_maxId, supermarketProductIds) {
+					historyScope = supermarketProductIds;
+					return report.rows
+						.filter((row) => row.insertedPriceHistoryId !== null)
+						.map((row) => ({
+							id: row.insertedPriceHistoryId ?? 0,
+							supermarketProductId: Number(row.rowId),
+							price: row.live?.price ?? null,
+							listPrice: row.live?.listPrice ?? null,
+							scrapedAt: report.committedAt,
+						}));
+				},
+			}),
+			writeReport: report,
+			now: new Date("2026-06-01T00:05:00.000Z"),
+		});
+
+		assert.equal(audit.status, "PASS");
+		assert.equal(audit.audit, "disco-direct-refresh-postwrite-audit");
+		assert.equal(audit.writeReport.source, "disco");
+		assert.equal(audit.writeReport.issue, 61);
+		assert.equal(audit.writeReport.umbrellaIssue, undefined);
+		assert.deepEqual(
+			historyScope,
+			report.rows.map((row) => Number(row.rowId)),
+		);
+		assert.equal(audit.summary.passRows, 10);
+		assert.equal(audit.summary.failRows, 0);
+	});
+
+	it("fails closed when Disco audit receives mismatched report source metadata", async () => {
+		const report = discoWriteReport({
+			report: "vea-direct-refresh-active-write",
+			issue: 54,
+			source: {
+				slug: "vea",
+				supermarketId: 5,
+				expectedHost: "vea.com.ar",
+			},
+		});
+		const audit = await buildDirectRefreshPostwriteAudit({
+			source: "disco",
+			repository: repository(report),
+			writeReport: report,
+		});
+
+		const reasons = audit.summary.failClosedReasons.join("\n");
+		assert.equal(audit.status, "FAIL");
+		assert.match(reasons, /type is not Disco active write/);
+		assert.match(reasons, /issue linkage mismatch/);
+		assert.match(reasons, /source is not disco/);
+		assert.match(reasons, /expected host is not disco\.com\.ar/);
 	});
 
 	it("rejects invalid write report schema, status, source, count, and no-create deltas", async () => {
@@ -426,6 +516,16 @@ describe("Carrefour active refresh post-write audit", () => {
 				"--output=audit.json",
 			]),
 			{ source: "vea", writeReport: "write.json", output: "audit.json" },
+		);
+		assert.deepEqual(
+			parseDirectRefreshPostwriteCliOptions([
+				"node",
+				"script",
+				"--source=disco",
+				"--write-report=write.json",
+				"--output=audit.json",
+			]),
+			{ source: "disco", writeReport: "write.json", output: "audit.json" },
 		);
 		for (const argv of [
 			["node", "script", "--write-report=write.json"],
