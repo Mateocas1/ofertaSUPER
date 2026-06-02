@@ -126,7 +126,7 @@ test("static guards inventory mutating workflows and package scripts before cron
 	assert.doesNotMatch(allWorkflows, /INGESTION_V2:\s*["']?active/i);
 	assert.doesNotMatch(
 		allWorkflows,
-		/direct-refresh:(?:carrefour|vea|disco)-write|direct-refresh-(?:carrefour|vea|disco)-write/i,
+		/direct-refresh:(?:carrefour|vea|disco|jumbo)-write|direct-refresh-(?:carrefour|vea|disco|jumbo)-write/i,
 	);
 	assert.equal(
 		workflowEntries.find((entry) => /refresh-existing/i.test(entry.fileName)),
@@ -139,9 +139,16 @@ test("active direct-refresh writers are not scheduled and avoid broad ingestion 
 		"scripts/direct-refresh-carrefour-write.ts",
 		"utf8",
 	);
-	const veaWriter = await readFile("scripts/direct-refresh-vea-write.ts", "utf8");
+	const veaWriter = await readFile(
+		"scripts/direct-refresh-vea-write.ts",
+		"utf8",
+	);
 	const discoWriter = await readFile(
 		"scripts/direct-refresh-disco-write.ts",
+		"utf8",
+	);
+	const jumboWriter = await readFile(
+		"scripts/direct-refresh-jumbo-write.ts",
 		"utf8",
 	);
 	const postwriteAudit = await readFile(
@@ -149,7 +156,7 @@ test("active direct-refresh writers are not scheduled and avoid broad ingestion 
 		"utf8",
 	);
 
-	for (const writer of [carrefourWriter, veaWriter, discoWriter]) {
+	for (const writer of [carrefourWriter, veaWriter, discoWriter, jumboWriter]) {
 		assert.doesNotMatch(
 			writer,
 			/reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
@@ -158,7 +165,7 @@ test("active direct-refresh writers are not scheduled and avoid broad ingestion 
 	}
 	assert.doesNotMatch(
 		postwriteAudit,
-		/direct-refresh-carrefour-write|direct-refresh-vea-write|direct-refresh-disco-write|executeCarrefourActiveWrite|executeVeaActiveWrite|executeDiscoActiveWrite|reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
+		/direct-refresh-carrefour-write|direct-refresh-vea-write|direct-refresh-disco-write|direct-refresh-jumbo-write|executeCarrefourActiveWrite|executeVeaActiveWrite|executeDiscoActiveWrite|executeJumboActiveWrite|reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
 	);
 });
 
