@@ -139,12 +139,20 @@ test("Carrefour active writer is not scheduled and avoids broad ingestion paths"
 		"scripts/direct-refresh-carrefour-write.ts",
 		"utf8",
 	);
+	const postwriteAudit = await readFile(
+		"scripts/audit-direct-refresh-postwrite.ts",
+		"utf8",
+	);
 
 	assert.doesNotMatch(
 		writer,
 		/reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
 	);
 	assert.doesNotMatch(writer, /workflow|cron|schedule|deploy|cleanup/);
+	assert.doesNotMatch(
+		postwriteAudit,
+		/direct-refresh-carrefour-write|executeCarrefourActiveWrite|reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
+	);
 });
 
 test("update prices workflow is dry-run only and does not report fake write status", async () => {

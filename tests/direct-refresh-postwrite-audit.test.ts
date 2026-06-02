@@ -1,0 +1,414 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+
+import { parseDirectRefreshPostwriteCliOptions } from "../scripts/audit-direct-refresh-postwrite";
+import type { ActiveWriteReport } from "../scripts/pipeline/direct-refresh-active-write";
+import {
+	buildCarrefourDirectRefreshPostwriteAudit,
+	type DirectRefreshPostwriteRepository,
+} from "../scripts/pipeline/direct-refresh-postwrite-audit";
+
+const product = {
+	ean: "7790001000011",
+	name: "Leche nueva",
+	brand: "Marca",
+	description: "Nueva",
+	imageUrl: "https://img/new.jpg",
+	images: ["https://img/new.jpg"],
+	category: "Lacteos",
+};
+const supermarketProduct = {
+	id: 1,
+	productEan: "7790001000011",
+	supermarketId: 4,
+	price: 1100,
+	listPrice: 1300,
+	referencePrice: null,
+	referenceUnit: null,
+	isAvailable: true,
+	skuId: "sku-1",
+	sellerId: "1",
+	productUrl: "https://www.carrefour.com.ar/leche/p",
+	productUrlHost: "carrefour.com.ar",
+	lastCheckedAt: "2026-06-01T00:00:00.000Z",
+};
+
+function writeReport(
+	overrides: Partial<ActiveWriteReport> = {},
+): ActiveWriteReport {
+	const rows = Array.from({ length: 10 }, (_, index) => {
+		const id = String(index + 1);
+		const ean = `77900010000${String(index + 1).padStart(2, "0")}`;
+		const sku = `sku-${index + 1}`;
+		return {
+			rowId: id,
+			productEan: ean,
+			skuId: sku,
+			before: {
+				product: { ...product, ean, name: "Leche vieja" },
+				supermarketProduct: {
+					...supermarketProduct,
+					id: index + 1,
+					productEan: ean,
+					skuId: sku,
+					price: 1000,
+				},
+				latestPriceHistory: {
+					id: index + 1,
+					supermarketProductId: index + 1,
+					price: 1000,
+					listPrice: 1200,
+					scrapedAt: "2026-05-01T00:00:00.000Z",
+				},
+			},
+			live: {
+				...product,
+				ean,
+				skuId: sku,
+				sellerId: "1",
+				productUrl: "https://www.carrefour.com.ar/leche/p",
+				price: 1100,
+				listPrice: 1300,
+				referencePrice: null,
+				referenceUnit: null,
+				isAvailable: true,
+				lookupResultCount: 1,
+				productUrlHost: "carrefour.com.ar",
+			},
+			appliedChanges: {
+				product: [
+					{ field: "name", before: "Leche vieja", after: product.name },
+				],
+				supermarketProduct: [
+					{ field: "price", before: 1000, after: 1100 },
+					{
+						field: "lastCheckedAt",
+						before: "2026-05-01T00:00:00.000Z",
+						after: "2026-06-01T00:00:00.000Z",
+					},
+				],
+			},
+			insertedPriceHistoryId: index < 8 ? 101 + index : null,
+		};
+	});
+	return {
+		schemaVersion: 1,
+		report: "carrefour-direct-refresh-active-write",
+		status: "PASS",
+		issue: 45,
+		umbrellaIssue: 44,
+		source: {
+			slug: "carrefour",
+			supermarketId: 4,
+			expectedHost: "carrefour.com.ar",
+		},
+		count: 10,
+		startedAt: "2026-06-01T00:00:00.000Z",
+		committedAt: "2026-06-01T00:00:00.000Z",
+		confirmation: {
+			prewriteReportPath: "prewrite.json",
+			prewriteGeneratedAt: "2026-06-01T00:00:00.000Z",
+			prewriteReportHash: "a".repeat(64),
+			rowIds: rows.map((row) => row.rowId),
+			productEans: rows.map((row) => row.productEan),
+			skuIds: rows.map((row) => row.skuId),
+		},
+		transaction: { advisoryLockKey: 44204510, acquired: true },
+		noCreate: {
+			before: {
+				productCount: 100,
+				supermarketProductCount: 200,
+				priceHistoryMaxId: 100,
+			},
+			after: {
+				productCount: 100,
+				supermarketProductCount: 200,
+				priceHistoryMaxId: 108,
+			},
+			productDelta: 0,
+			supermarketProductDelta: 0,
+		},
+		summary: {
+			rows: 10,
+			productUpdates: 10,
+			supermarketProductUpdates: 10,
+			priceHistoryPredicted: 8,
+			priceHistoryInserted: 8,
+		},
+		rollbackSnapshot: {
+			requiresConfirmation: true,
+			touchedProductEans: rows.map((row) => row.productEan),
+			touchedSupermarketProductIds: rows.map((row) => Number(row.rowId)),
+			priceHistory: { deleteRowsWithIdGreaterThan: 100, restoreLatestRows: [] },
+		},
+		rows,
+		...overrides,
+	};
+}
+
+function repository(
+	report = writeReport(),
+	overrides: Partial<DirectRefreshPostwriteRepository> = {},
+): DirectRefreshPostwriteRepository {
+	return {
+		async readNoCreateCounts() {
+			return report.noCreate.after;
+		},
+		async readSelectedRowsByExactIdentity(rows) {
+			return rows.map((identity) => ({
+				rowId: identity.rowId,
+				productEan: identity.productEan,
+				skuId: identity.skuId,
+				product: { ...product, ean: identity.productEan },
+				supermarketProduct: {
+					...supermarketProduct,
+					id: Number(identity.rowId),
+					productEan: identity.productEan,
+					skuId: identity.skuId,
+				},
+			}));
+		},
+		async readPriceHistoryRowsAboveId() {
+			return report.rows
+				.filter((row) => row.insertedPriceHistoryId !== null)
+				.map((row) => ({
+					id: row.insertedPriceHistoryId ?? 0,
+					supermarketProductId: Number(row.rowId),
+					price: row.live?.price ?? null,
+					listPrice: row.live?.listPrice ?? null,
+					scrapedAt: report.committedAt,
+				}));
+		},
+		...overrides,
+	};
+}
+
+describe("Carrefour active refresh post-write audit", () => {
+	it("passes with selected rows, no-create counts, and expected history rows", async () => {
+		const report = writeReport();
+		const audit = await buildCarrefourDirectRefreshPostwriteAudit({
+			repository: repository(report),
+			writeReport: report,
+			now: new Date("2026-06-01T00:05:00.000Z"),
+		});
+
+		assert.equal(audit.status, "PASS");
+		assert.equal(audit.writeBoundary.includes("read-only"), true);
+		assert.equal(audit.writeReport.source, "carrefour");
+		assert.equal(audit.summary.passRows, 10);
+		assert.equal(audit.summary.failRows, 0);
+		assert.equal(audit.summary.priceHistoryRowsExpected, 8);
+		assert.equal(audit.summary.priceHistoryRowsFound, 8);
+		assert.equal(audit.noCreate.productDelta, 0);
+		assert.equal(audit.noCreate.supermarketProductDelta, 0);
+	});
+
+	it("rejects invalid write report schema, status, source, count, and no-create deltas", async () => {
+		const report = writeReport({
+			schemaVersion: 2 as 1,
+			status: "FAIL" as "PASS",
+			source: {
+				slug: "dia" as "carrefour",
+				supermarketId: 4,
+				expectedHost: "carrefour.com.ar",
+			},
+			count: 9 as 10,
+			noCreate: {
+				before: {
+					productCount: 100,
+					supermarketProductCount: 200,
+					priceHistoryMaxId: 100,
+				},
+				after: {
+					productCount: 101,
+					supermarketProductCount: 201,
+					priceHistoryMaxId: 108,
+				},
+				productDelta: 1 as 0,
+				supermarketProductDelta: 1 as 0,
+			},
+			transaction: { advisoryLockKey: 44204510, acquired: false as true },
+			rollbackSnapshot: {
+				requiresConfirmation: false as true,
+				touchedProductEans: [],
+				touchedSupermarketProductIds: [],
+				priceHistory: {
+					deleteRowsWithIdGreaterThan: 100,
+					restoreLatestRows: [],
+				},
+			},
+		});
+		const audit = await buildCarrefourDirectRefreshPostwriteAudit({
+			repository: repository(report),
+			writeReport: report,
+		});
+
+		assert.equal(audit.status, "FAIL");
+		assert.match(audit.summary.failClosedReasons.join("\n"), /schema/);
+		assert.match(audit.summary.failClosedReasons.join("\n"), /status/);
+		assert.match(audit.summary.failClosedReasons.join("\n"), /source/);
+		assert.match(audit.summary.failClosedReasons.join("\n"), /count/);
+		assert.match(audit.summary.failClosedReasons.join("\n"), /deltas/);
+		assert.match(audit.summary.failClosedReasons.join("\n"), /rollback/);
+	});
+
+	it("fails on DB mismatch, missing row, extra history, and inserted history value mismatch", async () => {
+		const report = writeReport();
+		const audit = await buildCarrefourDirectRefreshPostwriteAudit({
+			repository: repository(report, {
+				async readNoCreateCounts() {
+					return {
+						productCount: 101,
+						supermarketProductCount: 200,
+						priceHistoryMaxId: 109,
+					};
+				},
+				async readSelectedRowsByExactIdentity(rows) {
+					const [first, ...rest] = rows;
+					return rest.map((identity) => ({
+						rowId: identity.rowId,
+						productEan: identity.productEan,
+						skuId: identity.skuId,
+						product: {
+							...product,
+							ean: identity.productEan,
+							name: first ? "wrong" : product.name,
+						},
+						supermarketProduct: {
+							...supermarketProduct,
+							id: Number(identity.rowId),
+							productEan: identity.productEan,
+							skuId: identity.skuId,
+							price: 999,
+						},
+					}));
+				},
+				async readPriceHistoryRowsAboveId() {
+					return [
+						{
+							id: 101,
+							supermarketProductId: 1,
+							price: 999,
+							listPrice: 1300,
+							scrapedAt: null,
+						},
+						{
+							id: 999,
+							supermarketProductId: 999,
+							price: 1,
+							listPrice: 1,
+							scrapedAt: null,
+						},
+					];
+				},
+			}),
+			writeReport: report,
+		});
+
+		const reasons = audit.summary.failClosedReasons.join("\n");
+		assert.equal(audit.status, "FAIL");
+		assert.match(reasons, /selected row is missing/);
+		assert.match(reasons, /product\.name/);
+		assert.match(reasons, /supermarketProduct\.price/);
+		assert.match(reasons, /product count/);
+		assert.match(reasons, /price history row 101 price mismatch/);
+		assert.match(reasons, /unexpected price history row 999/);
+	});
+
+	it("parses required read-only CLI options and rejects unsafe flags", () => {
+		assert.deepEqual(
+			parseDirectRefreshPostwriteCliOptions([
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+			]),
+			{ writeReport: "write.json", output: "audit.json" },
+		);
+		for (const argv of [
+			["node", "script", "--write-report=write.json"],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--source=carrefour",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--active",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--write",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--reconcile",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--stage",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--ingest",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--refresh",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--cron=true",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--workflow",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--cleanup",
+			],
+			[
+				"node",
+				"script",
+				"--write-report=write.json",
+				"--output=audit.json",
+				"--deploy",
+			],
+		]) {
+			assert.throws(
+				() => parseDirectRefreshPostwriteCliOptions(argv),
+				/post-write|expected|rejects/,
+			);
+		}
+	});
+});
