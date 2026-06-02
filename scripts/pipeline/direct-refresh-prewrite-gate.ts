@@ -197,6 +197,11 @@ const SOURCE_CONFIGS = {
 		displayName: "Vea",
 		expectedHost: "vea.com.ar",
 	},
+	disco: {
+		slug: "disco",
+		displayName: "Disco",
+		expectedHost: "disco.com.ar",
+	},
 } as const;
 type DirectRefreshSourceSlug = keyof typeof SOURCE_CONFIGS;
 type DirectRefreshExpectedHost =
@@ -466,8 +471,8 @@ async function evaluatePrewriteRow({
 	);
 	const positiveLivePrice = Boolean(
 		liveProduct?.price !== null &&
-		liveProduct?.price !== undefined &&
-		liveProduct.price > 0,
+			liveProduct?.price !== undefined &&
+			liveProduct.price > 0,
 	);
 	const priceDeltaPercent = priceDelta(row.price, liveProduct?.price ?? null);
 	const priceDeltaWithinLimit =

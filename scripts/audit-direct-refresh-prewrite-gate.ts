@@ -17,12 +17,13 @@ import {
 	parsePositiveIntegerFlag,
 } from "./pipeline/audit-utils";
 
-type SupportedPrewriteSource = "carrefour" | "vea";
+type SupportedPrewriteSource = "carrefour" | "vea" | "disco";
 
 const DEFAULT_SOURCE = "carrefour" as const;
 const SUPPORTED_SOURCES = new Set<SupportedPrewriteSource>([
 	"carrefour",
 	"vea",
+	"disco",
 ]);
 const FORBIDDEN_FLAGS = [
 	"--confirm-write",
@@ -78,7 +79,7 @@ export function parseDirectRefreshPrewriteGateCliOptions(
 		!SUPPORTED_SOURCES.has(sources[0] as SupportedPrewriteSource)
 	) {
 		throw new Error(
-			"direct-refresh pre-write gate only accepts --source=carrefour or --source=vea",
+			"direct-refresh pre-write gate only accepts --source=carrefour, --source=vea, or --source=disco",
 		);
 	}
 	return {
