@@ -8,20 +8,22 @@ import type {
 type AuditStatus = "PASS" | "FAIL";
 type RowStatus = "PASS" | "FAIL";
 type Counts = ActiveWriteReport["noCreate"]["after"];
-export type DirectRefreshPostwriteSource = "carrefour" | "vea";
+export type DirectRefreshPostwriteSource = "carrefour" | "vea" | "disco";
 
 type SourceConfig = {
 	source: DirectRefreshPostwriteSource;
 	displayName: string;
-	issue: 45 | 54;
+	issue: 45 | 54 | 61;
 	umbrellaIssue?: 44;
-	expectedHost: "carrefour.com.ar" | "vea.com.ar";
+	expectedHost: "carrefour.com.ar" | "vea.com.ar" | "disco.com.ar";
 	activeWriteReport:
 		| "carrefour-direct-refresh-active-write"
-		| "vea-direct-refresh-active-write";
+		| "vea-direct-refresh-active-write"
+		| "disco-direct-refresh-active-write";
 	postwriteAudit:
 		| "carrefour-direct-refresh-postwrite-audit"
-		| "vea-direct-refresh-postwrite-audit";
+		| "vea-direct-refresh-postwrite-audit"
+		| "disco-direct-refresh-postwrite-audit";
 };
 
 const SOURCE_CONFIGS = {
@@ -42,6 +44,15 @@ const SOURCE_CONFIGS = {
 		expectedHost: "vea.com.ar",
 		activeWriteReport: "vea-direct-refresh-active-write",
 		postwriteAudit: "vea-direct-refresh-postwrite-audit",
+	},
+	disco: {
+		source: "disco",
+		displayName: "Disco",
+		issue: 61,
+		umbrellaIssue: undefined,
+		expectedHost: "disco.com.ar",
+		activeWriteReport: "disco-direct-refresh-active-write",
+		postwriteAudit: "disco-direct-refresh-postwrite-audit",
 	},
 } as const satisfies Record<DirectRefreshPostwriteSource, SourceConfig>;
 
@@ -79,13 +90,14 @@ export type DirectRefreshPostwriteAuditReport = {
 	schemaVersion: 1;
 	audit:
 		| "carrefour-direct-refresh-postwrite-audit"
-		| "vea-direct-refresh-postwrite-audit";
+		| "vea-direct-refresh-postwrite-audit"
+		| "disco-direct-refresh-postwrite-audit";
 	status: AuditStatus;
 	basis: "production";
 	generatedAt: string;
 	writeBoundary: "read-only post-write audit; no production writes, no active refresh/reconcile, no staging/ingestion runs, no scheduler/cron/workflow side effects";
 	writeReport: {
-		issue: 45 | 54;
+		issue: 45 | 54 | 61;
 		umbrellaIssue?: 44;
 		source: DirectRefreshPostwriteSource;
 		count: 10;
