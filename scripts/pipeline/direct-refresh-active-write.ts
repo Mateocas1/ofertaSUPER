@@ -17,23 +17,30 @@ export const CARREFOUR_ACTIVE_WRITE_CONFIRMATION =
 	"carrefour-direct-refresh-count10";
 export const VEA_ACTIVE_WRITE_CONFIRMATION = "vea-direct-refresh-count10";
 export const DISCO_ACTIVE_WRITE_CONFIRMATION = "disco-direct-refresh-count10";
+export const JUMBO_ACTIVE_WRITE_CONFIRMATION = "jumbo-direct-refresh-count10";
 export const CARREFOUR_ACTIVE_WRITE_COUNT = 10;
 export const VEA_ACTIVE_WRITE_COUNT = 10;
 export const DISCO_ACTIVE_WRITE_COUNT = 10;
+export const JUMBO_ACTIVE_WRITE_COUNT = 10;
 export const CARREFOUR_ACTIVE_WRITE_LOCK_KEY = 44204510;
 export const VEA_ACTIVE_WRITE_LOCK_KEY = 54204510;
 export const DISCO_ACTIVE_WRITE_LOCK_KEY = 61204510;
+export const JUMBO_ACTIVE_WRITE_LOCK_KEY = 68204510;
 const MAX_PREWRITE_AGE_MS = 15 * 60 * 1000;
 
-type ActiveWriteSource = "carrefour" | "vea" | "disco";
+type ActiveWriteSource = "carrefour" | "vea" | "disco" | "jumbo";
 type SourceConfig = {
 	source: ActiveWriteSource;
 	displayName: string;
 	confirmation: string;
 	lockKey: number;
-	issue: 45 | 54 | 61;
+	issue: 45 | 54 | 61 | 68;
 	umbrellaIssue?: 44;
-	expectedHost: "carrefour.com.ar" | "vea.com.ar" | "disco.com.ar";
+	expectedHost:
+		| "carrefour.com.ar"
+		| "vea.com.ar"
+		| "disco.com.ar"
+		| "jumbo.com.ar";
 	report: `${ActiveWriteSource}-direct-refresh-active-write`;
 };
 const SOURCE_CONFIGS = {
@@ -64,6 +71,15 @@ const SOURCE_CONFIGS = {
 		issue: 61,
 		expectedHost: "disco.com.ar",
 		report: "disco-direct-refresh-active-write",
+	},
+	jumbo: {
+		source: "jumbo",
+		displayName: "Jumbo",
+		confirmation: JUMBO_ACTIVE_WRITE_CONFIRMATION,
+		lockKey: JUMBO_ACTIVE_WRITE_LOCK_KEY,
+		issue: 68,
+		expectedHost: "jumbo.com.ar",
+		report: "jumbo-direct-refresh-active-write",
 	},
 } as const satisfies Record<ActiveWriteSource, SourceConfig>;
 
@@ -108,10 +124,12 @@ export type CarrefourActiveWriteCliOptions =
 	ActiveWriteCliOptionsFor<"carrefour">;
 export type VeaActiveWriteCliOptions = ActiveWriteCliOptionsFor<"vea">;
 export type DiscoActiveWriteCliOptions = ActiveWriteCliOptionsFor<"disco">;
+export type JumboActiveWriteCliOptions = ActiveWriteCliOptionsFor<"jumbo">;
 export type ActiveWriteCliOptions =
 	| CarrefourActiveWriteCliOptions
 	| VeaActiveWriteCliOptions
-	| DiscoActiveWriteCliOptions;
+	| DiscoActiveWriteCliOptions
+	| JumboActiveWriteCliOptions;
 
 export type ActiveWriteTransaction = {
 	acquireAdvisoryLock(lockKey: number): Promise<boolean>;
@@ -147,12 +165,16 @@ export type ActiveWriteReport = {
 	schemaVersion: 1;
 	report: `${ActiveWriteSource}-direct-refresh-active-write`;
 	status: "PASS";
-	issue: 45 | 54 | 61;
+	issue: 45 | 54 | 61 | 68;
 	umbrellaIssue?: 44;
 	source: {
 		slug: ActiveWriteSource;
 		supermarketId: number;
-		expectedHost: "carrefour.com.ar" | "vea.com.ar" | "disco.com.ar";
+		expectedHost:
+			| "carrefour.com.ar"
+			| "vea.com.ar"
+			| "disco.com.ar"
+			| "jumbo.com.ar";
 	};
 	count: 10;
 	startedAt: string;
@@ -230,6 +252,12 @@ export function parseDiscoActiveWriteCliOptions(
 	return parseActiveWriteCliOptions(argv, "disco");
 }
 
+export function parseJumboActiveWriteCliOptions(
+	argv = process.argv,
+): JumboActiveWriteCliOptions {
+	return parseActiveWriteCliOptions(argv, "jumbo");
+}
+
 function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 	argv: string[],
 	expectedSource: Source,
@@ -241,7 +269,9 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 		),
 	);
 	if (foundForbidden)
-		throw new Error(`${config.displayName} active writer rejects ${foundForbidden}`);
+		throw new Error(
+			`${config.displayName} active writer rejects ${foundForbidden}`,
+		);
 	const allowedFlags = new Set(REQUIRED_FLAGS);
 	const unknownFlag = argv
 		.slice(2)
@@ -250,16 +280,16 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 				entry.startsWith("--") && !allowedFlags.has(entry.split("=", 1)[0]),
 		);
 	if (unknownFlag)
-		throw new Error(`unknown ${config.displayName} active writer flag ${unknownFlag}`);
+		throw new Error(
+			`unknown ${config.displayName} active writer flag ${unknownFlag}`,
+		);
 	for (const flag of REQUIRED_FLAGS) {
 		const matches = argv.filter((entry) => entry.startsWith(`${flag}=`));
 		if (matches.length !== 1) throw new Error(`expected exactly one ${flag}`);
 	}
 	const source = getOptionalSingleFlag(argv, "--source");
 	if (source !== config.source)
-		throw new Error(
-			`active writer only accepts --source=${config.source}`,
-		);
+		throw new Error(`active writer only accepts --source=${config.source}`);
 	const count = parsePositiveIntegerFlag(argv, "--count", 0);
 	if (count !== 10) throw new Error("active writer requires --count=10");
 	const hash = getOptionalSingleFlag(argv, "--prewrite-report-hash") ?? "";
@@ -267,7 +297,9 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 		throw new Error("prewrite report hash must be lowercase 64 hex");
 	const confirmWrite = getOptionalSingleFlag(argv, "--confirm-write");
 	if (confirmWrite !== config.confirmation)
-		throw new Error(`missing exact ${config.displayName} active write confirmation`);
+		throw new Error(
+			`missing exact ${config.displayName} active write confirmation`,
+		);
 	return {
 		source: config.source,
 		count: 10,
@@ -419,6 +451,20 @@ export async function executeDiscoActiveWrite({
 	return executeActiveWrite({ repository, prewriteReport, options, startedAt });
 }
 
+export async function executeJumboActiveWrite({
+	repository,
+	prewriteReport,
+	options,
+	startedAt = new Date(),
+}: {
+	repository: ActiveWriteRepository;
+	prewriteReport: CarrefourDirectRefreshPrewriteGate;
+	options: JumboActiveWriteCliOptions;
+	startedAt?: Date;
+}): Promise<ActiveWriteReport> {
+	return executeActiveWrite({ repository, prewriteReport, options, startedAt });
+}
+
 async function executeActiveWrite({
 	repository,
 	prewriteReport,
@@ -434,7 +480,9 @@ async function executeActiveWrite({
 	validatePrewriteReportForActiveWrite(prewriteReport, options, startedAt);
 	return repository.withTransaction(async (tx) => {
 		if (!(await tx.acquireAdvisoryLock(config.lockKey)))
-			throw new Error(`${config.displayName} active write advisory lock unavailable`);
+			throw new Error(
+				`${config.displayName} active write advisory lock unavailable`,
+			);
 		const beforeCounts = await tx.readNoCreateCounts();
 		const identities = prewriteReport.rows.map((row) => ({
 			rowId: row.rowId,
@@ -581,7 +629,8 @@ function buildActiveWriteReport({
 
 function exactList(argv: string[], flag: string) {
 	const list = parseOptionalListFlag(argv, flag);
-	if (list.length !== 10) throw new Error(`${flag} must contain exactly 10 values`);
+	if (list.length !== 10)
+		throw new Error(`${flag} must contain exactly 10 values`);
 	if (new Set(list).size !== list.length)
 		throw new Error(`${flag} contains duplicate values`);
 	return list;

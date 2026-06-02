@@ -6,14 +6,18 @@ import {
 	CARREFOUR_ACTIVE_WRITE_LOCK_KEY,
 	DISCO_ACTIVE_WRITE_CONFIRMATION,
 	DISCO_ACTIVE_WRITE_LOCK_KEY,
+	JUMBO_ACTIVE_WRITE_CONFIRMATION,
+	JUMBO_ACTIVE_WRITE_LOCK_KEY,
 	VEA_ACTIVE_WRITE_CONFIRMATION,
 	VEA_ACTIVE_WRITE_LOCK_KEY,
 	assertFreshPrewriteRerunMatches,
 	executeCarrefourActiveWrite,
 	executeDiscoActiveWrite,
+	executeJumboActiveWrite,
 	executeVeaActiveWrite,
 	parseCarrefourActiveWriteCliOptions,
 	parseDiscoActiveWriteCliOptions,
+	parseJumboActiveWriteCliOptions,
 	parseVeaActiveWriteCliOptions,
 	validatePrewriteReportForActiveWrite,
 	type ActiveWriteRepository,
@@ -133,7 +137,8 @@ function veaRows(): DirectRefreshPrewriteExistingRow[] {
 		...row,
 		sourceSlug: "vea",
 		supermarketId: 3,
-		productUrl: row.productUrl?.replace("carrefour.com.ar", "vea.com.ar") ?? null,
+		productUrl:
+			row.productUrl?.replace("carrefour.com.ar", "vea.com.ar") ?? null,
 	}));
 }
 function veaRepository(existingRows = veaRows()) {
@@ -209,7 +214,8 @@ function discoRows(): DirectRefreshPrewriteExistingRow[] {
 		...row,
 		sourceSlug: "disco",
 		supermarketId: 1,
-		productUrl: row.productUrl?.replace("carrefour.com.ar", "disco.com.ar") ?? null,
+		productUrl:
+			row.productUrl?.replace("carrefour.com.ar", "disco.com.ar") ?? null,
 	}));
 }
 function discoRepository(existingRows = discoRows()) {
@@ -277,6 +283,83 @@ function discoArgv(
 		`--sku-ids=${report.futureConfirmation.shape.skuIds.join(",")}`,
 		`--confirm-write=${DISCO_ACTIVE_WRITE_CONFIRMATION}`,
 		"--output=disco-write.json",
+		...extra,
+	];
+}
+function jumboRows(): DirectRefreshPrewriteExistingRow[] {
+	return rows().map((row) => ({
+		...row,
+		sourceSlug: "jumbo",
+		supermarketId: 2,
+		productUrl:
+			row.productUrl?.replace("carrefour.com.ar", "jumbo.com.ar") ?? null,
+	}));
+}
+function jumboRepository(existingRows = jumboRows()) {
+	return {
+		async getSource() {
+			return {
+				id: 2,
+				slug: "jumbo",
+				baseUrl: "https://www.jumbo.com.ar",
+			};
+		},
+		async listOldestPublicRankableRows() {
+			return existingRows;
+		},
+		async findRowsBySourceSku(_sourceSlug: string, skuId: string) {
+			return existingRows.filter((row) => row.skuId === skuId);
+		},
+		async getMaxPriceHistoryId() {
+			return 99;
+		},
+	};
+}
+async function jumboPrewrite(now = "2026-06-01T00:00:00.000Z") {
+	return buildDirectRefreshPrewriteGate({
+		repository: jumboRepository(),
+		sourceSlug: "jumbo",
+		now: new Date(now),
+		fetchDirectProducts: async (_sourceSlug, lookup) => {
+			const row = jumboRows().find((entry) => entry.skuId === lookup.value);
+			return [
+				{
+					ean: row?.ean ?? "",
+					name: `${row?.product?.name} Nuevo`,
+					brand: "Nueva",
+					description: "Nueva",
+					imageUrl: "https://www.jumbo.com.ar/new.jpg",
+					images: ["https://www.jumbo.com.ar/new.jpg"],
+					category: "Test",
+					skuId: lookup.value,
+					sellerId: "1",
+					productUrl: row?.productUrl ?? null,
+					price: 1100,
+					listPrice: 1100,
+					referencePrice: null,
+					referenceUnit: null,
+					isAvailable: true,
+				},
+			];
+		},
+	});
+}
+function jumboArgv(
+	report: Awaited<ReturnType<typeof jumboPrewrite>>,
+	extra: string[] = [],
+) {
+	return [
+		"node",
+		"script",
+		"--source=jumbo",
+		"--count=10",
+		"--prewrite-report=jumbo-prewrite.json",
+		`--prewrite-report-hash=${report.futureConfirmation.shape.reportHash}`,
+		`--row-ids=${report.futureConfirmation.shape.rowIds.join(",")}`,
+		`--product-eans=${report.futureConfirmation.shape.productEans.join(",")}`,
+		`--sku-ids=${report.futureConfirmation.shape.skuIds.join(",")}`,
+		`--confirm-write=${JUMBO_ACTIVE_WRITE_CONFIRMATION}`,
+		"--output=jumbo-write.json",
 		...extra,
 	];
 }
@@ -672,6 +755,80 @@ describe("Carrefour active refresh writer contract", () => {
 		assert.equal(writeReport.umbrellaIssue, undefined);
 		assert.equal(writeReport.source.slug, "disco");
 		assert.equal(writeReport.source.expectedHost, "disco.com.ar");
+		assert.equal(writeReport.summary.rows, 10);
+		assert.equal(writeReport.noCreate.productDelta, 0);
+	});
+
+	it("parses exact Jumbo confirmation flags and rejects other sources", async () => {
+		const report = await jumboPrewrite();
+		const parsed = parseJumboActiveWriteCliOptions(jumboArgv(report));
+		assert.equal(parsed.source, "jumbo");
+		assert.equal(parsed.confirmWrite, JUMBO_ACTIVE_WRITE_CONFIRMATION);
+		assert.deepEqual(parsed.rowIds, report.futureConfirmation.shape.rowIds);
+		for (const bad of [
+			["--source=carrefour"],
+			["--source=vea"],
+			["--source=disco"],
+			["--count=9"],
+			["--dry-run"],
+			["--all-source"],
+			["--cron=true"],
+			["--confirm-write=disco-direct-refresh-count10"],
+		]) {
+			assert.throws(
+				() => parseJumboActiveWriteCliOptions(jumboArgv(report, bad)),
+				/jumbo|count|rejects|confirmation|unknown|exactly one/,
+			);
+		}
+	});
+
+	it("executes Jumbo selected-row-only transaction and emits source report schema", async () => {
+		const report = await jumboPrewrite();
+		const options = parseJumboActiveWriteCliOptions(jumboArgv(report));
+		let lockKey = 0;
+		let selectedSource = "";
+		let updatedSource = "";
+		const writeReport = await executeJumboActiveWrite({
+			repository: repo(
+				tx({
+					async acquireAdvisoryLock(key) {
+						lockKey = key;
+						return true;
+					},
+					async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+						selectedSource = sourceSlug;
+						return tx().readSelectedRowsByExactIdentity(sourceSlug, identities);
+					},
+					async updateSupermarketProductByExactIdentity(
+						sourceSlug,
+						rowId,
+						productEan,
+						skuId,
+						changes,
+					) {
+						updatedSource = sourceSlug;
+						return tx().updateSupermarketProductByExactIdentity(
+							sourceSlug,
+							rowId,
+							productEan,
+							skuId,
+							changes,
+						);
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date(report.generatedAt),
+		});
+		assert.equal(lockKey, JUMBO_ACTIVE_WRITE_LOCK_KEY);
+		assert.equal(selectedSource, "jumbo");
+		assert.equal(updatedSource, "jumbo");
+		assert.equal(writeReport.report, "jumbo-direct-refresh-active-write");
+		assert.equal(writeReport.issue, 68);
+		assert.equal(writeReport.umbrellaIssue, undefined);
+		assert.equal(writeReport.source.slug, "jumbo");
+		assert.equal(writeReport.source.expectedHost, "jumbo.com.ar");
 		assert.equal(writeReport.summary.rows, 10);
 		assert.equal(writeReport.noCreate.productDelta, 0);
 	});
