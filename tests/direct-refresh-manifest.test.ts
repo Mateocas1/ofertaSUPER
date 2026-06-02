@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { parseDirectRefreshManifestCliOptions } from "../scripts/audit-direct-refresh-manifest";
 import {
 	buildCarrefourDirectRefreshManifestDryRun,
+	buildDirectRefreshManifestDryRun,
 	type DirectRefreshManifestExistingRow,
 } from "../scripts/pipeline/direct-refresh-manifest";
 
@@ -22,13 +23,21 @@ const passRow: DirectRefreshManifestExistingRow = {
 function repository(rows: DirectRefreshManifestExistingRow[]) {
 	return {
 		async getSource(sourceSlug: string) {
-			return sourceSlug === "carrefour"
-				? {
-						id: 10,
-						slug: "carrefour",
-						baseUrl: "https://www.carrefour.com.ar",
-					}
-				: null;
+			if (sourceSlug === "carrefour") {
+				return {
+					id: 10,
+					slug: "carrefour",
+					baseUrl: "https://www.carrefour.com.ar",
+				};
+			}
+			if (sourceSlug === "vea") {
+				return {
+					id: 20,
+					slug: "vea",
+					baseUrl: "https://www.vea.com.ar",
+				};
+			}
+			return null;
 		},
 		async listOldestPublicRankableRows(sourceSlug: string, sampleSize: number) {
 			return rows
@@ -175,10 +184,51 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		);
 	});
 
-	it("rejects non-Carrefour scope before repository or network work", async () => {
+	it("supports Vea allowlisted source with source-specific host guards", async () => {
+		const veaRow: DirectRefreshManifestExistingRow = {
+			...passRow,
+			id: "2",
+			sourceSlug: "vea",
+			supermarketId: 20,
+			productUrl: "https://www.vea.com.ar/leche-1/p",
+		};
+		const lookups: Array<{ sourceSlug: string; kind: string; value: string }> =
+			[];
+		const report = await buildDirectRefreshManifestDryRun({
+			sourceSlug: "vea",
+			repository: repository([veaRow]),
+			fetchDirectProducts: async (sourceSlug, lookup) => {
+				lookups.push({ sourceSlug, kind: lookup.kind, value: lookup.value });
+				return [
+					{
+						ean: "7790001000011",
+						skuId: "sku-1",
+						productUrl: "https://www.vea.com.ar/leche-1/p",
+						price: 990,
+						listPrice: 1100,
+						isAvailable: true,
+					},
+				];
+			},
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(report.audit, "vea-direct-refresh-manifest-dry-run");
+		assert.equal(report.source.slug, "vea");
+		assert.equal(report.source.expectedHost, "vea.com.ar");
+		assert.match(report.identity.guards.join("\n"), /existing Vea row/);
+		assert.match(report.identity.guards.join("\n"), /vea\.com\.ar/);
+		assert.deepEqual(lookups, [
+			{ sourceSlug: "vea", kind: "sku-id", value: "sku-1" },
+		]);
+		assert.equal(report.rows[0].sourceSlug, "vea");
+		assert.equal(report.rows[0].guards.carrefourHostOnly, true);
+	});
+
+	it("rejects unsupported scope before repository or network work", async () => {
 		await assert.rejects(
 			() =>
-				buildCarrefourDirectRefreshManifestDryRun({
+				buildDirectRefreshManifestDryRun({
 					sourceSlug: "dia",
 					repository: {
 						async getSource() {
@@ -195,7 +245,7 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 						throw new Error("network should not be called");
 					},
 				}),
-			/restricted to source=carrefour/,
+			/restricted to allowlisted source/,
 		);
 	});
 
@@ -210,7 +260,7 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		assert.deepEqual(report.summary.failClosedReasons, ["no rows selected"]);
 	});
 
-	it("parses only Carrefour read-only CLI options", () => {
+	it("parses only allowlisted read-only CLI options", () => {
 		assert.deepEqual(
 			parseDirectRefreshManifestCliOptions([
 				"node",
@@ -221,6 +271,15 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 			]),
 			{ source: "carrefour", sampleSize: 7, output: "manifest.json" },
 		);
+		assert.deepEqual(
+			parseDirectRefreshManifestCliOptions([
+				"node",
+				"script",
+				"--source=vea",
+				"--sample-size=10",
+			]),
+			{ source: "vea", sampleSize: 10, output: null },
+		);
 		assert.deepEqual(parseDirectRefreshManifestCliOptions(["node", "script"]), {
 			source: "carrefour",
 			sampleSize: 10,
@@ -229,6 +288,8 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		for (const argv of [
 			["node", "script", "--source=dia"],
 			["node", "script", "--source=carrefour,dia"],
+			["node", "script", "--all-source"],
+			["node", "script", "--all-sources=true"],
 			["node", "script", "--confirm-write"],
 			["node", "script", "--cron=true"],
 			["node", "script", "--cleanup"],

@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { parseDirectRefreshPrewriteGateCliOptions } from "../scripts/audit-direct-refresh-prewrite-gate";
 import {
 	buildCarrefourDirectRefreshPrewriteGate,
+	buildDirectRefreshPrewriteGate,
 	buildPrewriteReportHash,
 	type DirectRefreshPrewriteExistingRow,
 } from "../scripts/pipeline/direct-refresh-prewrite-gate";
@@ -87,13 +88,21 @@ function liveProduct(
 function repository(rows: DirectRefreshPrewriteExistingRow[]) {
 	return {
 		async getSource(sourceSlug: string) {
-			return sourceSlug === "carrefour"
-				? {
-						id: 10,
-						slug: "carrefour",
-						baseUrl: "https://www.carrefour.com.ar",
-					}
-				: null;
+			if (sourceSlug === "carrefour") {
+				return {
+					id: 10,
+					slug: "carrefour",
+					baseUrl: "https://www.carrefour.com.ar",
+				};
+			}
+			if (sourceSlug === "vea") {
+				return {
+					id: 20,
+					slug: "vea",
+					baseUrl: "https://www.vea.com.ar",
+				};
+			}
+			return null;
 		},
 		async listOldestPublicRankableRows(sourceSlug: string, sampleSize: number) {
 			return rows
@@ -206,10 +215,59 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		);
 	});
 
-	it("rejects non-Carrefour scope before repository or network work", async () => {
+	it("supports Vea allowlisted source with source-specific host and confirmation guards", async () => {
+		const veaRow: DirectRefreshPrewriteExistingRow = {
+			...passRow,
+			id: "2",
+			sourceSlug: "vea",
+			supermarketId: 20,
+			productUrl: "https://www.vea.com.ar/leche-1/p",
+			product: passRow.product
+				? {
+						...passRow.product,
+						imageUrl: "https://www.vea.com.ar/old.jpg",
+						images: ["https://www.vea.com.ar/old.jpg"],
+					}
+				: null,
+		};
+		const lookups: Array<{ sourceSlug: string; kind: string; value: string }> =
+			[];
+		const report = await buildDirectRefreshPrewriteGate({
+			sourceSlug: "vea",
+			repository: repository([veaRow]),
+			now: new Date("2026-06-01T00:00:00.000Z"),
+			fetchDirectProducts: async (sourceSlug, lookup) => {
+				lookups.push({ sourceSlug, kind: lookup.kind, value: lookup.value });
+				return [
+					live({
+						productUrl: "https://www.vea.com.ar/leche-1/p",
+						imageUrl: "https://www.vea.com.ar/new.jpg",
+						images: ["https://www.vea.com.ar/new.jpg"],
+					}),
+				];
+			},
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(report.audit, "vea-direct-refresh-prewrite-gate");
+		assert.equal(report.source.slug, "vea");
+		assert.equal(report.source.expectedHost, "vea.com.ar");
+		assert.match(report.identity.guards.join("\n"), /existing Vea row/);
+		assert.match(report.identity.guards.join("\n"), /vea\.com\.ar/);
+		assert.deepEqual(lookups, [
+			{ sourceSlug: "vea", kind: "sku-id", value: "sku-1" },
+		]);
+		assert.equal(report.futureConfirmation.shape.source, "vea");
+		assert.deepEqual(report.futureConfirmation.shape.rowIds, ["2"]);
+		assert.deepEqual(report.futureConfirmation.shape.skuIds, ["sku-1"]);
+		assert.equal(report.rows[0].sourceSlug, "vea");
+		assert.equal(report.rows[0].guards.carrefourHostOnly, true);
+	});
+
+	it("rejects unsupported scope before repository or network work", async () => {
 		await assert.rejects(
 			() =>
-				buildCarrefourDirectRefreshPrewriteGate({
+				buildDirectRefreshPrewriteGate({
 					sourceSlug: "dia",
 					repository: {
 						async getSource() {
@@ -229,7 +287,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 						throw new Error("network should not be called");
 					},
 				}),
-			/restricted to source=carrefour/,
+			/restricted to allowlisted source/,
 		);
 	});
 
@@ -326,7 +384,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		);
 	});
 
-	it("parses only Carrefour read-only CLI options", () => {
+	it("parses only allowlisted read-only CLI options", () => {
 		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions([
 				"node",
@@ -338,12 +396,22 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			{ source: "carrefour", sampleSize: 7, output: "prewrite.json" },
 		);
 		assert.deepEqual(
+			parseDirectRefreshPrewriteGateCliOptions([
+				"node",
+				"script",
+				"--source=vea",
+			]),
+			{ source: "vea", sampleSize: 10, output: null },
+		);
+		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions(["node", "script"]),
 			{ source: "carrefour", sampleSize: 10, output: null },
 		);
 		for (const argv of [
 			["node", "script", "--source=dia"],
 			["node", "script", "--source=carrefour,dia"],
+			["node", "script", "--all-source"],
+			["node", "script", "--all-sources=true"],
 			["node", "script", "--confirm-write"],
 			["node", "script", "--active"],
 			["node", "script", "--write=true"],

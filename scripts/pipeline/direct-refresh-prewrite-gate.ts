@@ -69,7 +69,7 @@ export type DirectRefreshPrewriteChange = {
 
 export type DirectRefreshPrewriteRow = {
 	rowId: string;
-	sourceSlug: "carrefour";
+	sourceSlug: DirectRefreshSourceSlug;
 	lookup: { kind: "sku-id"; value: string | null };
 	currentDb: {
 		product: DirectRefreshPrewriteProductSnapshot | null;
@@ -129,17 +129,17 @@ export type DirectRefreshPrewriteRow = {
 
 export type CarrefourDirectRefreshPrewriteGate = {
 	schemaVersion: 1;
-	audit: "carrefour-direct-refresh-prewrite-gate";
+	audit: `${DirectRefreshSourceSlug}-direct-refresh-prewrite-gate`;
 	status: GateStatus;
 	generatedAt: string;
 	basis: "production";
 	dryRun: true;
 	writeBoundary: "read-only pre-write gate; no production writes, no staging/ingestion runs, no active refresh/reconcile, no scheduler/cron/workflow side effects";
 	source: {
-		slug: "carrefour";
+		slug: DirectRefreshSourceSlug;
 		supermarketId: number | null;
 		baseUrl: string | null;
-		expectedHost: "carrefour.com.ar";
+		expectedHost: DirectRefreshExpectedHost;
 	};
 	primitive: {
 		kind: "vtex-catalog-direct-lookup";
@@ -176,7 +176,7 @@ export type CarrefourDirectRefreshPrewriteGate = {
 		required: true;
 		hashSemantics: "exact timestamped evidence hash; rerun the gate and use the new hash before any future write";
 		shape: {
-			source: "carrefour";
+			source: DirectRefreshSourceSlug;
 			reportHash: string;
 			rowIds: string[];
 			skuIds: string[];
@@ -186,26 +186,45 @@ export type CarrefourDirectRefreshPrewriteGate = {
 	rows: DirectRefreshPrewriteRow[];
 };
 
-const CARREFOUR_SOURCE = "carrefour" as const;
-const CARREFOUR_HOST = "carrefour.com.ar" as const;
+const SOURCE_CONFIGS = {
+	carrefour: {
+		slug: "carrefour",
+		displayName: "Carrefour",
+		expectedHost: "carrefour.com.ar",
+	},
+	vea: {
+		slug: "vea",
+		displayName: "Vea",
+		expectedHost: "vea.com.ar",
+	},
+} as const;
+type DirectRefreshSourceSlug = keyof typeof SOURCE_CONFIGS;
+type DirectRefreshExpectedHost =
+	(typeof SOURCE_CONFIGS)[DirectRefreshSourceSlug]["expectedHost"];
+type DirectRefreshSourceConfig =
+	(typeof SOURCE_CONFIGS)[DirectRefreshSourceSlug];
+const CARREFOUR_SOURCE = SOURCE_CONFIGS.carrefour.slug;
+const ALLOWED_SOURCE_LIST = Object.keys(SOURCE_CONFIGS).join(", ");
 const WRITE_BOUNDARY =
 	"read-only pre-write gate; no production writes, no staging/ingestion runs, no active refresh/reconcile, no scheduler/cron/workflow side effects" as const;
 const MAX_PRICE_DELTA_PERCENT = 200;
-const IDENTITY_GUARDS = [
-	"existing Carrefour row",
-	"current DB product snapshot",
-	"non-empty EAN",
-	"non-empty SKU",
-	"sourceSlug+skuId unique in existing DB rows",
-	"exactly one live product from direct SKU lookup",
-	"exact EAN match",
-	"exact SKU match",
-	"live URL host is carrefour.com.ar",
-	"no existing/live host drift when existing URL has a host",
-	"positive live price",
-	`live price delta is <= ${MAX_PRICE_DELTA_PERCENT}% when current DB price is positive`,
-	"rollback snapshot fields are present",
-];
+function identityGuards(config: DirectRefreshSourceConfig) {
+	return [
+		`existing ${config.displayName} row`,
+		"current DB product snapshot",
+		"non-empty EAN",
+		"non-empty SKU",
+		"sourceSlug+skuId unique in existing DB rows",
+		"exactly one live product from direct SKU lookup",
+		"exact EAN match",
+		"exact SKU match",
+		`live URL host is ${config.expectedHost}`,
+		"no existing/live host drift when existing URL has a host",
+		"positive live price",
+		`live price delta is <= ${MAX_PRICE_DELTA_PERCENT}% when current DB price is positive`,
+		"rollback snapshot fields are present",
+	];
+}
 const ROLLBACK_FIELDS = [
 	"product.ean",
 	"product.name",
@@ -232,7 +251,21 @@ const ROLLBACK_FIELDS = [
 	"latestPriceHistory.scrapedAt",
 ];
 
-export async function buildCarrefourDirectRefreshPrewriteGate({
+export async function buildCarrefourDirectRefreshPrewriteGate(
+	options: Omit<
+		Parameters<typeof buildDirectRefreshPrewriteGate>[0],
+		"sourceSlug"
+	> & {
+		sourceSlug?: string;
+	},
+): Promise<CarrefourDirectRefreshPrewriteGate> {
+	return buildDirectRefreshPrewriteGate({
+		...options,
+		sourceSlug: options.sourceSlug ?? CARREFOUR_SOURCE,
+	});
+}
+
+export async function buildDirectRefreshPrewriteGate({
 	repository,
 	fetchDirectProducts,
 	sourceSlug = CARREFOUR_SOURCE,
@@ -242,7 +275,7 @@ export async function buildCarrefourDirectRefreshPrewriteGate({
 }: {
 	repository: DirectRefreshPrewriteRepository;
 	fetchDirectProducts(
-		sourceSlug: "carrefour",
+		sourceSlug: DirectRefreshSourceSlug,
 		lookup: { kind: "sku-id"; value: string },
 	): Promise<NormalizedProduct[]>;
 	sourceSlug?: string;
@@ -250,19 +283,11 @@ export async function buildCarrefourDirectRefreshPrewriteGate({
 	now?: Date;
 	maxPriceDeltaPercent?: number;
 }): Promise<CarrefourDirectRefreshPrewriteGate> {
-	if (sourceSlug !== CARREFOUR_SOURCE) {
-		throw new Error(
-			"direct refresh pre-write gate is restricted to source=carrefour",
-		);
-	}
-
+	const config = sourceConfig(sourceSlug);
 	const generatedAt = now.toISOString();
-	const source = await repository.getSource(CARREFOUR_SOURCE);
+	const source = await repository.getSource(config.slug);
 	const selectedRows = source
-		? await repository.listOldestPublicRankableRows(
-				CARREFOUR_SOURCE,
-				sampleSize,
-			)
+		? await repository.listOldestPublicRankableRows(config.slug, sampleSize)
 		: [];
 	const maxPriceHistoryId = source
 		? await repository.getMaxPriceHistoryId()
@@ -275,10 +300,11 @@ export async function buildCarrefourDirectRefreshPrewriteGate({
 				fetchDirectProducts,
 				generatedAt,
 				maxPriceDeltaPercent,
+				config,
 			}),
 		),
 	);
-	const sourceFailReasons = source ? [] : ["source carrefour not found"];
+	const sourceFailReasons = source ? [] : [`source ${config.slug} not found`];
 	const selectedFailReasons =
 		selectedRows.length === 0 ? ["no rows selected"] : [];
 	const rowFailReasons = rows.flatMap((row) =>
@@ -328,7 +354,7 @@ export async function buildCarrefourDirectRefreshPrewriteGate({
 	};
 	const reportWithoutConfirmation = {
 		schemaVersion: 1 as const,
-		audit: "carrefour-direct-refresh-prewrite-gate" as const,
+		audit: `${config.slug}-direct-refresh-prewrite-gate` as const,
 		status:
 			failClosedReasons.length === 0 &&
 			rows.every((row) => row.guards.status === "PASS")
@@ -339,10 +365,10 @@ export async function buildCarrefourDirectRefreshPrewriteGate({
 		dryRun: true as const,
 		writeBoundary: WRITE_BOUNDARY,
 		source: {
-			slug: CARREFOUR_SOURCE,
+			slug: config.slug,
 			supermarketId: source?.id ?? null,
 			baseUrl: source?.baseUrl ?? null,
-			expectedHost: CARREFOUR_HOST,
+			expectedHost: config.expectedHost,
 		},
 		primitive: {
 			kind: "vtex-catalog-direct-lookup" as const,
@@ -352,7 +378,7 @@ export async function buildCarrefourDirectRefreshPrewriteGate({
 		},
 		identity: {
 			model: "sourceSlug+skuId" as const,
-			guards: IDENTITY_GUARDS,
+			guards: identityGuards(config),
 		},
 		selection: {
 			strategy: "oldest-public-rankable-existing-rows" as const,
@@ -364,7 +390,7 @@ export async function buildCarrefourDirectRefreshPrewriteGate({
 		rows,
 	};
 	const confirmationShape = {
-		source: CARREFOUR_SOURCE,
+		source: config.slug,
 		reportHash: buildPrewriteReportHash(reportWithoutConfirmation),
 		rowIds: passRows.map((row) => row.rowId).sort(),
 		skuIds: uniqueSorted(passRows.map((row) => row.lookup.value ?? "")).filter(
@@ -392,29 +418,31 @@ async function evaluatePrewriteRow({
 	fetchDirectProducts,
 	generatedAt,
 	maxPriceDeltaPercent,
+	config,
 }: {
 	row: DirectRefreshPrewriteExistingRow;
 	repository: DirectRefreshPrewriteRepository;
 	fetchDirectProducts(
-		sourceSlug: "carrefour",
+		sourceSlug: DirectRefreshSourceSlug,
 		lookup: { kind: "sku-id"; value: string },
 	): Promise<NormalizedProduct[]>;
 	generatedAt: string;
 	maxPriceDeltaPercent: number;
+	config: DirectRefreshSourceConfig;
 }): Promise<DirectRefreshPrewriteRow> {
 	const hasProductSnapshot = Boolean(row.product);
 	const hasEan = Boolean(row.ean?.trim());
 	const hasSkuId = Boolean(row.skuId?.trim());
 	const skuMatches = hasSkuId
-		? await repository.findRowsBySourceSku(CARREFOUR_SOURCE, row.skuId ?? "")
+		? await repository.findRowsBySourceSku(config.slug, row.skuId ?? "")
 		: [];
 	const sourceSkuUnique =
 		hasSkuId && skuMatches.length === 1 && skuMatches[0]?.id === row.id;
 	let lookupError: string | null = null;
 	let liveProducts: NormalizedProduct[] = [];
-	if (hasSkuId && row.sourceSlug === CARREFOUR_SOURCE) {
+	if (hasSkuId && row.sourceSlug === config.slug) {
 		try {
-			liveProducts = await fetchDirectProducts(CARREFOUR_SOURCE, {
+			liveProducts = await fetchDirectProducts(config.slug, {
 				kind: "sku-id",
 				value: row.skuId ?? "",
 			});
@@ -432,14 +460,14 @@ async function evaluatePrewriteRow({
 	const exactSkuMatch = Boolean(
 		liveProduct && row.skuId && liveProduct.skuId === row.skuId,
 	);
-	const carrefourHostOnly = liveHost === CARREFOUR_HOST;
+	const carrefourHostOnly = liveHost === config.expectedHost;
 	const hostDrift = Boolean(
 		existingHost && liveHost && existingHost !== liveHost,
 	);
 	const positiveLivePrice = Boolean(
 		liveProduct?.price !== null &&
-			liveProduct?.price !== undefined &&
-			liveProduct.price > 0,
+		liveProduct?.price !== undefined &&
+		liveProduct.price > 0,
 	);
 	const priceDeltaPercent = priceDelta(row.price, liveProduct?.price ?? null);
 	const priceDeltaWithinLimit =
@@ -459,13 +487,14 @@ async function evaluatePrewriteRow({
 		positiveLivePrice,
 		priceDeltaWithinLimit,
 		maxPriceDeltaPercent,
+		config,
 	});
 	const status = reasons.length === 0 ? "PASS" : "FAIL";
 	const expectedChanges = buildExpectedChanges(row, liveProduct, generatedAt);
 
 	return {
 		rowId: row.id,
-		sourceSlug: CARREFOUR_SOURCE,
+		sourceSlug: config.slug,
 		lookup: { kind: "sku-id", value: row.skuId },
 		currentDb: {
 			product: row.product,
@@ -498,7 +527,7 @@ async function evaluatePrewriteRow({
 		guards: {
 			status,
 			reasons,
-			existingRow: row.sourceSlug === CARREFOUR_SOURCE,
+			existingRow: row.sourceSlug === config.slug,
 			hasProductSnapshot,
 			hasEan,
 			hasSkuId,
@@ -532,6 +561,7 @@ function guardReasons({
 	positiveLivePrice,
 	priceDeltaWithinLimit,
 	maxPriceDeltaPercent,
+	config,
 }: {
 	row: DirectRefreshPrewriteExistingRow;
 	hasProductSnapshot: boolean;
@@ -547,10 +577,11 @@ function guardReasons({
 	positiveLivePrice: boolean;
 	priceDeltaWithinLimit: boolean;
 	maxPriceDeltaPercent: number;
+	config: DirectRefreshSourceConfig;
 }) {
 	const reasons: string[] = [];
-	if (row.sourceSlug !== CARREFOUR_SOURCE)
-		reasons.push("row source is not carrefour");
+	if (row.sourceSlug !== config.slug)
+		reasons.push(`row source is not ${config.slug}`);
 	if (!hasProductSnapshot) reasons.push("current DB product snapshot missing");
 	if (!hasEan) reasons.push("existing row lacks EAN");
 	if (!hasSkuId) reasons.push("existing row lacks SKU id");
@@ -568,7 +599,7 @@ function guardReasons({
 	if (directLookupCount === 1 && !exactSkuMatch)
 		reasons.push("direct lookup SKU does not match existing SKU");
 	if (directLookupCount === 1 && !carrefourHostOnly)
-		reasons.push("live product URL host is not carrefour.com.ar");
+		reasons.push(`live product URL host is not ${config.expectedHost}`);
 	if (hostDrift) reasons.push("existing/live product URL host drift");
 	if (directLookupCount === 1 && !positiveLivePrice)
 		reasons.push("live price is not positive");
@@ -754,4 +785,13 @@ function stableJson(value: unknown): string {
 			.join(",")}}`;
 	}
 	return JSON.stringify(value);
+}
+
+function sourceConfig(sourceSlug: string): DirectRefreshSourceConfig {
+	if (sourceSlug in SOURCE_CONFIGS) {
+		return SOURCE_CONFIGS[sourceSlug as DirectRefreshSourceSlug];
+	}
+	throw new Error(
+		`direct refresh pre-write gate is restricted to allowlisted source (${ALLOWED_SOURCE_LIST})`,
+	);
 }

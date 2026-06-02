@@ -42,7 +42,7 @@ export type DirectRefreshManifestRepository = {
 
 export type DirectRefreshManifestRow = {
 	rowId: string;
-	sourceSlug: "carrefour";
+	sourceSlug: DirectRefreshSourceSlug;
 	lookup: { kind: "sku-id"; value: string | null };
 	existing: {
 		supermarketProductId: number | string;
@@ -82,17 +82,17 @@ export type DirectRefreshManifestRow = {
 
 export type CarrefourDirectRefreshManifestDryRun = {
 	schemaVersion: 1;
-	audit: "carrefour-direct-refresh-manifest-dry-run";
+	audit: `${DirectRefreshSourceSlug}-direct-refresh-manifest-dry-run`;
 	status: ManifestStatus;
 	generatedAt: string;
 	basis: "production";
 	dryRun: true;
 	writeBoundary: "read-only manifest contract; no production writes, no staging/ingestion runs, no scheduler/cron/workflow side effects";
 	source: {
-		slug: "carrefour";
+		slug: DirectRefreshSourceSlug;
 		supermarketId: number | null;
 		baseUrl: string | null;
-		expectedHost: "carrefour.com.ar";
+		expectedHost: DirectRefreshExpectedHost;
 	};
 	primitive: {
 		kind: "vtex-catalog-direct-lookup";
@@ -116,23 +116,56 @@ export type CarrefourDirectRefreshManifestDryRun = {
 	rows: DirectRefreshManifestRow[];
 };
 
-const CARREFOUR_SOURCE = "carrefour" as const;
-const CARREFOUR_HOST = "carrefour.com.ar" as const;
+const SOURCE_CONFIGS = {
+	carrefour: {
+		slug: "carrefour",
+		displayName: "Carrefour",
+		expectedHost: "carrefour.com.ar",
+	},
+	vea: {
+		slug: "vea",
+		displayName: "Vea",
+		expectedHost: "vea.com.ar",
+	},
+} as const;
+type DirectRefreshSourceSlug = keyof typeof SOURCE_CONFIGS;
+type DirectRefreshExpectedHost =
+	(typeof SOURCE_CONFIGS)[DirectRefreshSourceSlug]["expectedHost"];
+type DirectRefreshSourceConfig =
+	(typeof SOURCE_CONFIGS)[DirectRefreshSourceSlug];
+const CARREFOUR_SOURCE = SOURCE_CONFIGS.carrefour.slug;
+const ALLOWED_SOURCE_LIST = Object.keys(SOURCE_CONFIGS).join(", ");
 const WRITE_BOUNDARY =
 	"read-only manifest contract; no production writes, no staging/ingestion runs, no scheduler/cron/workflow side effects" as const;
-const IDENTITY_GUARDS = [
-	"existing Carrefour row",
-	"non-empty EAN",
-	"non-empty SKU",
-	"sourceSlug+skuId unique in existing DB rows",
-	"exactly one live product from direct SKU lookup",
-	"exact EAN match",
-	"exact SKU match",
-	"live URL host is carrefour.com.ar",
-	"no existing/live host drift when existing URL has a host",
-];
+function identityGuards(config: DirectRefreshSourceConfig) {
+	return [
+		`existing ${config.displayName} row`,
+		"non-empty EAN",
+		"non-empty SKU",
+		"sourceSlug+skuId unique in existing DB rows",
+		"exactly one live product from direct SKU lookup",
+		"exact EAN match",
+		"exact SKU match",
+		`live URL host is ${config.expectedHost}`,
+		"no existing/live host drift when existing URL has a host",
+	];
+}
 
-export async function buildCarrefourDirectRefreshManifestDryRun({
+export async function buildCarrefourDirectRefreshManifestDryRun(
+	options: Omit<
+		Parameters<typeof buildDirectRefreshManifestDryRun>[0],
+		"sourceSlug"
+	> & {
+		sourceSlug?: string;
+	},
+): Promise<CarrefourDirectRefreshManifestDryRun> {
+	return buildDirectRefreshManifestDryRun({
+		...options,
+		sourceSlug: options.sourceSlug ?? CARREFOUR_SOURCE,
+	});
+}
+
+export async function buildDirectRefreshManifestDryRun({
 	repository,
 	fetchDirectProducts,
 	sourceSlug = CARREFOUR_SOURCE,
@@ -141,29 +174,21 @@ export async function buildCarrefourDirectRefreshManifestDryRun({
 }: {
 	repository: DirectRefreshManifestRepository;
 	fetchDirectProducts(
-		sourceSlug: "carrefour",
+		sourceSlug: DirectRefreshSourceSlug,
 		lookup: { kind: "sku-id"; value: string },
 	): Promise<LiveProduct[]>;
 	sourceSlug?: string;
 	sampleSize?: number;
 	now?: Date;
 }): Promise<CarrefourDirectRefreshManifestDryRun> {
-	if (sourceSlug !== CARREFOUR_SOURCE) {
-		throw new Error(
-			"direct refresh manifest is restricted to source=carrefour",
-		);
-	}
-
-	const source = await repository.getSource(CARREFOUR_SOURCE);
+	const config = sourceConfig(sourceSlug);
+	const source = await repository.getSource(config.slug);
 	const selectedRows = source
-		? await repository.listOldestPublicRankableRows(
-				CARREFOUR_SOURCE,
-				sampleSize,
-			)
+		? await repository.listOldestPublicRankableRows(config.slug, sampleSize)
 		: [];
 	const rows = await Promise.all(
 		selectedRows.map((row) =>
-			evaluateManifestRow({ row, repository, fetchDirectProducts }),
+			evaluateManifestRow({ row, repository, fetchDirectProducts, config }),
 		),
 	);
 	const selectedFailReasons =
@@ -171,7 +196,7 @@ export async function buildCarrefourDirectRefreshManifestDryRun({
 	const rowFailReasons = rows.flatMap((row) =>
 		row.guards.status === "FAIL" ? row.guards.reasons : [],
 	);
-	const sourceFailReasons = source ? [] : ["source carrefour not found"];
+	const sourceFailReasons = source ? [] : [`source ${config.slug} not found`];
 	const failClosedReasons = uniqueSorted([
 		...sourceFailReasons,
 		...selectedFailReasons,
@@ -181,7 +206,7 @@ export async function buildCarrefourDirectRefreshManifestDryRun({
 
 	return {
 		schemaVersion: 1,
-		audit: "carrefour-direct-refresh-manifest-dry-run",
+		audit: `${config.slug}-direct-refresh-manifest-dry-run`,
 		status:
 			failClosedReasons.length === 0 &&
 			rows.every((row) => row.guards.status === "PASS")
@@ -192,10 +217,10 @@ export async function buildCarrefourDirectRefreshManifestDryRun({
 		dryRun: true,
 		writeBoundary: WRITE_BOUNDARY,
 		source: {
-			slug: CARREFOUR_SOURCE,
+			slug: config.slug,
 			supermarketId: source?.id ?? null,
 			baseUrl: source?.baseUrl ?? null,
-			expectedHost: CARREFOUR_HOST,
+			expectedHost: config.expectedHost,
 		},
 		primitive: {
 			kind: "vtex-catalog-direct-lookup",
@@ -205,7 +230,7 @@ export async function buildCarrefourDirectRefreshManifestDryRun({
 		},
 		identity: {
 			model: "sourceSlug+skuId",
-			guards: IDENTITY_GUARDS,
+			guards: identityGuards(config),
 		},
 		selection: {
 			strategy: "oldest-public-rankable-existing-rows",
@@ -225,26 +250,28 @@ async function evaluateManifestRow({
 	row,
 	repository,
 	fetchDirectProducts,
+	config,
 }: {
 	row: DirectRefreshManifestExistingRow;
 	repository: DirectRefreshManifestRepository;
 	fetchDirectProducts(
-		sourceSlug: "carrefour",
+		sourceSlug: DirectRefreshSourceSlug,
 		lookup: { kind: "sku-id"; value: string },
 	): Promise<LiveProduct[]>;
+	config: DirectRefreshSourceConfig;
 }): Promise<DirectRefreshManifestRow> {
 	const hasEan = Boolean(row.ean?.trim());
 	const hasSkuId = Boolean(row.skuId?.trim());
 	const skuMatches = hasSkuId
-		? await repository.findRowsBySourceSku(CARREFOUR_SOURCE, row.skuId ?? "")
+		? await repository.findRowsBySourceSku(config.slug, row.skuId ?? "")
 		: [];
 	const sourceSkuUnique =
 		hasSkuId && skuMatches.length === 1 && skuMatches[0]?.id === row.id;
 	let lookupError: string | null = null;
 	let liveProducts: LiveProduct[] = [];
-	if (hasSkuId && row.sourceSlug === CARREFOUR_SOURCE) {
+	if (hasSkuId && row.sourceSlug === config.slug) {
 		try {
-			liveProducts = await fetchDirectProducts(CARREFOUR_SOURCE, {
+			liveProducts = await fetchDirectProducts(config.slug, {
 				kind: "sku-id",
 				value: row.skuId ?? "",
 			});
@@ -262,7 +289,7 @@ async function evaluateManifestRow({
 	const exactSkuMatch = Boolean(
 		liveProduct && row.skuId && liveProduct.skuId === row.skuId,
 	);
-	const carrefourHostOnly = liveHost === CARREFOUR_HOST;
+	const carrefourHostOnly = liveHost === config.expectedHost;
 	const hostDrift = Boolean(
 		existingHost && liveHost && existingHost !== liveHost,
 	);
@@ -277,12 +304,13 @@ async function evaluateManifestRow({
 		exactSkuMatch,
 		carrefourHostOnly,
 		hostDrift,
+		config,
 	});
 	const status = reasons.length === 0 ? "PASS" : "FAIL";
 
 	return {
 		rowId: row.id,
-		sourceSlug: CARREFOUR_SOURCE,
+		sourceSlug: config.slug,
 		lookup: { kind: "sku-id", value: row.skuId },
 		existing: {
 			supermarketProductId: numericId(row.id),
@@ -309,7 +337,7 @@ async function evaluateManifestRow({
 		guards: {
 			status,
 			reasons,
-			existingRow: row.sourceSlug === CARREFOUR_SOURCE,
+			existingRow: row.sourceSlug === config.slug,
 			hasEan,
 			hasSkuId,
 			sourceSkuUnique,
@@ -334,6 +362,7 @@ function guardReasons({
 	exactSkuMatch,
 	carrefourHostOnly,
 	hostDrift,
+	config,
 }: {
 	row: DirectRefreshManifestExistingRow;
 	hasEan: boolean;
@@ -345,10 +374,11 @@ function guardReasons({
 	exactSkuMatch: boolean;
 	carrefourHostOnly: boolean;
 	hostDrift: boolean;
+	config: DirectRefreshSourceConfig;
 }) {
 	const reasons: string[] = [];
-	if (row.sourceSlug !== CARREFOUR_SOURCE)
-		reasons.push("row source is not carrefour");
+	if (row.sourceSlug !== config.slug)
+		reasons.push(`row source is not ${config.slug}`);
 	if (!hasEan) reasons.push("existing row lacks EAN");
 	if (!hasSkuId) reasons.push("existing row lacks SKU id");
 	if (hasSkuId && !sourceSkuUnique)
@@ -365,7 +395,7 @@ function guardReasons({
 	if (directLookupCount === 1 && !exactSkuMatch)
 		reasons.push("direct lookup SKU does not match existing SKU");
 	if (directLookupCount === 1 && !carrefourHostOnly)
-		reasons.push("live product URL host is not carrefour.com.ar");
+		reasons.push(`live product URL host is not ${config.expectedHost}`);
 	if (hostDrift) reasons.push("existing/live product URL host drift");
 	return reasons;
 }
@@ -387,4 +417,13 @@ function numericId(value: string) {
 
 function uniqueSorted(values: string[]) {
 	return Array.from(new Set(values)).sort();
+}
+
+function sourceConfig(sourceSlug: string): DirectRefreshSourceConfig {
+	if (sourceSlug in SOURCE_CONFIGS) {
+		return SOURCE_CONFIGS[sourceSlug as DirectRefreshSourceSlug];
+	}
+	throw new Error(
+		`direct refresh manifest is restricted to allowlisted source (${ALLOWED_SOURCE_LIST})`,
+	);
 }

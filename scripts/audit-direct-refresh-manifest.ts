@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 import { db } from "../src/lib/db";
 import { getSourceAdapter } from "../src/lib/ingestion/adapters/registry";
 import {
-	buildCarrefourDirectRefreshManifestDryRun,
+	buildDirectRefreshManifestDryRun,
 	type DirectRefreshManifestRepository,
 } from "./pipeline/direct-refresh-manifest";
 import {
@@ -17,18 +17,26 @@ import {
 	parsePositiveIntegerFlag,
 } from "./pipeline/audit-utils";
 
+type SupportedManifestSource = "carrefour" | "vea";
+
 type CliOptions = {
-	source: "carrefour";
+	source: SupportedManifestSource;
 	sampleSize: number;
 	output: string | null;
 };
 
-const CARREFOUR_SOURCE = "carrefour" as const;
+const DEFAULT_SOURCE = "carrefour" as const;
+const SUPPORTED_SOURCES = new Set<SupportedManifestSource>([
+	"carrefour",
+	"vea",
+]);
 const FORBIDDEN_FLAGS = [
 	"--confirm-write",
 	"--active",
 	"--write",
 	"--reconcile",
+	"--all-source",
+	"--all-sources",
 	"--schedule",
 	"--scheduler",
 	"--cron",
@@ -60,20 +68,23 @@ export function parseDirectRefreshManifestCliOptions(
 	argv = process.argv,
 ): CliOptions {
 	rejectWriteFlags(argv);
-	const rawSource = getOptionalSingleFlag(argv, "--source") ?? CARREFOUR_SOURCE;
+	const rawSource = getOptionalSingleFlag(argv, "--source") ?? DEFAULT_SOURCE;
 	const sources = rawSource
 		.split(",")
 		.map((entry) => entry.trim())
 		.filter(Boolean);
 
-	if (sources.length !== 1 || sources[0] !== CARREFOUR_SOURCE) {
+	if (
+		sources.length !== 1 ||
+		!SUPPORTED_SOURCES.has(sources[0] as SupportedManifestSource)
+	) {
 		throw new Error(
-			"direct-refresh manifest audit only accepts --source=carrefour",
+			"direct-refresh manifest audit only accepts --source=carrefour or --source=vea",
 		);
 	}
 
 	return {
-		source: CARREFOUR_SOURCE,
+		source: sources[0] as SupportedManifestSource,
 		sampleSize: parsePositiveIntegerFlag(argv, "--sample-size", 10),
 		output: getOptionalSingleFlag(argv, "--output"),
 	};
@@ -170,12 +181,12 @@ async function writeJson(output: string | null, report: unknown) {
 
 async function main() {
 	const options = parseDirectRefreshManifestCliOptions();
-	const report = await buildCarrefourDirectRefreshManifestDryRun({
+	const report = await buildDirectRefreshManifestDryRun({
 		repository: createRepository(),
 		sourceSlug: options.source,
 		sampleSize: options.sampleSize,
-		fetchDirectProducts: async (_sourceSlug, lookup) =>
-			getSourceAdapter(CARREFOUR_SOURCE).fetchDirectProducts(lookup),
+		fetchDirectProducts: async (sourceSlug, lookup) =>
+			getSourceAdapter(sourceSlug).fetchDirectProducts(lookup),
 	});
 	await writeJson(options.output, report);
 	if (report.status === "FAIL") process.exitCode = 1;
