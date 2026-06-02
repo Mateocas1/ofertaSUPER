@@ -38,6 +38,7 @@
     "direct-refresh:vea-write": "tsx scripts/direct-refresh-vea-write.ts",
     "direct-refresh:disco-write": "tsx scripts/direct-refresh-disco-write.ts",
     "direct-refresh:jumbo-write": "tsx scripts/direct-refresh-jumbo-write.ts",
+    "direct-refresh:mas-write": "tsx scripts/direct-refresh-mas-write.ts",
     "metrics:ingestion": "tsx scripts/pipeline/metrics.ts"
   },
   "prisma": {

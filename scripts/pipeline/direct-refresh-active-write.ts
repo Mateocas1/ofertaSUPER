@@ -18,29 +18,33 @@ export const CARREFOUR_ACTIVE_WRITE_CONFIRMATION =
 export const VEA_ACTIVE_WRITE_CONFIRMATION = "vea-direct-refresh-count10";
 export const DISCO_ACTIVE_WRITE_CONFIRMATION = "disco-direct-refresh-count10";
 export const JUMBO_ACTIVE_WRITE_CONFIRMATION = "jumbo-direct-refresh-count10";
+export const MAS_ACTIVE_WRITE_CONFIRMATION = "mas-direct-refresh-count10";
 export const CARREFOUR_ACTIVE_WRITE_COUNT = 10;
 export const VEA_ACTIVE_WRITE_COUNT = 10;
 export const DISCO_ACTIVE_WRITE_COUNT = 10;
 export const JUMBO_ACTIVE_WRITE_COUNT = 10;
+export const MAS_ACTIVE_WRITE_COUNT = 10;
 export const CARREFOUR_ACTIVE_WRITE_LOCK_KEY = 44204510;
 export const VEA_ACTIVE_WRITE_LOCK_KEY = 54204510;
 export const DISCO_ACTIVE_WRITE_LOCK_KEY = 61204510;
 export const JUMBO_ACTIVE_WRITE_LOCK_KEY = 68204510;
+export const MAS_ACTIVE_WRITE_LOCK_KEY = 75204510;
 const MAX_PREWRITE_AGE_MS = 15 * 60 * 1000;
 
-type ActiveWriteSource = "carrefour" | "vea" | "disco" | "jumbo";
+type ActiveWriteSource = "carrefour" | "vea" | "disco" | "jumbo" | "mas";
 type SourceConfig = {
 	source: ActiveWriteSource;
 	displayName: string;
 	confirmation: string;
 	lockKey: number;
-	issue: 45 | 54 | 61 | 68;
-	umbrellaIssue?: 44;
+	issue: 45 | 54 | 61 | 68 | 75;
+	umbrellaIssue?: 44 | 73;
 	expectedHost:
 		| "carrefour.com.ar"
 		| "vea.com.ar"
 		| "disco.com.ar"
-		| "jumbo.com.ar";
+		| "jumbo.com.ar"
+		| "masonline.com.ar";
 	report: `${ActiveWriteSource}-direct-refresh-active-write`;
 };
 const SOURCE_CONFIGS = {
@@ -80,6 +84,16 @@ const SOURCE_CONFIGS = {
 		issue: 68,
 		expectedHost: "jumbo.com.ar",
 		report: "jumbo-direct-refresh-active-write",
+	},
+	mas: {
+		source: "mas",
+		displayName: "MAS",
+		confirmation: MAS_ACTIVE_WRITE_CONFIRMATION,
+		lockKey: MAS_ACTIVE_WRITE_LOCK_KEY,
+		issue: 75,
+		umbrellaIssue: 73,
+		expectedHost: "masonline.com.ar",
+		report: "mas-direct-refresh-active-write",
 	},
 } as const satisfies Record<ActiveWriteSource, SourceConfig>;
 
@@ -125,11 +139,13 @@ export type CarrefourActiveWriteCliOptions =
 export type VeaActiveWriteCliOptions = ActiveWriteCliOptionsFor<"vea">;
 export type DiscoActiveWriteCliOptions = ActiveWriteCliOptionsFor<"disco">;
 export type JumboActiveWriteCliOptions = ActiveWriteCliOptionsFor<"jumbo">;
+export type MasActiveWriteCliOptions = ActiveWriteCliOptionsFor<"mas">;
 export type ActiveWriteCliOptions =
 	| CarrefourActiveWriteCliOptions
 	| VeaActiveWriteCliOptions
 	| DiscoActiveWriteCliOptions
-	| JumboActiveWriteCliOptions;
+	| JumboActiveWriteCliOptions
+	| MasActiveWriteCliOptions;
 
 export type ActiveWriteTransaction = {
 	acquireAdvisoryLock(lockKey: number): Promise<boolean>;
@@ -165,8 +181,8 @@ export type ActiveWriteReport = {
 	schemaVersion: 1;
 	report: `${ActiveWriteSource}-direct-refresh-active-write`;
 	status: "PASS";
-	issue: 45 | 54 | 61 | 68;
-	umbrellaIssue?: 44;
+	issue: 45 | 54 | 61 | 68 | 75;
+	umbrellaIssue?: 44 | 73;
 	source: {
 		slug: ActiveWriteSource;
 		supermarketId: number;
@@ -174,7 +190,8 @@ export type ActiveWriteReport = {
 			| "carrefour.com.ar"
 			| "vea.com.ar"
 			| "disco.com.ar"
-			| "jumbo.com.ar";
+			| "jumbo.com.ar"
+			| "masonline.com.ar";
 	};
 	count: 10;
 	startedAt: string;
@@ -256,6 +273,12 @@ export function parseJumboActiveWriteCliOptions(
 	argv = process.argv,
 ): JumboActiveWriteCliOptions {
 	return parseActiveWriteCliOptions(argv, "jumbo");
+}
+
+export function parseMasActiveWriteCliOptions(
+	argv = process.argv,
+): MasActiveWriteCliOptions {
+	return parseActiveWriteCliOptions(argv, "mas");
 }
 
 function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
@@ -460,6 +483,20 @@ export async function executeJumboActiveWrite({
 	repository: ActiveWriteRepository;
 	prewriteReport: CarrefourDirectRefreshPrewriteGate;
 	options: JumboActiveWriteCliOptions;
+	startedAt?: Date;
+}): Promise<ActiveWriteReport> {
+	return executeActiveWrite({ repository, prewriteReport, options, startedAt });
+}
+
+export async function executeMasActiveWrite({
+	repository,
+	prewriteReport,
+	options,
+	startedAt = new Date(),
+}: {
+	repository: ActiveWriteRepository;
+	prewriteReport: CarrefourDirectRefreshPrewriteGate;
+	options: MasActiveWriteCliOptions;
 	startedAt?: Date;
 }): Promise<ActiveWriteReport> {
 	return executeActiveWrite({ repository, prewriteReport, options, startedAt });

@@ -8,16 +8,20 @@ import {
 	DISCO_ACTIVE_WRITE_LOCK_KEY,
 	JUMBO_ACTIVE_WRITE_CONFIRMATION,
 	JUMBO_ACTIVE_WRITE_LOCK_KEY,
+	MAS_ACTIVE_WRITE_CONFIRMATION,
+	MAS_ACTIVE_WRITE_LOCK_KEY,
 	VEA_ACTIVE_WRITE_CONFIRMATION,
 	VEA_ACTIVE_WRITE_LOCK_KEY,
 	assertFreshPrewriteRerunMatches,
 	executeCarrefourActiveWrite,
 	executeDiscoActiveWrite,
 	executeJumboActiveWrite,
+	executeMasActiveWrite,
 	executeVeaActiveWrite,
 	parseCarrefourActiveWriteCliOptions,
 	parseDiscoActiveWriteCliOptions,
 	parseJumboActiveWriteCliOptions,
+	parseMasActiveWriteCliOptions,
 	parseVeaActiveWriteCliOptions,
 	validatePrewriteReportForActiveWrite,
 	type ActiveWriteRepository,
@@ -360,6 +364,83 @@ function jumboArgv(
 		`--sku-ids=${report.futureConfirmation.shape.skuIds.join(",")}`,
 		`--confirm-write=${JUMBO_ACTIVE_WRITE_CONFIRMATION}`,
 		"--output=jumbo-write.json",
+		...extra,
+	];
+}
+function masRows(): DirectRefreshPrewriteExistingRow[] {
+	return rows().map((row) => ({
+		...row,
+		sourceSlug: "mas",
+		supermarketId: 6,
+		productUrl:
+			row.productUrl?.replace("carrefour.com.ar", "masonline.com.ar") ?? null,
+	}));
+}
+function masRepository(existingRows = masRows()) {
+	return {
+		async getSource() {
+			return {
+				id: 6,
+				slug: "mas",
+				baseUrl: "https://www.masonline.com.ar",
+			};
+		},
+		async listOldestPublicRankableRows() {
+			return existingRows;
+		},
+		async findRowsBySourceSku(_sourceSlug: string, skuId: string) {
+			return existingRows.filter((row) => row.skuId === skuId);
+		},
+		async getMaxPriceHistoryId() {
+			return 99;
+		},
+	};
+}
+async function masPrewrite(now = "2026-06-01T00:00:00.000Z") {
+	return buildDirectRefreshPrewriteGate({
+		repository: masRepository(),
+		sourceSlug: "mas",
+		now: new Date(now),
+		fetchDirectProducts: async (_sourceSlug, lookup) => {
+			const row = masRows().find((entry) => entry.skuId === lookup.value);
+			return [
+				{
+					ean: row?.ean ?? "",
+					name: `${row?.product?.name} Nuevo`,
+					brand: "Nueva",
+					description: "Nueva",
+					imageUrl: "https://www.masonline.com.ar/new.jpg",
+					images: ["https://www.masonline.com.ar/new.jpg"],
+					category: "Test",
+					skuId: lookup.value,
+					sellerId: "1",
+					productUrl: row?.productUrl ?? null,
+					price: 1100,
+					listPrice: 1100,
+					referencePrice: null,
+					referenceUnit: null,
+					isAvailable: true,
+				},
+			];
+		},
+	});
+}
+function masArgv(
+	report: Awaited<ReturnType<typeof masPrewrite>>,
+	extra: string[] = [],
+) {
+	return [
+		"node",
+		"script",
+		"--source=mas",
+		"--count=10",
+		"--prewrite-report=mas-prewrite.json",
+		`--prewrite-report-hash=${report.futureConfirmation.shape.reportHash}`,
+		`--row-ids=${report.futureConfirmation.shape.rowIds.join(",")}`,
+		`--product-eans=${report.futureConfirmation.shape.productEans.join(",")}`,
+		`--sku-ids=${report.futureConfirmation.shape.skuIds.join(",")}`,
+		`--confirm-write=${MAS_ACTIVE_WRITE_CONFIRMATION}`,
+		"--output=mas-write.json",
 		...extra,
 	];
 }
@@ -829,6 +910,111 @@ describe("Carrefour active refresh writer contract", () => {
 		assert.equal(writeReport.umbrellaIssue, undefined);
 		assert.equal(writeReport.source.slug, "jumbo");
 		assert.equal(writeReport.source.expectedHost, "jumbo.com.ar");
+		assert.equal(writeReport.summary.rows, 10);
+		assert.equal(writeReport.noCreate.productDelta, 0);
+	});
+
+	it("parses exact MAS confirmation flags and rejects other sources", async () => {
+		const report = await masPrewrite();
+		const parsed = parseMasActiveWriteCliOptions(masArgv(report));
+		assert.equal(parsed.source, "mas");
+		assert.equal(parsed.confirmWrite, MAS_ACTIVE_WRITE_CONFIRMATION);
+		assert.deepEqual(parsed.rowIds, report.futureConfirmation.shape.rowIds);
+		for (const bad of [
+			["--source=carrefour"],
+			["--source=vea"],
+			["--source=disco"],
+			["--source=jumbo"],
+			["--count=9"],
+			["--dry-run"],
+			["--all-source"],
+			["--cron=true"],
+			["--confirm-write=jumbo-direct-refresh-count10"],
+		]) {
+			assert.throws(
+				() => parseMasActiveWriteCliOptions(masArgv(report, bad)),
+				/mas|MAS|count|rejects|confirmation|unknown|exactly one/,
+			);
+		}
+	});
+
+	it("validates MAS prewrite reports fail closed until fresh PASS evidence exists", async () => {
+		const report = await masPrewrite();
+		const options = parseMasActiveWriteCliOptions(masArgv(report));
+		assert.doesNotThrow(() =>
+			validatePrewriteReportForActiveWrite(
+				report,
+				options,
+				new Date("2026-06-01T00:10:00.000Z"),
+			),
+		);
+		assert.throws(
+			() =>
+				validatePrewriteReportForActiveWrite(
+					{ ...report, status: "FAIL" },
+					options,
+					new Date("2026-06-01T00:10:00.000Z"),
+				),
+			/PASS/,
+		);
+		assert.throws(
+			() =>
+				validatePrewriteReportForActiveWrite(
+					report,
+					{ ...options, productEans: [...options.productEans].reverse() },
+					new Date("2026-06-01T00:10:00.000Z"),
+				),
+			/product EANs/,
+		);
+	});
+
+	it("executes MAS selected-row-only transaction and emits source report schema", async () => {
+		const report = await masPrewrite();
+		const options = parseMasActiveWriteCliOptions(masArgv(report));
+		let lockKey = 0;
+		let selectedSource = "";
+		let updatedSource = "";
+		const writeReport = await executeMasActiveWrite({
+			repository: repo(
+				tx({
+					async acquireAdvisoryLock(key) {
+						lockKey = key;
+						return true;
+					},
+					async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+						selectedSource = sourceSlug;
+						return tx().readSelectedRowsByExactIdentity(sourceSlug, identities);
+					},
+					async updateSupermarketProductByExactIdentity(
+						sourceSlug,
+						rowId,
+						productEan,
+						skuId,
+						changes,
+					) {
+						updatedSource = sourceSlug;
+						return tx().updateSupermarketProductByExactIdentity(
+							sourceSlug,
+							rowId,
+							productEan,
+							skuId,
+							changes,
+						);
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date(report.generatedAt),
+		});
+		assert.equal(lockKey, MAS_ACTIVE_WRITE_LOCK_KEY);
+		assert.equal(selectedSource, "mas");
+		assert.equal(updatedSource, "mas");
+		assert.equal(writeReport.report, "mas-direct-refresh-active-write");
+		assert.equal(writeReport.issue, 75);
+		assert.equal(writeReport.umbrellaIssue, 73);
+		assert.equal(writeReport.source.slug, "mas");
+		assert.equal(writeReport.source.expectedHost, "masonline.com.ar");
 		assert.equal(writeReport.summary.rows, 10);
 		assert.equal(writeReport.noCreate.productDelta, 0);
 	});
