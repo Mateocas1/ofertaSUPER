@@ -4,12 +4,16 @@ import { describe, it } from "node:test";
 import {
 	CARREFOUR_ACTIVE_WRITE_CONFIRMATION,
 	CARREFOUR_ACTIVE_WRITE_LOCK_KEY,
+	DISCO_ACTIVE_WRITE_CONFIRMATION,
+	DISCO_ACTIVE_WRITE_LOCK_KEY,
 	VEA_ACTIVE_WRITE_CONFIRMATION,
 	VEA_ACTIVE_WRITE_LOCK_KEY,
 	assertFreshPrewriteRerunMatches,
 	executeCarrefourActiveWrite,
+	executeDiscoActiveWrite,
 	executeVeaActiveWrite,
 	parseCarrefourActiveWriteCliOptions,
+	parseDiscoActiveWriteCliOptions,
 	parseVeaActiveWriteCliOptions,
 	validatePrewriteReportForActiveWrite,
 	type ActiveWriteRepository,
@@ -197,6 +201,82 @@ function veaArgv(
 		`--sku-ids=${report.futureConfirmation.shape.skuIds.join(",")}`,
 		`--confirm-write=${VEA_ACTIVE_WRITE_CONFIRMATION}`,
 		"--output=vea-write.json",
+		...extra,
+	];
+}
+function discoRows(): DirectRefreshPrewriteExistingRow[] {
+	return rows().map((row) => ({
+		...row,
+		sourceSlug: "disco",
+		supermarketId: 1,
+		productUrl: row.productUrl?.replace("carrefour.com.ar", "disco.com.ar") ?? null,
+	}));
+}
+function discoRepository(existingRows = discoRows()) {
+	return {
+		async getSource() {
+			return {
+				id: 1,
+				slug: "disco",
+				baseUrl: "https://www.disco.com.ar",
+			};
+		},
+		async listOldestPublicRankableRows() {
+			return existingRows;
+		},
+		async findRowsBySourceSku(_sourceSlug: string, skuId: string) {
+			return existingRows.filter((row) => row.skuId === skuId);
+		},
+		async getMaxPriceHistoryId() {
+			return 99;
+		},
+	};
+}
+async function discoPrewrite(now = "2026-06-01T00:00:00.000Z") {
+	return buildDirectRefreshPrewriteGate({
+		repository: discoRepository(),
+		sourceSlug: "disco",
+		now: new Date(now),
+		fetchDirectProducts: async (_sourceSlug, lookup) => {
+			const row = discoRows().find((entry) => entry.skuId === lookup.value);
+			return [
+				{
+					ean: row?.ean ?? "",
+					name: `${row?.product?.name} Nuevo`,
+					brand: "Nueva",
+					description: "Nueva",
+					imageUrl: "https://www.disco.com.ar/new.jpg",
+					images: ["https://www.disco.com.ar/new.jpg"],
+					category: "Test",
+					skuId: lookup.value,
+					sellerId: "1",
+					productUrl: row?.productUrl ?? null,
+					price: 1100,
+					listPrice: 1100,
+					referencePrice: null,
+					referenceUnit: null,
+					isAvailable: true,
+				},
+			];
+		},
+	});
+}
+function discoArgv(
+	report: Awaited<ReturnType<typeof discoPrewrite>>,
+	extra: string[] = [],
+) {
+	return [
+		"node",
+		"script",
+		"--source=disco",
+		"--count=10",
+		"--prewrite-report=disco-prewrite.json",
+		`--prewrite-report-hash=${report.futureConfirmation.shape.reportHash}`,
+		`--row-ids=${report.futureConfirmation.shape.rowIds.join(",")}`,
+		`--product-eans=${report.futureConfirmation.shape.productEans.join(",")}`,
+		`--sku-ids=${report.futureConfirmation.shape.skuIds.join(",")}`,
+		`--confirm-write=${DISCO_ACTIVE_WRITE_CONFIRMATION}`,
+		"--output=disco-write.json",
 		...extra,
 	];
 }
@@ -519,6 +599,79 @@ describe("Carrefour active refresh writer contract", () => {
 		assert.equal(writeReport.umbrellaIssue, undefined);
 		assert.equal(writeReport.source.slug, "vea");
 		assert.equal(writeReport.source.expectedHost, "vea.com.ar");
+		assert.equal(writeReport.summary.rows, 10);
+		assert.equal(writeReport.noCreate.productDelta, 0);
+	});
+
+	it("parses exact Disco confirmation flags and rejects other sources", async () => {
+		const report = await discoPrewrite();
+		const parsed = parseDiscoActiveWriteCliOptions(discoArgv(report));
+		assert.equal(parsed.source, "disco");
+		assert.equal(parsed.confirmWrite, DISCO_ACTIVE_WRITE_CONFIRMATION);
+		assert.deepEqual(parsed.rowIds, report.futureConfirmation.shape.rowIds);
+		for (const bad of [
+			["--source=carrefour"],
+			["--source=vea"],
+			["--count=9"],
+			["--dry-run"],
+			["--all-source"],
+			["--cron=true"],
+			["--confirm-write=vea-direct-refresh-count10"],
+		]) {
+			assert.throws(
+				() => parseDiscoActiveWriteCliOptions(discoArgv(report, bad)),
+				/disco|count|rejects|confirmation|unknown|exactly one/,
+			);
+		}
+	});
+
+	it("executes Disco selected-row-only transaction and emits source report schema", async () => {
+		const report = await discoPrewrite();
+		const options = parseDiscoActiveWriteCliOptions(discoArgv(report));
+		let lockKey = 0;
+		let selectedSource = "";
+		let updatedSource = "";
+		const writeReport = await executeDiscoActiveWrite({
+			repository: repo(
+				tx({
+					async acquireAdvisoryLock(key) {
+						lockKey = key;
+						return true;
+					},
+					async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+						selectedSource = sourceSlug;
+						return tx().readSelectedRowsByExactIdentity(sourceSlug, identities);
+					},
+					async updateSupermarketProductByExactIdentity(
+						sourceSlug,
+						rowId,
+						productEan,
+						skuId,
+						changes,
+					) {
+						updatedSource = sourceSlug;
+						return tx().updateSupermarketProductByExactIdentity(
+							sourceSlug,
+							rowId,
+							productEan,
+							skuId,
+							changes,
+						);
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date(report.generatedAt),
+		});
+		assert.equal(lockKey, DISCO_ACTIVE_WRITE_LOCK_KEY);
+		assert.equal(selectedSource, "disco");
+		assert.equal(updatedSource, "disco");
+		assert.equal(writeReport.report, "disco-direct-refresh-active-write");
+		assert.equal(writeReport.issue, 61);
+		assert.equal(writeReport.umbrellaIssue, undefined);
+		assert.equal(writeReport.source.slug, "disco");
+		assert.equal(writeReport.source.expectedHost, "disco.com.ar");
 		assert.equal(writeReport.summary.rows, 10);
 		assert.equal(writeReport.noCreate.productDelta, 0);
 	});

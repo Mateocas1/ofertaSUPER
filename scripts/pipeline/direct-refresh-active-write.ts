@@ -16,21 +16,24 @@ import {
 export const CARREFOUR_ACTIVE_WRITE_CONFIRMATION =
 	"carrefour-direct-refresh-count10";
 export const VEA_ACTIVE_WRITE_CONFIRMATION = "vea-direct-refresh-count10";
+export const DISCO_ACTIVE_WRITE_CONFIRMATION = "disco-direct-refresh-count10";
 export const CARREFOUR_ACTIVE_WRITE_COUNT = 10;
 export const VEA_ACTIVE_WRITE_COUNT = 10;
+export const DISCO_ACTIVE_WRITE_COUNT = 10;
 export const CARREFOUR_ACTIVE_WRITE_LOCK_KEY = 44204510;
 export const VEA_ACTIVE_WRITE_LOCK_KEY = 54204510;
+export const DISCO_ACTIVE_WRITE_LOCK_KEY = 61204510;
 const MAX_PREWRITE_AGE_MS = 15 * 60 * 1000;
 
-type ActiveWriteSource = "carrefour" | "vea";
+type ActiveWriteSource = "carrefour" | "vea" | "disco";
 type SourceConfig = {
 	source: ActiveWriteSource;
 	displayName: string;
 	confirmation: string;
 	lockKey: number;
-	issue: 45 | 54;
+	issue: 45 | 54 | 61;
 	umbrellaIssue?: 44;
-	expectedHost: "carrefour.com.ar" | "vea.com.ar";
+	expectedHost: "carrefour.com.ar" | "vea.com.ar" | "disco.com.ar";
 	report: `${ActiveWriteSource}-direct-refresh-active-write`;
 };
 const SOURCE_CONFIGS = {
@@ -52,6 +55,15 @@ const SOURCE_CONFIGS = {
 		issue: 54,
 		expectedHost: "vea.com.ar",
 		report: "vea-direct-refresh-active-write",
+	},
+	disco: {
+		source: "disco",
+		displayName: "Disco",
+		confirmation: DISCO_ACTIVE_WRITE_CONFIRMATION,
+		lockKey: DISCO_ACTIVE_WRITE_LOCK_KEY,
+		issue: 61,
+		expectedHost: "disco.com.ar",
+		report: "disco-direct-refresh-active-write",
 	},
 } as const satisfies Record<ActiveWriteSource, SourceConfig>;
 
@@ -95,9 +107,11 @@ type ActiveWriteCliOptionsFor<Source extends ActiveWriteSource> = {
 export type CarrefourActiveWriteCliOptions =
 	ActiveWriteCliOptionsFor<"carrefour">;
 export type VeaActiveWriteCliOptions = ActiveWriteCliOptionsFor<"vea">;
+export type DiscoActiveWriteCliOptions = ActiveWriteCliOptionsFor<"disco">;
 export type ActiveWriteCliOptions =
 	| CarrefourActiveWriteCliOptions
-	| VeaActiveWriteCliOptions;
+	| VeaActiveWriteCliOptions
+	| DiscoActiveWriteCliOptions;
 
 export type ActiveWriteTransaction = {
 	acquireAdvisoryLock(lockKey: number): Promise<boolean>;
@@ -133,12 +147,12 @@ export type ActiveWriteReport = {
 	schemaVersion: 1;
 	report: `${ActiveWriteSource}-direct-refresh-active-write`;
 	status: "PASS";
-	issue: 45 | 54;
+	issue: 45 | 54 | 61;
 	umbrellaIssue?: 44;
 	source: {
 		slug: ActiveWriteSource;
 		supermarketId: number;
-		expectedHost: "carrefour.com.ar" | "vea.com.ar";
+		expectedHost: "carrefour.com.ar" | "vea.com.ar" | "disco.com.ar";
 	};
 	count: 10;
 	startedAt: string;
@@ -208,6 +222,12 @@ export function parseVeaActiveWriteCliOptions(
 	argv = process.argv,
 ): VeaActiveWriteCliOptions {
 	return parseActiveWriteCliOptions(argv, "vea");
+}
+
+export function parseDiscoActiveWriteCliOptions(
+	argv = process.argv,
+): DiscoActiveWriteCliOptions {
+	return parseActiveWriteCliOptions(argv, "disco");
 }
 
 function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
@@ -380,6 +400,20 @@ export async function executeVeaActiveWrite({
 	repository: ActiveWriteRepository;
 	prewriteReport: CarrefourDirectRefreshPrewriteGate;
 	options: VeaActiveWriteCliOptions;
+	startedAt?: Date;
+}): Promise<ActiveWriteReport> {
+	return executeActiveWrite({ repository, prewriteReport, options, startedAt });
+}
+
+export async function executeDiscoActiveWrite({
+	repository,
+	prewriteReport,
+	options,
+	startedAt = new Date(),
+}: {
+	repository: ActiveWriteRepository;
+	prewriteReport: CarrefourDirectRefreshPrewriteGate;
+	options: DiscoActiveWriteCliOptions;
 	startedAt?: Date;
 }): Promise<ActiveWriteReport> {
 	return executeActiveWrite({ repository, prewriteReport, options, startedAt });
