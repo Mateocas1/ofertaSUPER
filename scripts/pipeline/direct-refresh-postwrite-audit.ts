@@ -8,6 +8,42 @@ import type {
 type AuditStatus = "PASS" | "FAIL";
 type RowStatus = "PASS" | "FAIL";
 type Counts = ActiveWriteReport["noCreate"]["after"];
+export type DirectRefreshPostwriteSource = "carrefour" | "vea";
+
+type SourceConfig = {
+	source: DirectRefreshPostwriteSource;
+	displayName: string;
+	issue: 45 | 54;
+	umbrellaIssue?: 44;
+	expectedHost: "carrefour.com.ar" | "vea.com.ar";
+	activeWriteReport:
+		| "carrefour-direct-refresh-active-write"
+		| "vea-direct-refresh-active-write";
+	postwriteAudit:
+		| "carrefour-direct-refresh-postwrite-audit"
+		| "vea-direct-refresh-postwrite-audit";
+};
+
+const SOURCE_CONFIGS = {
+	carrefour: {
+		source: "carrefour",
+		displayName: "Carrefour",
+		issue: 45,
+		umbrellaIssue: 44,
+		expectedHost: "carrefour.com.ar",
+		activeWriteReport: "carrefour-direct-refresh-active-write",
+		postwriteAudit: "carrefour-direct-refresh-postwrite-audit",
+	},
+	vea: {
+		source: "vea",
+		displayName: "Vea",
+		issue: 54,
+		umbrellaIssue: undefined,
+		expectedHost: "vea.com.ar",
+		activeWriteReport: "vea-direct-refresh-active-write",
+		postwriteAudit: "vea-direct-refresh-postwrite-audit",
+	},
+} as const satisfies Record<DirectRefreshPostwriteSource, SourceConfig>;
 
 type CurrentRow = {
 	rowId: string;
@@ -26,6 +62,7 @@ export type DirectRefreshPostwriteRepository = {
 	): Promise<CurrentRow[]>;
 	readPriceHistoryRowsAboveId(
 		maxId: number | null,
+		supermarketProductIds: number[],
 	): Promise<CurrentPriceHistory[]>;
 };
 
@@ -40,15 +77,17 @@ export type DirectRefreshPostwriteAuditRow = {
 
 export type DirectRefreshPostwriteAuditReport = {
 	schemaVersion: 1;
-	audit: "carrefour-direct-refresh-postwrite-audit";
+	audit:
+		| "carrefour-direct-refresh-postwrite-audit"
+		| "vea-direct-refresh-postwrite-audit";
 	status: AuditStatus;
 	basis: "production";
 	generatedAt: string;
 	writeBoundary: "read-only post-write audit; no production writes, no active refresh/reconcile, no staging/ingestion runs, no scheduler/cron/workflow side effects";
 	writeReport: {
-		issue: 45;
-		umbrellaIssue: 44;
-		source: "carrefour";
+		issue: 45 | 54;
+		umbrellaIssue?: 44;
+		source: DirectRefreshPostwriteSource;
 		count: 10;
 		prewriteReportHash: string;
 		startedAt: string;
@@ -73,26 +112,33 @@ export type DirectRefreshPostwriteAuditReport = {
 const WRITE_BOUNDARY =
 	"read-only post-write audit; no production writes, no active refresh/reconcile, no staging/ingestion runs, no scheduler/cron/workflow side effects" as const;
 
-export async function buildCarrefourDirectRefreshPostwriteAudit({
+export async function buildDirectRefreshPostwriteAudit({
+	source = "carrefour",
 	repository,
 	writeReport,
 	now = new Date(),
 }: {
+	source?: DirectRefreshPostwriteSource;
 	repository: DirectRefreshPostwriteRepository;
 	writeReport: ActiveWriteReport;
 	now?: Date;
 }): Promise<DirectRefreshPostwriteAuditReport> {
-	const reportReasons = validateWriteReport(writeReport);
+	const config = SOURCE_CONFIGS[source];
+	const reportReasons = validateWriteReport(writeReport, config);
 	const identities = writeReport.rows.map((row) => ({
 		rowId: row.rowId,
 		productEan: row.productEan,
 		skuId: row.skuId,
 	}));
+	const selectedSupermarketProductIds = writeReport.rows.map((row) =>
+		Number(row.rowId),
+	);
 	const [actualCounts, currentRows, historyRows] = await Promise.all([
 		repository.readNoCreateCounts(),
 		repository.readSelectedRowsByExactIdentity(identities),
 		repository.readPriceHistoryRowsAboveId(
 			writeReport.noCreate.before.priceHistoryMaxId,
+			selectedSupermarketProductIds,
 		),
 	]);
 	const currentById = new Map(currentRows.map((row) => [row.rowId, row]));
@@ -111,15 +157,15 @@ export async function buildCarrefourDirectRefreshPostwriteAudit({
 
 	return {
 		schemaVersion: 1,
-		audit: "carrefour-direct-refresh-postwrite-audit",
+		audit: config.postwriteAudit,
 		status: failClosedReasons.length === 0 ? "PASS" : "FAIL",
 		basis: "production",
 		generatedAt: now.toISOString(),
 		writeBoundary: WRITE_BOUNDARY,
 		writeReport: {
-			issue: 45,
-			umbrellaIssue: 44,
-			source: "carrefour",
+			issue: config.issue,
+			...(config.umbrellaIssue ? { umbrellaIssue: config.umbrellaIssue } : {}),
+			source: config.source,
 			count: 10,
 			prewriteReportHash: writeReport.confirmation?.prewriteReportHash ?? "",
 			startedAt: writeReport.startedAt,
@@ -145,16 +191,38 @@ export async function buildCarrefourDirectRefreshPostwriteAudit({
 	};
 }
 
-function validateWriteReport(report: ActiveWriteReport) {
+export async function buildCarrefourDirectRefreshPostwriteAudit({
+	repository,
+	writeReport,
+	now = new Date(),
+}: {
+	repository: DirectRefreshPostwriteRepository;
+	writeReport: ActiveWriteReport;
+	now?: Date;
+}): Promise<DirectRefreshPostwriteAuditReport> {
+	return buildDirectRefreshPostwriteAudit({
+		source: "carrefour",
+		repository,
+		writeReport,
+		now,
+	});
+}
+
+function validateWriteReport(report: ActiveWriteReport, config: SourceConfig) {
 	const reasons: string[] = [];
 	if (report.schemaVersion !== 1) reasons.push("write report schema is not v1");
-	if (report.report !== "carrefour-direct-refresh-active-write")
-		reasons.push("write report type is not Carrefour active write");
+	if (report.report !== config.activeWriteReport)
+		reasons.push(`write report type is not ${config.displayName} active write`);
 	if (report.status !== "PASS") reasons.push("write report status is not PASS");
-	if (report.issue !== 45 || report.umbrellaIssue !== 44)
+	if (
+		report.issue !== config.issue ||
+		report.umbrellaIssue !== config.umbrellaIssue
+	)
 		reasons.push("write report issue linkage mismatch");
-	if (report.source?.slug !== "carrefour")
-		reasons.push("write report source is not carrefour");
+	if (report.source?.slug !== config.source)
+		reasons.push(`write report source is not ${config.source}`);
+	if (report.source?.expectedHost !== config.expectedHost)
+		reasons.push(`write report expected host is not ${config.expectedHost}`);
 	if (report.count !== 10 || report.summary?.rows !== 10)
 		reasons.push("write report count is not exactly 10");
 	if (report.transaction?.acquired !== true)
