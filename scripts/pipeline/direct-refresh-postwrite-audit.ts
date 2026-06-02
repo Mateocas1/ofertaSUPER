@@ -8,22 +8,32 @@ import type {
 type AuditStatus = "PASS" | "FAIL";
 type RowStatus = "PASS" | "FAIL";
 type Counts = ActiveWriteReport["noCreate"]["after"];
-export type DirectRefreshPostwriteSource = "carrefour" | "vea" | "disco";
+export type DirectRefreshPostwriteSource =
+	| "carrefour"
+	| "vea"
+	| "disco"
+	| "jumbo";
 
 type SourceConfig = {
 	source: DirectRefreshPostwriteSource;
 	displayName: string;
-	issue: 45 | 54 | 61;
+	issue: 45 | 54 | 61 | 68;
 	umbrellaIssue?: 44;
-	expectedHost: "carrefour.com.ar" | "vea.com.ar" | "disco.com.ar";
+	expectedHost:
+		| "carrefour.com.ar"
+		| "vea.com.ar"
+		| "disco.com.ar"
+		| "jumbo.com.ar";
 	activeWriteReport:
 		| "carrefour-direct-refresh-active-write"
 		| "vea-direct-refresh-active-write"
-		| "disco-direct-refresh-active-write";
+		| "disco-direct-refresh-active-write"
+		| "jumbo-direct-refresh-active-write";
 	postwriteAudit:
 		| "carrefour-direct-refresh-postwrite-audit"
 		| "vea-direct-refresh-postwrite-audit"
-		| "disco-direct-refresh-postwrite-audit";
+		| "disco-direct-refresh-postwrite-audit"
+		| "jumbo-direct-refresh-postwrite-audit";
 };
 
 const SOURCE_CONFIGS = {
@@ -53,6 +63,15 @@ const SOURCE_CONFIGS = {
 		expectedHost: "disco.com.ar",
 		activeWriteReport: "disco-direct-refresh-active-write",
 		postwriteAudit: "disco-direct-refresh-postwrite-audit",
+	},
+	jumbo: {
+		source: "jumbo",
+		displayName: "Jumbo",
+		issue: 68,
+		umbrellaIssue: undefined,
+		expectedHost: "jumbo.com.ar",
+		activeWriteReport: "jumbo-direct-refresh-active-write",
+		postwriteAudit: "jumbo-direct-refresh-postwrite-audit",
 	},
 } as const satisfies Record<DirectRefreshPostwriteSource, SourceConfig>;
 
@@ -91,13 +110,14 @@ export type DirectRefreshPostwriteAuditReport = {
 	audit:
 		| "carrefour-direct-refresh-postwrite-audit"
 		| "vea-direct-refresh-postwrite-audit"
-		| "disco-direct-refresh-postwrite-audit";
+		| "disco-direct-refresh-postwrite-audit"
+		| "jumbo-direct-refresh-postwrite-audit";
 	status: AuditStatus;
 	basis: "production";
 	generatedAt: string;
 	writeBoundary: "read-only post-write audit; no production writes, no active refresh/reconcile, no staging/ingestion runs, no scheduler/cron/workflow side effects";
 	writeReport: {
-		issue: 45 | 54 | 61;
+		issue: 45 | 54 | 61 | 68;
 		umbrellaIssue?: 44;
 		source: DirectRefreshPostwriteSource;
 		count: 10;
@@ -246,12 +266,33 @@ function validateWriteReport(report: ActiveWriteReport, config: SourceConfig) {
 		reasons.push("write report no-create deltas are not zero");
 	if (report.rows.length !== 10)
 		reasons.push("write report rows are not exactly 10");
+	if (!/^[a-f0-9]{64}$/.test(report.confirmation?.prewriteReportHash ?? ""))
+		reasons.push("write report confirmation hash is invalid");
+	const rowIds = report.rows.map((row) => row.rowId);
+	const productEans = report.rows.map((row) => row.productEan);
+	const skuIds = report.rows.map((row) => row.skuId);
+	if (!sameStringSet(report.confirmation?.rowIds, rowIds))
+		reasons.push("write report confirmation row ids mismatch");
+	if (!sameStringSet(report.confirmation?.productEans, productEans))
+		reasons.push("write report confirmation product EANs mismatch");
+	if (!sameStringSet(report.confirmation?.skuIds, skuIds))
+		reasons.push("write report confirmation SKU ids mismatch");
 	if (!report.rollbackSnapshot?.requiresConfirmation)
 		reasons.push("rollback snapshot confirmation is missing");
-	if (!report.rollbackSnapshot?.touchedProductEans?.length)
+	if (!report.rollbackSnapshot?.touchedProductEans?.length) {
 		reasons.push("rollback snapshot product references are missing");
-	if (!report.rollbackSnapshot?.touchedSupermarketProductIds?.length)
+	} else if (
+		!sameStringSet(report.rollbackSnapshot.touchedProductEans, productEans)
+	) {
+		reasons.push("rollback snapshot product references mismatch");
+	}
+	if (!report.rollbackSnapshot?.touchedSupermarketProductIds?.length) {
 		reasons.push("rollback snapshot supermarketProduct references are missing");
+	} else if (
+		!sameNumberSet(report.rollbackSnapshot.touchedSupermarketProductIds, rowIds)
+	) {
+		reasons.push("rollback snapshot supermarketProduct references mismatch");
+	}
 	return reasons;
 }
 
@@ -362,6 +403,20 @@ function expectedHistoryIds(report: ActiveWriteReport) {
 	return report.rows
 		.map((row) => row.insertedPriceHistoryId)
 		.filter((id): id is number => id !== null);
+}
+
+function sameStringSet(left: string[] | undefined, right: string[]) {
+	if (!left || left.length !== right.length) return false;
+	const leftSorted = [...left].sort();
+	const rightSorted = [...right].sort();
+	return leftSorted.every((value, index) => value === rightSorted[index]);
+}
+
+function sameNumberSet(left: Array<string | number> | undefined, right: string[]) {
+	if (!left || left.length !== right.length) return false;
+	const leftSorted = left.map(Number).sort((a, b) => a - b);
+	const rightSorted = right.map(Number).sort((a, b) => a - b);
+	return leftSorted.every((value, index) => value === rightSorted[index]);
 }
 
 function sameValue(left: unknown, right: unknown) {
