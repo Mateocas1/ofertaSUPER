@@ -202,6 +202,11 @@ const SOURCE_CONFIGS = {
 		displayName: "Disco",
 		expectedHost: "disco.com.ar",
 	},
+	jumbo: {
+		slug: "jumbo",
+		displayName: "Jumbo",
+		expectedHost: "jumbo.com.ar",
+	},
 } as const;
 type DirectRefreshSourceSlug = keyof typeof SOURCE_CONFIGS;
 type DirectRefreshExpectedHost =

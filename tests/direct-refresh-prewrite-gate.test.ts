@@ -109,6 +109,13 @@ function repository(rows: DirectRefreshPrewriteExistingRow[]) {
 					baseUrl: "https://www.disco.com.ar",
 				};
 			}
+			if (sourceSlug === "jumbo") {
+				return {
+					id: 40,
+					slug: "jumbo",
+					baseUrl: "https://www.jumbo.com.ar",
+				};
+			}
 			return null;
 		},
 		async listOldestPublicRankableRows(sourceSlug: string, sampleSize: number) {
@@ -323,6 +330,58 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		assert.equal(report.rows[0].guards.carrefourHostOnly, true);
 	});
 
+	it("supports Jumbo allowlisted source with source-specific host and confirmation guards", async () => {
+		const jumboRow: DirectRefreshPrewriteExistingRow = {
+			...passRow,
+			id: "4",
+			sourceSlug: "jumbo",
+			supermarketId: 40,
+			productUrl: "https://www.jumbo.com.ar/leche-1/p",
+			product: passRow.product
+				? {
+						...passRow.product,
+						imageUrl: "https://www.jumbo.com.ar/old.jpg",
+						images: ["https://www.jumbo.com.ar/old.jpg"],
+					}
+				: null,
+		};
+		const lookups: Array<{ sourceSlug: string; kind: string; value: string }> =
+			[];
+		const report = await buildDirectRefreshPrewriteGate({
+			sourceSlug: "jumbo",
+			repository: repository([jumboRow]),
+			now: new Date("2026-06-01T00:00:00.000Z"),
+			fetchDirectProducts: async (sourceSlug, lookup) => {
+				lookups.push({ sourceSlug, kind: lookup.kind, value: lookup.value });
+				return [
+					live({
+						productUrl: "https://www.jumbo.com.ar/leche-1/p",
+						imageUrl: "https://www.jumbo.com.ar/new.jpg",
+						images: ["https://www.jumbo.com.ar/new.jpg"],
+					}),
+				];
+			},
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(report.audit, "jumbo-direct-refresh-prewrite-gate");
+		assert.equal(report.source.slug, "jumbo");
+		assert.equal(report.source.expectedHost, "jumbo.com.ar");
+		assert.match(report.identity.guards.join("\n"), /existing Jumbo row/);
+		assert.match(report.identity.guards.join("\n"), /jumbo\.com\.ar/);
+		assert.deepEqual(lookups, [
+			{ sourceSlug: "jumbo", kind: "sku-id", value: "sku-1" },
+		]);
+		assert.equal(report.futureConfirmation.shape.source, "jumbo");
+		assert.deepEqual(report.futureConfirmation.shape.rowIds, ["4"]);
+		assert.deepEqual(report.futureConfirmation.shape.skuIds, ["sku-1"]);
+		assert.deepEqual(report.futureConfirmation.shape.productEans, [
+			"7790001000011",
+		]);
+		assert.equal(report.rows[0].sourceSlug, "jumbo");
+		assert.equal(report.rows[0].guards.carrefourHostOnly, true);
+	});
+
 	it("rejects unsupported scope before repository or network work", async () => {
 		await assert.rejects(
 			() =>
@@ -469,6 +528,14 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"--source=disco",
 			]),
 			{ source: "disco", sampleSize: 10, output: null },
+		);
+		assert.deepEqual(
+			parseDirectRefreshPrewriteGateCliOptions([
+				"node",
+				"script",
+				"--source=jumbo",
+			]),
+			{ source: "jumbo", sampleSize: 10, output: null },
 		);
 		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions(["node", "script"]),
