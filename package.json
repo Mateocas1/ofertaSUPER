@@ -35,6 +35,7 @@
     "audit:direct-refresh-prewrite-gate": "tsx scripts/audit-direct-refresh-prewrite-gate.ts",
     "audit:direct-refresh-postwrite": "tsx scripts/audit-direct-refresh-postwrite.ts",
     "direct-refresh:carrefour-write": "tsx scripts/direct-refresh-carrefour-write.ts",
+    "direct-refresh:vea-write": "tsx scripts/direct-refresh-vea-write.ts",
     "metrics:ingestion": "tsx scripts/pipeline/metrics.ts"
   },
   "prisma": {

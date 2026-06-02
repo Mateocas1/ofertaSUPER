@@ -10,16 +10,16 @@ import { db } from "../src/lib/db";
 import { getSourceAdapter } from "../src/lib/ingestion/adapters/registry";
 import {
 	assertFreshPrewriteRerunMatches,
-	executeCarrefourActiveWrite,
-	parseCarrefourActiveWriteCliOptions,
+	executeVeaActiveWrite,
+	parseVeaActiveWriteCliOptions,
 	readPrewriteReport,
 	type ActiveWriteRepository,
 	type ActiveWriteTransaction,
-	type CarrefourActiveWriteCliOptions,
+	type VeaActiveWriteCliOptions,
 } from "./pipeline/direct-refresh-active-write";
 import { createDirectRefreshPrewriteRepository } from "./audit-direct-refresh-prewrite-gate";
 import {
-	buildCarrefourDirectRefreshPrewriteGate,
+	buildDirectRefreshPrewriteGate,
 	type DirectRefreshPrewriteChange,
 } from "./pipeline/direct-refresh-prewrite-gate";
 
@@ -239,32 +239,32 @@ async function writeJson(output: string, report: unknown) {
 	const serialized = `${JSON.stringify(report, null, 2)}\n`;
 	await mkdir(dirname(output), { recursive: true });
 	await writeFile(output, serialized, "utf8");
-	process.stdout.write(`Wrote Carrefour active refresh report to ${output}\n`);
+	process.stdout.write(`Wrote Vea active refresh report to ${output}\n`);
 }
 
 async function buildFreshPrewrite(
-	options: CarrefourActiveWriteCliOptions,
+	options: VeaActiveWriteCliOptions,
 	generatedAt: string,
 ) {
-	return buildCarrefourDirectRefreshPrewriteGate({
+	return buildDirectRefreshPrewriteGate({
 		repository: createDirectRefreshPrewriteRepository(),
 		sourceSlug: options.source,
 		sampleSize: options.count,
 		now: new Date(generatedAt),
 		fetchDirectProducts: async (_sourceSlug, lookup) =>
-			getSourceAdapter("carrefour").fetchDirectProducts(lookup),
+			getSourceAdapter("vea").fetchDirectProducts(lookup),
 	});
 }
 
 async function main() {
-	const options = parseCarrefourActiveWriteCliOptions();
+	const options = parseVeaActiveWriteCliOptions();
 	const prewriteReport = await readPrewriteReport(options.prewriteReport);
 	const freshPrewriteReport = await buildFreshPrewrite(
 		options,
 		prewriteReport.generatedAt,
 	);
 	assertFreshPrewriteRerunMatches(prewriteReport, freshPrewriteReport, options);
-	const report = await executeCarrefourActiveWrite({
+	const report = await executeVeaActiveWrite({
 		repository: createActiveWriteRepository(),
 		prewriteReport: freshPrewriteReport,
 		options,

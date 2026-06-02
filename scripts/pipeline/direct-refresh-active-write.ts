@@ -15,9 +15,45 @@ import {
 
 export const CARREFOUR_ACTIVE_WRITE_CONFIRMATION =
 	"carrefour-direct-refresh-count10";
+export const VEA_ACTIVE_WRITE_CONFIRMATION = "vea-direct-refresh-count10";
 export const CARREFOUR_ACTIVE_WRITE_COUNT = 10;
+export const VEA_ACTIVE_WRITE_COUNT = 10;
 export const CARREFOUR_ACTIVE_WRITE_LOCK_KEY = 44204510;
+export const VEA_ACTIVE_WRITE_LOCK_KEY = 54204510;
 const MAX_PREWRITE_AGE_MS = 15 * 60 * 1000;
+
+type ActiveWriteSource = "carrefour" | "vea";
+type SourceConfig = {
+	source: ActiveWriteSource;
+	displayName: string;
+	confirmation: string;
+	lockKey: number;
+	issue: 45 | 54;
+	umbrellaIssue?: 44;
+	expectedHost: "carrefour.com.ar" | "vea.com.ar";
+	report: `${ActiveWriteSource}-direct-refresh-active-write`;
+};
+const SOURCE_CONFIGS = {
+	carrefour: {
+		source: "carrefour",
+		displayName: "Carrefour",
+		confirmation: CARREFOUR_ACTIVE_WRITE_CONFIRMATION,
+		lockKey: CARREFOUR_ACTIVE_WRITE_LOCK_KEY,
+		issue: 45,
+		umbrellaIssue: 44,
+		expectedHost: "carrefour.com.ar",
+		report: "carrefour-direct-refresh-active-write",
+	},
+	vea: {
+		source: "vea",
+		displayName: "Vea",
+		confirmation: VEA_ACTIVE_WRITE_CONFIRMATION,
+		lockKey: VEA_ACTIVE_WRITE_LOCK_KEY,
+		issue: 54,
+		expectedHost: "vea.com.ar",
+		report: "vea-direct-refresh-active-write",
+	},
+} as const satisfies Record<ActiveWriteSource, SourceConfig>;
 
 type Counts = {
 	productCount: number;
@@ -45,21 +81,29 @@ type AppliedRow = {
 	insertedPriceHistoryId: number | null;
 };
 
-export type CarrefourActiveWriteCliOptions = {
-	source: "carrefour";
+type ActiveWriteCliOptionsFor<Source extends ActiveWriteSource> = {
+	source: Source;
 	count: 10;
 	prewriteReport: string;
 	prewriteReportHash: string;
 	rowIds: string[];
 	productEans: string[];
 	skuIds: string[];
-	confirmWrite: typeof CARREFOUR_ACTIVE_WRITE_CONFIRMATION;
+	confirmWrite: (typeof SOURCE_CONFIGS)[Source]["confirmation"];
 	output: string;
 };
+export type CarrefourActiveWriteCliOptions =
+	ActiveWriteCliOptionsFor<"carrefour">;
+export type VeaActiveWriteCliOptions = ActiveWriteCliOptionsFor<"vea">;
+export type ActiveWriteCliOptions =
+	| CarrefourActiveWriteCliOptions
+	| VeaActiveWriteCliOptions;
+
 export type ActiveWriteTransaction = {
 	acquireAdvisoryLock(lockKey: number): Promise<boolean>;
 	readNoCreateCounts(): Promise<Counts>;
 	readSelectedRowsByExactIdentity(
+		sourceSlug: ActiveWriteSource,
 		rows: Array<{ rowId: string; productEan: string; skuId: string }>,
 	): Promise<TxRow[]>;
 	updateProductByEan(
@@ -67,6 +111,7 @@ export type ActiveWriteTransaction = {
 		changes: DirectRefreshPrewriteChange[],
 	): Promise<number>;
 	updateSupermarketProductByExactIdentity(
+		sourceSlug: ActiveWriteSource,
 		rowId: string,
 		productEan: string,
 		skuId: string,
@@ -86,14 +131,14 @@ export type ActiveWriteRepository = {
 };
 export type ActiveWriteReport = {
 	schemaVersion: 1;
-	report: "carrefour-direct-refresh-active-write";
+	report: `${ActiveWriteSource}-direct-refresh-active-write`;
 	status: "PASS";
-	issue: 45;
-	umbrellaIssue: 44;
+	issue: 45 | 54;
+	umbrellaIssue?: 44;
 	source: {
-		slug: "carrefour";
+		slug: ActiveWriteSource;
 		supermarketId: number;
-		expectedHost: "carrefour.com.ar";
+		expectedHost: "carrefour.com.ar" | "vea.com.ar";
 	};
 	count: 10;
 	startedAt: string;
@@ -156,13 +201,27 @@ const REQUIRED_FLAGS = [
 export function parseCarrefourActiveWriteCliOptions(
 	argv = process.argv,
 ): CarrefourActiveWriteCliOptions {
+	return parseActiveWriteCliOptions(argv, "carrefour");
+}
+
+export function parseVeaActiveWriteCliOptions(
+	argv = process.argv,
+): VeaActiveWriteCliOptions {
+	return parseActiveWriteCliOptions(argv, "vea");
+}
+
+function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
+	argv: string[],
+	expectedSource: Source,
+): ActiveWriteCliOptionsFor<Source> {
+	const config = SOURCE_CONFIGS[expectedSource];
 	const foundForbidden = argv.find((entry) =>
 		FORBIDDEN_FLAGS.some(
 			(flag) => entry === flag || entry.startsWith(`${flag}=`),
 		),
 	);
 	if (foundForbidden)
-		throw new Error(`Carrefour active writer rejects ${foundForbidden}`);
+		throw new Error(`${config.displayName} active writer rejects ${foundForbidden}`);
 	const allowedFlags = new Set(REQUIRED_FLAGS);
 	const unknownFlag = argv
 		.slice(2)
@@ -171,34 +230,35 @@ export function parseCarrefourActiveWriteCliOptions(
 				entry.startsWith("--") && !allowedFlags.has(entry.split("=", 1)[0]),
 		);
 	if (unknownFlag)
-		throw new Error(`unknown Carrefour active writer flag ${unknownFlag}`);
+		throw new Error(`unknown ${config.displayName} active writer flag ${unknownFlag}`);
 	for (const flag of REQUIRED_FLAGS) {
 		const matches = argv.filter((entry) => entry.startsWith(`${flag}=`));
 		if (matches.length !== 1) throw new Error(`expected exactly one ${flag}`);
 	}
 	const source = getOptionalSingleFlag(argv, "--source");
-	if (source !== "carrefour")
-		throw new Error("active writer only accepts --source=carrefour");
+	if (source !== config.source)
+		throw new Error(
+			`active writer only accepts --source=${config.source}`,
+		);
 	const count = parsePositiveIntegerFlag(argv, "--count", 0);
-	if (count !== CARREFOUR_ACTIVE_WRITE_COUNT)
-		throw new Error("active writer requires --count=10");
+	if (count !== 10) throw new Error("active writer requires --count=10");
 	const hash = getOptionalSingleFlag(argv, "--prewrite-report-hash") ?? "";
 	if (!/^[a-f0-9]{64}$/.test(hash))
 		throw new Error("prewrite report hash must be lowercase 64 hex");
 	const confirmWrite = getOptionalSingleFlag(argv, "--confirm-write");
-	if (confirmWrite !== CARREFOUR_ACTIVE_WRITE_CONFIRMATION)
-		throw new Error("missing exact Carrefour active write confirmation");
+	if (confirmWrite !== config.confirmation)
+		throw new Error(`missing exact ${config.displayName} active write confirmation`);
 	return {
-		source: "carrefour",
+		source: config.source,
 		count: 10,
 		prewriteReport: getOptionalSingleFlag(argv, "--prewrite-report") ?? "",
 		prewriteReportHash: hash,
 		rowIds: exactList(argv, "--row-ids"),
 		productEans: exactList(argv, "--product-eans"),
 		skuIds: exactList(argv, "--sku-ids"),
-		confirmWrite: CARREFOUR_ACTIVE_WRITE_CONFIRMATION,
+		confirmWrite: config.confirmation,
 		output: getOptionalSingleFlag(argv, "--output") ?? "",
-	};
+	} as ActiveWriteCliOptionsFor<Source>;
 }
 
 export async function readPrewriteReport(path: string) {
@@ -209,12 +269,13 @@ export async function readPrewriteReport(path: string) {
 
 export function validatePrewriteReportForActiveWrite(
 	report: CarrefourDirectRefreshPrewriteGate,
-	options: CarrefourActiveWriteCliOptions,
+	options: ActiveWriteCliOptions,
 	now = new Date(),
 ) {
+	const config = SOURCE_CONFIGS[options.source];
 	if (
 		report.schemaVersion !== 1 ||
-		report.audit !== "carrefour-direct-refresh-prewrite-gate"
+		report.audit !== `${config.source}-direct-refresh-prewrite-gate`
 	)
 		throw new Error("invalid prewrite report schema");
 	if (
@@ -224,7 +285,8 @@ export function validatePrewriteReportForActiveWrite(
 	)
 		throw new Error("prewrite report must be PASS production dry-run");
 	if (
-		report.source.slug !== "carrefour" ||
+		report.source.slug !== config.source ||
+		report.source.expectedHost !== config.expectedHost ||
 		report.primitive.lookupKind !== "sku-id"
 	)
 		throw new Error("prewrite report scope/primitive mismatch");
@@ -244,6 +306,8 @@ export function validatePrewriteReportForActiveWrite(
 		computed !== options.prewriteReportHash
 	)
 		throw new Error("prewrite report hash mismatch");
+	if (report.futureConfirmation.shape.source !== config.source)
+		throw new Error("prewrite report confirmation source mismatch");
 	assertSameList(
 		"row ids",
 		options.rowIds,
@@ -264,7 +328,7 @@ export function validatePrewriteReportForActiveWrite(
 export function assertFreshPrewriteRerunMatches(
 	input: CarrefourDirectRefreshPrewriteGate,
 	rerun: CarrefourDirectRefreshPrewriteGate,
-	options: CarrefourActiveWriteCliOptions,
+	options: ActiveWriteCliOptions,
 ) {
 	validatePrewriteReportForActiveWrite(
 		rerun,
@@ -304,17 +368,49 @@ export async function executeCarrefourActiveWrite({
 	options: CarrefourActiveWriteCliOptions;
 	startedAt?: Date;
 }): Promise<ActiveWriteReport> {
+	return executeActiveWrite({ repository, prewriteReport, options, startedAt });
+}
+
+export async function executeVeaActiveWrite({
+	repository,
+	prewriteReport,
+	options,
+	startedAt = new Date(),
+}: {
+	repository: ActiveWriteRepository;
+	prewriteReport: CarrefourDirectRefreshPrewriteGate;
+	options: VeaActiveWriteCliOptions;
+	startedAt?: Date;
+}): Promise<ActiveWriteReport> {
+	return executeActiveWrite({ repository, prewriteReport, options, startedAt });
+}
+
+async function executeActiveWrite({
+	repository,
+	prewriteReport,
+	options,
+	startedAt,
+}: {
+	repository: ActiveWriteRepository;
+	prewriteReport: CarrefourDirectRefreshPrewriteGate;
+	options: ActiveWriteCliOptions;
+	startedAt: Date;
+}): Promise<ActiveWriteReport> {
+	const config = SOURCE_CONFIGS[options.source];
 	validatePrewriteReportForActiveWrite(prewriteReport, options, startedAt);
 	return repository.withTransaction(async (tx) => {
-		if (!(await tx.acquireAdvisoryLock(CARREFOUR_ACTIVE_WRITE_LOCK_KEY)))
-			throw new Error("Carrefour active write advisory lock unavailable");
+		if (!(await tx.acquireAdvisoryLock(config.lockKey)))
+			throw new Error(`${config.displayName} active write advisory lock unavailable`);
 		const beforeCounts = await tx.readNoCreateCounts();
 		const identities = prewriteReport.rows.map((row) => ({
 			rowId: row.rowId,
 			productEan: row.currentDb.supermarketProduct.productEan ?? "",
 			skuId: row.lookup.value ?? "",
 		}));
-		const selectedRows = await tx.readSelectedRowsByExactIdentity(identities);
+		const selectedRows = await tx.readSelectedRowsByExactIdentity(
+			config.source,
+			identities,
+		);
 		if (selectedRows.length !== 10)
 			throw new Error("selected rows missing before write");
 		const appliedRows: AppliedRow[] = [];
@@ -328,6 +424,7 @@ export async function executeCarrefourActiveWrite({
 					`product update count for ${row.rowId} was ${productCount}`,
 				);
 			const spCount = await tx.updateSupermarketProductByExactIdentity(
+				config.source,
 				row.rowId,
 				row.currentDb.supermarketProduct.productEan ?? "",
 				row.lookup.value ?? "",
@@ -388,23 +485,26 @@ function buildActiveWriteReport({
 	committedAt,
 }: {
 	prewriteReport: CarrefourDirectRefreshPrewriteGate;
-	options: CarrefourActiveWriteCliOptions;
+	options: ActiveWriteCliOptions;
 	beforeCounts: Counts;
 	afterCounts: Counts;
 	rows: AppliedRow[];
 	startedAt: Date;
 	committedAt: Date;
 }): ActiveWriteReport {
+	const config = SOURCE_CONFIGS[options.source];
 	return {
 		schemaVersion: 1,
-		report: "carrefour-direct-refresh-active-write",
+		report: config.report,
 		status: "PASS",
-		issue: 45,
-		umbrellaIssue: 44,
+		issue: config.issue,
+		...("umbrellaIssue" in config
+			? { umbrellaIssue: config.umbrellaIssue }
+			: {}),
 		source: {
-			slug: "carrefour",
+			slug: config.source,
 			supermarketId: prewriteReport.source.supermarketId ?? 0,
-			expectedHost: "carrefour.com.ar",
+			expectedHost: config.expectedHost,
 		},
 		count: 10,
 		startedAt: startedAt.toISOString(),
@@ -418,7 +518,7 @@ function buildActiveWriteReport({
 			skuIds: options.skuIds,
 		},
 		transaction: {
-			advisoryLockKey: CARREFOUR_ACTIVE_WRITE_LOCK_KEY,
+			advisoryLockKey: config.lockKey,
 			acquired: true,
 		},
 		noCreate: {
@@ -447,8 +547,7 @@ function buildActiveWriteReport({
 
 function exactList(argv: string[], flag: string) {
 	const list = parseOptionalListFlag(argv, flag);
-	if (list.length !== CARREFOUR_ACTIVE_WRITE_COUNT)
-		throw new Error(`${flag} must contain exactly 10 values`);
+	if (list.length !== 10) throw new Error(`${flag} must contain exactly 10 values`);
 	if (new Set(list).size !== list.length)
 		throw new Error(`${flag} contains duplicate values`);
 	return list;

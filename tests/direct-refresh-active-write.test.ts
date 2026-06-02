@@ -4,15 +4,20 @@ import { describe, it } from "node:test";
 import {
 	CARREFOUR_ACTIVE_WRITE_CONFIRMATION,
 	CARREFOUR_ACTIVE_WRITE_LOCK_KEY,
+	VEA_ACTIVE_WRITE_CONFIRMATION,
+	VEA_ACTIVE_WRITE_LOCK_KEY,
 	assertFreshPrewriteRerunMatches,
 	executeCarrefourActiveWrite,
+	executeVeaActiveWrite,
 	parseCarrefourActiveWriteCliOptions,
+	parseVeaActiveWriteCliOptions,
 	validatePrewriteReportForActiveWrite,
 	type ActiveWriteRepository,
 	type ActiveWriteTransaction,
 } from "../scripts/pipeline/direct-refresh-active-write";
 import {
 	buildCarrefourDirectRefreshPrewriteGate,
+	buildDirectRefreshPrewriteGate,
 	type DirectRefreshPrewriteExistingRow,
 } from "../scripts/pipeline/direct-refresh-prewrite-gate";
 
@@ -119,6 +124,83 @@ function argv(
 		...extra,
 	];
 }
+function veaRows(): DirectRefreshPrewriteExistingRow[] {
+	return rows().map((row) => ({
+		...row,
+		sourceSlug: "vea",
+		supermarketId: 3,
+		productUrl: row.productUrl?.replace("carrefour.com.ar", "vea.com.ar") ?? null,
+	}));
+}
+function veaRepository(existingRows = veaRows()) {
+	return {
+		async getSource() {
+			return {
+				id: 3,
+				slug: "vea",
+				baseUrl: "https://www.vea.com.ar",
+			};
+		},
+		async listOldestPublicRankableRows() {
+			return existingRows;
+		},
+		async findRowsBySourceSku(_sourceSlug: string, skuId: string) {
+			return existingRows.filter((row) => row.skuId === skuId);
+		},
+		async getMaxPriceHistoryId() {
+			return 99;
+		},
+	};
+}
+async function veaPrewrite(now = "2026-06-01T00:00:00.000Z") {
+	return buildDirectRefreshPrewriteGate({
+		repository: veaRepository(),
+		sourceSlug: "vea",
+		now: new Date(now),
+		fetchDirectProducts: async (_sourceSlug, lookup) => {
+			const row = veaRows().find((entry) => entry.skuId === lookup.value);
+			return [
+				{
+					ean: row?.ean ?? "",
+					name: `${row?.product?.name} Nuevo`,
+					brand: "Nueva",
+					description: "Nueva",
+					imageUrl: "https://www.vea.com.ar/new.jpg",
+					images: ["https://www.vea.com.ar/new.jpg"],
+					category: "Test",
+					skuId: lookup.value,
+					sellerId: "1",
+					productUrl: row?.productUrl ?? null,
+					price: 1100,
+					listPrice: 1100,
+					referencePrice: null,
+					referenceUnit: null,
+					isAvailable: true,
+				},
+			];
+		},
+	});
+}
+function veaArgv(
+	report: Awaited<ReturnType<typeof veaPrewrite>>,
+	extra: string[] = [],
+) {
+	return [
+		"node",
+		"script",
+		"--source=vea",
+		"--count=10",
+		"--prewrite-report=vea-prewrite.json",
+		`--prewrite-report-hash=${report.futureConfirmation.shape.reportHash}`,
+		`--row-ids=${report.futureConfirmation.shape.rowIds.join(",")}`,
+		`--product-eans=${report.futureConfirmation.shape.productEans.join(",")}`,
+		`--sku-ids=${report.futureConfirmation.shape.skuIds.join(",")}`,
+		`--confirm-write=${VEA_ACTIVE_WRITE_CONFIRMATION}`,
+		"--output=vea-write.json",
+		...extra,
+	];
+}
+
 function tx(overrides: Partial<ActiveWriteTransaction> = {}) {
 	const base: ActiveWriteTransaction = {
 		async acquireAdvisoryLock() {
@@ -131,7 +213,7 @@ function tx(overrides: Partial<ActiveWriteTransaction> = {}) {
 				priceHistoryMaxId: 99,
 			};
 		},
-		async readSelectedRowsByExactIdentity(identities) {
+		async readSelectedRowsByExactIdentity(_sourceSlug, identities) {
 			return identities.map((identity) => ({
 				rowId: identity.rowId,
 				productEan: identity.productEan,
@@ -367,5 +449,77 @@ describe("Carrefour active refresh writer contract", () => {
 				}),
 			/no-create/,
 		);
+	});
+
+	it("parses exact Vea confirmation flags and rejects other sources", async () => {
+		const report = await veaPrewrite();
+		const parsed = parseVeaActiveWriteCliOptions(veaArgv(report));
+		assert.equal(parsed.source, "vea");
+		assert.equal(parsed.confirmWrite, VEA_ACTIVE_WRITE_CONFIRMATION);
+		assert.deepEqual(parsed.rowIds, report.futureConfirmation.shape.rowIds);
+		for (const bad of [
+			["--source=carrefour"],
+			["--count=9"],
+			["--dry-run"],
+			["--all-source"],
+			["--cron=true"],
+			["--confirm-write=carrefour-direct-refresh-count10"],
+		]) {
+			assert.throws(
+				() => parseVeaActiveWriteCliOptions(veaArgv(report, bad)),
+				/vea|count|rejects|confirmation|unknown|exactly one/,
+			);
+		}
+	});
+
+	it("executes Vea selected-row-only transaction and emits source report schema", async () => {
+		const report = await veaPrewrite();
+		const options = parseVeaActiveWriteCliOptions(veaArgv(report));
+		let lockKey = 0;
+		let selectedSource = "";
+		let updatedSource = "";
+		const writeReport = await executeVeaActiveWrite({
+			repository: repo(
+				tx({
+					async acquireAdvisoryLock(key) {
+						lockKey = key;
+						return true;
+					},
+					async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+						selectedSource = sourceSlug;
+						return tx().readSelectedRowsByExactIdentity(sourceSlug, identities);
+					},
+					async updateSupermarketProductByExactIdentity(
+						sourceSlug,
+						rowId,
+						productEan,
+						skuId,
+						changes,
+					) {
+						updatedSource = sourceSlug;
+						return tx().updateSupermarketProductByExactIdentity(
+							sourceSlug,
+							rowId,
+							productEan,
+							skuId,
+							changes,
+						);
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date(report.generatedAt),
+		});
+		assert.equal(lockKey, VEA_ACTIVE_WRITE_LOCK_KEY);
+		assert.equal(selectedSource, "vea");
+		assert.equal(updatedSource, "vea");
+		assert.equal(writeReport.report, "vea-direct-refresh-active-write");
+		assert.equal(writeReport.issue, 54);
+		assert.equal(writeReport.umbrellaIssue, undefined);
+		assert.equal(writeReport.source.slug, "vea");
+		assert.equal(writeReport.source.expectedHost, "vea.com.ar");
+		assert.equal(writeReport.summary.rows, 10);
+		assert.equal(writeReport.noCreate.productDelta, 0);
 	});
 });
