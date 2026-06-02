@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 import { db } from "../src/lib/db";
 import { getSourceAdapter } from "../src/lib/ingestion/adapters/registry";
 import {
-	buildCarrefourDirectRefreshPrewriteGate,
+	buildDirectRefreshPrewriteGate,
 	type DirectRefreshPrewriteRepository,
 } from "./pipeline/direct-refresh-prewrite-gate";
 import {
@@ -17,12 +17,20 @@ import {
 	parsePositiveIntegerFlag,
 } from "./pipeline/audit-utils";
 
-const CARREFOUR_SOURCE = "carrefour" as const;
+type SupportedPrewriteSource = "carrefour" | "vea";
+
+const DEFAULT_SOURCE = "carrefour" as const;
+const SUPPORTED_SOURCES = new Set<SupportedPrewriteSource>([
+	"carrefour",
+	"vea",
+]);
 const FORBIDDEN_FLAGS = [
 	"--confirm-write",
 	"--active",
 	"--write",
 	"--reconcile",
+	"--all-source",
+	"--all-sources",
 	"--schedule",
 	"--scheduler",
 	"--cron",
@@ -38,7 +46,7 @@ const FORBIDDEN_FLAGS = [
 ];
 
 type CliOptions = {
-	source: "carrefour";
+	source: SupportedPrewriteSource;
 	sampleSize: number;
 	output: string | null;
 };
@@ -60,18 +68,21 @@ export function parseDirectRefreshPrewriteGateCliOptions(
 	argv = process.argv,
 ): CliOptions {
 	rejectWriteFlags(argv);
-	const rawSource = getOptionalSingleFlag(argv, "--source") ?? CARREFOUR_SOURCE;
+	const rawSource = getOptionalSingleFlag(argv, "--source") ?? DEFAULT_SOURCE;
 	const sources = rawSource
 		.split(",")
 		.map((entry) => entry.trim())
 		.filter(Boolean);
-	if (sources.length !== 1 || sources[0] !== CARREFOUR_SOURCE) {
+	if (
+		sources.length !== 1 ||
+		!SUPPORTED_SOURCES.has(sources[0] as SupportedPrewriteSource)
+	) {
 		throw new Error(
-			"direct-refresh pre-write gate only accepts --source=carrefour",
+			"direct-refresh pre-write gate only accepts --source=carrefour or --source=vea",
 		);
 	}
 	return {
-		source: CARREFOUR_SOURCE,
+		source: sources[0] as SupportedPrewriteSource,
 		sampleSize: parsePositiveIntegerFlag(argv, "--sample-size", 10),
 		output: getOptionalSingleFlag(argv, "--output"),
 	};
@@ -236,12 +247,12 @@ async function writeJson(output: string | null, report: unknown) {
 
 async function main() {
 	const options = parseDirectRefreshPrewriteGateCliOptions();
-	const report = await buildCarrefourDirectRefreshPrewriteGate({
+	const report = await buildDirectRefreshPrewriteGate({
 		repository: createDirectRefreshPrewriteRepository(),
 		sourceSlug: options.source,
 		sampleSize: options.sampleSize,
-		fetchDirectProducts: async (_sourceSlug, lookup) =>
-			getSourceAdapter(CARREFOUR_SOURCE).fetchDirectProducts(lookup),
+		fetchDirectProducts: async (sourceSlug, lookup) =>
+			getSourceAdapter(sourceSlug).fetchDirectProducts(lookup),
 	});
 	await writeJson(options.output, report);
 	if (report.status === "FAIL") process.exitCode = 1;
