@@ -134,24 +134,27 @@ test("static guards inventory mutating workflows and package scripts before cron
 	);
 });
 
-test("Carrefour active writer is not scheduled and avoids broad ingestion paths", async () => {
-	const writer = await readFile(
+test("active direct-refresh writers are not scheduled and avoid broad ingestion paths", async () => {
+	const carrefourWriter = await readFile(
 		"scripts/direct-refresh-carrefour-write.ts",
 		"utf8",
 	);
+	const veaWriter = await readFile("scripts/direct-refresh-vea-write.ts", "utf8");
 	const postwriteAudit = await readFile(
 		"scripts/audit-direct-refresh-postwrite.ts",
 		"utf8",
 	);
 
-	assert.doesNotMatch(
-		writer,
-		/reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
-	);
-	assert.doesNotMatch(writer, /workflow|cron|schedule|deploy|cleanup/);
+	for (const writer of [carrefourWriter, veaWriter]) {
+		assert.doesNotMatch(
+			writer,
+			/reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
+		);
+		assert.doesNotMatch(writer, /workflow|cron|schedule|deploy|cleanup/);
+	}
 	assert.doesNotMatch(
 		postwriteAudit,
-		/direct-refresh-carrefour-write|executeCarrefourActiveWrite|reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
+		/direct-refresh-carrefour-write|direct-refresh-vea-write|executeCarrefourActiveWrite|executeVeaActiveWrite|reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
 	);
 });
 
