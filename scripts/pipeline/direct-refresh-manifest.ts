@@ -137,6 +137,11 @@ const SOURCE_CONFIGS = {
 		displayName: "Jumbo",
 		expectedHost: "jumbo.com.ar",
 	},
+	mas: {
+		slug: "mas",
+		displayName: "MAS",
+		expectedHost: "masonline.com.ar",
+	},
 } as const;
 type DirectRefreshSourceSlug = keyof typeof SOURCE_CONFIGS;
 type DirectRefreshExpectedHost =
