@@ -17,7 +17,7 @@ import {
 	parsePositiveIntegerFlag,
 } from "./pipeline/audit-utils";
 
-type SupportedManifestSource = "carrefour" | "vea" | "disco";
+type SupportedManifestSource = "carrefour" | "vea" | "disco" | "jumbo";
 
 type CliOptions = {
 	source: SupportedManifestSource;
@@ -30,6 +30,7 @@ const SUPPORTED_SOURCES = new Set<SupportedManifestSource>([
 	"carrefour",
 	"vea",
 	"disco",
+	"jumbo",
 ]);
 const FORBIDDEN_FLAGS = [
 	"--confirm-write",
@@ -80,7 +81,7 @@ export function parseDirectRefreshManifestCliOptions(
 		!SUPPORTED_SOURCES.has(sources[0] as SupportedManifestSource)
 	) {
 		throw new Error(
-			"direct-refresh manifest audit only accepts --source=carrefour, --source=vea, or --source=disco",
+			"direct-refresh manifest audit only accepts --source=carrefour, --source=vea, --source=disco, or --source=jumbo",
 		);
 	}
 
