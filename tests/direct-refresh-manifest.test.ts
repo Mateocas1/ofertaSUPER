@@ -51,6 +51,13 @@ function repository(rows: DirectRefreshManifestExistingRow[]) {
 					baseUrl: "https://www.jumbo.com.ar",
 				};
 			}
+			if (sourceSlug === "mas") {
+				return {
+					id: 50,
+					slug: "mas",
+					baseUrl: "https://www.masonline.com.ar",
+				};
+			}
 			return null;
 		},
 		async listOldestPublicRankableRows(sourceSlug: string, sampleSize: number) {
@@ -321,6 +328,77 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		assert.equal(report.rows[0].guards.carrefourHostOnly, true);
 	});
 
+	it("supports MAS allowlisted source with source-specific host guards", async () => {
+		const masRow: DirectRefreshManifestExistingRow = {
+			...passRow,
+			id: "5",
+			sourceSlug: "mas",
+			supermarketId: 50,
+			productUrl: "https://www.masonline.com.ar/leche-1/p",
+		};
+		const lookups: Array<{ sourceSlug: string; kind: string; value: string }> =
+			[];
+		const report = await buildDirectRefreshManifestDryRun({
+			sourceSlug: "mas",
+			repository: repository([masRow]),
+			fetchDirectProducts: async (sourceSlug, lookup) => {
+				lookups.push({ sourceSlug, kind: lookup.kind, value: lookup.value });
+				return [
+					{
+						ean: "7790001000011",
+						skuId: "sku-1",
+						productUrl: "https://www.masonline.com.ar/leche-1/p",
+						price: 990,
+						listPrice: 1100,
+						isAvailable: true,
+					},
+				];
+			},
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(report.audit, "mas-direct-refresh-manifest-dry-run");
+		assert.equal(report.source.slug, "mas");
+		assert.equal(report.source.expectedHost, "masonline.com.ar");
+		assert.match(report.identity.guards.join("\n"), /existing MAS row/);
+		assert.match(report.identity.guards.join("\n"), /masonline\.com\.ar/);
+		assert.deepEqual(lookups, [
+			{ sourceSlug: "mas", kind: "sku-id", value: "sku-1" },
+		]);
+		assert.equal(report.rows[0].sourceSlug, "mas");
+		assert.equal(report.rows[0].guards.carrefourHostOnly, true);
+	});
+
+	it("fails closed when MAS live URL drifts outside masonline.com.ar", async () => {
+		const masRow: DirectRefreshManifestExistingRow = {
+			...passRow,
+			id: "mas-host-fail",
+			sourceSlug: "mas",
+			supermarketId: 50,
+			productUrl: "https://www.masonline.com.ar/leche-1/p",
+		};
+		const report = await buildDirectRefreshManifestDryRun({
+			sourceSlug: "mas",
+			repository: repository([masRow]),
+			fetchDirectProducts: async () => [
+				{
+					ean: "7790001000011",
+					skuId: "sku-1",
+					productUrl: "https://example.com/leche-1/p",
+					price: 990,
+					listPrice: 1100,
+					isAvailable: true,
+				},
+			],
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/host is not masonline\.com\.ar/,
+		);
+	});
+
 	it("rejects unsupported scope before repository or network work", async () => {
 		await assert.rejects(
 			() =>
@@ -392,6 +470,10 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 			]),
 			{ source: "jumbo", sampleSize: 10, output: null },
 		);
+		assert.deepEqual(
+			parseDirectRefreshManifestCliOptions(["node", "script", "--source=mas"]),
+			{ source: "mas", sampleSize: 10, output: null },
+		);
 		assert.deepEqual(parseDirectRefreshManifestCliOptions(["node", "script"]), {
 			source: "carrefour",
 			sampleSize: 10,
@@ -400,6 +482,7 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		for (const argv of [
 			["node", "script", "--source=dia"],
 			["node", "script", "--source=carrefour,dia"],
+			["node", "script", "--source=mas,jumbo"],
 			["node", "script", "--all-source"],
 			["node", "script", "--all-sources=true"],
 			["node", "script", "--confirm-write"],
