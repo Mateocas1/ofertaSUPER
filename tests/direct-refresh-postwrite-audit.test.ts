@@ -207,6 +207,36 @@ function discoWriteReport(
 	};
 }
 
+function jumboWriteReport(
+	overrides: Partial<ActiveWriteReport> = {},
+): ActiveWriteReport {
+	const base = writeReport();
+	const rows = base.rows.map((row) => ({
+		...row,
+		live: row.live
+			? {
+					...row.live,
+					productUrl: "https://www.jumbo.com.ar/leche/p",
+					productUrlHost: "jumbo.com.ar",
+				}
+			: row.live,
+	}));
+	return {
+		...base,
+		report: "jumbo-direct-refresh-active-write",
+		issue: 68,
+		umbrellaIssue: undefined,
+		source: {
+			slug: "jumbo",
+			supermarketId: 2,
+			expectedHost: "jumbo.com.ar",
+		},
+		transaction: { advisoryLockKey: 68204510, acquired: true },
+		rows,
+		...overrides,
+	};
+}
+
 function repository(
 	report = writeReport(),
 	overrides: Partial<DirectRefreshPostwriteRepository> = {},
@@ -385,6 +415,111 @@ describe("Carrefour active refresh post-write audit", () => {
 		assert.match(reasons, /expected host is not disco\.com\.ar/);
 	});
 
+	it("passes Jumbo audits with source-specific report metadata", async () => {
+		const report = jumboWriteReport();
+		let historyScope: number[] = [];
+		const audit = await buildDirectRefreshPostwriteAudit({
+			source: "jumbo",
+			repository: repository(report, {
+				async readPriceHistoryRowsAboveId(_maxId, supermarketProductIds) {
+					historyScope = supermarketProductIds;
+					return report.rows
+						.filter((row) => row.insertedPriceHistoryId !== null)
+						.map((row) => ({
+							id: row.insertedPriceHistoryId ?? 0,
+							supermarketProductId: Number(row.rowId),
+							price: row.live?.price ?? null,
+							listPrice: row.live?.listPrice ?? null,
+							scrapedAt: report.committedAt,
+						}));
+				},
+			}),
+			writeReport: report,
+			now: new Date("2026-06-01T00:05:00.000Z"),
+		});
+
+		assert.equal(audit.status, "PASS");
+		assert.equal(audit.audit, "jumbo-direct-refresh-postwrite-audit");
+		assert.equal(audit.writeReport.source, "jumbo");
+		assert.equal(audit.writeReport.issue, 68);
+		assert.equal(audit.writeReport.umbrellaIssue, undefined);
+		assert.deepEqual(
+			historyScope,
+			report.rows.map((row) => Number(row.rowId)),
+		);
+		assert.equal(audit.summary.passRows, 10);
+		assert.equal(audit.summary.failRows, 0);
+	});
+
+	it("fails closed when Jumbo audit receives mismatched report source metadata", async () => {
+		const report = jumboWriteReport({
+			report: "disco-direct-refresh-active-write",
+			issue: 61,
+			source: {
+				slug: "disco",
+				supermarketId: 1,
+				expectedHost: "disco.com.ar",
+			},
+		});
+		const audit = await buildDirectRefreshPostwriteAudit({
+			source: "jumbo",
+			repository: repository(report),
+			writeReport: report,
+		});
+
+		const reasons = audit.summary.failClosedReasons.join("\n");
+		assert.equal(audit.status, "FAIL");
+		assert.match(reasons, /type is not Jumbo active write/);
+		assert.match(reasons, /issue linkage mismatch/);
+		assert.match(reasons, /source is not jumbo/);
+		assert.match(reasons, /expected host is not jumbo\.com\.ar/);
+	});
+
+	it("fails closed when Jumbo confirmation or rollback references do not match rows", async () => {
+		const report = jumboWriteReport({
+			confirmation: {
+				prewriteReportPath: "prewrite.json",
+				prewriteGeneratedAt: "2026-06-01T00:00:00.000Z",
+				prewriteReportHash: "not-a-hash",
+				rowIds: Array.from({ length: 10 }, (_, index) => `bad-row-${index}`),
+				productEans: Array.from({ length: 10 }, (_, index) => `bad-ean-${index}`),
+				skuIds: Array.from({ length: 10 }, (_, index) => `bad-sku-${index}`),
+			},
+			rollbackSnapshot: {
+				requiresConfirmation: true,
+				touchedProductEans: Array.from(
+					{ length: 10 },
+					(_, index) => `rollback-ean-${index}`,
+				),
+				touchedSupermarketProductIds: Array.from(
+					{ length: 10 },
+					(_, index) => 9000 + index,
+				),
+				priceHistory: {
+					deleteRowsWithIdGreaterThan: 100,
+					restoreLatestRows: [],
+				},
+			},
+		});
+		const audit = await buildDirectRefreshPostwriteAudit({
+			source: "jumbo",
+			repository: repository(report),
+			writeReport: report,
+		});
+
+		const reasons = audit.summary.failClosedReasons.join("\n");
+		assert.equal(audit.status, "FAIL");
+		assert.match(reasons, /confirmation hash is invalid/);
+		assert.match(reasons, /confirmation row ids mismatch/);
+		assert.match(reasons, /confirmation product EANs mismatch/);
+		assert.match(reasons, /confirmation SKU ids mismatch/);
+		assert.match(reasons, /rollback snapshot product references mismatch/);
+		assert.match(
+			reasons,
+			/rollback snapshot supermarketProduct references mismatch/,
+		);
+	});
+
 	it("rejects invalid write report schema, status, source, count, and no-create deltas", async () => {
 		const report = writeReport({
 			schemaVersion: 2 as 1,
@@ -526,6 +661,16 @@ describe("Carrefour active refresh post-write audit", () => {
 				"--output=audit.json",
 			]),
 			{ source: "disco", writeReport: "write.json", output: "audit.json" },
+		);
+		assert.deepEqual(
+			parseDirectRefreshPostwriteCliOptions([
+				"node",
+				"script",
+				"--source=jumbo",
+				"--write-report=write.json",
+				"--output=audit.json",
+			]),
+			{ source: "jumbo", writeReport: "write.json", output: "audit.json" },
 		);
 		for (const argv of [
 			["node", "script", "--write-report=write.json"],
