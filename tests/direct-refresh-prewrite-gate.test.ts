@@ -85,6 +85,10 @@ function liveProduct(
 	};
 }
 
+function delay(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function masLikeRows(count: number): DirectRefreshPrewriteExistingRow[] {
 	return Array.from({ length: count }, (_, index) => ({
 		...passRow,
@@ -508,6 +512,47 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			report.rollbackSnapshot.touchedSupermarketProductIds,
 			selectedIds.map(Number),
 		);
+	});
+
+	it("evaluates candidate repository lookups serially to avoid pool exhaustion", async () => {
+		const rows = masLikeRows(12);
+		const repo = repository(rows);
+		const originalFindRowsBySourceSku = repo.findRowsBySourceSku;
+		let activeSourceSkuLookups = 0;
+		let maxActiveSourceSkuLookups = 0;
+		repo.findRowsBySourceSku = async (sourceSlug, skuId) => {
+			activeSourceSkuLookups += 1;
+			maxActiveSourceSkuLookups = Math.max(
+				maxActiveSourceSkuLookups,
+				activeSourceSkuLookups,
+			);
+			await delay(1);
+			try {
+				return await originalFindRowsBySourceSku(sourceSlug, skuId);
+			} finally {
+				activeSourceSkuLookups -= 1;
+			}
+		};
+		const report = await buildDirectRefreshPrewriteGate({
+			repository: repo,
+			sourceSlug: "mas",
+			sampleSize: 10,
+			candidateScanSize: 12,
+			now: new Date("2026-06-01T00:00:00.000Z"),
+			fetchDirectProducts: async (_sourceSlug, lookup) => {
+				const id = lookup.value.replace("mas-sku-", "");
+				return [
+					live({
+						ean: `77910000000${id.padStart(2, "0")}`,
+						skuId: lookup.value,
+						productUrl: "https://www.masonline.com.ar/leche-1/p",
+					}),
+				];
+			},
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(maxActiveSourceSkuLookups, 1);
 	});
 
 	it("fails closed when bounded MAS scan cannot find enough viable rows", async () => {

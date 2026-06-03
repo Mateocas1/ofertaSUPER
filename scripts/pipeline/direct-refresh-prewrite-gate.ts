@@ -322,9 +322,10 @@ export async function buildDirectRefreshPrewriteGate({
 	const maxPriceHistoryId = source
 		? await repository.getMaxPriceHistoryId()
 		: null;
-	const candidateEvaluations = await Promise.all(
-		candidateRows.map((row) =>
-			evaluatePrewriteRow({
+	const candidateEvaluations: DirectRefreshPrewriteRow[] = [];
+	for (const row of candidateRows) {
+		candidateEvaluations.push(
+			await evaluatePrewriteRow({
 				row,
 				repository,
 				fetchDirectProducts,
@@ -332,8 +333,8 @@ export async function buildDirectRefreshPrewriteGate({
 				maxPriceDeltaPercent,
 				config,
 			}),
-		),
-	);
+		);
+	}
 	const boundedViableScan = candidateScanSize > sampleSize;
 	const viableRows = candidateEvaluations.filter(
 		(row) => row.guards.status === "PASS",
