@@ -47,6 +47,10 @@ export const DISCO_ACTIVE_WRITE_LOCK_KEY = 61204510;
 export const JUMBO_ACTIVE_WRITE_LOCK_KEY = 68204510;
 export const MAS_ACTIVE_WRITE_LOCK_KEY = 75204510;
 const MAX_PREWRITE_AGE_MS = 15 * 60 * 1000;
+export const DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS = {
+	maxWait: 20_000,
+	timeout: 60_000,
+} as const;
 
 type ActiveWriteSource = "carrefour" | "vea" | "disco" | "jumbo" | "mas";
 type SourceConfig = {

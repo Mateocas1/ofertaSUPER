@@ -9,6 +9,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "../src/lib/db";
 import { getSourceAdapter } from "../src/lib/ingestion/adapters/registry";
 import {
+	DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS,
 	assertFreshPrewriteRerunMatches,
 	executeMasActiveWrite,
 	parseMasActiveWriteCliOptions,
@@ -75,7 +76,10 @@ function supermarketProductUpdateData(
 function createActiveWriteRepository(): ActiveWriteRepository {
 	return {
 		withTransaction: (fn) =>
-			db.$transaction(async (tx) => fn(createActiveWriteTransaction(tx))),
+			db.$transaction(
+				async (tx) => fn(createActiveWriteTransaction(tx)),
+				DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS,
+			),
 	};
 }
 function createActiveWriteTransaction(
