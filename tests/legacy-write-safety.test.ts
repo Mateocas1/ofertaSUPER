@@ -176,6 +176,10 @@ test("active direct-refresh writers are not scheduled and avoid broad ingestion 
 			writer,
 			/candidateScanSize: prewriteReport\.selection\.candidateScanSize/,
 		);
+		assert.match(
+			writer,
+			/DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS/,
+		);
 	}
 	assert.doesNotMatch(
 		postwriteAudit,
