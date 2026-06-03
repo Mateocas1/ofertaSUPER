@@ -12,28 +12,32 @@ export type DirectRefreshPostwriteSource =
 	| "carrefour"
 	| "vea"
 	| "disco"
-	| "jumbo";
+	| "jumbo"
+	| "mas";
 
 type SourceConfig = {
 	source: DirectRefreshPostwriteSource;
 	displayName: string;
-	issue: 45 | 54 | 61 | 68;
-	umbrellaIssue?: 44;
+	issue: 45 | 54 | 61 | 68 | 75;
+	umbrellaIssue?: 44 | 73;
 	expectedHost:
 		| "carrefour.com.ar"
 		| "vea.com.ar"
 		| "disco.com.ar"
-		| "jumbo.com.ar";
+		| "jumbo.com.ar"
+		| "masonline.com.ar";
 	activeWriteReport:
 		| "carrefour-direct-refresh-active-write"
 		| "vea-direct-refresh-active-write"
 		| "disco-direct-refresh-active-write"
-		| "jumbo-direct-refresh-active-write";
+		| "jumbo-direct-refresh-active-write"
+		| "mas-direct-refresh-active-write";
 	postwriteAudit:
 		| "carrefour-direct-refresh-postwrite-audit"
 		| "vea-direct-refresh-postwrite-audit"
 		| "disco-direct-refresh-postwrite-audit"
-		| "jumbo-direct-refresh-postwrite-audit";
+		| "jumbo-direct-refresh-postwrite-audit"
+		| "mas-direct-refresh-postwrite-audit";
 };
 
 const SOURCE_CONFIGS = {
@@ -73,6 +77,15 @@ const SOURCE_CONFIGS = {
 		activeWriteReport: "jumbo-direct-refresh-active-write",
 		postwriteAudit: "jumbo-direct-refresh-postwrite-audit",
 	},
+	mas: {
+		source: "mas",
+		displayName: "MAS",
+		issue: 75,
+		umbrellaIssue: 73,
+		expectedHost: "masonline.com.ar",
+		activeWriteReport: "mas-direct-refresh-active-write",
+		postwriteAudit: "mas-direct-refresh-postwrite-audit",
+	},
 } as const satisfies Record<DirectRefreshPostwriteSource, SourceConfig>;
 
 type CurrentRow = {
@@ -111,14 +124,15 @@ export type DirectRefreshPostwriteAuditReport = {
 		| "carrefour-direct-refresh-postwrite-audit"
 		| "vea-direct-refresh-postwrite-audit"
 		| "disco-direct-refresh-postwrite-audit"
-		| "jumbo-direct-refresh-postwrite-audit";
+		| "jumbo-direct-refresh-postwrite-audit"
+		| "mas-direct-refresh-postwrite-audit";
 	status: AuditStatus;
 	basis: "production";
 	generatedAt: string;
 	writeBoundary: "read-only post-write audit; no production writes, no active refresh/reconcile, no staging/ingestion runs, no scheduler/cron/workflow side effects";
 	writeReport: {
-		issue: 45 | 54 | 61 | 68;
-		umbrellaIssue?: 44;
+		issue: 45 | 54 | 61 | 68 | 75;
+		umbrellaIssue?: 44 | 73;
 		source: DirectRefreshPostwriteSource;
 		count: 10;
 		prewriteReportHash: string;

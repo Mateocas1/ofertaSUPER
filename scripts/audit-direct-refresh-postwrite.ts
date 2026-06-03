@@ -30,6 +30,7 @@ const ALLOWED_SOURCES = new Set<DirectRefreshPostwriteSource>([
 	"vea",
 	"disco",
 	"jumbo",
+	"mas",
 ]);
 
 const FORBIDDEN_FLAGS = [

@@ -126,7 +126,7 @@ test("static guards inventory mutating workflows and package scripts before cron
 	assert.doesNotMatch(allWorkflows, /INGESTION_V2:\s*["']?active/i);
 	assert.doesNotMatch(
 		allWorkflows,
-		/direct-refresh:(?:carrefour|vea|disco|jumbo)-write|direct-refresh-(?:carrefour|vea|disco|jumbo)-write/i,
+		/direct-refresh:(?:carrefour|vea|disco|jumbo|mas)-write|direct-refresh-(?:carrefour|vea|disco|jumbo|mas)-write/i,
 	);
 	assert.equal(
 		workflowEntries.find((entry) => /refresh-existing/i.test(entry.fileName)),
@@ -151,12 +151,22 @@ test("active direct-refresh writers are not scheduled and avoid broad ingestion 
 		"scripts/direct-refresh-jumbo-write.ts",
 		"utf8",
 	);
+	const masWriter = await readFile(
+		"scripts/direct-refresh-mas-write.ts",
+		"utf8",
+	);
 	const postwriteAudit = await readFile(
 		"scripts/audit-direct-refresh-postwrite.ts",
 		"utf8",
 	);
 
-	for (const writer of [carrefourWriter, veaWriter, discoWriter, jumboWriter]) {
+	for (const writer of [
+		carrefourWriter,
+		veaWriter,
+		discoWriter,
+		jumboWriter,
+		masWriter,
+	]) {
 		assert.doesNotMatch(
 			writer,
 			/reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
@@ -165,7 +175,7 @@ test("active direct-refresh writers are not scheduled and avoid broad ingestion 
 	}
 	assert.doesNotMatch(
 		postwriteAudit,
-		/direct-refresh-carrefour-write|direct-refresh-vea-write|direct-refresh-disco-write|direct-refresh-jumbo-write|executeCarrefourActiveWrite|executeVeaActiveWrite|executeDiscoActiveWrite|executeJumboActiveWrite|reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
+		/direct-refresh-carrefour-write|direct-refresh-vea-write|direct-refresh-disco-write|direct-refresh-jumbo-write|direct-refresh-mas-write|executeCarrefourActiveWrite|executeVeaActiveWrite|executeDiscoActiveWrite|executeJumboActiveWrite|executeMasActiveWrite|reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
 	);
 });
 
