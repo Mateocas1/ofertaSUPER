@@ -10,6 +10,7 @@ import {
 	buildDirectRefreshPrewriteGate,
 	type DirectRefreshPrewriteRepository,
 } from "./pipeline/direct-refresh-prewrite-gate";
+import { assertDirectRefreshAllowedBatchCount } from "./pipeline/direct-refresh-batch-size";
 import {
 	dateToIso,
 	decimalToNumber,
@@ -85,7 +86,10 @@ export function parseDirectRefreshPrewriteGateCliOptions(
 			"direct-refresh pre-write gate only accepts --source=carrefour, --source=vea, --source=disco, --source=jumbo, or --source=mas",
 		);
 	}
-	const sampleSize = parsePositiveIntegerFlag(argv, "--sample-size", 10);
+	const sampleSize = assertDirectRefreshAllowedBatchCount(
+		parsePositiveIntegerFlag(argv, "--sample-size", 10),
+		"direct-refresh pre-write gate --sample-size",
+	);
 	const candidateScanSize = parsePositiveIntegerFlag(
 		argv,
 		"--candidate-scan-size",

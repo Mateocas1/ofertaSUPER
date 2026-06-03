@@ -36,8 +36,9 @@ const supermarketProduct = {
 
 function writeReport(
 	overrides: Partial<ActiveWriteReport> = {},
+	count = 10,
 ): ActiveWriteReport {
-	const rows = Array.from({ length: 10 }, (_, index) => {
+	const rows = Array.from({ length: count }, (_, index) => {
 		const id = String(index + 1);
 		const ean = `77900010000${String(index + 1).padStart(2, "0")}`;
 		const sku = `sku-${index + 1}`;
@@ -103,7 +104,7 @@ function writeReport(
 			supermarketId: 4,
 			expectedHost: "carrefour.com.ar",
 		},
-		count: 10,
+		count: count as ActiveWriteReport["count"],
 		startedAt: "2026-06-01T00:00:00.000Z",
 		committedAt: "2026-06-01T00:00:00.000Z",
 		confirmation: {
@@ -130,9 +131,9 @@ function writeReport(
 			supermarketProductDelta: 0,
 		},
 		summary: {
-			rows: 10,
-			productUpdates: 10,
-			supermarketProductUpdates: 10,
+			rows: count as ActiveWriteReport["summary"]["rows"],
+			productUpdates: count,
+			supermarketProductUpdates: count,
 			priceHistoryPredicted: 8,
 			priceHistoryInserted: 8,
 		},
@@ -322,6 +323,43 @@ describe("Carrefour active refresh post-write audit", () => {
 		assert.equal(audit.summary.priceHistoryRowsFound, 8);
 		assert.equal(audit.noCreate.productDelta, 0);
 		assert.equal(audit.noCreate.supermarketProductDelta, 0);
+	});
+
+	it("passes with count=25 and validates variable row counts", async () => {
+		const report = writeReport({}, 25);
+		const audit = await buildCarrefourDirectRefreshPostwriteAudit({
+			repository: repository(report),
+			writeReport: report,
+			now: new Date("2026-06-01T00:05:00.000Z"),
+		});
+
+		assert.equal(audit.status, "PASS");
+		assert.equal(audit.writeReport.count, 25);
+		assert.equal(audit.summary.passRows, 25);
+		assert.equal(audit.rows.length, 25);
+
+		const invalidCount = await buildCarrefourDirectRefreshPostwriteAudit({
+			repository: repository(writeReport({}, 25)),
+			writeReport: writeReport(
+				{ count: 100 as ActiveWriteReport["count"] },
+				25,
+			),
+		});
+		assert.equal(invalidCount.status, "FAIL");
+		assert.match(
+			invalidCount.summary.failClosedReasons.join("\n"),
+			/count is not allowlisted/,
+		);
+
+		const mismatchedRows = await buildCarrefourDirectRefreshPostwriteAudit({
+			repository: repository(report),
+			writeReport: { ...report, summary: { ...report.summary, rows: 10 } },
+		});
+		assert.equal(mismatchedRows.status, "FAIL");
+		assert.match(
+			mismatchedRows.summary.failClosedReasons.join("\n"),
+			/summary rows do not match count/,
+		);
 	});
 
 	it("passes Vea audits with source-specific report metadata", async () => {
@@ -573,7 +611,10 @@ describe("Carrefour active refresh post-write audit", () => {
 				prewriteGeneratedAt: "2026-06-01T00:00:00.000Z",
 				prewriteReportHash: "not-a-hash",
 				rowIds: Array.from({ length: 10 }, (_, index) => `bad-row-${index}`),
-				productEans: Array.from({ length: 10 }, (_, index) => `bad-ean-${index}`),
+				productEans: Array.from(
+					{ length: 10 },
+					(_, index) => `bad-ean-${index}`,
+				),
 				skuIds: Array.from({ length: 10 }, (_, index) => `bad-sku-${index}`),
 			},
 			rollbackSnapshot: {

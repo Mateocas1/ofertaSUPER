@@ -172,6 +172,10 @@ test("active direct-refresh writers are not scheduled and avoid broad ingestion 
 			/reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
 		);
 		assert.doesNotMatch(writer, /workflow|cron|schedule|deploy|cleanup/);
+		assert.match(
+			writer,
+			/candidateScanSize: prewriteReport\.selection\.candidateScanSize/,
+		);
 	}
 	assert.doesNotMatch(
 		postwriteAudit,

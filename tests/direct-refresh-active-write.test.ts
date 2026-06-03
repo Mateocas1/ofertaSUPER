@@ -33,8 +33,8 @@ import {
 	type DirectRefreshPrewriteExistingRow,
 } from "../scripts/pipeline/direct-refresh-prewrite-gate";
 
-function rows(): DirectRefreshPrewriteExistingRow[] {
-	return Array.from({ length: 10 }, (_, index) => {
+function rows(count = 10): DirectRefreshPrewriteExistingRow[] {
+	return Array.from({ length: count }, (_, index) => {
 		const n = index + 1;
 		return {
 			id: String(n),
@@ -89,12 +89,19 @@ function repository(existingRows = rows()) {
 		},
 	};
 }
-async function prewrite(now = "2026-06-01T00:00:00.000Z") {
+async function prewrite(
+	now = "2026-06-01T00:00:00.000Z",
+	count = 10,
+	candidateScanSize = count,
+) {
+	const existingRows = rows(candidateScanSize);
 	return buildCarrefourDirectRefreshPrewriteGate({
-		repository: repository(),
+		repository: repository(existingRows),
+		sampleSize: count,
+		candidateScanSize,
 		now: new Date(now),
 		fetchDirectProducts: async (_sourceSlug, lookup) => {
-			const row = rows().find((entry) => entry.skuId === lookup.value);
+			const row = existingRows.find((entry) => entry.skuId === lookup.value);
 			return [
 				{
 					ean: row?.ean ?? "",
@@ -120,18 +127,19 @@ async function prewrite(now = "2026-06-01T00:00:00.000Z") {
 function argv(
 	report: Awaited<ReturnType<typeof prewrite>>,
 	extra: string[] = [],
+	count = report.selection.requestedSampleSize,
 ) {
 	return [
 		"node",
 		"script",
 		"--source=carrefour",
-		"--count=10",
+		`--count=${count}`,
 		"--prewrite-report=prewrite.json",
 		`--prewrite-report-hash=${report.futureConfirmation.shape.reportHash}`,
 		`--row-ids=${report.futureConfirmation.shape.rowIds.join(",")}`,
 		`--product-eans=${report.futureConfirmation.shape.productEans.join(",")}`,
 		`--sku-ids=${report.futureConfirmation.shape.skuIds.join(",")}`,
-		`--confirm-write=${CARREFOUR_ACTIVE_WRITE_CONFIRMATION}`,
+		`--confirm-write=carrefour-direct-refresh-count${count}`,
 		"--output=write.json",
 		...extra,
 	];
@@ -515,6 +523,7 @@ describe("Carrefour active refresh writer contract", () => {
 		const parsed = parseCarrefourActiveWriteCliOptions(argv(report));
 		assert.equal(parsed.source, "carrefour");
 		assert.equal(parsed.count, 10);
+		assert.equal(parsed.confirmWrite, CARREFOUR_ACTIVE_WRITE_CONFIRMATION);
 		assert.deepEqual(parsed.rowIds, report.futureConfirmation.shape.rowIds);
 		for (const bad of [
 			["--source=dia"],
@@ -528,6 +537,32 @@ describe("Carrefour active refresh writer contract", () => {
 			assert.throws(
 				() => parseCarrefourActiveWriteCliOptions(argv(report, bad)),
 				/carrefour|count|rejects|confirmation|exactly one|unknown/,
+			);
+		}
+	});
+
+	it("parses count=25 with count-specific confirmation and rejects invalid counts", async () => {
+		const report = await prewrite("2026-06-01T00:00:00.000Z", 25);
+		const parsed = parseCarrefourActiveWriteCliOptions(argv(report));
+		assert.equal(parsed.count, 25);
+		assert.equal(parsed.confirmWrite, "carrefour-direct-refresh-count25");
+		assert.equal(parsed.rowIds.length, 25);
+		const wrongConfirmation = argv(report).map((entry) =>
+			entry.startsWith("--confirm-write=")
+				? "--confirm-write=carrefour-direct-refresh-count10"
+				: entry,
+		);
+		assert.throws(
+			() => parseCarrefourActiveWriteCliOptions(wrongConfirmation),
+			/confirmation/,
+		);
+		for (const count of [9, 100]) {
+			const invalidArgv = argv(report).map((entry) =>
+				entry.startsWith("--count=") ? `--count=${count}` : entry,
+			);
+			assert.throws(
+				() => parseCarrefourActiveWriteCliOptions(invalidArgv),
+				/count/,
 			);
 		}
 	});
@@ -611,6 +646,31 @@ describe("Carrefour active refresh writer contract", () => {
 		assert.equal(writeReport.summary.priceHistoryInserted, historyInserts);
 		assert.equal(writeReport.noCreate.productDelta, 0);
 		assert.equal(writeReport.rows.length, 10);
+	});
+
+	it("executes count=25 selected-row-only transaction and emits variable count report", async () => {
+		const report = await prewrite("2026-06-01T00:00:00.000Z", 25);
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		let selectedIdentityCount = 0;
+		const writeReport = await executeCarrefourActiveWrite({
+			repository: repo(
+				tx({
+					async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+						selectedIdentityCount = identities.length;
+						return tx().readSelectedRowsByExactIdentity(sourceSlug, identities);
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date(report.generatedAt),
+		});
+
+		assert.equal(selectedIdentityCount, 25);
+		assert.equal(writeReport.count, 25);
+		assert.equal(writeReport.summary.rows, 25);
+		assert.equal(writeReport.rows.length, 25);
+		assert.equal(writeReport.confirmation.rowIds.length, 25);
 	});
 
 	it("fails closed when lock, selected rows, update counts, or no-create assertions fail", async () => {

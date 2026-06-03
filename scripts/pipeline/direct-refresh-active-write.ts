@@ -8,17 +8,34 @@ import {
 	type DirectRefreshPrewriteRow,
 } from "./direct-refresh-prewrite-gate";
 import {
+	assertDirectRefreshAllowedBatchCount,
+	directRefreshConfirmationToken,
+	type DirectRefreshAllowedBatchCount,
+} from "./direct-refresh-batch-size";
+import {
 	getOptionalSingleFlag,
 	parseOptionalListFlag,
 	parsePositiveIntegerFlag,
 } from "./audit-utils";
 
 export const CARREFOUR_ACTIVE_WRITE_CONFIRMATION =
-	"carrefour-direct-refresh-count10";
-export const VEA_ACTIVE_WRITE_CONFIRMATION = "vea-direct-refresh-count10";
-export const DISCO_ACTIVE_WRITE_CONFIRMATION = "disco-direct-refresh-count10";
-export const JUMBO_ACTIVE_WRITE_CONFIRMATION = "jumbo-direct-refresh-count10";
-export const MAS_ACTIVE_WRITE_CONFIRMATION = "mas-direct-refresh-count10";
+	directRefreshConfirmationToken("carrefour", 10);
+export const VEA_ACTIVE_WRITE_CONFIRMATION = directRefreshConfirmationToken(
+	"vea",
+	10,
+);
+export const DISCO_ACTIVE_WRITE_CONFIRMATION = directRefreshConfirmationToken(
+	"disco",
+	10,
+);
+export const JUMBO_ACTIVE_WRITE_CONFIRMATION = directRefreshConfirmationToken(
+	"jumbo",
+	10,
+);
+export const MAS_ACTIVE_WRITE_CONFIRMATION = directRefreshConfirmationToken(
+	"mas",
+	10,
+);
 export const CARREFOUR_ACTIVE_WRITE_COUNT = 10;
 export const VEA_ACTIVE_WRITE_COUNT = 10;
 export const DISCO_ACTIVE_WRITE_COUNT = 10;
@@ -35,7 +52,6 @@ type ActiveWriteSource = "carrefour" | "vea" | "disco" | "jumbo" | "mas";
 type SourceConfig = {
 	source: ActiveWriteSource;
 	displayName: string;
-	confirmation: string;
 	lockKey: number;
 	issue: 45 | 54 | 61 | 68 | 75;
 	umbrellaIssue?: 44 | 73;
@@ -51,7 +67,6 @@ const SOURCE_CONFIGS = {
 	carrefour: {
 		source: "carrefour",
 		displayName: "Carrefour",
-		confirmation: CARREFOUR_ACTIVE_WRITE_CONFIRMATION,
 		lockKey: CARREFOUR_ACTIVE_WRITE_LOCK_KEY,
 		issue: 45,
 		umbrellaIssue: 44,
@@ -61,7 +76,6 @@ const SOURCE_CONFIGS = {
 	vea: {
 		source: "vea",
 		displayName: "Vea",
-		confirmation: VEA_ACTIVE_WRITE_CONFIRMATION,
 		lockKey: VEA_ACTIVE_WRITE_LOCK_KEY,
 		issue: 54,
 		expectedHost: "vea.com.ar",
@@ -70,7 +84,6 @@ const SOURCE_CONFIGS = {
 	disco: {
 		source: "disco",
 		displayName: "Disco",
-		confirmation: DISCO_ACTIVE_WRITE_CONFIRMATION,
 		lockKey: DISCO_ACTIVE_WRITE_LOCK_KEY,
 		issue: 61,
 		expectedHost: "disco.com.ar",
@@ -79,7 +92,6 @@ const SOURCE_CONFIGS = {
 	jumbo: {
 		source: "jumbo",
 		displayName: "Jumbo",
-		confirmation: JUMBO_ACTIVE_WRITE_CONFIRMATION,
 		lockKey: JUMBO_ACTIVE_WRITE_LOCK_KEY,
 		issue: 68,
 		expectedHost: "jumbo.com.ar",
@@ -88,7 +100,6 @@ const SOURCE_CONFIGS = {
 	mas: {
 		source: "mas",
 		displayName: "MAS",
-		confirmation: MAS_ACTIVE_WRITE_CONFIRMATION,
 		lockKey: MAS_ACTIVE_WRITE_LOCK_KEY,
 		issue: 75,
 		umbrellaIssue: 73,
@@ -125,13 +136,13 @@ type AppliedRow = {
 
 type ActiveWriteCliOptionsFor<Source extends ActiveWriteSource> = {
 	source: Source;
-	count: 10;
+	count: DirectRefreshAllowedBatchCount;
 	prewriteReport: string;
 	prewriteReportHash: string;
 	rowIds: string[];
 	productEans: string[];
 	skuIds: string[];
-	confirmWrite: (typeof SOURCE_CONFIGS)[Source]["confirmation"];
+	confirmWrite: string;
 	output: string;
 };
 export type CarrefourActiveWriteCliOptions =
@@ -193,7 +204,7 @@ export type ActiveWriteReport = {
 			| "jumbo.com.ar"
 			| "masonline.com.ar";
 	};
-	count: 10;
+	count: DirectRefreshAllowedBatchCount;
 	startedAt: string;
 	committedAt: string;
 	confirmation: {
@@ -212,7 +223,7 @@ export type ActiveWriteReport = {
 		supermarketProductDelta: 0;
 	};
 	summary: {
-		rows: 10;
+		rows: DirectRefreshAllowedBatchCount;
 		productUpdates: number;
 		supermarketProductUpdates: number;
 		priceHistoryPredicted: number;
@@ -313,25 +324,31 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 	const source = getOptionalSingleFlag(argv, "--source");
 	if (source !== config.source)
 		throw new Error(`active writer only accepts --source=${config.source}`);
-	const count = parsePositiveIntegerFlag(argv, "--count", 0);
-	if (count !== 10) throw new Error("active writer requires --count=10");
+	const count = assertDirectRefreshAllowedBatchCount(
+		parsePositiveIntegerFlag(argv, "--count", 0),
+		"active writer --count",
+	);
 	const hash = getOptionalSingleFlag(argv, "--prewrite-report-hash") ?? "";
 	if (!/^[a-f0-9]{64}$/.test(hash))
 		throw new Error("prewrite report hash must be lowercase 64 hex");
+	const expectedConfirmation = directRefreshConfirmationToken(
+		config.source,
+		count,
+	);
 	const confirmWrite = getOptionalSingleFlag(argv, "--confirm-write");
-	if (confirmWrite !== config.confirmation)
+	if (confirmWrite !== expectedConfirmation)
 		throw new Error(
 			`missing exact ${config.displayName} active write confirmation`,
 		);
 	return {
 		source: config.source,
-		count: 10,
+		count,
 		prewriteReport: getOptionalSingleFlag(argv, "--prewrite-report") ?? "",
 		prewriteReportHash: hash,
-		rowIds: exactList(argv, "--row-ids"),
-		productEans: exactList(argv, "--product-eans"),
-		skuIds: exactList(argv, "--sku-ids"),
-		confirmWrite: config.confirmation,
+		rowIds: exactList(argv, "--row-ids", count),
+		productEans: exactList(argv, "--product-eans", count),
+		skuIds: exactList(argv, "--sku-ids", count),
+		confirmWrite: expectedConfirmation,
 		output: getOptionalSingleFlag(argv, "--output") ?? "",
 	} as ActiveWriteCliOptionsFor<Source>;
 }
@@ -366,11 +383,14 @@ export function validatePrewriteReportForActiveWrite(
 	)
 		throw new Error("prewrite report scope/primitive mismatch");
 	if (
-		report.selection.selectedRows !== 10 ||
-		report.summary.passRows !== 10 ||
+		report.selection.requestedSampleSize !== options.count ||
+		report.selection.selectedRows !== options.count ||
+		report.summary.passRows !== options.count ||
 		report.summary.failRows !== 0
 	)
-		throw new Error("prewrite report must be exactly 10/10/0");
+		throw new Error(
+			`prewrite report must be exactly ${options.count}/${options.count}/0`,
+		);
 	const ageMs = now.getTime() - new Date(report.generatedAt).getTime();
 	if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_PREWRITE_AGE_MS)
 		throw new Error("prewrite report is stale; maximum age is 15 minutes");
@@ -530,7 +550,7 @@ async function executeActiveWrite({
 			config.source,
 			identities,
 		);
-		if (selectedRows.length !== 10)
+		if (selectedRows.length !== options.count)
 			throw new Error("selected rows missing before write");
 		const appliedRows: AppliedRow[] = [];
 		for (const row of prewriteReport.rows) {
@@ -625,7 +645,7 @@ function buildActiveWriteReport({
 			supermarketId: prewriteReport.source.supermarketId ?? 0,
 			expectedHost: config.expectedHost,
 		},
-		count: 10,
+		count: options.count,
 		startedAt: startedAt.toISOString(),
 		committedAt: committedAt.toISOString(),
 		confirmation: {
@@ -647,7 +667,7 @@ function buildActiveWriteReport({
 			supermarketProductDelta: 0,
 		},
 		summary: {
-			rows: 10,
+			rows: options.count,
 			productUpdates: rows.filter(
 				(row) => row.appliedChanges.product.length > 0,
 			).length,
@@ -664,10 +684,10 @@ function buildActiveWriteReport({
 	};
 }
 
-function exactList(argv: string[], flag: string) {
+function exactList(argv: string[], flag: string, expectedCount: number) {
 	const list = parseOptionalListFlag(argv, flag);
-	if (list.length !== 10)
-		throw new Error(`${flag} must contain exactly 10 values`);
+	if (list.length !== expectedCount)
+		throw new Error(`${flag} must contain exactly ${expectedCount} values`);
 	if (new Set(list).size !== list.length)
 		throw new Error(`${flag} contains duplicate values`);
 	return list;
