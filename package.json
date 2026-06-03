@@ -34,6 +34,7 @@
     "audit:direct-refresh-manifest": "tsx scripts/audit-direct-refresh-manifest.ts",
     "audit:direct-refresh-prewrite-gate": "tsx scripts/audit-direct-refresh-prewrite-gate.ts",
     "audit:direct-refresh-postwrite": "tsx scripts/audit-direct-refresh-postwrite.ts",
+    "audit:direct-refresh-capacity": "tsx scripts/audit-direct-refresh-capacity.ts",
     "direct-refresh:carrefour-write": "tsx scripts/direct-refresh-carrefour-write.ts",
     "direct-refresh:vea-write": "tsx scripts/direct-refresh-vea-write.ts",
     "direct-refresh:disco-write": "tsx scripts/direct-refresh-disco-write.ts",
