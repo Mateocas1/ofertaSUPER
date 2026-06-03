@@ -22,6 +22,7 @@ type SupportedManifestSource = "carrefour" | "vea" | "disco" | "jumbo" | "mas";
 type CliOptions = {
 	source: SupportedManifestSource;
 	sampleSize: number;
+	candidateScanSize: number;
 	output: string | null;
 };
 
@@ -86,9 +87,18 @@ export function parseDirectRefreshManifestCliOptions(
 		);
 	}
 
+	const sampleSize = parsePositiveIntegerFlag(argv, "--sample-size", 10);
+	const candidateScanSize = parsePositiveIntegerFlag(
+		argv,
+		"--candidate-scan-size",
+		sampleSize,
+	);
+	if (candidateScanSize < sampleSize)
+		throw new Error("--candidate-scan-size must be >= --sample-size");
 	return {
 		source: sources[0] as SupportedManifestSource,
-		sampleSize: parsePositiveIntegerFlag(argv, "--sample-size", 10),
+		sampleSize,
+		candidateScanSize,
 		output: getOptionalSingleFlag(argv, "--output"),
 	};
 }
@@ -188,6 +198,7 @@ async function main() {
 		repository: createRepository(),
 		sourceSlug: options.source,
 		sampleSize: options.sampleSize,
+		candidateScanSize: options.candidateScanSize,
 		fetchDirectProducts: async (sourceSlug, lookup) =>
 			getSourceAdapter(sourceSlug).fetchDirectProducts(lookup),
 	});

@@ -151,13 +151,20 @@ export type CarrefourDirectRefreshPrewriteGate = {
 		guards: string[];
 	};
 	selection: {
-		strategy: "oldest-public-rankable-existing-rows";
+		strategy:
+			| "oldest-public-rankable-existing-rows"
+			| "oldest-public-rankable-existing-rows-bounded-viable-scan";
 		requestedSampleSize: number;
+		candidateScanSize: number;
+		candidateRows: number;
 		selectedRows: number;
+		skippedBlockedRows: number;
 	};
 	summary: {
 		passRows: number;
 		failRows: number;
+		skippedBlockedRows: number;
+		skippedBlockedReasons: string[];
 		expectedSupermarketProductUpdates: number;
 		expectedProductUpdates: number;
 		expectedPriceHistoryInserts: number;
@@ -184,6 +191,7 @@ export type CarrefourDirectRefreshPrewriteGate = {
 		};
 	};
 	rows: DirectRefreshPrewriteRow[];
+	skippedRows: DirectRefreshPrewriteRow[];
 };
 
 const SOURCE_CONFIGS = {
@@ -285,6 +293,7 @@ export async function buildDirectRefreshPrewriteGate({
 	fetchDirectProducts,
 	sourceSlug = CARREFOUR_SOURCE,
 	sampleSize = 10,
+	candidateScanSize = sampleSize,
 	now = new Date(),
 	maxPriceDeltaPercent = MAX_PRICE_DELTA_PERCENT,
 }: {
@@ -295,20 +304,26 @@ export async function buildDirectRefreshPrewriteGate({
 	): Promise<NormalizedProduct[]>;
 	sourceSlug?: string;
 	sampleSize?: number;
+	candidateScanSize?: number;
 	now?: Date;
 	maxPriceDeltaPercent?: number;
 }): Promise<CarrefourDirectRefreshPrewriteGate> {
 	const config = sourceConfig(sourceSlug);
 	const generatedAt = now.toISOString();
 	const source = await repository.getSource(config.slug);
-	const selectedRows = source
-		? await repository.listOldestPublicRankableRows(config.slug, sampleSize)
+	if (candidateScanSize < sampleSize)
+		throw new Error("candidate scan size must be >= sample size");
+	const candidateRows = source
+		? await repository.listOldestPublicRankableRows(
+				config.slug,
+				candidateScanSize,
+			)
 		: [];
 	const maxPriceHistoryId = source
 		? await repository.getMaxPriceHistoryId()
 		: null;
-	const rows = await Promise.all(
-		selectedRows.map((row) =>
+	const candidateEvaluations = await Promise.all(
+		candidateRows.map((row) =>
 			evaluatePrewriteRow({
 				row,
 				repository,
@@ -319,15 +334,39 @@ export async function buildDirectRefreshPrewriteGate({
 			}),
 		),
 	);
+	const boundedViableScan = candidateScanSize > sampleSize;
+	const viableRows = candidateEvaluations.filter(
+		(row) => row.guards.status === "PASS",
+	);
+	const skippedRows = boundedViableScan
+		? candidateEvaluations.filter((row) => row.guards.status === "FAIL")
+		: [];
+	const rows = boundedViableScan
+		? viableRows.slice(0, sampleSize)
+		: candidateEvaluations;
 	const sourceFailReasons = source ? [] : [`source ${config.slug} not found`];
 	const selectedFailReasons =
-		selectedRows.length === 0 ? ["no rows selected"] : [];
-	const rowFailReasons = rows.flatMap((row) =>
-		row.guards.status === "FAIL" ? row.guards.reasons : [],
+		candidateRows.length === 0 ? ["no rows selected"] : [];
+	const insufficientViableReasons =
+		boundedViableScan && rows.length < sampleSize
+			? [
+					`insufficient viable rows: selected ${rows.length} of ${sampleSize} from ${candidateRows.length} candidates`,
+				]
+			: [];
+	const skippedBlockedReasons = uniqueSorted(
+		skippedRows.flatMap((row) => row.guards.reasons),
 	);
+	const rowFailReasons = boundedViableScan
+		? insufficientViableReasons.length > 0
+			? skippedBlockedReasons
+			: []
+		: rows.flatMap((row) =>
+				row.guards.status === "FAIL" ? row.guards.reasons : [],
+			);
 	const failClosedReasons = uniqueSorted([
 		...sourceFailReasons,
 		...selectedFailReasons,
+		...insufficientViableReasons,
 		...rowFailReasons,
 	]);
 	const passRows = rows.filter((row) => row.guards.status === "PASS");
@@ -356,6 +395,8 @@ export async function buildDirectRefreshPrewriteGate({
 	const summary = {
 		passRows: passRows.length,
 		failRows,
+		skippedBlockedRows: skippedRows.length,
+		skippedBlockedReasons,
 		expectedSupermarketProductUpdates: passRows.filter(
 			(row) => row.expectedChanges.supermarketProduct.length > 0,
 		).length,
@@ -372,6 +413,7 @@ export async function buildDirectRefreshPrewriteGate({
 		audit: `${config.slug}-direct-refresh-prewrite-gate` as const,
 		status:
 			failClosedReasons.length === 0 &&
+			(!boundedViableScan || rows.length === sampleSize) &&
 			rows.every((row) => row.guards.status === "PASS")
 				? ("PASS" as const)
 				: ("FAIL" as const),
@@ -396,13 +438,19 @@ export async function buildDirectRefreshPrewriteGate({
 			guards: identityGuards(config),
 		},
 		selection: {
-			strategy: "oldest-public-rankable-existing-rows" as const,
+			strategy: boundedViableScan
+				? ("oldest-public-rankable-existing-rows-bounded-viable-scan" as const)
+				: ("oldest-public-rankable-existing-rows" as const),
 			requestedSampleSize: sampleSize,
-			selectedRows: selectedRows.length,
+			candidateScanSize,
+			candidateRows: candidateRows.length,
+			selectedRows: rows.length,
+			skippedBlockedRows: skippedRows.length,
 		},
 		summary,
 		rollbackSnapshot,
 		rows,
+		skippedRows,
 	};
 	const confirmationShape = {
 		source: config.slug,

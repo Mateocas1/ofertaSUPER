@@ -85,6 +85,30 @@ function liveProduct(
 	};
 }
 
+function masLikeRows(count: number): DirectRefreshPrewriteExistingRow[] {
+	return Array.from({ length: count }, (_, index) => ({
+		...passRow,
+		id: String(index + 1),
+		sourceSlug: "mas",
+		supermarketId: 50,
+		ean: `77910000000${String(index + 1).padStart(2, "0")}`,
+		skuId: `mas-sku-${index + 1}`,
+		productUrl: "https://www.masonline.com.ar/leche-1/p",
+		product: passRow.product
+			? {
+					...passRow.product,
+					ean: `77910000000${String(index + 1).padStart(2, "0")}`,
+				}
+			: null,
+		latestPriceHistory: passRow.latestPriceHistory
+			? {
+					...passRow.latestPriceHistory,
+					supermarketProductId: index + 1,
+				}
+			: null,
+	}));
+}
+
 function repository(rows: DirectRefreshPrewriteExistingRow[]) {
 	return {
 		async getSource(sourceSlug: string) {
@@ -441,6 +465,80 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		assert.equal(report.rows[0].guards.carrefourHostOnly, true);
 	});
 
+	it("selects 10 viable MAS prewrite rows from a bounded candidate scan", async () => {
+		const candidateRows = masLikeRows(12);
+		const report = await buildDirectRefreshPrewriteGate({
+			sourceSlug: "mas",
+			sampleSize: 10,
+			candidateScanSize: 12,
+			repository: repository(candidateRows),
+			now: new Date("2026-06-01T00:00:00.000Z"),
+			fetchDirectProducts: async (_sourceSlug, lookup) => {
+				const row = candidateRows.find((entry) => entry.skuId === lookup.value);
+				return [
+					live({
+						ean: row?.ean ?? "missing",
+						skuId: lookup.value,
+						productUrl: "https://www.masonline.com.ar/leche-1/p",
+						price:
+							lookup.value === "mas-sku-1" || lookup.value === "mas-sku-2"
+								? 0
+								: 1100,
+					}),
+				];
+			},
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(report.selection.candidateScanSize, 12);
+		assert.equal(report.selection.selectedRows, 10);
+		assert.equal(report.summary.passRows, 10);
+		assert.equal(report.summary.failRows, 0);
+		assert.equal(report.summary.skippedBlockedRows, 2);
+		assert.match(report.summary.skippedBlockedReasons.join("\n"), /price is not positive/);
+		const selectedIds = candidateRows
+			.slice(2)
+			.map((row) => row.id)
+			.sort();
+		assert.deepEqual(report.futureConfirmation.shape.rowIds, selectedIds);
+		assert.deepEqual(
+			report.rollbackSnapshot.touchedSupermarketProductIds,
+			selectedIds.map(Number),
+		);
+	});
+
+	it("fails closed when bounded MAS scan cannot find enough viable rows", async () => {
+		const candidateRows = masLikeRows(12);
+		const report = await buildDirectRefreshPrewriteGate({
+			sourceSlug: "mas",
+			sampleSize: 10,
+			candidateScanSize: 12,
+			repository: repository(candidateRows),
+			fetchDirectProducts: async (_sourceSlug, lookup) => {
+				const row = candidateRows.find((entry) => entry.skuId === lookup.value);
+				return [
+					live({
+						ean: row?.ean ?? "missing",
+						skuId: lookup.value,
+						productUrl: "https://www.masonline.com.ar/leche-1/p",
+						price: ["mas-sku-1", "mas-sku-2", "mas-sku-3", "mas-sku-4"].includes(
+							lookup.value ?? "",
+						)
+							? 0
+							: 1100,
+					}),
+				];
+			},
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.equal(report.selection.candidateScanSize, 12);
+		assert.equal(report.selection.selectedRows, 8);
+		assert.match(reasons, /insufficient viable rows/);
+		assert.match(reasons, /price is not positive/);
+	});
+
 	it("rejects unsupported scope before repository or network work", async () => {
 		await assert.rejects(
 			() =>
@@ -570,7 +668,12 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"--sample-size=7",
 				"--output=prewrite.json",
 			]),
-			{ source: "carrefour", sampleSize: 7, output: "prewrite.json" },
+			{
+				source: "carrefour",
+				sampleSize: 7,
+				candidateScanSize: 7,
+				output: "prewrite.json",
+			},
 		);
 		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions([
@@ -578,7 +681,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"script",
 				"--source=vea",
 			]),
-			{ source: "vea", sampleSize: 10, output: null },
+			{ source: "vea", sampleSize: 10, candidateScanSize: 10, output: null },
 		);
 		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions([
@@ -586,7 +689,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"script",
 				"--source=disco",
 			]),
-			{ source: "disco", sampleSize: 10, output: null },
+			{ source: "disco", sampleSize: 10, candidateScanSize: 10, output: null },
 		);
 		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions([
@@ -594,20 +697,36 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"script",
 				"--source=jumbo",
 			]),
-			{ source: "jumbo", sampleSize: 10, output: null },
+			{ source: "jumbo", sampleSize: 10, candidateScanSize: 10, output: null },
 		);
 		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions(["node", "script", "--source=mas"]),
-			{ source: "mas", sampleSize: 10, output: null },
+			{ source: "mas", sampleSize: 10, candidateScanSize: 10, output: null },
 		);
 		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions(["node", "script"]),
-			{ source: "carrefour", sampleSize: 10, output: null },
+			{
+				source: "carrefour",
+				sampleSize: 10,
+				candidateScanSize: 10,
+				output: null,
+			},
+		);
+		assert.deepEqual(
+			parseDirectRefreshPrewriteGateCliOptions([
+				"node",
+				"script",
+				"--source=mas",
+				"--sample-size=10",
+				"--candidate-scan-size=12",
+			]),
+			{ source: "mas", sampleSize: 10, candidateScanSize: 12, output: null },
 		);
 		for (const argv of [
 			["node", "script", "--source=dia"],
 			["node", "script", "--source=carrefour,dia"],
 			["node", "script", "--source=mas,jumbo"],
+			["node", "script", "--sample-size=10", "--candidate-scan-size=9"],
 			["node", "script", "--all-source"],
 			["node", "script", "--all-sources=true"],
 			["node", "script", "--confirm-write"],
@@ -624,7 +743,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		]) {
 			assert.throws(
 				() => parseDirectRefreshPrewriteGateCliOptions(argv),
-				/carrefour|read-only/,
+				/carrefour|read-only|candidate-scan-size/,
 			);
 		}
 	});

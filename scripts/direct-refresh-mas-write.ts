@@ -244,13 +244,14 @@ async function writeJson(output: string, report: unknown) {
 
 async function buildFreshPrewrite(
 	options: MasActiveWriteCliOptions,
-	generatedAt: string,
+	prewriteReport: Awaited<ReturnType<typeof readPrewriteReport>>,
 ) {
 	return buildDirectRefreshPrewriteGate({
 		repository: createDirectRefreshPrewriteRepository(),
 		sourceSlug: options.source,
 		sampleSize: options.count,
-		now: new Date(generatedAt),
+		candidateScanSize: prewriteReport.selection.candidateScanSize,
+		now: new Date(prewriteReport.generatedAt),
 		fetchDirectProducts: async (_sourceSlug, lookup) =>
 			getSourceAdapter("mas").fetchDirectProducts(lookup),
 	});
@@ -259,10 +260,7 @@ async function buildFreshPrewrite(
 async function main() {
 	const options = parseMasActiveWriteCliOptions();
 	const prewriteReport = await readPrewriteReport(options.prewriteReport);
-	const freshPrewriteReport = await buildFreshPrewrite(
-		options,
-		prewriteReport.generatedAt,
-	);
+	const freshPrewriteReport = await buildFreshPrewrite(options, prewriteReport);
 	assertFreshPrewriteRerunMatches(prewriteReport, freshPrewriteReport, options);
 	const report = await executeMasActiveWrite({
 		repository: createActiveWriteRepository(),

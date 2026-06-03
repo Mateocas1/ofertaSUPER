@@ -399,6 +399,53 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		);
 	});
 
+	it("selects 10 viable MAS rows from a bounded candidate scan and reports skipped rows", async () => {
+		const masRows: DirectRefreshManifestExistingRow[] = Array.from(
+			{ length: 12 },
+			(_, index) => ({
+				...passRow,
+				id: String(index + 1),
+				sourceSlug: "mas",
+				supermarketId: 50,
+				ean: `77910000000${String(index + 1).padStart(2, "0")}`,
+				skuId: `mas-sku-${index + 1}`,
+				productUrl: "https://www.masonline.com.ar/leche-1/p",
+			}),
+		);
+		const report = await buildDirectRefreshManifestDryRun({
+			sourceSlug: "mas",
+			sampleSize: 10,
+			candidateScanSize: 12,
+			repository: repository(masRows),
+			fetchDirectProducts: async (_sourceSlug, lookup) => [
+				{
+					ean:
+						masRows.find((row) => row.skuId === lookup.value)?.ean ?? "missing",
+					skuId: lookup.value,
+					productUrl:
+						lookup.value === "mas-sku-1" || lookup.value === "mas-sku-2"
+							? "https://example.com/leche-1/p"
+							: "https://www.masonline.com.ar/leche-1/p",
+					price: 990,
+					listPrice: 1100,
+					isAvailable: true,
+				},
+			],
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(report.selection.candidateScanSize, 12);
+		assert.equal(report.selection.selectedRows, 10);
+		assert.equal(report.summary.passRows, 10);
+		assert.equal(report.summary.failRows, 0);
+		assert.equal(report.skippedRows.length, 2);
+		assert.match(report.summary.skippedBlockedReasons.join("\n"), /host is not/);
+		assert.deepEqual(
+			report.rows.map((row) => row.rowId),
+			masRows.slice(2).map((row) => row.id),
+		);
+	});
+
 	it("rejects unsupported scope before repository or network work", async () => {
 		await assert.rejects(
 			() =>
@@ -443,7 +490,12 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 				"--sample-size=7",
 				"--output=manifest.json",
 			]),
-			{ source: "carrefour", sampleSize: 7, output: "manifest.json" },
+			{
+				source: "carrefour",
+				sampleSize: 7,
+				candidateScanSize: 7,
+				output: "manifest.json",
+			},
 		);
 		assert.deepEqual(
 			parseDirectRefreshManifestCliOptions([
@@ -452,7 +504,7 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 				"--source=vea",
 				"--sample-size=10",
 			]),
-			{ source: "vea", sampleSize: 10, output: null },
+			{ source: "vea", sampleSize: 10, candidateScanSize: 10, output: null },
 		);
 		assert.deepEqual(
 			parseDirectRefreshManifestCliOptions([
@@ -460,7 +512,7 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 				"script",
 				"--source=disco",
 			]),
-			{ source: "disco", sampleSize: 10, output: null },
+			{ source: "disco", sampleSize: 10, candidateScanSize: 10, output: null },
 		);
 		assert.deepEqual(
 			parseDirectRefreshManifestCliOptions([
@@ -468,21 +520,33 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 				"script",
 				"--source=jumbo",
 			]),
-			{ source: "jumbo", sampleSize: 10, output: null },
+			{ source: "jumbo", sampleSize: 10, candidateScanSize: 10, output: null },
 		);
 		assert.deepEqual(
 			parseDirectRefreshManifestCliOptions(["node", "script", "--source=mas"]),
-			{ source: "mas", sampleSize: 10, output: null },
+			{ source: "mas", sampleSize: 10, candidateScanSize: 10, output: null },
 		);
 		assert.deepEqual(parseDirectRefreshManifestCliOptions(["node", "script"]), {
 			source: "carrefour",
 			sampleSize: 10,
+			candidateScanSize: 10,
 			output: null,
 		});
+		assert.deepEqual(
+			parseDirectRefreshManifestCliOptions([
+				"node",
+				"script",
+				"--source=mas",
+				"--sample-size=10",
+				"--candidate-scan-size=12",
+			]),
+			{ source: "mas", sampleSize: 10, candidateScanSize: 12, output: null },
+		);
 		for (const argv of [
 			["node", "script", "--source=dia"],
 			["node", "script", "--source=carrefour,dia"],
 			["node", "script", "--source=mas,jumbo"],
+			["node", "script", "--sample-size=10", "--candidate-scan-size=9"],
 			["node", "script", "--all-source"],
 			["node", "script", "--all-sources=true"],
 			["node", "script", "--confirm-write"],
@@ -492,7 +556,7 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		]) {
 			assert.throws(
 				() => parseDirectRefreshManifestCliOptions(argv),
-				/carrefour|read-only/,
+				/carrefour|read-only|candidate-scan-size/,
 			);
 		}
 	});
