@@ -224,24 +224,27 @@ export async function buildDirectRefreshCapacityReport({
 		throw new Error("targetBatchSize must be a positive integer");
 	}
 	const sources = await repository.listSources(sourceSlugs);
-	const sourceReports = await Promise.all(
-		sources.map(async (source) => {
-			const [allRows, candidateRows] = await Promise.all([
-				repository.listRowsForDenominator(source.slug),
-				repository.listOldestPublicRankableRows(source.slug, candidateScanSize),
-			]);
-			const rows = await Promise.all(
-				candidateRows.map((row) =>
-					evaluateCapacityRow({
-						row,
-						repository,
-						fetchDirectProducts,
-						sourceSlug: source.slug,
-						maxPriceDeltaPercent,
-					}),
-				),
+	const sourceReports: DirectRefreshCapacitySourceReport[] = [];
+	for (const source of sources) {
+		const allRows = await repository.listRowsForDenominator(source.slug);
+		const candidateRows = await repository.listOldestPublicRankableRows(
+			source.slug,
+			candidateScanSize,
+		);
+		const rows: DirectRefreshCapacityRowReport[] = [];
+		for (const row of candidateRows) {
+			rows.push(
+				await evaluateCapacityRow({
+					row,
+					repository,
+					fetchDirectProducts,
+					sourceSlug: source.slug,
+					maxPriceDeltaPercent,
+				}),
 			);
-			return buildSourceReport({
+		}
+		sourceReports.push(
+			buildSourceReport({
 				source,
 				allRows,
 				rows,
@@ -250,9 +253,9 @@ export async function buildDirectRefreshCapacityReport({
 				freshnessTargetsPercent,
 				slaHours,
 				now,
-			});
-		}),
-	);
+			}),
+		);
+	}
 	const failConditions: string[] = [];
 	if (sourceReports.length === 0) failConditions.push("no sources selected");
 	if (
