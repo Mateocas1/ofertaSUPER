@@ -178,6 +178,41 @@ describe("direct-refresh operating capacity audit", () => {
 		assert.match(mas.recommendation, /increase candidate scan evidence/);
 	});
 
+	it("evaluates candidate repository lookups serially to avoid pool exhaustion", async () => {
+		let activeSourceSkuLookups = 0;
+		let maxActiveSourceSkuLookups = 0;
+		const rows = Array.from({ length: 6 }, (_, index) =>
+			row("carrefour", String(index + 1), `ean-${index + 1}`, `sku-${index + 1}`),
+		);
+		const repository = fakeRepository({ sources: [source("carrefour")], rows });
+		const originalFindRowsBySourceSku = repository.findRowsBySourceSku;
+		repository.findRowsBySourceSku = async (sourceSlug, skuId) => {
+			activeSourceSkuLookups += 1;
+			maxActiveSourceSkuLookups = Math.max(
+				maxActiveSourceSkuLookups,
+				activeSourceSkuLookups,
+			);
+			await delay(1);
+			try {
+				return await originalFindRowsBySourceSku(sourceSlug, skuId);
+			} finally {
+				activeSourceSkuLookups -= 1;
+			}
+		};
+
+		await buildDirectRefreshCapacityReport({
+			repository,
+			fetchDirectProducts: async (_sourceSlug, lookup) => [
+				live("carrefour", `ean-${lookup.value.replace("sku-", "")}`, lookup.value),
+			],
+			candidateScanSize: 6,
+			targetBatchSize: 3,
+			now: NOW,
+		});
+
+		assert.equal(maxActiveSourceSkuLookups, 1);
+	});
+
 	it("rejects unsafe CLI flags and parses defaults/output", () => {
 		assert.throws(
 			() => parseDirectRefreshCapacityCliOptions(["node", "script", "--write"]),
@@ -310,6 +345,10 @@ function live(
 		isAvailable: true,
 		...overrides,
 	};
+}
+
+function delay(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function sourceSlugHost(sourceSlug: string) {
