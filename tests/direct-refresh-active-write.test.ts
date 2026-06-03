@@ -30,6 +30,7 @@ import {
 import {
 	buildCarrefourDirectRefreshPrewriteGate,
 	buildDirectRefreshPrewriteGate,
+	buildPrewriteReportHash,
 	type DirectRefreshPrewriteExistingRow,
 } from "../scripts/pipeline/direct-refresh-prewrite-gate";
 
@@ -671,6 +672,37 @@ describe("Carrefour active refresh writer contract", () => {
 		assert.equal(writeReport.summary.rows, 25);
 		assert.equal(writeReport.rows.length, 25);
 		assert.equal(writeReport.confirmation.rowIds.length, 25);
+	});
+
+	it("skips product updates for rows without product-level changes", async () => {
+		const report = await prewrite();
+		report.rows[0].expectedChanges.product = [];
+		report.summary.expectedProductUpdates = report.rows.filter(
+			(row) => row.expectedChanges.product.length > 0,
+		).length;
+		const hashPayload = { ...report } as Record<string, unknown>;
+		delete hashPayload.futureConfirmation;
+		report.futureConfirmation.shape.reportHash = buildPrewriteReportHash(hashPayload);
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		let productUpdateCalls = 0;
+		const writeReport = await executeCarrefourActiveWrite({
+			repository: repo(
+				tx({
+					async updateProductByEan() {
+						productUpdateCalls += 1;
+						return 1;
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date(report.generatedAt),
+		});
+
+		assert.equal(productUpdateCalls, 9);
+		assert.equal(writeReport.summary.productUpdates, 9);
+		assert.equal(writeReport.summary.supermarketProductUpdates, 10);
+		assert.deepEqual(writeReport.rows[0].appliedChanges.product, []);
 	});
 
 	it("fails closed when lock, selected rows, update counts, or no-create assertions fail", async () => {
