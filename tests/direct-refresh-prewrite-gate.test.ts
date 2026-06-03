@@ -495,7 +495,10 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		assert.equal(report.summary.passRows, 10);
 		assert.equal(report.summary.failRows, 0);
 		assert.equal(report.summary.skippedBlockedRows, 2);
-		assert.match(report.summary.skippedBlockedReasons.join("\n"), /price is not positive/);
+		assert.match(
+			report.summary.skippedBlockedReasons.join("\n"),
+			/price is not positive/,
+		);
 		const selectedIds = candidateRows
 			.slice(2)
 			.map((row) => row.id)
@@ -521,9 +524,12 @@ describe("Carrefour direct refresh pre-write gate", () => {
 						ean: row?.ean ?? "missing",
 						skuId: lookup.value,
 						productUrl: "https://www.masonline.com.ar/leche-1/p",
-						price: ["mas-sku-1", "mas-sku-2", "mas-sku-3", "mas-sku-4"].includes(
-							lookup.value ?? "",
-						)
+						price: [
+							"mas-sku-1",
+							"mas-sku-2",
+							"mas-sku-3",
+							"mas-sku-4",
+						].includes(lookup.value ?? "")
 							? 0
 							: 1100,
 					}),
@@ -665,13 +671,13 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"node",
 				"script",
 				"--source=carrefour",
-				"--sample-size=7",
+				"--sample-size=25",
 				"--output=prewrite.json",
 			]),
 			{
 				source: "carrefour",
-				sampleSize: 7,
-				candidateScanSize: 7,
+				sampleSize: 25,
+				candidateScanSize: 25,
 				output: "prewrite.json",
 			},
 		);
@@ -700,7 +706,11 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			{ source: "jumbo", sampleSize: 10, candidateScanSize: 10, output: null },
 		);
 		assert.deepEqual(
-			parseDirectRefreshPrewriteGateCliOptions(["node", "script", "--source=mas"]),
+			parseDirectRefreshPrewriteGateCliOptions([
+				"node",
+				"script",
+				"--source=mas",
+			]),
 			{ source: "mas", sampleSize: 10, candidateScanSize: 10, output: null },
 		);
 		assert.deepEqual(
@@ -717,15 +727,17 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"node",
 				"script",
 				"--source=mas",
-				"--sample-size=10",
-				"--candidate-scan-size=12",
+				"--sample-size=50",
+				"--candidate-scan-size=60",
 			]),
-			{ source: "mas", sampleSize: 10, candidateScanSize: 12, output: null },
+			{ source: "mas", sampleSize: 50, candidateScanSize: 60, output: null },
 		);
 		for (const argv of [
 			["node", "script", "--source=dia"],
 			["node", "script", "--source=carrefour,dia"],
 			["node", "script", "--source=mas,jumbo"],
+			["node", "script", "--sample-size=9"],
+			["node", "script", "--sample-size=100"],
 			["node", "script", "--sample-size=10", "--candidate-scan-size=9"],
 			["node", "script", "--all-source"],
 			["node", "script", "--all-sources=true"],
@@ -743,7 +755,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		]) {
 			assert.throws(
 				() => parseDirectRefreshPrewriteGateCliOptions(argv),
-				/carrefour|read-only|candidate-scan-size/,
+				/carrefour|read-only|candidate-scan-size|sample-size/,
 			);
 		}
 	});

@@ -1,4 +1,8 @@
 import type { ActiveWriteReport } from "./direct-refresh-active-write";
+import {
+	isDirectRefreshAllowedBatchCount,
+	type DirectRefreshAllowedBatchCount,
+} from "./direct-refresh-batch-size";
 import type {
 	DirectRefreshPrewriteProductSnapshot,
 	DirectRefreshPrewritePriceHistorySnapshot,
@@ -134,7 +138,7 @@ export type DirectRefreshPostwriteAuditReport = {
 		issue: 45 | 54 | 61 | 68 | 75;
 		umbrellaIssue?: 44 | 73;
 		source: DirectRefreshPostwriteSource;
-		count: 10;
+		count: DirectRefreshAllowedBatchCount;
 		prewriteReportHash: string;
 		startedAt: string;
 		committedAt: string;
@@ -212,7 +216,9 @@ export async function buildDirectRefreshPostwriteAudit({
 			issue: config.issue,
 			...(config.umbrellaIssue ? { umbrellaIssue: config.umbrellaIssue } : {}),
 			source: config.source,
-			count: 10,
+			count: isDirectRefreshAllowedBatchCount(writeReport.count)
+				? writeReport.count
+				: 10,
 			prewriteReportHash: writeReport.confirmation?.prewriteReportHash ?? "",
 			startedAt: writeReport.startedAt,
 			committedAt: writeReport.committedAt,
@@ -269,8 +275,11 @@ function validateWriteReport(report: ActiveWriteReport, config: SourceConfig) {
 		reasons.push(`write report source is not ${config.source}`);
 	if (report.source?.expectedHost !== config.expectedHost)
 		reasons.push(`write report expected host is not ${config.expectedHost}`);
-	if (report.count !== 10 || report.summary?.rows !== 10)
-		reasons.push("write report count is not exactly 10");
+	if (!isDirectRefreshAllowedBatchCount(report.count)) {
+		reasons.push("write report count is not allowlisted");
+	} else if (report.summary?.rows !== report.count) {
+		reasons.push("write report summary rows do not match count");
+	}
 	if (report.transaction?.acquired !== true)
 		reasons.push("write report transaction lock was not acquired");
 	if (
@@ -278,8 +287,8 @@ function validateWriteReport(report: ActiveWriteReport, config: SourceConfig) {
 		report.noCreate?.supermarketProductDelta !== 0
 	)
 		reasons.push("write report no-create deltas are not zero");
-	if (report.rows.length !== 10)
-		reasons.push("write report rows are not exactly 10");
+	if (report.rows.length !== report.count)
+		reasons.push("write report rows do not match count");
 	if (!/^[a-f0-9]{64}$/.test(report.confirmation?.prewriteReportHash ?? ""))
 		reasons.push("write report confirmation hash is invalid");
 	const rowIds = report.rows.map((row) => row.rowId);
@@ -426,7 +435,10 @@ function sameStringSet(left: string[] | undefined, right: string[]) {
 	return leftSorted.every((value, index) => value === rightSorted[index]);
 }
 
-function sameNumberSet(left: Array<string | number> | undefined, right: string[]) {
+function sameNumberSet(
+	left: Array<string | number> | undefined,
+	right: string[],
+) {
 	if (!left || left.length !== right.length) return false;
 	const leftSorted = left.map(Number).sort((a, b) => a - b);
 	const rightSorted = right.map(Number).sort((a, b) => a - b);
