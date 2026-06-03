@@ -237,6 +237,36 @@ function jumboWriteReport(
 	};
 }
 
+function masWriteReport(
+	overrides: Partial<ActiveWriteReport> = {},
+): ActiveWriteReport {
+	const base = writeReport();
+	const rows = base.rows.map((row) => ({
+		...row,
+		live: row.live
+			? {
+					...row.live,
+					productUrl: "https://www.masonline.com.ar/leche/p",
+					productUrlHost: "masonline.com.ar",
+				}
+			: row.live,
+	}));
+	return {
+		...base,
+		report: "mas-direct-refresh-active-write",
+		issue: 75,
+		umbrellaIssue: 73,
+		source: {
+			slug: "mas",
+			supermarketId: 6,
+			expectedHost: "masonline.com.ar",
+		},
+		transaction: { advisoryLockKey: 75204510, acquired: true },
+		rows,
+		...overrides,
+	};
+}
+
 function repository(
 	report = writeReport(),
 	overrides: Partial<DirectRefreshPostwriteRepository> = {},
@@ -475,6 +505,67 @@ describe("Carrefour active refresh post-write audit", () => {
 		assert.match(reasons, /expected host is not jumbo\.com\.ar/);
 	});
 
+	it("passes MAS audits with source-specific report metadata", async () => {
+		const report = masWriteReport();
+		let historyScope: number[] = [];
+		const audit = await buildDirectRefreshPostwriteAudit({
+			source: "mas",
+			repository: repository(report, {
+				async readPriceHistoryRowsAboveId(_maxId, supermarketProductIds) {
+					historyScope = supermarketProductIds;
+					return report.rows
+						.filter((row) => row.insertedPriceHistoryId !== null)
+						.map((row) => ({
+							id: row.insertedPriceHistoryId ?? 0,
+							supermarketProductId: Number(row.rowId),
+							price: row.live?.price ?? null,
+							listPrice: row.live?.listPrice ?? null,
+							scrapedAt: report.committedAt,
+						}));
+				},
+			}),
+			writeReport: report,
+			now: new Date("2026-06-01T00:05:00.000Z"),
+		});
+
+		assert.equal(audit.status, "PASS");
+		assert.equal(audit.audit, "mas-direct-refresh-postwrite-audit");
+		assert.equal(audit.writeReport.source, "mas");
+		assert.equal(audit.writeReport.issue, 75);
+		assert.equal(audit.writeReport.umbrellaIssue, 73);
+		assert.deepEqual(
+			historyScope,
+			report.rows.map((row) => Number(row.rowId)),
+		);
+		assert.equal(audit.summary.passRows, 10);
+		assert.equal(audit.summary.failRows, 0);
+	});
+
+	it("fails closed when MAS audit receives mismatched report source metadata", async () => {
+		const report = masWriteReport({
+			report: "jumbo-direct-refresh-active-write",
+			issue: 68,
+			umbrellaIssue: undefined,
+			source: {
+				slug: "jumbo",
+				supermarketId: 2,
+				expectedHost: "jumbo.com.ar",
+			},
+		});
+		const audit = await buildDirectRefreshPostwriteAudit({
+			source: "mas",
+			repository: repository(report),
+			writeReport: report,
+		});
+
+		const reasons = audit.summary.failClosedReasons.join("\n");
+		assert.equal(audit.status, "FAIL");
+		assert.match(reasons, /type is not MAS active write/);
+		assert.match(reasons, /issue linkage mismatch/);
+		assert.match(reasons, /source is not mas/);
+		assert.match(reasons, /expected host is not masonline\.com\.ar/);
+	});
+
 	it("fails closed when Jumbo confirmation or rollback references do not match rows", async () => {
 		const report = jumboWriteReport({
 			confirmation: {
@@ -671,6 +762,16 @@ describe("Carrefour active refresh post-write audit", () => {
 				"--output=audit.json",
 			]),
 			{ source: "jumbo", writeReport: "write.json", output: "audit.json" },
+		);
+		assert.deepEqual(
+			parseDirectRefreshPostwriteCliOptions([
+				"node",
+				"script",
+				"--source=mas",
+				"--write-report=write.json",
+				"--output=audit.json",
+			]),
+			{ source: "mas", writeReport: "write.json", output: "audit.json" },
 		);
 		for (const argv of [
 			["node", "script", "--write-report=write.json"],
