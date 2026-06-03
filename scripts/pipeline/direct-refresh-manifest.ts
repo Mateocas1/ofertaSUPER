@@ -104,16 +104,24 @@ export type CarrefourDirectRefreshManifestDryRun = {
 		guards: string[];
 	};
 	selection: {
-		strategy: "oldest-public-rankable-existing-rows";
+		strategy:
+			| "oldest-public-rankable-existing-rows"
+			| "oldest-public-rankable-existing-rows-bounded-viable-scan";
 		requestedSampleSize: number;
+		candidateScanSize: number;
+		candidateRows: number;
 		selectedRows: number;
+		skippedBlockedRows: number;
 	};
 	summary: {
 		passRows: number;
 		failRows: number;
+		skippedBlockedRows: number;
+		skippedBlockedReasons: string[];
 		failClosedReasons: string[];
 	};
 	rows: DirectRefreshManifestRow[];
+	skippedRows: DirectRefreshManifestRow[];
 };
 
 const SOURCE_CONFIGS = {
@@ -185,6 +193,7 @@ export async function buildDirectRefreshManifestDryRun({
 	fetchDirectProducts,
 	sourceSlug = CARREFOUR_SOURCE,
 	sampleSize = 10,
+	candidateScanSize = sampleSize,
 	now = new Date(),
 }: {
 	repository: DirectRefreshManifestRepository;
@@ -194,27 +203,57 @@ export async function buildDirectRefreshManifestDryRun({
 	): Promise<LiveProduct[]>;
 	sourceSlug?: string;
 	sampleSize?: number;
+	candidateScanSize?: number;
 	now?: Date;
 }): Promise<CarrefourDirectRefreshManifestDryRun> {
 	const config = sourceConfig(sourceSlug);
 	const source = await repository.getSource(config.slug);
-	const selectedRows = source
-		? await repository.listOldestPublicRankableRows(config.slug, sampleSize)
+	if (candidateScanSize < sampleSize)
+		throw new Error("candidate scan size must be >= sample size");
+	const candidateRows = source
+		? await repository.listOldestPublicRankableRows(
+				config.slug,
+				candidateScanSize,
+			)
 		: [];
-	const rows = await Promise.all(
-		selectedRows.map((row) =>
+	const candidateEvaluations = await Promise.all(
+		candidateRows.map((row) =>
 			evaluateManifestRow({ row, repository, fetchDirectProducts, config }),
 		),
 	);
-	const selectedFailReasons =
-		selectedRows.length === 0 ? ["no rows selected"] : [];
-	const rowFailReasons = rows.flatMap((row) =>
-		row.guards.status === "FAIL" ? row.guards.reasons : [],
+	const boundedViableScan = candidateScanSize > sampleSize;
+	const viableRows = candidateEvaluations.filter(
+		(row) => row.guards.status === "PASS",
 	);
+	const skippedRows = boundedViableScan
+		? candidateEvaluations.filter((row) => row.guards.status === "FAIL")
+		: [];
+	const rows = boundedViableScan
+		? viableRows.slice(0, sampleSize)
+		: candidateEvaluations;
+	const selectedFailReasons =
+		candidateRows.length === 0 ? ["no rows selected"] : [];
+	const insufficientViableReasons =
+		boundedViableScan && rows.length < sampleSize
+			? [
+					`insufficient viable rows: selected ${rows.length} of ${sampleSize} from ${candidateRows.length} candidates`,
+				]
+			: [];
+	const skippedBlockedReasons = uniqueSorted(
+		skippedRows.flatMap((row) => row.guards.reasons),
+	);
+	const rowFailReasons = boundedViableScan
+		? insufficientViableReasons.length > 0
+			? skippedBlockedReasons
+			: []
+		: rows.flatMap((row) =>
+				row.guards.status === "FAIL" ? row.guards.reasons : [],
+			);
 	const sourceFailReasons = source ? [] : [`source ${config.slug} not found`];
 	const failClosedReasons = uniqueSorted([
 		...sourceFailReasons,
 		...selectedFailReasons,
+		...insufficientViableReasons,
 		...rowFailReasons,
 	]);
 	const failRows = rows.filter((row) => row.guards.status === "FAIL").length;
@@ -224,6 +263,7 @@ export async function buildDirectRefreshManifestDryRun({
 		audit: `${config.slug}-direct-refresh-manifest-dry-run`,
 		status:
 			failClosedReasons.length === 0 &&
+			(!boundedViableScan || rows.length === sampleSize) &&
 			rows.every((row) => row.guards.status === "PASS")
 				? "PASS"
 				: "FAIL",
@@ -248,16 +288,24 @@ export async function buildDirectRefreshManifestDryRun({
 			guards: identityGuards(config),
 		},
 		selection: {
-			strategy: "oldest-public-rankable-existing-rows",
+			strategy: boundedViableScan
+				? "oldest-public-rankable-existing-rows-bounded-viable-scan"
+				: "oldest-public-rankable-existing-rows",
 			requestedSampleSize: sampleSize,
-			selectedRows: selectedRows.length,
+			candidateScanSize,
+			candidateRows: candidateRows.length,
+			selectedRows: rows.length,
+			skippedBlockedRows: skippedRows.length,
 		},
 		summary: {
 			passRows: rows.length - failRows,
 			failRows,
+			skippedBlockedRows: skippedRows.length,
+			skippedBlockedReasons,
 			failClosedReasons,
 		},
 		rows,
+		skippedRows,
 	};
 }
 

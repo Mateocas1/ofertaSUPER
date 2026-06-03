@@ -51,6 +51,7 @@ const FORBIDDEN_FLAGS = [
 type CliOptions = {
 	source: SupportedPrewriteSource;
 	sampleSize: number;
+	candidateScanSize: number;
 	output: string | null;
 };
 
@@ -84,9 +85,18 @@ export function parseDirectRefreshPrewriteGateCliOptions(
 			"direct-refresh pre-write gate only accepts --source=carrefour, --source=vea, --source=disco, --source=jumbo, or --source=mas",
 		);
 	}
+	const sampleSize = parsePositiveIntegerFlag(argv, "--sample-size", 10);
+	const candidateScanSize = parsePositiveIntegerFlag(
+		argv,
+		"--candidate-scan-size",
+		sampleSize,
+	);
+	if (candidateScanSize < sampleSize)
+		throw new Error("--candidate-scan-size must be >= --sample-size");
 	return {
 		source: sources[0] as SupportedPrewriteSource,
-		sampleSize: parsePositiveIntegerFlag(argv, "--sample-size", 10),
+		sampleSize,
+		candidateScanSize,
 		output: getOptionalSingleFlag(argv, "--output"),
 	};
 }
@@ -254,6 +264,7 @@ async function main() {
 		repository: createDirectRefreshPrewriteRepository(),
 		sourceSlug: options.source,
 		sampleSize: options.sampleSize,
+		candidateScanSize: options.candidateScanSize,
 		fetchDirectProducts: async (sourceSlug, lookup) =>
 			getSourceAdapter(sourceSlug).fetchDirectProducts(lookup),
 	});
