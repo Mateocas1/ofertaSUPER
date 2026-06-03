@@ -558,11 +558,14 @@ async function executeActiveWrite({
 			throw new Error("selected rows missing before write");
 		const appliedRows: AppliedRow[] = [];
 		for (const row of prewriteReport.rows) {
-			const productCount = await tx.updateProductByEan(
-				row.currentDb.supermarketProduct.productEan ?? "",
-				row.expectedChanges.product,
-			);
-			if (productCount !== 1)
+			const productCount =
+				row.expectedChanges.product.length > 0
+					? await tx.updateProductByEan(
+							row.currentDb.supermarketProduct.productEan ?? "",
+							row.expectedChanges.product,
+						)
+					: 0;
+			if (productCount !== (row.expectedChanges.product.length > 0 ? 1 : 0))
 				throw new Error(
 					`product update count for ${row.rowId} was ${productCount}`,
 				);
