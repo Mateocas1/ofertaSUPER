@@ -15,7 +15,8 @@ export type DirectRefreshOperationsArtifactKind =
 	| "activeWrite"
 	| "postwrite"
 	| "noPartial"
-	| "errorArtifact";
+	| "errorArtifact"
+	| "schedulerPlanner";
 
 export type DirectRefreshOperationsArtifacts = Partial<
 	Record<DirectRefreshOperationsArtifactKind, unknown>
@@ -54,6 +55,7 @@ export type DirectRefreshOperationsReport = {
 		alertStatus: string | null;
 		killSwitchStatus: string | null;
 		freshnessBaselineStatus: string | null;
+		schedulerPlannerStatus: string | null;
 		operationStatus: DirectRefreshOperationsStatus | "NOT_PROVIDED";
 		incidentStatus: DirectRefreshOperationsStatus | "NOT_PROVIDED";
 		blockedSourceCount: number;
@@ -105,6 +107,29 @@ export type DirectRefreshOperationsReport = {
 		denominatorDeltaStatus: string | null;
 		denominatorBlockers: unknown;
 	} | null;
+	schedulerPlanner: {
+		status: string | null;
+		plannerMode: string | null;
+		schedulerExecution: string | null;
+		productionWrites: string | null;
+		allSource: string | null;
+		repeatedBatch: string | null;
+		diaWriter: string | null;
+		workUnit: {
+			source: string | null;
+			count: number | null;
+			writerSupported: boolean | null;
+		} | null;
+		issue: {
+			url: string | null;
+			number: number | null;
+			title: string | null;
+			typeLabel: string | null;
+			approvalLabel: string | null;
+		} | null;
+		failClosedReasons: string[];
+		nextManualAction: string | null;
+	} | null;
 	operation: {
 		manifest: ArtifactSummary | null;
 		prewrite: ArtifactSummary | null;
@@ -114,7 +139,10 @@ export type DirectRefreshOperationsReport = {
 		selectedRows: number | null;
 		skippedBlockedRows: number | null;
 		failClosedReasons: string[];
-		noCreateDeltas: { productDelta: number | null; supermarketProductDelta: number | null } | null;
+		noCreateDeltas: {
+			productDelta: number | null;
+			supermarketProductDelta: number | null;
+		} | null;
 	};
 	blockedSources: DirectRefreshOperationsBlockedSource[];
 	readiness: {
@@ -158,6 +186,7 @@ const DEFAULT_PATHS: DirectRefreshOperationsArtifactPaths = {
 	postwrite: null,
 	noPartial: null,
 	errorArtifact: null,
+	schedulerPlanner: null,
 };
 
 export function buildDirectRefreshOperationsReport({
@@ -181,13 +210,22 @@ export function buildDirectRefreshOperationsReport({
 	const sourceHealth = summarizeSourceHealth(artifacts.sourceHealth);
 	const alerts = summarizeAlerts(artifacts.alerts);
 	const killSwitch = summarizeKillSwitch(artifacts.killSwitch);
-	const freshnessBaseline = summarizeFreshnessBaseline(artifacts.freshnessBaseline);
+	const freshnessBaseline = summarizeFreshnessBaseline(
+		artifacts.freshnessBaseline,
+	);
+	const schedulerPlanner = summarizeSchedulerPlanner(
+		artifacts.schedulerPlanner,
+	);
 	const operation = summarizeOperation(artifacts, artifactPaths);
 	const blockedSources: DirectRefreshOperationsBlockedSource[] = [
 		...sourceHealthBlockers(sourceHealth, artifactPaths.sourceHealth),
 		...alertBlockers(alerts, artifactPaths.alerts),
 		...killSwitchBlockers(killSwitch, artifactPaths.killSwitch),
 		...baselineBlockers(freshnessBaseline, artifactPaths.freshnessBaseline),
+		...schedulerPlannerBlockers(
+			schedulerPlanner,
+			artifactPaths.schedulerPlanner,
+		),
 		...operationBlockers(operation, artifactPaths),
 		...missingArtifactBlockers({
 			artifacts,
@@ -198,9 +236,22 @@ export function buildDirectRefreshOperationsReport({
 		}),
 	];
 	const status = aggregateStatus(blockedSources);
-	const operationStatus = summarizeOperationStatus(operation, artifacts, requireOperationArtifacts, requirePostwrite);
-	const incidentStatus = summarizeIncidentStatus(artifacts, requireNoPartialForIncident);
-	const posture = status === "FAIL" ? "blocked" : status === "WARN" ? "incomplete" : "ready-for-controlled-manual-review";
+	const operationStatus = summarizeOperationStatus(
+		operation,
+		artifacts,
+		requireOperationArtifacts,
+		requirePostwrite,
+	);
+	const incidentStatus = summarizeIncidentStatus(
+		artifacts,
+		requireNoPartialForIncident,
+	);
+	const posture =
+		status === "FAIL"
+			? "blocked"
+			: status === "WARN"
+				? "incomplete"
+				: "ready-for-controlled-manual-review";
 	const inputs = buildInputs(artifacts, artifactPaths);
 
 	return {
@@ -224,10 +275,13 @@ export function buildDirectRefreshOperationsReport({
 			alertStatus: alerts?.status ?? null,
 			killSwitchStatus: killSwitch?.status ?? null,
 			freshnessBaselineStatus: freshnessBaseline?.status ?? null,
+			schedulerPlannerStatus: schedulerPlanner?.status ?? null,
 			operationStatus,
 			incidentStatus,
 			blockedSourceCount: uniqueSorted(
-				blockedSources.map((entry) => entry.source).filter((value): value is string => Boolean(value)),
+				blockedSources
+					.map((entry) => entry.source)
+					.filter((value): value is string => Boolean(value)),
 			).length,
 			blockerCount: blockedSources.length,
 			schedulerGate: "blocked",
@@ -237,6 +291,7 @@ export function buildDirectRefreshOperationsReport({
 		alerts,
 		killSwitch,
 		freshnessBaseline,
+		schedulerPlanner,
 		operation,
 		blockedSources,
 		readiness: {
@@ -255,13 +310,17 @@ export function buildDirectRefreshOperationsReport({
 	};
 }
 
-function summarizeSourceHealth(report: unknown): DirectRefreshOperationsReport["sourceHealth"] {
+function summarizeSourceHealth(
+	report: unknown,
+): DirectRefreshOperationsReport["sourceHealth"] {
 	const object = asRecord(report);
 	if (!object) return null;
 	const sources = Array.isArray(object.sources) ? object.sources : [];
 	return {
 		status: stringOrNull(object.status),
-		writerSupportedStatus: stringOrNull(asRecord(object.summary)?.writerSupportedStatus),
+		writerSupportedStatus: stringOrNull(
+			asRecord(object.summary)?.writerSupportedStatus,
+		),
 		sources: sources.map((entry) => {
 			const source = asRecord(entry) ?? {};
 			return {
@@ -269,7 +328,9 @@ function summarizeSourceHealth(report: unknown): DirectRefreshOperationsReport["
 				directRefreshSupport: stringOrNull(source.directRefreshSupport),
 				status: stringOrNull(source.status),
 				reasons: source.reasons,
-				freshnessPercent: numberOrNull(asRecord(source.freshness)?.freshnessPercent),
+				freshnessPercent: numberOrNull(
+					asRecord(source.freshness)?.freshnessPercent,
+				),
 				blockedRows: numberOrNull(asRecord(source.capacity)?.blockedRows),
 				recommendation: stringOrNull(source.recommendation),
 			};
@@ -277,7 +338,9 @@ function summarizeSourceHealth(report: unknown): DirectRefreshOperationsReport["
 	};
 }
 
-function summarizeAlerts(report: unknown): DirectRefreshOperationsReport["alerts"] {
+function summarizeAlerts(
+	report: unknown,
+): DirectRefreshOperationsReport["alerts"] {
 	const object = asRecord(report);
 	if (!object) return null;
 	const summary = asRecord(object.summary);
@@ -304,19 +367,27 @@ function summarizeAlerts(report: unknown): DirectRefreshOperationsReport["alerts
 	};
 }
 
-function summarizeKillSwitch(report: unknown): DirectRefreshOperationsReport["killSwitch"] {
+function summarizeKillSwitch(
+	report: unknown,
+): DirectRefreshOperationsReport["killSwitch"] {
 	const object = asRecord(report);
 	if (!object) return null;
 	const summary = asRecord(object.summary);
 	return {
 		status: stringOrNull(object.status),
-		activeStops: Array.isArray(object.activeControls) ? object.activeControls : [],
-		invalidControls: Array.isArray(object.invalidControls) ? object.invalidControls : [],
+		activeStops: Array.isArray(object.activeControls)
+			? object.activeControls
+			: [],
+		invalidControls: Array.isArray(object.invalidControls)
+			? object.invalidControls
+			: [],
 		expiredStopCount: numberOrZero(summary?.expiredStopCount),
 	};
 }
 
-function summarizeFreshnessBaseline(report: unknown): DirectRefreshOperationsReport["freshnessBaseline"] {
+function summarizeFreshnessBaseline(
+	report: unknown,
+): DirectRefreshOperationsReport["freshnessBaseline"] {
 	const object = asRecord(report);
 	if (!object) return null;
 	const summary = asRecord(object.summary);
@@ -329,6 +400,148 @@ function summarizeFreshnessBaseline(report: unknown): DirectRefreshOperationsRep
 		denominatorDeltaStatus: stringOrNull(denominatorDeltas?.status),
 		denominatorBlockers: denominatorDeltas?.blockers,
 	};
+}
+
+function summarizeSchedulerPlanner(
+	report: unknown,
+): DirectRefreshOperationsReport["schedulerPlanner"] {
+	const object = asRecord(report);
+	if (!object) return null;
+	const summary = asRecord(object.summary);
+	const workUnit = asRecord(object.workUnit);
+	const issue = asRecord(object.issue);
+	const status = stringOrNull(object.status);
+	const plannerMode = stringOrNull(summary?.plannerMode);
+	const schedulerExecution = stringOrNull(summary?.schedulerExecution);
+	const productionWrites = stringOrNull(summary?.productionWrites);
+	const allSource = stringOrNull(summary?.allSource);
+	const repeatedBatch = stringOrNull(summary?.repeatedBatch);
+	const diaWriter = stringOrNull(summary?.diaWriter);
+	const nextManualAction = stringOrNull(object.nextManualAction);
+	const summarizedWorkUnit = workUnit
+		? {
+				source: stringOrNull(workUnit.source),
+				count: numberOrNull(workUnit.count),
+				writerSupported: booleanOrNull(workUnit.writerSupported),
+			}
+		: null;
+	const summarizedIssue = issue
+		? {
+				url: stringOrNull(issue.url),
+				number: numberOrNull(issue.number),
+				title: stringOrNull(issue.title),
+				typeLabel: stringOrNull(issue.typeLabel),
+				approvalLabel: stringOrNull(issue.approvalLabel),
+			}
+		: null;
+	const validationReasons = validateSchedulerPlannerArtifact({
+		object,
+		status,
+		plannerMode,
+		schedulerExecution,
+		productionWrites,
+		allSource,
+		repeatedBatch,
+		diaWriter,
+		workUnit: summarizedWorkUnit,
+		issue: summarizedIssue,
+		nextManualAction,
+	});
+	return {
+		status,
+		plannerMode,
+		schedulerExecution,
+		productionWrites,
+		allSource,
+		repeatedBatch,
+		diaWriter,
+		workUnit: summarizedWorkUnit,
+		issue: summarizedIssue,
+		failClosedReasons: uniqueSorted([
+			...stringList(summary?.failClosedReasons),
+			...validationReasons,
+		]),
+		nextManualAction,
+	};
+}
+
+function validateSchedulerPlannerArtifact({
+	object,
+	status,
+	plannerMode,
+	schedulerExecution,
+	productionWrites,
+	allSource,
+	repeatedBatch,
+	diaWriter,
+	workUnit,
+	issue,
+	nextManualAction,
+}: {
+	object: Record<string, unknown>;
+	status: string | null;
+	plannerMode: string | null;
+	schedulerExecution: string | null;
+	productionWrites: string | null;
+	allSource: string | null;
+	repeatedBatch: string | null;
+	diaWriter: string | null;
+	workUnit: DirectRefreshOperationsReport["schedulerPlanner"] extends infer T
+		? T extends { workUnit: infer W }
+			? W
+			: never
+		: never;
+	issue: DirectRefreshOperationsReport["schedulerPlanner"] extends infer T
+		? T extends { issue: infer I }
+			? I
+			: never
+		: never;
+	nextManualAction: string | null;
+}) {
+	const reasons: string[] = [];
+	if (object.audit !== "direct-refresh-scheduler-planner") {
+		reasons.push("scheduler planner artifact audit must be direct-refresh-scheduler-planner");
+	}
+	if (object.dryRun !== true) {
+		reasons.push("scheduler planner artifact must be dryRun true");
+	}
+	if (!status || !["PASS", "WARN", "FAIL"].includes(status)) {
+		reasons.push("scheduler planner artifact status must be PASS, WARN, or FAIL");
+	}
+	if (plannerMode !== "read-only-disabled-scheduler-planning") {
+		reasons.push("scheduler planner artifact mode must be read-only-disabled-scheduler-planning");
+	}
+	for (const [field, value] of [
+		["schedulerExecution", schedulerExecution],
+		["productionWrites", productionWrites],
+		["allSource", allSource],
+		["repeatedBatch", repeatedBatch],
+		["diaWriter", diaWriter],
+	] as const) {
+		if (value !== "blocked") {
+			reasons.push(`scheduler planner artifact ${field} must be blocked`);
+		}
+	}
+	if (!workUnit?.source) reasons.push("scheduler planner artifact workUnit.source is required");
+	if (workUnit?.count === null || workUnit?.count === undefined) {
+		reasons.push("scheduler planner artifact workUnit.count is required");
+	}
+	if (workUnit?.writerSupported !== true) {
+		reasons.push("scheduler planner artifact workUnit.writerSupported must be true");
+	}
+	if (!issue?.url) reasons.push("scheduler planner artifact issue.url is required");
+	if (issue?.number === null || issue?.number === undefined) {
+		reasons.push("scheduler planner artifact issue.number is required");
+	}
+	if (!issue?.title) reasons.push("scheduler planner artifact issue.title is required");
+	if (!issue?.typeLabel) reasons.push("scheduler planner artifact issue.typeLabel is required");
+	if (issue?.approvalLabel !== "status:approved") {
+		reasons.push("scheduler planner artifact issue.approvalLabel must be status:approved");
+	}
+	if (!nextManualAction) {
+		reasons.push("scheduler planner artifact nextManualAction is required");
+	}
+	return reasons;
 }
 
 function summarizeOperation(
@@ -347,41 +560,60 @@ function summarizeOperation(
 		...stringList(asRecord(manifestObject?.summary)?.failClosedReasons),
 		...stringList(asRecord(prewriteObject?.summary)?.failClosedReasons),
 		...stringList(asRecord(postwriteObject?.summary)?.failClosedReasons),
-		...Object.keys(asRecord(asRecord(manifestObject?.summary)?.skippedBlockedReasons) ?? {}),
-		...Object.keys(asRecord(asRecord(prewriteObject?.summary)?.skippedBlockedReasons) ?? {}),
+		...Object.keys(
+			asRecord(asRecord(manifestObject?.summary)?.skippedBlockedReasons) ?? {},
+		),
+		...Object.keys(
+			asRecord(asRecord(prewriteObject?.summary)?.skippedBlockedReasons) ?? {},
+		),
 	]);
-	const noCreate = asRecord(postwriteObject?.noCreate) ?? asRecord(asRecord(artifacts.activeWrite)?.noCreate);
+	const noCreate =
+		asRecord(postwriteObject?.noCreate) ??
+		asRecord(asRecord(artifacts.activeWrite)?.noCreate);
 	return {
 		manifest,
 		prewrite,
 		activeWrite,
 		postwrite,
 		noPartial,
-		selectedRows: numberOrNull(asRecord(manifestObject?.selection)?.selectedRows),
-		skippedBlockedRows: numberOrNull(asRecord(manifestObject?.selection)?.skippedBlockedRows),
+		selectedRows: numberOrNull(
+			asRecord(manifestObject?.selection)?.selectedRows,
+		),
+		skippedBlockedRows: numberOrNull(
+			asRecord(manifestObject?.selection)?.skippedBlockedRows,
+		),
 		failClosedReasons,
 		noCreateDeltas: noCreate
 			? {
 					productDelta: numberOrNull(noCreate.productDelta),
-					supermarketProductDelta: numberOrNull(noCreate.supermarketProductDelta),
+					supermarketProductDelta: numberOrNull(
+						noCreate.supermarketProductDelta,
+					),
 				}
 			: null,
 	};
 }
 
-function artifactSummary(report: unknown, path: string | null): ArtifactSummary | null {
+function artifactSummary(
+	report: unknown,
+	path: string | null,
+): ArtifactSummary | null {
 	const object = asRecord(report);
 	if (!object) return null;
 	return {
 		audit: stringOrNull(object.audit ?? object.report ?? object.artifact),
 		status: stringOrNull(object.status ?? object.conclusion),
 		source: sourceFromReport(object),
-		generatedAt: stringOrNull(object.generatedAt ?? object.startedAt ?? object.attemptedAt),
+		generatedAt: stringOrNull(
+			object.generatedAt ?? object.startedAt ?? object.attemptedAt,
+		),
 		path,
 	};
 }
 
-function normalizeSeverity(value: string | null): DirectRefreshOperationsBlockedSource["severity"] {
+function normalizeSeverity(
+	value: string | null,
+): DirectRefreshOperationsBlockedSource["severity"] {
 	return value === "CRITICAL" ||
 		value === "HIGH" ||
 		value === "MEDIUM" ||
@@ -397,9 +629,14 @@ function sourceHealthBlockers(
 	if (!sourceHealth) return [];
 	const blockers = sourceHealth.sources.flatMap((source) => {
 		if (source.status === "PASS") return [];
-		const severity: DirectRefreshOperationsBlockedSource["severity"] = source.status === "FAIL" ? "HIGH" : "MEDIUM";
+		const severity: DirectRefreshOperationsBlockedSource["severity"] =
+			source.status === "FAIL" ? "HIGH" : "MEDIUM";
 		const reasons = stringList(source.reasons);
-		return (reasons.length > 0 ? reasons : [`source health ${source.status ?? "unknown"}`]).map((reason) => ({
+		return (
+			reasons.length > 0
+				? reasons
+				: [`source health ${source.status ?? "unknown"}`]
+		).map((reason) => ({
 			source: source.slug,
 			reason,
 			severity,
@@ -407,7 +644,11 @@ function sourceHealthBlockers(
 			artifactPath: path,
 		}));
 	});
-	if (blockers.length === 0 && sourceHealth.status && sourceHealth.status !== "PASS") {
+	if (
+		blockers.length === 0 &&
+		sourceHealth.status &&
+		sourceHealth.status !== "PASS"
+	) {
 		blockers.push({
 			source: null,
 			reason: `source health report status is ${sourceHealth.status}`,
@@ -419,15 +660,20 @@ function sourceHealthBlockers(
 	return blockers;
 }
 
-function alertBlockers(alerts: DirectRefreshOperationsReport["alerts"], path: string | null) {
+function alertBlockers(
+	alerts: DirectRefreshOperationsReport["alerts"],
+	path: string | null,
+) {
 	if (!alerts) return [];
-	const blockers = alerts.alerts.map((alert): DirectRefreshOperationsBlockedSource => ({
-		source: alert.source,
-		reason: alert.message ?? alert.condition ?? "direct-refresh alert",
-		severity: normalizeSeverity(alert.severity),
-		artifactKind: "alerts",
-		artifactPath: path,
-	}));
+	const blockers = alerts.alerts.map(
+		(alert): DirectRefreshOperationsBlockedSource => ({
+			source: alert.source,
+			reason: alert.message ?? alert.condition ?? "direct-refresh alert",
+			severity: normalizeSeverity(alert.severity),
+			artifactKind: "alerts",
+			artifactPath: path,
+		}),
+	);
 	if (blockers.length === 0 && alerts.status && alerts.status !== "PASS") {
 		blockers.push({
 			source: null,
@@ -440,7 +686,10 @@ function alertBlockers(alerts: DirectRefreshOperationsReport["alerts"], path: st
 	return blockers;
 }
 
-function killSwitchBlockers(killSwitch: DirectRefreshOperationsReport["killSwitch"], path: string | null) {
+function killSwitchBlockers(
+	killSwitch: DirectRefreshOperationsReport["killSwitch"],
+	path: string | null,
+) {
 	if (!killSwitch) return [];
 	const blockers: DirectRefreshOperationsBlockedSource[] = [
 		...killSwitch.activeStops.map((entry) => {
@@ -464,10 +713,22 @@ function killSwitchBlockers(killSwitch: DirectRefreshOperationsReport["killSwitc
 			};
 		}),
 		...(killSwitch.expiredStopCount > 0
-			? [{ source: null, reason: `${killSwitch.expiredStopCount} expired kill switch controls need cleanup`, severity: "LOW" as const, artifactKind: "killSwitch" as const, artifactPath: path }]
+			? [
+					{
+						source: null,
+						reason: `${killSwitch.expiredStopCount} expired kill switch controls need cleanup`,
+						severity: "LOW" as const,
+						artifactKind: "killSwitch" as const,
+						artifactPath: path,
+					},
+				]
 			: []),
 	];
-	if (blockers.length === 0 && killSwitch.status && killSwitch.status !== "PASS") {
+	if (
+		blockers.length === 0 &&
+		killSwitch.status &&
+		killSwitch.status !== "PASS"
+	) {
 		blockers.push({
 			source: null,
 			reason: `kill switch report status is ${killSwitch.status}`,
@@ -484,15 +745,47 @@ function baselineBlockers(
 	path: string | null,
 ) {
 	if (!baseline || baseline.status === "PASS") return [];
-	const severity: DirectRefreshOperationsBlockedSource["severity"] = baseline.status === "FAIL" ? "HIGH" : "MEDIUM";
+	const severity: DirectRefreshOperationsBlockedSource["severity"] =
+		baseline.status === "FAIL" ? "HIGH" : "MEDIUM";
 	const blockers = stringList(baseline.denominatorBlockers);
-	return (blockers.length > 0 ? blockers : [`freshness baseline ${baseline.status ?? "unknown"}`]).map((reason) => ({
+	return (
+		blockers.length > 0
+			? blockers
+			: [`freshness baseline ${baseline.status ?? "unknown"}`]
+	).map((reason) => ({
 		source: null,
 		reason,
 		severity,
 		artifactKind: "freshnessBaseline" as const,
 		artifactPath: path,
 	}));
+}
+
+function schedulerPlannerBlockers(
+	schedulerPlanner: DirectRefreshOperationsReport["schedulerPlanner"],
+	path: string | null,
+) {
+	if (!schedulerPlanner) return [];
+	const blockers: DirectRefreshOperationsReport["blockedSources"] = [];
+	if (schedulerPlanner.status && schedulerPlanner.status !== "PASS") {
+		blockers.push({
+			source: schedulerPlanner.workUnit?.source ?? null,
+			reason: `scheduler planner artifact status is ${schedulerPlanner.status}`,
+			severity: schedulerPlanner.status === "FAIL" ? "HIGH" : "MEDIUM",
+			artifactKind: "schedulerPlanner",
+			artifactPath: path,
+		});
+	}
+	for (const reason of schedulerPlanner.failClosedReasons) {
+		blockers.push({
+			source: schedulerPlanner.workUnit?.source ?? null,
+			reason,
+			severity: "HIGH",
+			artifactKind: "schedulerPlanner",
+			artifactPath: path,
+		});
+	}
+	return blockers;
 }
 
 function operationBlockers(
@@ -511,17 +804,35 @@ function operationBlockers(
 			blockers.push({
 				source: summary.source,
 				reason: `${kind} artifact status is FAIL`,
-				severity: kind === "postwrite" || kind === "noPartial" ? "CRITICAL" : "HIGH",
+				severity:
+					kind === "postwrite" || kind === "noPartial" ? "CRITICAL" : "HIGH",
 				artifactKind: kind,
 				artifactPath: paths[kind],
 			});
 		}
 	}
 	for (const reason of operation.failClosedReasons) {
-		blockers.push({ source: null, reason, severity: "HIGH", artifactKind: "manifest", artifactPath: paths.manifest });
+		blockers.push({
+			source: null,
+			reason,
+			severity: "HIGH",
+			artifactKind: "manifest",
+			artifactPath: paths.manifest,
+		});
 	}
-	if (operation.noCreateDeltas && ((operation.noCreateDeltas.productDelta ?? 0) !== 0 || (operation.noCreateDeltas.supermarketProductDelta ?? 0) !== 0)) {
-		blockers.push({ source: operation.postwrite?.source ?? operation.activeWrite?.source ?? null, reason: "no-create delta is non-zero", severity: "CRITICAL", artifactKind: operation.postwrite ? "postwrite" : "activeWrite", artifactPath: operation.postwrite ? paths.postwrite : paths.activeWrite });
+	if (
+		operation.noCreateDeltas &&
+		((operation.noCreateDeltas.productDelta ?? 0) !== 0 ||
+			(operation.noCreateDeltas.supermarketProductDelta ?? 0) !== 0)
+	) {
+		blockers.push({
+			source:
+				operation.postwrite?.source ?? operation.activeWrite?.source ?? null,
+			reason: "no-create delta is non-zero",
+			severity: "CRITICAL",
+			artifactKind: operation.postwrite ? "postwrite" : "activeWrite",
+			artifactPath: operation.postwrite ? paths.postwrite : paths.activeWrite,
+		});
 	}
 	return blockers;
 }
@@ -541,17 +852,51 @@ function missingArtifactBlockers({
 }) {
 	const blockers: DirectRefreshOperationsReport["blockedSources"] = [];
 	if (requireOperationArtifacts) {
-		for (const kind of ["manifest", "prewrite", "activeWrite", "postwrite"] as const) {
-			if (!artifacts[kind]) blockers.push({ source: null, reason: `${kind} artifact is required but missing`, severity: "HIGH", artifactKind: kind, artifactPath: paths[kind] });
+		for (const kind of [
+			"manifest",
+			"prewrite",
+			"activeWrite",
+			"postwrite",
+		] as const) {
+			if (!artifacts[kind])
+				blockers.push({
+					source: null,
+					reason: `${kind} artifact is required but missing`,
+					severity: "HIGH",
+					artifactKind: kind,
+					artifactPath: paths[kind],
+				});
 		}
 	}
 	if (requirePostwrite && !artifacts.postwrite && !requireOperationArtifacts) {
-		blockers.push({ source: null, reason: "postwrite artifact is required but missing", severity: "HIGH", artifactKind: "postwrite", artifactPath: paths.postwrite });
+		blockers.push({
+			source: null,
+			reason: "postwrite artifact is required but missing",
+			severity: "HIGH",
+			artifactKind: "postwrite",
+			artifactPath: paths.postwrite,
+		});
 	}
-	if (artifacts.errorArtifact && requireNoPartialForIncident && !artifacts.noPartial) {
-		blockers.push({ source: sourceFromReport(asRecord(artifacts.errorArtifact) ?? {}), reason: "incident/error artifact requires no-partial verification", severity: "HIGH", artifactKind: "noPartial", artifactPath: paths.noPartial });
+	if (
+		artifacts.errorArtifact &&
+		requireNoPartialForIncident &&
+		!artifacts.noPartial
+	) {
+		blockers.push({
+			source: sourceFromReport(asRecord(artifacts.errorArtifact) ?? {}),
+			reason: "incident/error artifact requires no-partial verification",
+			severity: "HIGH",
+			artifactKind: "noPartial",
+			artifactPath: paths.noPartial,
+		});
 	} else if (artifacts.errorArtifact && !artifacts.noPartial) {
-		blockers.push({ source: sourceFromReport(asRecord(artifacts.errorArtifact) ?? {}), reason: "incident/error artifact has no no-partial verification supplied", severity: "MEDIUM", artifactKind: "noPartial", artifactPath: paths.noPartial });
+		blockers.push({
+			source: sourceFromReport(asRecord(artifacts.errorArtifact) ?? {}),
+			reason: "incident/error artifact has no no-partial verification supplied",
+			severity: "MEDIUM",
+			artifactKind: "noPartial",
+			artifactPath: paths.noPartial,
+		});
 	}
 	return blockers;
 }
@@ -562,11 +907,34 @@ function summarizeOperationStatus(
 	requireOperationArtifacts: boolean,
 	requirePostwrite: boolean,
 ): DirectRefreshOperationsStatus | "NOT_PROVIDED" {
-	if (!artifacts.manifest && !artifacts.prewrite && !artifacts.activeWrite && !artifacts.postwrite && !artifacts.noPartial) {
-		return requireOperationArtifacts || requirePostwrite ? "FAIL" : "NOT_PROVIDED";
+	if (
+		!artifacts.manifest &&
+		!artifacts.prewrite &&
+		!artifacts.activeWrite &&
+		!artifacts.postwrite &&
+		!artifacts.noPartial
+	) {
+		return requireOperationArtifacts || requirePostwrite
+			? "FAIL"
+			: "NOT_PROVIDED";
 	}
-	if ([operation.manifest, operation.prewrite, operation.activeWrite, operation.postwrite, operation.noPartial].some((entry) => entry?.status === "FAIL")) return "FAIL";
-	if (operation.failClosedReasons.length > 0 || (operation.noCreateDeltas && ((operation.noCreateDeltas.productDelta ?? 0) !== 0 || (operation.noCreateDeltas.supermarketProductDelta ?? 0) !== 0))) return "FAIL";
+	if (
+		[
+			operation.manifest,
+			operation.prewrite,
+			operation.activeWrite,
+			operation.postwrite,
+			operation.noPartial,
+		].some((entry) => entry?.status === "FAIL")
+	)
+		return "FAIL";
+	if (
+		operation.failClosedReasons.length > 0 ||
+		(operation.noCreateDeltas &&
+			((operation.noCreateDeltas.productDelta ?? 0) !== 0 ||
+				(operation.noCreateDeltas.supermarketProductDelta ?? 0) !== 0))
+	)
+		return "FAIL";
 	return "PASS";
 }
 
@@ -577,12 +945,20 @@ function summarizeIncidentStatus(
 	if (!artifacts.errorArtifact && !artifacts.noPartial) return "NOT_PROVIDED";
 	const noPartial = asRecord(artifacts.noPartial);
 	if ((noPartial?.status ?? noPartial?.conclusion) === "FAIL") return "FAIL";
-	if (artifacts.errorArtifact && !artifacts.noPartial) return requireNoPartialForIncident ? "FAIL" : "WARN";
+	if (artifacts.errorArtifact && !artifacts.noPartial)
+		return requireNoPartialForIncident ? "FAIL" : "WARN";
 	return "PASS";
 }
 
-function aggregateStatus(blockers: DirectRefreshOperationsReport["blockedSources"]): DirectRefreshOperationsStatus {
-	if (blockers.some((entry) => entry.severity === "CRITICAL" || entry.severity === "HIGH")) return "FAIL";
+function aggregateStatus(
+	blockers: DirectRefreshOperationsReport["blockedSources"],
+): DirectRefreshOperationsStatus {
+	if (
+		blockers.some(
+			(entry) => entry.severity === "CRITICAL" || entry.severity === "HIGH",
+		)
+	)
+		return "FAIL";
 	if (blockers.length > 0) return "WARN";
 	return "PASS";
 }
@@ -591,25 +967,39 @@ function buildInputs(
 	artifacts: DirectRefreshOperationsArtifacts,
 	paths: DirectRefreshOperationsArtifactPaths,
 ): DirectRefreshOperationsReport["inputs"] {
-	return (Object.keys(paths) as DirectRefreshOperationsArtifactKind[]).map((kind) => {
-		const object = asRecord(artifacts[kind]);
-		return {
-			kind,
-			path: paths[kind],
-			present: Boolean(artifacts[kind]),
-			audit: stringOrNull(object?.audit ?? object?.report ?? object?.artifact),
-			status: stringOrNull(object?.status ?? object?.conclusion),
-			generatedAt: stringOrNull(object?.generatedAt ?? object?.startedAt ?? object?.attemptedAt),
-		};
-	});
+	return (Object.keys(paths) as DirectRefreshOperationsArtifactKind[]).map(
+		(kind) => {
+			const object = asRecord(artifacts[kind]);
+			return {
+				kind,
+				path: paths[kind],
+				present: Boolean(artifacts[kind]),
+				audit: stringOrNull(
+					object?.audit ?? object?.report ?? object?.artifact,
+				),
+				status: stringOrNull(object?.status ?? object?.conclusion),
+				generatedAt: stringOrNull(
+					object?.generatedAt ?? object?.startedAt ?? object?.attemptedAt,
+				),
+			};
+		},
+	);
 }
 
 function sourceFromReport(object: Record<string, unknown>) {
-	return stringOrNull(asRecord(object.source)?.slug ?? object.source ?? object.sourceSlug ?? asRecord(object.writeReport)?.source ?? asRecord(object.expected)?.source);
+	return stringOrNull(
+		asRecord(object.source)?.slug ??
+			object.source ??
+			object.sourceSlug ??
+			asRecord(object.writeReport)?.source ??
+			asRecord(object.expected)?.source,
+	);
 }
 
 function stringList(value: unknown): string[] {
-	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+	return Array.isArray(value)
+		? value.filter((entry): entry is string => typeof entry === "string")
+		: [];
 }
 
 function numberOrZero(value: unknown) {
@@ -618,6 +1008,10 @@ function numberOrZero(value: unknown) {
 
 function numberOrNull(value: unknown) {
 	return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function booleanOrNull(value: unknown) {
+	return typeof value === "boolean" ? value : null;
 }
 
 function stringOrNull(value: unknown) {

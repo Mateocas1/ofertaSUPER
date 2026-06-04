@@ -8,7 +8,7 @@ This gate does not authorize scheduler implementation, scheduler execution, cron
 
 Readiness evidence is sufficient to propose a separate, reviewable scheduler implementation issue, but it is not sufficient to run or deploy a scheduler.
 
-Issue #136 implements only a disabled-by-default read-only scheduler planner/audit. It emits a source/count plan and guardrail report; it does not run a scheduler or invoke active writers.
+Issue #136 implements only a disabled-by-default read-only scheduler planner/audit. It emits a source/count plan and guardrail report; it does not run a scheduler or invoke active writers. Issue #138 lets the operations report consume that supplied planner JSON as consolidated read-only evidence; it does not execute the planner or change scheduler/write authorization.
 
 Any future scheduler issue must be approved separately and must implement a conservative scheduler that is disabled by default, source-specific, count-scoped, fail-closed, and human-reviewable. The first implementation must not execute production writes automatically.
 
@@ -23,7 +23,7 @@ Any future scheduler issue must be approved separately and must implement a cons
 | Retry/alert policy | Complete | `docs/direct-refresh-retry-alert-policy.md` |
 | Alert checks | Complete | `scripts/pipeline/direct-refresh-alerts.ts`, `scripts/audit-direct-refresh-alerts.ts`, `tests/direct-refresh-alerts.test.ts` |
 | Kill switch | Complete | `scripts/pipeline/direct-refresh-kill-switch.ts`, `scripts/audit-direct-refresh-kill-switch.ts`, `tests/direct-refresh-kill-switch.test.ts` |
-| Operations report | Complete | `scripts/pipeline/direct-refresh-operations-report.ts`, `scripts/audit-direct-refresh-operations-report.ts`, `tests/direct-refresh-operations-report.test.ts` |
+| Operations report | Complete | `scripts/pipeline/direct-refresh-operations-report.ts`, `scripts/audit-direct-refresh-operations-report.ts`, `tests/direct-refresh-operations-report.test.ts`; accepts optional supplied scheduler planner evidence. |
 | Run ownership and drill | Complete | `docs/direct-refresh-run-ownership-drill.md` |
 | DIA posture | Complete | `docs/direct-refresh-dia-posture.md` |
 | Semi-automatic orchestrator design | Complete | `docs/direct-refresh-orchestrator-design.md` |

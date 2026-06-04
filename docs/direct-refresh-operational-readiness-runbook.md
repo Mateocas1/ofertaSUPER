@@ -10,7 +10,7 @@ This runbook defines the next production posture before any semi-automatic orche
 |---|---|
 | Source-specific manual writes | Allowed only with approved issue, fresh prewrite PASS, exact confirmation, postwrite PASS, and baseline. |
 | `count=50` controlled pilot coverage | Complete for all writer-supported sources. |
-| Scheduler / cron | Gate complete and read-only scheduler planner/audit available; running or deploying a scheduler remains blocked. Gate: `docs/direct-refresh-scheduler-gate.md`. Planner: `audit:direct-refresh-scheduler-planner`. |
+| Scheduler / cron | Gate complete and read-only scheduler planner/audit available; operations report can include supplied planner evidence; running or deploying a scheduler remains blocked. Gate: `docs/direct-refresh-scheduler-gate.md`. Planner: `audit:direct-refresh-scheduler-planner`. |
 | Semi-automatic orchestrator | Design-only; no implementation authorized. Design: `docs/direct-refresh-orchestrator-design.md`. |
 | All-source writes | Blocked. |
 | Repeated batches / cadence | Blocked until explicitly planned and approved. |
@@ -28,7 +28,7 @@ This runbook defines the next production posture before any semi-automatic orche
 7. Postwrite audit is mandatory.
 8. Freshness baseline is mandatory.
 9. Any failed or stopped attempt requires no-partial-write verification before retry.
-10. Scheduler planner/audit output is read-only guidance only; scheduler execution, all-source operation, and repeated batches remain blocked until separately scoped, approved, reviewed, merged/configured, and explicitly enabled by humans where applicable.
+10. Scheduler planner/audit output and operations-report planner evidence are read-only guidance only; scheduler execution, all-source operation, and repeated batches remain blocked until separately scoped, approved, reviewed, merged/configured, and explicitly enabled by humans where applicable.
 
 ## Controlled-write workflow
 
