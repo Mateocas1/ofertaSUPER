@@ -40,6 +40,7 @@
     "audit:direct-refresh-kill-switch": "tsx scripts/audit-direct-refresh-kill-switch.ts",
     "audit:direct-refresh-operations-report": "tsx scripts/audit-direct-refresh-operations-report.ts",
     "audit:direct-refresh-scheduler-planner": "tsx scripts/audit-direct-refresh-scheduler-planner.ts",
+    "audit:direct-refresh-dry-run-orchestrator": "tsx scripts/audit-direct-refresh-dry-run-orchestrator.ts",
     "direct-refresh:carrefour-write": "tsx scripts/direct-refresh-carrefour-write.ts",
     "direct-refresh:vea-write": "tsx scripts/direct-refresh-vea-write.ts",
     "direct-refresh:disco-write": "tsx scripts/direct-refresh-disco-write.ts",
