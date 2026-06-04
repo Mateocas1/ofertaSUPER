@@ -11,6 +11,7 @@ This runbook defines the next production posture before any semi-automatic orche
 | Source-specific manual writes | Allowed only with approved issue, fresh prewrite PASS, exact confirmation, postwrite PASS, and baseline. |
 | `count=50` controlled pilot coverage | Complete for all writer-supported sources. |
 | Scheduler / cron | Blocked. |
+| Semi-automatic orchestrator | Design-only; no implementation authorized. Design: `docs/direct-refresh-orchestrator-design.md`. |
 | All-source writes | Blocked. |
 | Repeated batches / cadence | Blocked until explicitly planned and approved. |
 | DIA writer support | Formally excluded from writer-supported direct-refresh; DIA remains audit-only/no-writer. Decision: `docs/direct-refresh-dia-posture.md`. |
@@ -105,10 +106,8 @@ Scheduler remains blocked until all prerequisites are documented and implemented
 
 Recommended order:
 
-1. Operational readiness checklist issue: convert this runbook into concrete implementation tasks.
-2. Semi-automatic orchestrator design: human-approved sequencing, no scheduler.
-3. Alerting/source-health implementation.
-4. Kill switch and reporting implementation.
-5. Only then consider scheduler guardrails.
+1. Operational readiness checklist issue: convert this runbook into concrete implementation tasks. Complete: `docs/direct-refresh-readiness-checklist.md`.
+2. Semi-automatic orchestrator design: human-approved sequencing, no scheduler. Complete: `docs/direct-refresh-orchestrator-design.md`.
+3. Final scheduler gate: decide whether readiness evidence is complete enough to approve a separate scheduler implementation issue.
 
 Until those gates are complete, direct-refresh stays in controlled manual operation mode.
