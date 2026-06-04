@@ -20,6 +20,10 @@ const passRow: DirectRefreshManifestExistingRow = {
 	listPrice: 1200,
 };
 
+function delay(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function repository(rows: DirectRefreshManifestExistingRow[]) {
 	return {
 		async getSource(sourceSlug: string) {
@@ -444,6 +448,60 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 			report.rows.map((row) => row.rowId),
 			masRows.slice(2).map((row) => row.id),
 		);
+	});
+
+	it("evaluates candidate repository lookups serially to avoid pool exhaustion", async () => {
+		const masRows: DirectRefreshManifestExistingRow[] = Array.from(
+			{ length: 12 },
+			(_, index) => ({
+				...passRow,
+				id: String(index + 1),
+				sourceSlug: "mas",
+				supermarketId: 50,
+				ean: `77910000000${String(index + 1).padStart(2, "0")}`,
+				skuId: `mas-sku-${index + 1}`,
+				productUrl: "https://www.masonline.com.ar/leche-1/p",
+			}),
+		);
+		const repo = repository(masRows);
+		const originalFindRowsBySourceSku = repo.findRowsBySourceSku;
+		let activeSourceSkuLookups = 0;
+		let maxActiveSourceSkuLookups = 0;
+		repo.findRowsBySourceSku = async (sourceSlug, skuId) => {
+			activeSourceSkuLookups += 1;
+			maxActiveSourceSkuLookups = Math.max(
+				maxActiveSourceSkuLookups,
+				activeSourceSkuLookups,
+			);
+			await delay(1);
+			try {
+				return await originalFindRowsBySourceSku(sourceSlug, skuId);
+			} finally {
+				activeSourceSkuLookups -= 1;
+			}
+		};
+
+		const report = await buildDirectRefreshManifestDryRun({
+			sourceSlug: "mas",
+			sampleSize: 10,
+			candidateScanSize: 12,
+			repository: repo,
+			fetchDirectProducts: async (_sourceSlug, lookup) => [
+				{
+					ean:
+						masRows.find((row) => row.skuId === lookup.value)?.ean ??
+						"missing",
+					skuId: lookup.value,
+					productUrl: "https://www.masonline.com.ar/leche-1/p",
+					price: 990,
+					listPrice: 1100,
+					isAvailable: true,
+				},
+			],
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(maxActiveSourceSkuLookups, 1);
 	});
 
 	it("rejects unsupported scope before repository or network work", async () => {

@@ -216,11 +216,12 @@ export async function buildDirectRefreshManifestDryRun({
 				candidateScanSize,
 			)
 		: [];
-	const candidateEvaluations = await Promise.all(
-		candidateRows.map((row) =>
-			evaluateManifestRow({ row, repository, fetchDirectProducts, config }),
-		),
-	);
+	const candidateEvaluations: DirectRefreshManifestRow[] = [];
+	for (const row of candidateRows) {
+		candidateEvaluations.push(
+			await evaluateManifestRow({ row, repository, fetchDirectProducts, config }),
+		);
+	}
 	const boundedViableScan = candidateScanSize > sampleSize;
 	const viableRows = candidateEvaluations.filter(
 		(row) => row.guards.status === "PASS",
