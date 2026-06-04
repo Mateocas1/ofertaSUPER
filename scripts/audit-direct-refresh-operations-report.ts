@@ -59,6 +59,7 @@ const ALLOWED_FLAGS = new Set([
 	"--postwrite",
 	"--no-partial",
 	"--error-artifact",
+	"--scheduler-planner",
 	"--require-operation-artifacts",
 	"--require-postwrite",
 	"--require-no-partial-for-incident",
@@ -79,7 +80,9 @@ export function parseDirectRefreshOperationsReportCliOptions(
 		),
 	);
 	if (foundForbidden)
-		throw new Error(`direct-refresh operations report rejects ${foundForbidden}`);
+		throw new Error(
+			`direct-refresh operations report rejects ${foundForbidden}`,
+		);
 	const unknownFlag = argv
 		.slice(2)
 		.find(
@@ -87,7 +90,9 @@ export function parseDirectRefreshOperationsReportCliOptions(
 				entry.startsWith("--") && !ALLOWED_FLAGS.has(entry.split("=", 1)[0]),
 		);
 	if (unknownFlag)
-		throw new Error(`unknown direct-refresh operations report flag ${unknownFlag}`);
+		throw new Error(
+			`unknown direct-refresh operations report flag ${unknownFlag}`,
+		);
 	const bareAllowedFlag = argv
 		.slice(2)
 		.find((entry) => ALLOWED_FLAGS.has(entry));
@@ -108,6 +113,7 @@ export function parseDirectRefreshOperationsReportCliOptions(
 			postwrite: getOptionalSingleFlag(argv, "--postwrite"),
 			noPartial: getOptionalSingleFlag(argv, "--no-partial"),
 			errorArtifact: getOptionalSingleFlag(argv, "--error-artifact"),
+			schedulerPlanner: getOptionalSingleFlag(argv, "--scheduler-planner"),
 		},
 		requireOperationArtifacts: parseBooleanFlag(
 			argv,
@@ -139,7 +145,9 @@ async function readJson(path: string | null) {
 	return JSON.parse(await readFile(path, "utf8")) as unknown;
 }
 
-async function readArtifacts(paths: DirectRefreshOperationsArtifactPaths): Promise<DirectRefreshOperationsArtifacts> {
+async function readArtifacts(
+	paths: DirectRefreshOperationsArtifactPaths,
+): Promise<DirectRefreshOperationsArtifacts> {
 	return {
 		sourceHealth: await readJson(paths.sourceHealth),
 		alerts: await readJson(paths.alerts),
@@ -151,6 +159,7 @@ async function readArtifacts(paths: DirectRefreshOperationsArtifactPaths): Promi
 		postwrite: await readJson(paths.postwrite),
 		noPartial: await readJson(paths.noPartial),
 		errorArtifact: await readJson(paths.errorArtifact),
+		schedulerPlanner: await readJson(paths.schedulerPlanner),
 	};
 }
 
