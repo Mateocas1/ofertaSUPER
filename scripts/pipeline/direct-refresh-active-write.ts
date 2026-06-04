@@ -7,6 +7,7 @@ import {
 	type DirectRefreshPrewriteProductSnapshot,
 	type DirectRefreshPrewriteRow,
 } from "./direct-refresh-prewrite-gate";
+import { assertDirectRefreshKillSwitchAllowsSource } from "./direct-refresh-kill-switch";
 import {
 	assertDirectRefreshAllowedBatchCount,
 	directRefreshConfirmationToken,
@@ -148,6 +149,7 @@ type ActiveWriteCliOptionsFor<Source extends ActiveWriteSource> = {
 	skuIds: string[];
 	confirmWrite: string;
 	output: string;
+	killSwitchControl: string | null;
 };
 export type CarrefourActiveWriteCliOptions =
 	ActiveWriteCliOptionsFor<"carrefour">;
@@ -265,6 +267,7 @@ const REQUIRED_FLAGS = [
 	"--confirm-write",
 	"--output",
 ];
+const OPTIONAL_FLAGS = ["--kill-switch-control"];
 
 export function parseCarrefourActiveWriteCliOptions(
 	argv = process.argv,
@@ -310,7 +313,7 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 		throw new Error(
 			`${config.displayName} active writer rejects ${foundForbidden}`,
 		);
-	const allowedFlags = new Set(REQUIRED_FLAGS);
+	const allowedFlags = new Set([...REQUIRED_FLAGS, ...OPTIONAL_FLAGS]);
 	const unknownFlag = argv
 		.slice(2)
 		.find(
@@ -320,6 +323,13 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 	if (unknownFlag)
 		throw new Error(
 			`unknown ${config.displayName} active writer flag ${unknownFlag}`,
+		);
+	const bareOptionalFlag = argv
+		.slice(2)
+		.find((entry) => OPTIONAL_FLAGS.includes(entry));
+	if (bareOptionalFlag)
+		throw new Error(
+			`${config.displayName} active writer requires ${bareOptionalFlag}=...`,
 		);
 	for (const flag of REQUIRED_FLAGS) {
 		const matches = argv.filter((entry) => entry.startsWith(`${flag}=`));
@@ -344,6 +354,12 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 		throw new Error(
 			`missing exact ${config.displayName} active write confirmation`,
 		);
+	const killSwitchControl = getOptionalSingleFlag(argv, "--kill-switch-control");
+	if (killSwitchControl !== null && !killSwitchControl.trim()) {
+		throw new Error(
+			`${config.displayName} active writer requires --kill-switch-control=...`,
+		);
+	}
 	return {
 		source: config.source,
 		count,
@@ -354,6 +370,7 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 		skuIds: exactList(argv, "--sku-ids", count),
 		confirmWrite: expectedConfirmation,
 		output: getOptionalSingleFlag(argv, "--output") ?? "",
+		killSwitchControl,
 	} as ActiveWriteCliOptionsFor<Source>;
 }
 
@@ -539,6 +556,14 @@ async function executeActiveWrite({
 }): Promise<ActiveWriteReport> {
 	const config = SOURCE_CONFIGS[options.source];
 	validatePrewriteReportForActiveWrite(prewriteReport, options, startedAt);
+	if (options.killSwitchControl) {
+		assertDirectRefreshKillSwitchAllowsSource({
+			control: JSON.parse(await readFile(options.killSwitchControl, "utf8")) as unknown,
+			source: options.source,
+			controlPath: options.killSwitchControl,
+			now: startedAt,
+		});
+	}
 	return repository.withTransaction(async (tx) => {
 		if (!(await tx.acquireAdvisoryLock(config.lockKey)))
 			throw new Error(
