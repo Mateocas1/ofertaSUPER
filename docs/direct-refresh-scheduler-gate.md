@@ -8,6 +8,8 @@ This gate does not authorize scheduler implementation, scheduler execution, cron
 
 Readiness evidence is sufficient to propose a separate, reviewable scheduler implementation issue, but it is not sufficient to run or deploy a scheduler.
 
+Issue #136 implements only a disabled-by-default read-only scheduler planner/audit. It emits a source/count plan and guardrail report; it does not run a scheduler or invoke active writers.
+
 Any future scheduler issue must be approved separately and must implement a conservative scheduler that is disabled by default, source-specific, count-scoped, fail-closed, and human-reviewable. The first implementation must not execute production writes automatically.
 
 ## Evidence inventory
@@ -25,10 +27,11 @@ Any future scheduler issue must be approved separately and must implement a cons
 | Run ownership and drill | Complete | `docs/direct-refresh-run-ownership-drill.md` |
 | DIA posture | Complete | `docs/direct-refresh-dia-posture.md` |
 | Semi-automatic orchestrator design | Complete | `docs/direct-refresh-orchestrator-design.md` |
+| Disabled scheduler planner/audit | Complete | `scripts/pipeline/direct-refresh-scheduler-planner.ts`, `scripts/audit-direct-refresh-scheduler-planner.ts`, `tests/direct-refresh-scheduler-planner.test.ts` |
 
 ## What may happen next
 
-A future issue may propose scheduler implementation only if it preserves these constraints:
+The current planner/audit may be used only to produce read-only guidance for one approved source/count work unit. A future issue may propose scheduler implementation only if it preserves these constraints:
 
 1. scheduler is disabled by default;
 2. scheduler cannot execute active writes in its first implementation;
