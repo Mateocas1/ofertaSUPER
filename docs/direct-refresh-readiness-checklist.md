@@ -25,7 +25,7 @@ This document does not authorize production writes, scheduler, all-source operat
 | 5 | Reporting | Implementation | Make freshness and incidents visible. | A repeatable report summarizes freshness, runs, incidents, and blocked sources. |
 | 6 | Run ownership | Docs | Assign responsibility. | Operator/on-call ownership and handoff expectations are documented. Document: `docs/direct-refresh-run-ownership-drill.md`. |
 | 7 | Runbook drill | Manual/read-only | Prove incident response. | At least one no-partial verification drill is recorded without production writes. Document: `docs/direct-refresh-run-ownership-drill.md`. |
-| 8 | DIA decision | Docs or implementation | Avoid ambiguous coverage claims. | DIA is formally excluded or has a separate hardening plan. |
+| 8 | DIA decision | Docs or implementation | Avoid ambiguous coverage claims. | DIA is formally excluded from writer-supported direct-refresh. Document: `docs/direct-refresh-dia-posture.md`. |
 | 9 | Semi-automatic orchestrator design | Docs | Design human-approved sequencing. | Design is approved with no scheduler and no automatic writes. |
 | 10 | Scheduler gate | Docs | Decide whether scheduler can be built. | All required readiness slices are complete and reviewed. |
 
@@ -58,7 +58,7 @@ This document does not authorize production writes, scheduler, all-source operat
 | 4 | `feat(data): add direct-refresh kill switch` | Implement per-source/global stop checks. |
 | 5 | `feat(data): add direct-refresh operations report` | Generate freshness/run/incident summary. |
 | 6 | `docs(data): record direct-refresh run ownership and drill` | Record owner expectations and a no-partial verification drill. Status: issue #128 / `docs/direct-refresh-run-ownership-drill.md`. |
-| 7 | `docs(data): decide DIA direct-refresh posture` | Exclude DIA formally or plan hardening. |
+| 7 | `docs(data): decide DIA direct-refresh posture` | Exclude DIA formally or plan hardening. Status: issue #130 / `docs/direct-refresh-dia-posture.md`. |
 
 ## Scheduler resume criteria
 
