@@ -37,6 +37,7 @@
     "audit:direct-refresh-capacity": "tsx scripts/audit-direct-refresh-capacity.ts",
     "audit:direct-refresh-source-health": "tsx scripts/audit-direct-refresh-source-health.ts",
     "audit:direct-refresh-alerts": "tsx scripts/audit-direct-refresh-alerts.ts",
+    "audit:direct-refresh-kill-switch": "tsx scripts/audit-direct-refresh-kill-switch.ts",
     "direct-refresh:carrefour-write": "tsx scripts/direct-refresh-carrefour-write.ts",
     "direct-refresh:vea-write": "tsx scripts/direct-refresh-vea-write.ts",
     "direct-refresh:disco-write": "tsx scripts/direct-refresh-disco-write.ts",

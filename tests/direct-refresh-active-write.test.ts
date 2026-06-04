@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import {
@@ -510,12 +513,20 @@ function tx(overrides: Partial<ActiveWriteTransaction> = {}) {
 	};
 	return { ...base, ...overrides };
 }
-function repo(transaction: ActiveWriteTransaction): ActiveWriteRepository {
+function repo(transaction: ActiveWriteTransaction, onTransaction?: () => void): ActiveWriteRepository {
 	return {
 		async withTransaction(fn) {
+			onTransaction?.();
 			return fn(transaction);
 		},
 	};
+}
+
+async function writeKillSwitchControl(control: unknown) {
+	const dir = await mkdtemp(join(tmpdir(), "direct-refresh-kill-switch-"));
+	const path = join(dir, "control.json");
+	await writeFile(path, `${JSON.stringify(control, null, 2)}\n`, "utf8");
+	return path;
 }
 
 describe("Carrefour active refresh writer contract", () => {
@@ -525,6 +536,7 @@ describe("Carrefour active refresh writer contract", () => {
 		assert.equal(parsed.source, "carrefour");
 		assert.equal(parsed.count, 10);
 		assert.equal(parsed.confirmWrite, CARREFOUR_ACTIVE_WRITE_CONFIRMATION);
+		assert.equal(parsed.killSwitchControl, null);
 		assert.deepEqual(parsed.rowIds, report.futureConfirmation.shape.rowIds);
 		for (const bad of [
 			["--source=dia"],
@@ -534,12 +546,84 @@ describe("Carrefour active refresh writer contract", () => {
 			["--stage"],
 			["--unknown=true"],
 			["--confirm-write=nope"],
+			["--kill-switch-control"],
+			["--kill-switch-control="],
 		]) {
 			assert.throws(
 				() => parseCarrefourActiveWriteCliOptions(argv(report, bad)),
-				/carrefour|count|rejects|confirmation|exactly one|unknown/,
+				/carrefour|count|rejects|confirmation|exactly one|unknown|kill-switch-control/,
 			);
 		}
+	});
+
+	it("parses optional kill switch control path", async () => {
+		const report = await prewrite();
+		const parsed = parseCarrefourActiveWriteCliOptions(
+			argv(report, ["--kill-switch-control=control.json"]),
+		);
+		assert.equal(parsed.killSwitchControl, "control.json");
+	});
+
+	it("blocks before transaction when supplied kill switch control stops the source", async () => {
+		const report = await prewrite();
+		const killSwitchControl = await writeKillSwitchControl({
+			schemaVersion: 1,
+			control: "direct-refresh-kill-switch",
+			sources: {
+				carrefour: {
+					stop: true,
+					reason: "incident review",
+					owner: "Direct-refresh operator",
+				},
+			},
+		});
+		const options = parseCarrefourActiveWriteCliOptions(
+			argv(report, [`--kill-switch-control=${killSwitchControl}`]),
+		);
+		let transactionStarted = false;
+		await assert.rejects(
+			() =>
+				executeCarrefourActiveWrite({
+					repository: repo(tx(), () => {
+						transactionStarted = true;
+					}),
+					prewriteReport: report,
+					options,
+					startedAt: new Date(report.generatedAt),
+				}),
+			/direct-refresh kill switch blocks source carrefour/,
+		);
+		assert.equal(transactionStarted, false);
+	});
+
+	it("allows transaction when supplied kill switch control has no active stop", async () => {
+		const report = await prewrite();
+		const killSwitchControl = await writeKillSwitchControl({
+			schemaVersion: 1,
+			control: "direct-refresh-kill-switch",
+			global: { stop: false },
+			sources: {
+				carrefour: {
+					stop: true,
+					reason: "expired incident",
+					owner: "Direct-refresh operator",
+					expiresAt: "2026-06-01T00:00:00.000Z",
+				},
+			},
+		});
+		const options = parseCarrefourActiveWriteCliOptions(
+			argv(report, [`--kill-switch-control=${killSwitchControl}`]),
+		);
+		let transactionStarted = false;
+		await executeCarrefourActiveWrite({
+			repository: repo(tx(), () => {
+				transactionStarted = true;
+			}),
+			prewriteReport: report,
+			options,
+			startedAt: new Date("2026-06-01T00:10:00.000Z"),
+		});
+		assert.equal(transactionStarted, true);
 	});
 
 	it("parses count=25 with count-specific confirmation and rejects invalid counts", async () => {
