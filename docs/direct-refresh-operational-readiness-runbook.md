@@ -13,7 +13,7 @@ This runbook defines the next production posture before any semi-automatic orche
 | Scheduler / cron | Blocked. |
 | All-source writes | Blocked. |
 | Repeated batches / cadence | Blocked until explicitly planned and approved. |
-| DIA writer support | Not approved; DIA remains audit-only/no-writer. |
+| DIA writer support | Formally excluded from writer-supported direct-refresh; DIA remains audit-only/no-writer. Decision: `docs/direct-refresh-dia-posture.md`. |
 | Latest evidence summary | `docs/direct-refresh-count50-complete-summary.md` |
 
 ## Non-negotiable operating rules
