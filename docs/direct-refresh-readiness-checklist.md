@@ -23,8 +23,8 @@ This document does not authorize production writes, scheduler, all-source operat
 | 3 | Retry/backoff policy | Docs | Prevent uncontrolled retries. | Retry limits, cooldowns, no-partial verification, and escalation paths are documented per incident class. Policy: `docs/direct-refresh-retry-alert-policy.md`. |
 | 4 | Kill switch | Implementation | Stop source/global operation quickly. | Per-source and global stop controls exist and are checked before active writes/orchestration. |
 | 5 | Reporting | Implementation | Make freshness and incidents visible. | A repeatable report summarizes freshness, runs, incidents, and blocked sources. |
-| 6 | Run ownership | Docs | Assign responsibility. | Operator/on-call ownership and handoff expectations are documented. |
-| 7 | Runbook drill | Manual/read-only | Prove incident response. | At least one no-partial verification drill is recorded without production writes. |
+| 6 | Run ownership | Docs | Assign responsibility. | Operator/on-call ownership and handoff expectations are documented. Document: `docs/direct-refresh-run-ownership-drill.md`. |
+| 7 | Runbook drill | Manual/read-only | Prove incident response. | At least one no-partial verification drill is recorded without production writes. Document: `docs/direct-refresh-run-ownership-drill.md`. |
 | 8 | DIA decision | Docs or implementation | Avoid ambiguous coverage claims. | DIA is formally excluded or has a separate hardening plan. |
 | 9 | Semi-automatic orchestrator design | Docs | Design human-approved sequencing. | Design is approved with no scheduler and no automatic writes. |
 | 10 | Scheduler gate | Docs | Decide whether scheduler can be built. | All required readiness slices are complete and reviewed. |
@@ -57,7 +57,7 @@ This document does not authorize production writes, scheduler, all-source operat
 | 3 | `feat(data): implement direct-refresh alerts` | Implement alert checks/channels for approved conditions. |
 | 4 | `feat(data): add direct-refresh kill switch` | Implement per-source/global stop checks. |
 | 5 | `feat(data): add direct-refresh operations report` | Generate freshness/run/incident summary. |
-| 6 | `docs(data): record direct-refresh run ownership and drill` | Record owner expectations and a no-partial verification drill. |
+| 6 | `docs(data): record direct-refresh run ownership and drill` | Record owner expectations and a no-partial verification drill. Status: issue #128 / `docs/direct-refresh-run-ownership-drill.md`. |
 | 7 | `docs(data): decide DIA direct-refresh posture` | Exclude DIA formally or plan hardening. |
 
 ## Scheduler resume criteria
