@@ -18,9 +18,9 @@ This document does not authorize production writes, scheduler, all-source operat
 
 | Order | Slice | Type | Purpose | Done when |
 |---:|---|---|---|---|
-| 1 | Source health checks | Implementation | Verify each source before any planned run. | Per-source PASS/WARN/FAIL health report exists and writers require PASS or explicit approved override. |
-| 2 | Alerting plan | Docs then implementation | Define actionable alerts before automation. | Failure, stale baseline, postwrite FAIL, timeout, and pool exhaustion alerts have owners and channels. |
-| 3 | Retry/backoff policy | Docs | Prevent uncontrolled retries. | Retry limits, cooldowns, no-partial verification, and escalation paths are documented per incident class. |
+| 1 | Source health checks | Implementation | Verify each source before any planned run. | Per-source PASS/WARN/FAIL health report exists and writers require PASS or explicit approved override. Overrides cannot bypass hard stops, no-partial verification, DIA no-writer posture, scheduler block, or issue scope. |
+| 2 | Alerting plan | Docs then implementation | Define actionable alerts before automation. | Failure, stale baseline, postwrite FAIL, timeout, and pool exhaustion alerts have owners and channels. Policy: `docs/direct-refresh-retry-alert-policy.md`. |
+| 3 | Retry/backoff policy | Docs | Prevent uncontrolled retries. | Retry limits, cooldowns, no-partial verification, and escalation paths are documented per incident class. Policy: `docs/direct-refresh-retry-alert-policy.md`. |
 | 4 | Kill switch | Implementation | Stop source/global operation quickly. | Per-source and global stop controls exist and are checked before active writes/orchestration. |
 | 5 | Reporting | Implementation | Make freshness and incidents visible. | A repeatable report summarizes freshness, runs, incidents, and blocked sources. |
 | 6 | Run ownership | Docs | Assign responsibility. | Operator/on-call ownership and handoff expectations are documented. |
@@ -53,7 +53,7 @@ This document does not authorize production writes, scheduler, all-source operat
 | Next issue | Suggested title | Scope |
 |---|---|---|
 | 1 | `feat(data): add direct-refresh source health checks` | Implement read-only per-source health report and tests. |
-| 2 | `docs(data): define direct-refresh retry and alert policy` | Document alert conditions, owners, and retry/backoff rules. |
+| 2 | `docs(data): define direct-refresh retry and alert policy` | Document alert conditions, owners, and retry/backoff rules. Status: issue #120 / `docs/direct-refresh-retry-alert-policy.md`. |
 | 3 | `feat(data): implement direct-refresh alerts` | Implement alert checks/channels for approved conditions. |
 | 4 | `feat(data): add direct-refresh kill switch` | Implement per-source/global stop checks. |
 | 5 | `feat(data): add direct-refresh operations report` | Generate freshness/run/incident summary. |
