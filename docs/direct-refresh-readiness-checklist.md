@@ -27,7 +27,7 @@ This document does not authorize production writes, scheduler, all-source operat
 | 7 | Runbook drill | Manual/read-only | Prove incident response. | At least one no-partial verification drill is recorded without production writes. Document: `docs/direct-refresh-run-ownership-drill.md`. |
 | 8 | DIA decision | Docs or implementation | Avoid ambiguous coverage claims. | DIA is formally excluded from writer-supported direct-refresh. Document: `docs/direct-refresh-dia-posture.md`. |
 | 9 | Semi-automatic orchestrator design | Docs | Design human-approved sequencing. | Design is approved with no scheduler and no automatic writes. Document: `docs/direct-refresh-orchestrator-design.md`. |
-| 10 | Scheduler gate | Docs | Decide whether scheduler can be built. | All required readiness slices are complete and reviewed. |
+| 10 | Scheduler gate | Docs | Decide whether scheduler can be built. | Readiness evidence is sufficient to propose a separate scheduler implementation issue, but not to run or deploy a scheduler. Document: `docs/direct-refresh-scheduler-gate.md`. |
 
 ## Dependency rules
 
@@ -60,10 +60,11 @@ This document does not authorize production writes, scheduler, all-source operat
 | 6 | `docs(data): record direct-refresh run ownership and drill` | Record owner expectations and a no-partial verification drill. Status: issue #128 / `docs/direct-refresh-run-ownership-drill.md`. |
 | 7 | `docs(data): decide DIA direct-refresh posture` | Exclude DIA formally or plan hardening. Status: issue #130 / `docs/direct-refresh-dia-posture.md`. |
 | 8 | `docs(data): design semi-automatic direct-refresh orchestrator` | Design human-approved sequencing with no scheduler and no automatic writes. Status: issue #132 / `docs/direct-refresh-orchestrator-design.md`. |
+| 9 | `docs(data): add direct-refresh final scheduler gate` | Decide whether readiness evidence is complete enough for a separate scheduler implementation proposal. Status: issue #134 / `docs/direct-refresh-scheduler-gate.md`. |
 
 ## Scheduler resume criteria
 
-Scheduler discussion may resume only when all of these are true:
+Scheduler proposal work may resume only when all of these are true:
 
 - source health checks exist and are used;
 - alerting policy and implementation exist;
@@ -75,4 +76,4 @@ Scheduler discussion may resume only when all of these are true:
 - DIA is excluded or hardened by separate decision;
 - a fresh review confirms readiness evidence is complete.
 
-Until then, direct-refresh remains controlled manual source-specific operation only.
+Final gate decision: readiness evidence is sufficient to propose a separate scheduler implementation issue, but this checklist does not authorize scheduler implementation, scheduler execution, automatic writes, all-source operation, or repeated batches. Until a future scheduler PR is separately approved, merged, configured, and explicitly enabled by humans, direct-refresh remains controlled manual source-specific operation only.
