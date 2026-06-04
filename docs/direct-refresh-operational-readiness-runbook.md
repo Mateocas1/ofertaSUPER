@@ -10,7 +10,7 @@ This runbook defines the next production posture before any semi-automatic orche
 |---|---|
 | Source-specific manual writes | Allowed only with approved issue, fresh prewrite PASS, exact confirmation, postwrite PASS, and baseline. |
 | `count=50` controlled pilot coverage | Complete for all writer-supported sources. |
-| Scheduler / cron | Blocked. |
+| Scheduler / cron | Gate complete for proposing a separate implementation issue; running or deploying a scheduler remains blocked. Gate: `docs/direct-refresh-scheduler-gate.md`. |
 | Semi-automatic orchestrator | Design-only; no implementation authorized. Design: `docs/direct-refresh-orchestrator-design.md`. |
 | All-source writes | Blocked. |
 | Repeated batches / cadence | Blocked until explicitly planned and approved. |
@@ -28,7 +28,7 @@ This runbook defines the next production posture before any semi-automatic orche
 7. Postwrite audit is mandatory.
 8. Freshness baseline is mandatory.
 9. Any failed or stopped attempt requires no-partial-write verification before retry.
-10. Scheduler/all-source/repeated batches remain blocked until readiness prerequisites are complete.
+10. Scheduler, all-source operation, and repeated batches remain blocked until separately scoped, approved, reviewed, merged/configured, and explicitly enabled by humans where applicable.
 
 ## Controlled-write workflow
 
@@ -108,6 +108,6 @@ Recommended order:
 
 1. Operational readiness checklist issue: convert this runbook into concrete implementation tasks. Complete: `docs/direct-refresh-readiness-checklist.md`.
 2. Semi-automatic orchestrator design: human-approved sequencing, no scheduler. Complete: `docs/direct-refresh-orchestrator-design.md`.
-3. Final scheduler gate: decide whether readiness evidence is complete enough to approve a separate scheduler implementation issue.
+3. Final scheduler gate: decide whether readiness evidence is complete enough to approve a separate scheduler implementation issue. Complete: `docs/direct-refresh-scheduler-gate.md`.
 
-Until those gates are complete, direct-refresh stays in controlled manual operation mode.
+Until a future scheduler issue and PR are separately approved, merged, configured, and explicitly enabled by humans, direct-refresh stays in controlled manual operation mode.
