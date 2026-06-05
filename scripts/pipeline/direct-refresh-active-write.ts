@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import {
@@ -8,6 +9,7 @@ import {
 	type DirectRefreshPrewriteRow,
 } from "./direct-refresh-prewrite-gate";
 import { assertDirectRefreshKillSwitchAllowsSource } from "./direct-refresh-kill-switch";
+import type { DirectRefreshCapacityEvidenceInput } from "./direct-refresh-capacity-lineage";
 import {
 	assertDirectRefreshAllowedBatchCount,
 	directRefreshConfirmationToken,
@@ -150,6 +152,8 @@ type ActiveWriteCliOptionsFor<Source extends ActiveWriteSource> = {
 	confirmWrite: string;
 	output: string;
 	killSwitchControl: string | null;
+	capacityReport: string | null;
+	issueNumber: number | null;
 };
 export type CarrefourActiveWriteCliOptions =
 	ActiveWriteCliOptionsFor<"carrefour">;
@@ -267,7 +271,11 @@ const REQUIRED_FLAGS = [
 	"--confirm-write",
 	"--output",
 ];
-const OPTIONAL_FLAGS = ["--kill-switch-control"];
+const OPTIONAL_FLAGS = [
+	"--kill-switch-control",
+	"--capacity-report",
+	"--issue-number",
+];
 
 export function parseCarrefourActiveWriteCliOptions(
 	argv = process.argv,
@@ -354,11 +362,32 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 		throw new Error(
 			`missing exact ${config.displayName} active write confirmation`,
 		);
-	const killSwitchControl = getOptionalSingleFlag(argv, "--kill-switch-control");
+	const killSwitchControl = getOptionalSingleFlag(
+		argv,
+		"--kill-switch-control",
+	);
 	if (killSwitchControl !== null && !killSwitchControl.trim()) {
 		throw new Error(
 			`${config.displayName} active writer requires --kill-switch-control=...`,
 		);
+	}
+	const rawCapacityReport = getOptionalSingleFlag(argv, "--capacity-report");
+	if (rawCapacityReport !== null && !rawCapacityReport.trim()) {
+		throw new Error("--capacity-report requires a non-empty path");
+	}
+	const capacityReport = rawCapacityReport?.trim() ?? null;
+	const issueNumber =
+		capacityReport !== null
+			? parsePositiveIntegerFlag(argv, "--issue-number", 0)
+			: null;
+	if (capacityReport !== null && issueNumber === 0) {
+		throw new Error("--capacity-report requires --issue-number=...");
+	}
+	if (
+		capacityReport === null &&
+		getOptionalSingleFlag(argv, "--issue-number") !== null
+	) {
+		throw new Error("--issue-number requires --capacity-report=...");
 	}
 	return {
 		source: config.source,
@@ -371,6 +400,8 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 		confirmWrite: expectedConfirmation,
 		output: getOptionalSingleFlag(argv, "--output") ?? "",
 		killSwitchControl,
+		capacityReport,
+		issueNumber,
 	} as ActiveWriteCliOptionsFor<Source>;
 }
 
@@ -378,6 +409,47 @@ export async function readPrewriteReport(path: string) {
 	return JSON.parse(
 		await readFile(path, "utf8"),
 	) as CarrefourDirectRefreshPrewriteGate;
+}
+
+export async function readActiveWriteCapacityEvidence(
+	options: ActiveWriteCliOptions,
+	prewriteReport: CarrefourDirectRefreshPrewriteGate,
+): Promise<DirectRefreshCapacityEvidenceInput | null> {
+	const capacityArtifact = prewriteReport.lineage.parentArtifacts[0];
+	if (!capacityArtifact.present) {
+		if (options.capacityReport) {
+			throw new Error(
+				"capacity report supplied for prewrite report without capacity lineage",
+			);
+		}
+		return null;
+	}
+	if (!options.capacityReport) {
+		throw new Error(
+			"capacity-bound prewrite report requires --capacity-report=...",
+		);
+	}
+	if (typeof options.issueNumber !== "number") {
+		throw new Error(
+			"capacity-bound prewrite report requires --issue-number=...",
+		);
+	}
+	if (capacityArtifact.issue !== options.issueNumber) {
+		throw new Error(
+			`capacity report issue must match prewrite lineage issue ${capacityArtifact.issue}`,
+		);
+	}
+	const raw = await readFile(options.capacityReport, "utf8");
+	const hash = createHash("sha256").update(raw).digest("hex");
+	if (capacityArtifact.hash && hash !== capacityArtifact.hash) {
+		throw new Error("capacity report hash mismatch");
+	}
+	return {
+		path: options.capacityReport,
+		raw,
+		report: JSON.parse(raw) as unknown,
+		expectedIssueNumber: options.issueNumber,
+	};
 }
 
 export function validatePrewriteReportForActiveWrite(
@@ -558,7 +630,9 @@ async function executeActiveWrite({
 	validatePrewriteReportForActiveWrite(prewriteReport, options, startedAt);
 	if (options.killSwitchControl) {
 		assertDirectRefreshKillSwitchAllowsSource({
-			control: JSON.parse(await readFile(options.killSwitchControl, "utf8")) as unknown,
+			control: JSON.parse(
+				await readFile(options.killSwitchControl, "utf8"),
+			) as unknown,
 			source: options.source,
 			controlPath: options.killSwitchControl,
 			now: startedAt,
