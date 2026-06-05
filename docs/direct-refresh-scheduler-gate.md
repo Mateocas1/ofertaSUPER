@@ -8,7 +8,7 @@ This gate does not authorize scheduler implementation, scheduler execution, cron
 
 Readiness evidence is sufficient to propose a separate, reviewable scheduler implementation issue, but it is not sufficient to run or deploy a scheduler.
 
-Issue #136 implements only a disabled-by-default read-only scheduler planner/audit. It emits a source/count plan and guardrail report; it does not run a scheduler or invoke active writers. Issue #138 lets the operations report consume that supplied planner JSON as consolidated read-only evidence; it does not execute the planner or change scheduler/write authorization. Issue #140 adds a read-only dry-run orchestrator report that summarizes supplied planner/source-health/alerts/kill-switch/operations-report artifacts only; it does not run those tools, generate manifest/prewrite, execute writers, or schedule work.
+Issue #136 implements only a disabled-by-default read-only scheduler planner/audit. It emits a source/count plan and guardrail report; it does not run a scheduler or invoke active writers. Issue #138 lets the operations report consume that supplied planner JSON as consolidated read-only evidence; it does not execute the planner or change scheduler/write authorization. Issue #140 adds a read-only dry-run orchestrator report that summarizes supplied planner/source-health/alerts/kill-switch/operations-report artifacts only; it does not run those tools, generate manifest/prewrite, execute writers, or schedule work. The operator sequence is documented in `docs/direct-refresh-dry-run-evidence-guide.md`.
 
 Any future scheduler issue must be approved separately and must implement a conservative scheduler that is disabled by default, source-specific, count-scoped, fail-closed, and human-reviewable. The first implementation must not execute production writes automatically.
 
@@ -28,7 +28,7 @@ Any future scheduler issue must be approved separately and must implement a cons
 | DIA posture | Complete | `docs/direct-refresh-dia-posture.md` |
 | Semi-automatic orchestrator design | Complete | `docs/direct-refresh-orchestrator-design.md` |
 | Disabled scheduler planner/audit | Complete | `scripts/pipeline/direct-refresh-scheduler-planner.ts`, `scripts/audit-direct-refresh-scheduler-planner.ts`, `tests/direct-refresh-scheduler-planner.test.ts` |
-| Read-only dry-run orchestrator report | Complete | `scripts/pipeline/direct-refresh-dry-run-orchestrator.ts`, `scripts/audit-direct-refresh-dry-run-orchestrator.ts`, `tests/direct-refresh-dry-run-orchestrator.test.ts` |
+| Read-only dry-run orchestrator report | Complete | `scripts/pipeline/direct-refresh-dry-run-orchestrator.ts`, `scripts/audit-direct-refresh-dry-run-orchestrator.ts`, `tests/direct-refresh-dry-run-orchestrator.test.ts`; operator guide: `docs/direct-refresh-dry-run-evidence-guide.md` |
 
 ## What may happen next
 

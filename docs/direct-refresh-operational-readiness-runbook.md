@@ -10,7 +10,7 @@ This runbook defines the next production posture before any semi-automatic orche
 |---|---|
 | Source-specific manual writes | Allowed only with approved issue, fresh prewrite PASS, exact confirmation, postwrite PASS, and baseline. |
 | `count=50` controlled pilot coverage | Complete for all writer-supported sources. |
-| Scheduler / cron | Gate complete; read-only scheduler planner/audit and dry-run orchestrator report are available; operations report can include supplied planner evidence. Running or deploying a scheduler remains blocked. Gate: `docs/direct-refresh-scheduler-gate.md`. Planner: `audit:direct-refresh-scheduler-planner`. Dry-run orchestrator: `audit:direct-refresh-dry-run-orchestrator`. |
+| Scheduler / cron | Gate complete; read-only scheduler planner/audit and dry-run orchestrator report are available; operations report can include supplied planner evidence. Running or deploying a scheduler remains blocked. Gate: `docs/direct-refresh-scheduler-gate.md`. Evidence guide: `docs/direct-refresh-dry-run-evidence-guide.md`. Planner: `audit:direct-refresh-scheduler-planner`. Dry-run orchestrator: `audit:direct-refresh-dry-run-orchestrator`. |
 | Semi-automatic orchestrator | Design-only; no implementation authorized. Design: `docs/direct-refresh-orchestrator-design.md`. |
 | All-source writes | Blocked. |
 | Repeated batches / cadence | Blocked until explicitly planned and approved. |
