@@ -182,7 +182,7 @@ const WRITE_BOUNDARY =
 	"read-only operating capacity audit; no production writes, no staging/ingestion runs, no scheduler/cron/workflow side effects" as const;
 const DEFAULT_CANDIDATE_SCAN_SIZE = 50;
 const DEFAULT_TARGET_BATCH_SIZE = 25;
-const DEFAULT_FRESHNESS_TARGETS = [80, 95, 100];
+const DEFAULT_FRESHNESS_TARGETS = [90, 95, 100];
 const DEFAULT_SLA_HOURS = 24;
 const DEFAULT_MAX_PRICE_DELTA_PERCENT = 200;
 

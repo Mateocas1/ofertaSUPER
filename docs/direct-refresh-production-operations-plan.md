@@ -14,7 +14,7 @@ Confirmed strategy for the next phase:
 
 | Area | Decision |
 | --- | --- |
-| Freshness roadmap | Recovery target: `80%` of writer-supported public-rankable rows within `24h`; final target: `95%` within `12h`. |
+| Freshness roadmap | Recovery floor: `90%` of writer-supported public-rankable rows within `24h`; final target: `95%` within `12h`. Anything below 90% is not a production recovery posture. |
 | Coverage target | Writer-supported sources first: Carrefour, Vea, Disco, Jumbo, MAS. |
 | DIA posture | DIA remains `audit-only-no-writer`; it must not block writer-supported freshness recovery claims. |
 | Freshness WARN | Freshness debt does not authorize writes, but it may trigger recovery planning when safety is PASS. |
@@ -38,20 +38,28 @@ Latest writer-supported snapshot: `audit/direct-refresh-source-health/writer-sup
 
 The snapshot shows `0%` fresh rows for all writer-supported sources. This is freshness debt, not by itself proof that the source is unsafe to refresh.
 
-| Source | Public-rankable rows | Fresh rows | Rows needed for 80% | Rows needed for 95% | Capacity status | Current blockers |
+| Source | Public-rankable rows | Fresh rows | Rows needed for 90% | Rows needed for 95% | Capacity status | Current blockers |
 | --- | ---: | ---: | ---: | ---: | --- | --- |
-| Carrefour | 990 | 0 | 792 | 941 | WARN | freshness debt; mixed capacity; 6 blocked rows |
-| Vea | 666 | 0 | 533 | 633 | WARN | freshness debt; mixed capacity in fresh issue #166 evidence |
-| Disco | 777 | 0 | 622 | 739 | WARN | freshness debt; mixed capacity; 2 blocked rows |
-| Jumbo | 778 | 0 | 623 | 740 | WARN | freshness debt; mixed capacity; 6 blocked rows |
-| MAS | 831 | 0 | 665 | 790 | WARN | freshness debt; mixed capacity; 5 blocked rows |
+| Carrefour | 990 | 0 | 891 | 941 | WARN | freshness debt; mixed capacity; 6 blocked rows |
+| Vea | 666 | 0 | 600 | 633 | WARN | freshness debt; mixed capacity in fresh issue #166 evidence |
+| Disco | 777 | 0 | 700 | 739 | WARN | freshness debt; mixed capacity; 2 blocked rows |
+| Jumbo | 778 | 0 | 701 | 740 | WARN | freshness debt; mixed capacity; 6 blocked rows |
+| MAS | 831 | 0 | 748 | 790 | WARN | freshness debt; mixed capacity; 5 blocked rows |
 
 Best-case lower bounds with `count=50` batches:
 
 | Target | Minimum selected rows | Minimum source-scoped `count=50` batches | Caveat |
 | --- | ---: | ---: | --- |
-| 80%/24h recovery | 3,235 | 67 | Sum of per-source batch ceilings; excludes skips, aging during recovery, VTEX limits, confirmation latency, and source-specific scan density. |
+| 90%/24h recovery floor | 3,640 | 74 | Sum of per-source batch ceilings; excludes skips, aging during recovery, VTEX limits, confirmation latency, and source-specific scan density. |
 | 95%/12h final | 3,843 | 78 | Sum of per-source batch ceilings; not credible without a production cadence controller and guardrails. |
+
+Fresh audit recorded on 2026-06-05 for issue [#178](https://github.com/Mateocas1/ofertaSUPER/issues/178):
+
+| Artifact | Result |
+| --- | --- |
+| `audit/direct-refresh-prod-final-planning/20260605T151900Z/freshness-baseline-95-fail-under-90.json` | `FAIL`: writer-supported sources are at `0%` freshness against target `95%` and fail-under `90%`. |
+| `audit/direct-refresh-prod-final-planning/20260605T151900Z/source-health-95-fail-under-90.json` | `FAIL`: 5/5 writer-supported sources fail the 90% floor. |
+| `audit/direct-refresh-prod-final-planning/20260605T151900Z/freshness-debt-plan-90-95.json` | `WARN`: reduced/manual-review planning; 90% recovery floor needs 3,640 rows / 74 count50 source-scoped batches, 95% final needs 3,843 rows / 78 count50 source-scoped batches. |
 
 ## Source-health taxonomy
 
@@ -87,7 +95,7 @@ Hard-stop safety blockers include:
 
 Freshness debt examples:
 
-- freshness below 80% recovery target;
+- freshness below 90% recovery floor;
 - freshness below 95% final target;
 - all public-rankable rows stale;
 - source aging after successful one-off pilots.
@@ -154,7 +162,7 @@ The planner must:
 
 1. read existing DB/audit evidence only;
 2. reject DIA as writer-supported source;
-3. compute per-source freshness debt for 80%/24h and 95%/12h;
+3. compute per-source freshness debt for 90%/24h and 95%/12h;
 4. estimate minimum batches by count and by source;
 5. apply capacity status to recommend normal, reduced, manual-review, or blocked planning;
 6. model max rows per run and max runs per window;

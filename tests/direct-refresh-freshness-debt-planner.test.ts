@@ -89,34 +89,53 @@ describe("direct-refresh freshness debt planner", () => {
 		assert.equal(source.freshnessStatus, "DEBT");
 		assert.equal(source.safetyStatus, "PASS");
 		assert.equal(source.runEligibility, "planning-normal");
-		assert.equal(
-			source.debtTargets.find((target) => target.name === "recovery")
-				?.rowsNeeded,
-			533,
+		const recoveryTarget = source.debtTargets.find(
+			(target) => target.name === "recovery",
 		);
+		assert.equal(recoveryTarget?.freshnessTargetPercent, 90);
+		assert.equal(recoveryTarget?.rowsNeeded, 600);
 		assert.equal(
 			source.debtTargets.find((target) => target.name === "final")?.rowsNeeded,
 			633,
 		);
 		assert.equal(
-			source.debtTargets.find((target) => target.name === "recovery")
-				?.minBatchesByAllowedCount["50"],
-			11,
+			recoveryTarget?.minBatchesByAllowedCount["50"],
+			12,
 		);
-		assert.equal(report.summary.totalRowsNeededByTarget.recovery, 533);
-		assert.equal(report.summary.minBatchesByTargetAndCount.recovery["50"], 11);
+		assert.equal(report.summary.totalRowsNeededByTarget.recovery, 600);
+		assert.equal(report.summary.minBatchesByTargetAndCount.recovery["50"], 12);
 	});
 
-	it("passes with no debt when the recovery target is already met", () => {
+	it("does not clear recovery debt until the 90% production floor is met", () => {
 		const report = buildReport({
 			directSources: [
 				writerSource({
 					freshness: {
-						publicRankableRows: 10,
-						freshRows: 10,
-						staleRows: 0,
+						publicRankableRows: 100,
+						freshRows: 89,
+						staleRows: 11,
 						unknownRows: 0,
-						freshnessPercent: 100,
+						freshnessPercent: 89,
+					},
+				}),
+			],
+		});
+
+		assert.equal(report.status, "WARN");
+		assert.equal(report.summary.totalRowsNeededByTarget.recovery, 1);
+		assert.equal(report.sources[0].freshnessStatus, "DEBT");
+	});
+
+	it("passes with no recovery debt when the 90% production floor is already met", () => {
+		const report = buildReport({
+			directSources: [
+				writerSource({
+					freshness: {
+						publicRankableRows: 100,
+						freshRows: 90,
+						staleRows: 10,
+						unknownRows: 0,
+						freshnessPercent: 90,
 					},
 				}),
 			],
@@ -343,16 +362,16 @@ describe("direct-refresh freshness debt planner", () => {
 					slug: "jumbo",
 					freshness: {
 						publicRankableRows: 100,
-						freshRows: 80,
-						staleRows: 20,
+						freshRows: 90,
+						staleRows: 10,
 						unknownRows: 0,
-						freshnessPercent: 80,
+						freshnessPercent: 90,
 					},
 				}),
 			],
 		});
 
-		assert.equal(report.summary.minBatchesByTargetAndCount.recovery["50"], 16);
+		assert.equal(report.summary.minBatchesByTargetAndCount.recovery["50"], 18);
 		assert.equal(
 			report.summary.windowCapacity.maxSourceScopedBatches.recoveryWindow24h,
 			20,

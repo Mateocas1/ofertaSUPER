@@ -120,7 +120,7 @@ export type DirectRefreshFreshnessDebtPlannerReport = {
 	};
 	targets: Array<{
 		name: "recovery" | "final";
-		freshnessTargetPercent: 80 | 95;
+		freshnessTargetPercent: 90 | 95;
 		windowHours: 24 | 12;
 	}>;
 	summary: {
@@ -170,7 +170,7 @@ export type DirectRefreshFreshnessDebtPlannerSourceReport = {
 	};
 	debtTargets: Array<{
 		name: "recovery" | "final";
-		freshnessTargetPercent: 80 | 95;
+		freshnessTargetPercent: 90 | 95;
 		windowHours: 24 | 12;
 		rowsNeeded: number;
 		minBatchesByAllowedCount: Record<string, number>;
@@ -208,7 +208,7 @@ const BLOCKED_MODES = [
 ] as const;
 
 const TARGETS = [
-	{ name: "recovery", freshnessTargetPercent: 80, windowHours: 24 },
+	{ name: "recovery", freshnessTargetPercent: 90, windowHours: 24 },
 	{ name: "final", freshnessTargetPercent: 95, windowHours: 12 },
 ] as const;
 
@@ -620,12 +620,12 @@ function freshnessStatusFor(
 	source: DirectRefreshFreshnessDebtPlannerSourceInput,
 ): DirectRefreshFreshnessDebtPlannerFreshnessStatus {
 	if (source.freshness.publicRankableRows <= 0) return "EMPTY_DENOMINATOR";
-	return rowsNeededForTarget(source, 80) > 0 ? "DEBT" : "PASS";
+	return rowsNeededForTarget(source, 90) > 0 ? "DEBT" : "PASS";
 }
 
 function rowsNeededForTarget(
 	source: DirectRefreshFreshnessDebtPlannerSourceInput,
-	targetPercent: 80 | 95,
+	targetPercent: 90 | 95,
 ) {
 	const required = Math.ceil(
 		(source.freshness.publicRankableRows * targetPercent) / 100,
@@ -709,7 +709,7 @@ function recommendationFor({
 	if (capacityStatus === "UNKNOWN")
 		return "Collect or review capacity evidence before manifest/prewrite.";
 	if (freshnessStatus === "PASS")
-		return "No recovery debt for the 80%/24h target; continue monitoring.";
+		return "No recovery debt for the 90%/24h target; continue monitoring.";
 	if (source.slug === "mas")
 		return "Plan recovery with MAS rapid-confirmation protocol risk surfaced before any future write gate.";
 	return "Eligible for evidence-only recovery planning; run normal write gates separately before any operation.";
@@ -955,7 +955,7 @@ function nextManualAction(
 	if (status === "FAIL")
 		return "Stop. Fix fail-closed reasons before using this planner output for recovery planning.";
 	if (planningPosture === "no-debt")
-		return "No recovery planning is required for the 80%/24h target; continue monitoring.";
+		return "No recovery planning is required for the 90%/24h target; continue monitoring.";
 	return "Use this report as evidence-only recovery planning input; any future operation must start from separate approved write gates.";
 }
 
