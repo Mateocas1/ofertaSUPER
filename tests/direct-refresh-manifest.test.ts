@@ -411,16 +411,25 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 				skuId: "sku-2",
 				productUrl: "https://www.vea.com.ar/leche-2/p",
 			},
+			{
+				...passRow,
+				id: "3",
+				sourceSlug: "vea",
+				supermarketId: 20,
+				skuId: "sku-3",
+				productUrl: "https://www.vea.com.ar/leche-3/p",
+			},
 		];
 		const report = await buildDirectRefreshManifestDryRun({
 			sourceSlug: "vea",
 			sampleSize: 2,
+			candidateScanSize: 3,
 			repository: repository(veaRows),
 			capacityEvidence: capacityEvidence({
 				rows: [
-					{ rowId: "1", status: "PASS" },
+					{ rowId: "1", status: "FAIL" },
 					{ rowId: "2", status: "PASS" },
-					{ rowId: "blocked", status: "FAIL" },
+					{ rowId: "3", status: "PASS" },
 				],
 			}),
 			fetchDirectProducts: async (_sourceSlug, lookup) => [
@@ -437,6 +446,13 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		});
 
 		assert.equal(report.status, "PASS");
+		assert.deepEqual(
+			report.rows.map((row) => row.rowId),
+			["2", "3"],
+		);
+		assert.equal(report.selection.capacityEvidence.applied, true);
+		assert.equal(report.selection.capacityEvidence.passCandidateRows, 2);
+		assert.equal(report.selection.capacityEvidence.excludedCandidateRows, 1);
 		assert.equal(report.lineage.parentArtifacts[0].present, true);
 		assert.equal(report.lineage.parentArtifacts[0].status, "WARN");
 		assert.equal(
@@ -446,7 +462,7 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		assert.deepEqual(report.lineage.parentArtifacts[0].guardReasons, []);
 	});
 
-	it("fails when a selected manifest row did not pass capacity evidence", async () => {
+	it("fails when capacity-PASS manifest rows cannot fill the request", async () => {
 		const veaRow: DirectRefreshManifestExistingRow = {
 			...passRow,
 			id: "capacity-blocked",
@@ -478,8 +494,11 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/selected row capacity-blocked did not PASS capacity evidence/,
+			/insufficient capacity-PASS rows: selected 0 of 1/,
 		);
+		assert.deepEqual(report.rows, []);
+		assert.equal(report.selection.capacityEvidence.passCandidateRows, 0);
+		assert.equal(report.selection.capacityEvidence.excludedCandidateRows, 1);
 	});
 
 	it("fails on capacity source, count, viable row, and batch mismatches", async () => {
@@ -596,10 +615,8 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /write boundary must be read-only/);
-		assert.match(
-			reasons,
-			/selected row missing-from-capacity is missing from capacity report evidence/,
-		);
+		assert.match(reasons, /insufficient capacity-PASS rows: selected 0 of 10/);
+		assert.deepEqual(report.rows, []);
 	});
 
 	it("preserves existing no-capacity behavior with absent capacity lineage", async () => {

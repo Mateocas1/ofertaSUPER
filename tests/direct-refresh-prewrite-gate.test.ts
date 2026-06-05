@@ -459,7 +459,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 
 	it("passes with mixed capacity evidence when selected prewrite rows passed capacity", async () => {
 		const veaRows: DirectRefreshPrewriteExistingRow[] = Array.from(
-			{ length: 10 },
+			{ length: 11 },
 			(_, index) => ({
 				...passRow,
 				id: String(index + 1),
@@ -489,11 +489,13 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			sampleSize: 10,
 			repository: repository(veaRows),
 			now: new Date("2026-06-01T00:00:00.000Z"),
+			candidateScanSize: 11,
 			capacityEvidence: capacityEvidence({
-				rows: [
-					...veaRows.map((row) => ({ rowId: row.id, status: "PASS" as const })),
-					{ rowId: "blocked", status: "FAIL" },
-				],
+				viableRows: 10,
+				rows: veaRows.map((row, index) => ({
+					rowId: row.id,
+					status: index === 0 ? "FAIL" : "PASS",
+				})),
 			}),
 			fetchDirectProducts: async (_sourceSlug, lookup) => {
 				const row = veaRows.find((entry) => entry.skuId === lookup.value);
@@ -512,6 +514,13 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		delete hashPayload.futureConfirmation;
 
 		assert.equal(report.status, "PASS");
+		assert.deepEqual(
+			report.rows.map((row) => row.rowId),
+			["2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
+		);
+		assert.equal(report.selection.capacityEvidence.applied, true);
+		assert.equal(report.selection.capacityEvidence.passCandidateRows, 10);
+		assert.equal(report.selection.capacityEvidence.excludedCandidateRows, 1);
 		assert.equal(report.lineage.parentArtifacts[0].present, true);
 		assert.equal(report.lineage.parentArtifacts[0].status, "WARN");
 		assert.equal(
@@ -525,7 +534,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		);
 	});
 
-	it("fails when a selected prewrite row did not pass capacity evidence", async () => {
+	it("fails when capacity-PASS prewrite rows cannot fill the request", async () => {
 		const veaRows: DirectRefreshPrewriteExistingRow[] = Array.from(
 			{ length: 10 },
 			(_, index) => ({
@@ -571,8 +580,14 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/selected row 1 did not PASS capacity evidence/,
+			/insufficient capacity-PASS rows: selected 9 of 10/,
 		);
+		assert.deepEqual(
+			report.rows.map((row) => row.rowId),
+			["2", "3", "4", "5", "6", "7", "8", "9", "10"],
+		);
+		assert.equal(report.selection.capacityEvidence.passCandidateRows, 9);
+		assert.equal(report.selection.capacityEvidence.excludedCandidateRows, 1);
 	});
 
 	it("fails on capacity source, count, viable row, and recommended batch mismatches", async () => {
@@ -687,10 +702,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		assert.match(reasons, /summary\.sourceCount must be 1/);
 		assert.match(reasons, /issue must equal expected issue 169/);
 		assert.match(reasons, /write boundary must be read-only/);
-		assert.match(
-			reasons,
-			/selected row 1 is missing from capacity report evidence/,
-		);
+		assert.match(reasons, /insufficient capacity-PASS rows: selected 9 of 10/);
 	});
 
 	it("preserves existing prewrite behavior with absent capacity lineage", async () => {
