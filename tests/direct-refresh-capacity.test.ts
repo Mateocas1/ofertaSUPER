@@ -182,7 +182,12 @@ describe("direct-refresh operating capacity audit", () => {
 		let activeSourceSkuLookups = 0;
 		let maxActiveSourceSkuLookups = 0;
 		const rows = Array.from({ length: 6 }, (_, index) =>
-			row("carrefour", String(index + 1), `ean-${index + 1}`, `sku-${index + 1}`),
+			row(
+				"carrefour",
+				String(index + 1),
+				`ean-${index + 1}`,
+				`sku-${index + 1}`,
+			),
 		);
 		const repository = fakeRepository({ sources: [source("carrefour")], rows });
 		const originalFindRowsBySourceSku = repository.findRowsBySourceSku;
@@ -203,7 +208,11 @@ describe("direct-refresh operating capacity audit", () => {
 		await buildDirectRefreshCapacityReport({
 			repository,
 			fetchDirectProducts: async (_sourceSlug, lookup) => [
-				live("carrefour", `ean-${lookup.value.replace("sku-", "")}`, lookup.value),
+				live(
+					"carrefour",
+					`ean-${lookup.value.replace("sku-", "")}`,
+					lookup.value,
+				),
 			],
 			candidateScanSize: 6,
 			targetBatchSize: 3,
@@ -236,6 +245,7 @@ describe("direct-refresh operating capacity audit", () => {
 			"--sla-hours=12",
 			"--freshness-targets=80,95,100",
 			"--max-price-delta-percent=150",
+			"--issue-number=169",
 			"--output=audit/out.json",
 		]);
 		assert.deepEqual(options, {
@@ -245,6 +255,7 @@ describe("direct-refresh operating capacity audit", () => {
 			slaHours: 12,
 			freshnessTargetsPercent: [80, 95, 100],
 			maxPriceDeltaPercent: 150,
+			issue: 169,
 			output: "audit/out.json",
 		});
 		assert.match(
