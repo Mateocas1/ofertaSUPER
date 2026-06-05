@@ -33,7 +33,7 @@ Separate source-health interpretation into three dimensions and one combined eli
 Accepted policy choices:
 
 1. Use a dual freshness roadmap:
-   - recovery target: `80%` freshness within `24h`;
+   - recovery floor: `90%` freshness within `24h`;
    - final production target: `95%` freshness within `12h`.
 2. Target writer-supported sources first: Carrefour, Vea, Disco, Jumbo, MAS.
 3. Keep DIA as `audit-only-no-writer` until a separate approved hardening decision changes that posture.
@@ -167,7 +167,7 @@ Latest writer-supported source-health snapshot shows this best-case lower bound:
 
 | Target | Minimum selected rows | Minimum source-scoped `count=50` batches |
 | --- | ---: | ---: |
-| 80%/24h recovery | 3,235 | 67 |
+| 90%/24h recovery floor | 3,640 | 74 |
 | 95%/12h final | 3,843 | 78 |
 
 These are lower bounds calculated as the sum of per-source batch ceilings. Real execution may need more because of skipped rows, stale aging during the recovery window, VTEX anti-bot behavior, rate limits, MAS scan density, manual confirmation latency, and database contention.

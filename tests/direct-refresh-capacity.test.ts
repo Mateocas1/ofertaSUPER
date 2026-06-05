@@ -71,6 +71,33 @@ describe("direct-refresh operating capacity audit", () => {
 		});
 	});
 
+	it("defaults capacity planning targets to the 90% recovery floor and 95% final target", async () => {
+		const rows = [
+			row("carrefour", "1", "ean-1", "sku-1", {
+				lastCheckedAt: "2026-06-03T06:00:00.000Z",
+			}),
+			row("carrefour", "2", "ean-2", "sku-2", {
+				lastCheckedAt: "2026-06-01T06:00:00.000Z",
+			}),
+		];
+		const report = await buildDirectRefreshCapacityReport({
+			repository: fakeRepository({ sources: [source("carrefour")], rows }),
+			fetchDirectProducts: async (_sourceSlug, lookup) => [
+				live("carrefour", `ean-${lookup.value.slice(-1)}`, lookup.value),
+			],
+			candidateScanSize: 2,
+			targetBatchSize: 1,
+			now: NOW,
+		});
+
+		assert.deepEqual(report.filters.freshnessTargetsPercent, [90, 95, 100]);
+		assert.deepEqual(report.sources[0].capacity.estimatedRowsToRefresh, {
+			"90": 1,
+			"95": 1,
+			"100": 1,
+		});
+	});
+
 	it("counts guard blockers and excludes blocked rows from viable capacity", async () => {
 		const rows = [
 			row("carrefour", "1", "ean-1", "zero-products"),
