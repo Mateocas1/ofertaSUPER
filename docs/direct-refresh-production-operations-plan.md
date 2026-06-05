@@ -175,9 +175,28 @@ Issue [#158](https://github.com/Mateocas1/ofertaSUPER/issues/158) adds the contr
 
 This foundation does not execute production writes, manifest/prewrite generation, scheduler jobs, all-source runs, repeated batches, VTEX scans, notifications, deploys, secrets changes, remote config changes, or cache purge. It only prepares the control plane needed to make future cadence work safe and auditable.
 
-## Future production cadence controller
+## Cadence controller foundation
 
-A production cadence controller may be designed later, but only after the evidence-only planner and run ledger/source lock foundation are reviewed.
+Issue [#160](https://github.com/Mateocas1/ofertaSUPER/issues/160) adds the first cadence controller foundation as a read-only, disabled-by-default planning layer.
+
+The controller must stay production-shaped without becoming production execution:
+
+- disabled unless explicitly invoked with planning enabled;
+- one writer-supported source per invocation;
+- one allowlisted count per invocation;
+- consumes supplied planner/ledger evidence only;
+- blocks active ledger conflicts for `PLANNED` and `RUNNING` states;
+- blocks capacity `FAIL`;
+- maps capacity `WARN`/unknown posture to manual review;
+- treats freshness debt as planning input only, never write authorization;
+- emits `blocked`, `manual-review`, `no-debt`, or `ready-for-human-confirmation` posture;
+- stops at the next human confirmation boundary.
+
+This foundation still does not execute production writes, scheduler jobs, manifest/prewrite generation, all-source runs, repeated batches, VTEX scans, notifications, deploys, secrets changes, remote config changes, or cache purge.
+
+## Future production cadence controller execution
+
+A production cadence executor may be designed later, but only after the evidence-only planner, run ledger/source lock foundation, and cadence controller foundation are reviewed.
 
 It must be production-shaped from the start:
 
@@ -192,7 +211,7 @@ It must be production-shaped from the start:
 - artifact lineage enforcement;
 - postwrite and baseline required;
 - alert hooks;
-- no automatic retry after stopped/failed attempts;
+- no automatic retry after stopped or failed attempts;
 - DIA excluded from writer-supported execution;
 - no active writes without a separately approved confirmation boundary.
 
@@ -214,9 +233,9 @@ It must be production-shaped from the start:
 | Order | Issue | Type | Scope |
 | ---: | --- | --- | --- |
 | 1 | `feat(data): add direct-refresh freshness debt planner` | implementation | Evidence-only/read-only planner; no VTEX scans or writes. |
-| 2 | `docs(data): define direct-refresh cadence controller design` | docs | Production controller architecture, locks, ledger, budgets, TTL, alert ownership. |
-| 3 | `feat(data): add direct-refresh run ledger and advisory lock` | implementation | No writes; state and concurrency guard foundations. |
-| 4 | `feat(data): add source-scoped cadence planner dry run` | implementation | Still read-only; may sequence proposed windows, not execute writes. |
+| 2 | `feat(data): add direct-refresh run ledger and advisory lock` | implementation | No writes; state and concurrency guard foundations. |
+| 3 | `feat(data): add direct-refresh cadence controller foundation` | implementation | Still read-only; consumes planner/ledger evidence and stops at human confirmation. |
+| 4 | `docs(data): define direct-refresh cadence executor design` | docs | Future production executor architecture, budgets, TTL, alert ownership. |
 | 5 | `ops(data): run controlled recovery batch <source> count50` | operation | Only after planner evidence and normal write gates; one source/count/run. |
 
 ## Launch posture
