@@ -163,9 +163,21 @@ The planner must:
 9. produce JSON plus a human-readable issue summary;
 10. never run VTEX scans, manifest, prewrite, active writer, scheduler, all-source mode, notifications, deploys, secrets, remote config, or cache purge.
 
+## Run ledger and source lock foundation
+
+Issue [#158](https://github.com/Mateocas1/ofertaSUPER/issues/158) adds the control-plane foundation that must exist before any repeated-batch or cadence execution:
+
+- direct-refresh run ledger schema for source/count/attempt/issue/status/artifact lineage;
+- source-scoped advisory lock key generation;
+- active run conflict detection for `PLANNED` and `RUNNING` states;
+- terminal state protection for `STOPPED`, `FAILED`, and `COMPLETED`;
+- DIA rejection for writer-supported run scopes.
+
+This foundation does not execute production writes, manifest/prewrite generation, scheduler jobs, all-source runs, repeated batches, VTEX scans, notifications, deploys, secrets changes, remote config changes, or cache purge. It only prepares the control plane needed to make future cadence work safe and auditable.
+
 ## Future production cadence controller
 
-A production cadence controller may be designed later, but only after the evidence-only planner is reviewed.
+A production cadence controller may be designed later, but only after the evidence-only planner and run ledger/source lock foundation are reviewed.
 
 It must be production-shaped from the start:
 
