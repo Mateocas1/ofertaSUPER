@@ -47,6 +47,7 @@ type CliOptions = {
 	slaHours: number;
 	freshnessTargetsPercent: number[];
 	maxPriceDeltaPercent: number;
+	issue: number;
 	output: string;
 };
 
@@ -99,6 +100,7 @@ export function parseDirectRefreshCapacityCliOptions(
 			"requires --max-price-delta-percent=... to be non-negative",
 		);
 	}
+	const issue = parsePositiveIntegerFlag(argv, "--issue-number", 82);
 	return {
 		sources: sources.length > 0 ? sources : DEFAULT_SOURCES,
 		candidateScanSize,
@@ -106,6 +108,7 @@ export function parseDirectRefreshCapacityCliOptions(
 		slaHours,
 		freshnessTargetsPercent,
 		maxPriceDeltaPercent,
+		issue,
 		output:
 			getOptionalSingleFlag(argv, "--output") ??
 			defaultDirectRefreshCapacityOutput(now),
@@ -254,6 +257,7 @@ async function main() {
 		freshnessTargetsPercent: options.freshnessTargetsPercent,
 		slaHours: options.slaHours,
 		maxPriceDeltaPercent: options.maxPriceDeltaPercent,
+		issue: options.issue,
 	});
 	await writeJson(options.output, report);
 	if (report.status === "FAIL") process.exitCode = 1;

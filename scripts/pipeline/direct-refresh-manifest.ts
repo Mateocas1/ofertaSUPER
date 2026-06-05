@@ -1,3 +1,9 @@
+import {
+	validateDirectRefreshCapacityEvidence,
+	type DirectRefreshCapacityEvidenceInput,
+	type DirectRefreshCapacityEvidenceLineage,
+} from "./direct-refresh-capacity-lineage";
+
 type ManifestStatus = "PASS" | "FAIL";
 type RowGuardStatus = "PASS" | "FAIL";
 
@@ -120,6 +126,7 @@ export type CarrefourDirectRefreshManifestDryRun = {
 		skippedBlockedReasons: string[];
 		failClosedReasons: string[];
 	};
+	lineage: DirectRefreshCapacityEvidenceLineage;
 	rows: DirectRefreshManifestRow[];
 	skippedRows: DirectRefreshManifestRow[];
 };
@@ -195,6 +202,7 @@ export async function buildDirectRefreshManifestDryRun({
 	sampleSize = 10,
 	candidateScanSize = sampleSize,
 	now = new Date(),
+	capacityEvidence = null,
 }: {
 	repository: DirectRefreshManifestRepository;
 	fetchDirectProducts(
@@ -205,6 +213,7 @@ export async function buildDirectRefreshManifestDryRun({
 	sampleSize?: number;
 	candidateScanSize?: number;
 	now?: Date;
+	capacityEvidence?: DirectRefreshCapacityEvidenceInput | null;
 }): Promise<CarrefourDirectRefreshManifestDryRun> {
 	const config = sourceConfig(sourceSlug);
 	const source = await repository.getSource(config.slug);
@@ -219,7 +228,12 @@ export async function buildDirectRefreshManifestDryRun({
 	const candidateEvaluations: DirectRefreshManifestRow[] = [];
 	for (const row of candidateRows) {
 		candidateEvaluations.push(
-			await evaluateManifestRow({ row, repository, fetchDirectProducts, config }),
+			await evaluateManifestRow({
+				row,
+				repository,
+				fetchDirectProducts,
+				config,
+			}),
 		);
 	}
 	const boundedViableScan = candidateScanSize > sampleSize;
@@ -251,11 +265,18 @@ export async function buildDirectRefreshManifestDryRun({
 				row.guards.status === "FAIL" ? row.guards.reasons : [],
 			);
 	const sourceFailReasons = source ? [] : [`source ${config.slug} not found`];
+	const capacityValidation = validateDirectRefreshCapacityEvidence({
+		evidence: capacityEvidence,
+		sourceSlug: config.slug,
+		sampleSize,
+		selectedRows: rows,
+	});
 	const failClosedReasons = uniqueSorted([
 		...sourceFailReasons,
 		...selectedFailReasons,
 		...insufficientViableReasons,
 		...rowFailReasons,
+		...capacityValidation.failClosedReasons,
 	]);
 	const failRows = rows.filter((row) => row.guards.status === "FAIL").length;
 
@@ -305,6 +326,7 @@ export async function buildDirectRefreshManifestDryRun({
 			skippedBlockedReasons,
 			failClosedReasons,
 		},
+		lineage: capacityValidation.lineage,
 		rows,
 		skippedRows,
 	};

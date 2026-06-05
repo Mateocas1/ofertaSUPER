@@ -1,6 +1,6 @@
 import "./load-env";
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -24,6 +24,8 @@ type CliOptions = {
 	sampleSize: number;
 	candidateScanSize: number;
 	output: string | null;
+	capacityReport: string | null;
+	issueNumber: number | null;
 };
 
 const DEFAULT_SOURCE = "carrefour" as const;
@@ -95,11 +97,20 @@ export function parseDirectRefreshManifestCliOptions(
 	);
 	if (candidateScanSize < sampleSize)
 		throw new Error("--candidate-scan-size must be >= --sample-size");
+	const capacityReport = getOptionalSingleFlag(argv, "--capacity-report");
+	const issueNumber = capacityReport
+		? parsePositiveIntegerFlag(argv, "--issue-number", 0)
+		: null;
+	if (capacityReport && issueNumber === 0) {
+		throw new Error("--capacity-report requires --issue-number=...");
+	}
 	return {
 		source: sources[0] as SupportedManifestSource,
 		sampleSize,
 		candidateScanSize,
 		output: getOptionalSingleFlag(argv, "--output"),
+		capacityReport,
+		issueNumber,
 	};
 }
 
@@ -192,6 +203,20 @@ async function writeJson(output: string | null, report: unknown) {
 	process.stdout.write(`Wrote direct-refresh manifest dry-run to ${output}\n`);
 }
 
+async function readCapacityEvidence(
+	path: string | null,
+	issueNumber: number | null,
+) {
+	if (!path) return null;
+	const raw = await readFile(path, "utf8");
+	return {
+		path,
+		raw,
+		report: JSON.parse(raw) as unknown,
+		expectedIssueNumber: issueNumber,
+	};
+}
+
 async function main() {
 	const options = parseDirectRefreshManifestCliOptions();
 	const report = await buildDirectRefreshManifestDryRun({
@@ -199,6 +224,10 @@ async function main() {
 		sourceSlug: options.source,
 		sampleSize: options.sampleSize,
 		candidateScanSize: options.candidateScanSize,
+		capacityEvidence: await readCapacityEvidence(
+			options.capacityReport,
+			options.issueNumber,
+		),
 		fetchDirectProducts: async (sourceSlug, lookup) =>
 			getSourceAdapter(sourceSlug).fetchDirectProducts(lookup),
 	});

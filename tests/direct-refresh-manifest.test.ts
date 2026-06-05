@@ -24,6 +24,150 @@ function delay(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function capacityEvidence({
+	source = "vea",
+	targetBatchSize = 2,
+	viableRows = 2,
+	recommendedBatchSize = 2,
+	issue = 169,
+	expectedIssueNumber = issue,
+	filtersSources,
+	summarySourceCount = 1,
+	extraSources = [],
+	writeBoundary = "read-only operating capacity audit; no production writes, no staging/ingestion runs, no scheduler/cron/workflow side effects",
+	rows,
+}: {
+	source?: string;
+	targetBatchSize?: number;
+	viableRows?: number;
+	recommendedBatchSize?: number;
+	issue?: number;
+	expectedIssueNumber?: number;
+	filtersSources?: string[];
+	summarySourceCount?: number;
+	extraSources?: Array<{ slug: string }>;
+	writeBoundary?: string;
+	rows: Array<{ rowId: string; status: "PASS" | "FAIL" }>;
+}) {
+	const report = {
+		schemaVersion: 1,
+		audit: "direct-refresh-operating-capacity",
+		issue,
+		status: "WARN",
+		generatedAt: "2026-06-05T00:00:00.000Z",
+		basis: "production",
+		dryRun: true,
+		writeBoundary,
+		filters: {
+			sources: filtersSources ?? [source],
+			candidateScanSize: rows.length,
+			targetBatchSize,
+			freshnessTargetsPercent: [80, 95],
+			slaHours: 24,
+			maxPriceDeltaPercent: 200,
+		},
+		summary: {
+			sourceCount: summarySourceCount,
+			publicRankableRows: rows.length,
+			freshRows: 0,
+			staleRows: rows.length,
+			viableRowsInScan: viableRows,
+			blockedRowsInScan: rows.length - viableRows,
+			excludedSources: [],
+			warnSources: [source],
+			failSources: [],
+			recommendedNextPhase: "phase-2-batch-size-generalization",
+		},
+		sources: [
+			{
+				slug: source,
+				displayName: source,
+				directRefreshSupport: "writer-supported",
+				classification: "mixed",
+				status: "WARN",
+				sourceHealth: null,
+				denominator: {
+					totalRows: rows.length,
+					publicRankableRows: rows.length,
+					excludedRows: 0,
+					freshRows: 0,
+					staleRows: rows.length,
+					unknownRows: 0,
+					freshnessPercent: 0,
+				},
+				candidateScan: {
+					requestedRows: rows.length,
+					evaluatedRows: rows.length,
+					viableRows,
+					blockedRows: rows.length - viableRows,
+					passFillRatePercent: 0,
+					scanRowsNeededForBatch: null,
+				},
+				blockers: [
+					{
+						reason: "live product is unavailable",
+						count: rows.length - viableRows,
+					},
+				],
+				capacity: {
+					recommendedBatchSize,
+					recommendedCandidateScanSize: rows.length,
+					estimatedChunks: { "80": 1 },
+					estimatedRowsToRefresh: { "80": targetBatchSize },
+					estimatedDurationMinutesPerChunk: null,
+				},
+				rows,
+				evidenceGaps: [],
+				recommendation:
+					"eligible for manual-review planning; not approval to write",
+			},
+			...extraSources.map((extraSource) => ({
+				slug: extraSource.slug,
+				displayName: extraSource.slug,
+				directRefreshSupport: "writer-supported",
+				classification: "mixed",
+				status: "WARN",
+				sourceHealth: null,
+				denominator: {
+					totalRows: 0,
+					publicRankableRows: 0,
+					excludedRows: 0,
+					freshRows: 0,
+					staleRows: 0,
+					unknownRows: 0,
+					freshnessPercent: 0,
+				},
+				candidateScan: {
+					requestedRows: 0,
+					evaluatedRows: 0,
+					viableRows: 0,
+					blockedRows: 0,
+					passFillRatePercent: 0,
+					scanRowsNeededForBatch: null,
+				},
+				blockers: [],
+				capacity: {
+					recommendedBatchSize: 0,
+					recommendedCandidateScanSize: 0,
+					estimatedChunks: {},
+					estimatedRowsToRefresh: {},
+					estimatedDurationMinutesPerChunk: null,
+				},
+				rows: [],
+				evidenceGaps: [],
+				recommendation: "not selected",
+			})),
+		],
+		stopConditions: [],
+	};
+	return {
+		path: "capacity-report.json",
+		raw: JSON.stringify(report),
+		report,
+		expectedIssueNumber,
+	};
+}
+
 function repository(rows: DirectRefreshManifestExistingRow[]) {
 	return {
 		async getSource(sourceSlug: string) {
@@ -250,6 +394,235 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		assert.equal(report.rows[0].guards.carrefourHostOnly, true);
 	});
 
+	it("passes with mixed capacity evidence when selected rows passed capacity", async () => {
+		const veaRows: DirectRefreshManifestExistingRow[] = [
+			{
+				...passRow,
+				id: "1",
+				sourceSlug: "vea",
+				supermarketId: 20,
+				productUrl: "https://www.vea.com.ar/leche-1/p",
+			},
+			{
+				...passRow,
+				id: "2",
+				sourceSlug: "vea",
+				supermarketId: 20,
+				skuId: "sku-2",
+				productUrl: "https://www.vea.com.ar/leche-2/p",
+			},
+		];
+		const report = await buildDirectRefreshManifestDryRun({
+			sourceSlug: "vea",
+			sampleSize: 2,
+			repository: repository(veaRows),
+			capacityEvidence: capacityEvidence({
+				rows: [
+					{ rowId: "1", status: "PASS" },
+					{ rowId: "2", status: "PASS" },
+					{ rowId: "blocked", status: "FAIL" },
+				],
+			}),
+			fetchDirectProducts: async (_sourceSlug, lookup) => [
+				{
+					ean:
+						veaRows.find((row) => row.skuId === lookup.value)?.ean ?? "missing",
+					skuId: lookup.value,
+					productUrl: "https://www.vea.com.ar/leche/p",
+					price: 990,
+					listPrice: 1100,
+					isAvailable: true,
+				},
+			],
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(report.lineage.parentArtifacts[0].present, true);
+		assert.equal(report.lineage.parentArtifacts[0].status, "WARN");
+		assert.equal(
+			report.lineage.parentArtifacts[0].source?.classification,
+			"mixed",
+		);
+		assert.deepEqual(report.lineage.parentArtifacts[0].guardReasons, []);
+	});
+
+	it("fails when a selected manifest row did not pass capacity evidence", async () => {
+		const veaRow: DirectRefreshManifestExistingRow = {
+			...passRow,
+			id: "capacity-blocked",
+			sourceSlug: "vea",
+			supermarketId: 20,
+			productUrl: "https://www.vea.com.ar/leche-1/p",
+		};
+		const report = await buildDirectRefreshManifestDryRun({
+			sourceSlug: "vea",
+			repository: repository([veaRow]),
+			capacityEvidence: capacityEvidence({
+				targetBatchSize: 1,
+				viableRows: 1,
+				recommendedBatchSize: 1,
+				rows: [{ rowId: "capacity-blocked", status: "FAIL" }],
+			}),
+			fetchDirectProducts: async () => [
+				{
+					ean: "7790001000011",
+					skuId: "sku-1",
+					productUrl: "https://www.vea.com.ar/leche-1/p",
+					price: 990,
+					listPrice: 1100,
+					isAvailable: true,
+				},
+			],
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/selected row capacity-blocked did not PASS capacity evidence/,
+		);
+	});
+
+	it("fails on capacity source, count, viable row, and batch mismatches", async () => {
+		const veaRow: DirectRefreshManifestExistingRow = {
+			...passRow,
+			id: "1",
+			sourceSlug: "vea",
+			supermarketId: 20,
+			productUrl: "https://www.vea.com.ar/leche-1/p",
+		};
+		const report = await buildDirectRefreshManifestDryRun({
+			sourceSlug: "vea",
+			sampleSize: 2,
+			repository: repository([veaRow]),
+			capacityEvidence: capacityEvidence({
+				source: "disco",
+				targetBatchSize: 1,
+				viableRows: 1,
+				recommendedBatchSize: 1,
+				rows: [{ rowId: "1", status: "PASS" }],
+			}),
+			fetchDirectProducts: async () => [
+				{
+					ean: "7790001000011",
+					skuId: "sku-1",
+					productUrl: "https://www.vea.com.ar/leche-1/p",
+					price: 990,
+					listPrice: 1100,
+					isAvailable: true,
+				},
+			],
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /filters\.sources must be exactly vea/);
+		assert.match(reasons, /targetBatchSize must equal requested sample size 2/);
+		assert.match(reasons, /exactly one source entry for vea/);
+	});
+
+	it("fails on multi-source capacity evidence and issue mismatch", async () => {
+		const veaRow: DirectRefreshManifestExistingRow = {
+			...passRow,
+			id: "1",
+			sourceSlug: "vea",
+			supermarketId: 20,
+			productUrl: "https://www.vea.com.ar/leche-1/p",
+		};
+		const report = await buildDirectRefreshManifestDryRun({
+			sourceSlug: "vea",
+			repository: repository([veaRow]),
+			capacityEvidence: capacityEvidence({
+				issue: 82,
+				expectedIssueNumber: 169,
+				targetBatchSize: 1,
+				viableRows: 1,
+				recommendedBatchSize: 1,
+				filtersSources: ["vea", "mas"],
+				summarySourceCount: 2,
+				extraSources: [{ slug: "mas" }],
+				rows: [{ rowId: "1", status: "PASS" }],
+			}),
+			fetchDirectProducts: async () => [
+				{
+					ean: "7790001000011",
+					skuId: "sku-1",
+					productUrl: "https://www.vea.com.ar/leche-1/p",
+					price: 990,
+					listPrice: 1100,
+					isAvailable: true,
+				},
+			],
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /filters\.sources must be exactly vea/);
+		assert.match(reasons, /source-scoped to exactly one source/);
+		assert.match(reasons, /summary\.sourceCount must be 1/);
+		assert.match(reasons, /issue must equal expected issue 169/);
+	});
+
+	it("fails on missing selected rows and non-exact read-only capacity boundary", async () => {
+		const veaRow: DirectRefreshManifestExistingRow = {
+			...passRow,
+			id: "missing-from-capacity",
+			sourceSlug: "vea",
+			supermarketId: 20,
+			productUrl: "https://www.vea.com.ar/leche-1/p",
+		};
+		const report = await buildDirectRefreshManifestDryRun({
+			sourceSlug: "vea",
+			repository: repository([veaRow]),
+			capacityEvidence: capacityEvidence({
+				targetBatchSize: 1,
+				viableRows: 1,
+				recommendedBatchSize: 1,
+				writeBoundary:
+					"read-only operating capacity audit; no production writes",
+				rows: [{ rowId: "different-row", status: "PASS" }],
+			}),
+			fetchDirectProducts: async () => [
+				{
+					ean: "7790001000011",
+					skuId: "sku-1",
+					productUrl: "https://www.vea.com.ar/leche-1/p",
+					price: 990,
+					listPrice: 1100,
+					isAvailable: true,
+				},
+			],
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /write boundary must be read-only/);
+		assert.match(
+			reasons,
+			/selected row missing-from-capacity is missing from capacity report evidence/,
+		);
+	});
+
+	it("preserves existing no-capacity behavior with absent capacity lineage", async () => {
+		const report = await buildCarrefourDirectRefreshManifestDryRun({
+			repository: repository([passRow]),
+			fetchDirectProducts: async () => [
+				{
+					ean: "7790001000011",
+					skuId: "sku-1",
+					productUrl: "https://www.carrefour.com.ar/leche-1/p",
+					price: 990,
+					listPrice: 1100,
+					isAvailable: true,
+				},
+			],
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.deepEqual(report.summary.failClosedReasons, []);
+		assert.equal(report.lineage.parentArtifacts[0].present, false);
+		assert.deepEqual(report.lineage.parentArtifacts[0].guardReasons, []);
+	});
+
 	it("supports Disco allowlisted source with source-specific host guards", async () => {
 		const discoRow: DirectRefreshManifestExistingRow = {
 			...passRow,
@@ -443,7 +816,10 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		assert.equal(report.summary.passRows, 10);
 		assert.equal(report.summary.failRows, 0);
 		assert.equal(report.skippedRows.length, 2);
-		assert.match(report.summary.skippedBlockedReasons.join("\n"), /host is not/);
+		assert.match(
+			report.summary.skippedBlockedReasons.join("\n"),
+			/host is not/,
+		);
 		assert.deepEqual(
 			report.rows.map((row) => row.rowId),
 			masRows.slice(2).map((row) => row.id),
@@ -489,8 +865,7 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 			fetchDirectProducts: async (_sourceSlug, lookup) => [
 				{
 					ean:
-						masRows.find((row) => row.skuId === lookup.value)?.ean ??
-						"missing",
+						masRows.find((row) => row.skuId === lookup.value)?.ean ?? "missing",
 					skuId: lookup.value,
 					productUrl: "https://www.masonline.com.ar/leche-1/p",
 					price: 990,
@@ -553,6 +928,8 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 				sampleSize: 7,
 				candidateScanSize: 7,
 				output: "manifest.json",
+				capacityReport: null,
+				issueNumber: null,
 			},
 		);
 		assert.deepEqual(
@@ -562,7 +939,14 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 				"--source=vea",
 				"--sample-size=10",
 			]),
-			{ source: "vea", sampleSize: 10, candidateScanSize: 10, output: null },
+			{
+				source: "vea",
+				sampleSize: 10,
+				candidateScanSize: 10,
+				output: null,
+				capacityReport: null,
+				issueNumber: null,
+			},
 		);
 		assert.deepEqual(
 			parseDirectRefreshManifestCliOptions([
@@ -570,7 +954,14 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 				"script",
 				"--source=disco",
 			]),
-			{ source: "disco", sampleSize: 10, candidateScanSize: 10, output: null },
+			{
+				source: "disco",
+				sampleSize: 10,
+				candidateScanSize: 10,
+				output: null,
+				capacityReport: null,
+				issueNumber: null,
+			},
 		);
 		assert.deepEqual(
 			parseDirectRefreshManifestCliOptions([
@@ -578,17 +969,33 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 				"script",
 				"--source=jumbo",
 			]),
-			{ source: "jumbo", sampleSize: 10, candidateScanSize: 10, output: null },
+			{
+				source: "jumbo",
+				sampleSize: 10,
+				candidateScanSize: 10,
+				output: null,
+				capacityReport: null,
+				issueNumber: null,
+			},
 		);
 		assert.deepEqual(
 			parseDirectRefreshManifestCliOptions(["node", "script", "--source=mas"]),
-			{ source: "mas", sampleSize: 10, candidateScanSize: 10, output: null },
+			{
+				source: "mas",
+				sampleSize: 10,
+				candidateScanSize: 10,
+				output: null,
+				capacityReport: null,
+				issueNumber: null,
+			},
 		);
 		assert.deepEqual(parseDirectRefreshManifestCliOptions(["node", "script"]), {
 			source: "carrefour",
 			sampleSize: 10,
 			candidateScanSize: 10,
 			output: null,
+			capacityReport: null,
+			issueNumber: null,
 		});
 		assert.deepEqual(
 			parseDirectRefreshManifestCliOptions([
@@ -598,13 +1005,39 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 				"--sample-size=10",
 				"--candidate-scan-size=12",
 			]),
-			{ source: "mas", sampleSize: 10, candidateScanSize: 12, output: null },
+			{
+				source: "mas",
+				sampleSize: 10,
+				candidateScanSize: 12,
+				output: null,
+				capacityReport: null,
+				issueNumber: null,
+			},
+		);
+		assert.deepEqual(
+			parseDirectRefreshManifestCliOptions([
+				"node",
+				"script",
+				"--source=vea",
+				"--sample-size=10",
+				"--capacity-report=audit/capacity-report.json",
+				"--issue-number=169",
+			]),
+			{
+				source: "vea",
+				sampleSize: 10,
+				candidateScanSize: 10,
+				output: null,
+				capacityReport: "audit/capacity-report.json",
+				issueNumber: 169,
+			},
 		);
 		for (const argv of [
 			["node", "script", "--source=dia"],
 			["node", "script", "--source=carrefour,dia"],
 			["node", "script", "--source=mas,jumbo"],
 			["node", "script", "--sample-size=10", "--candidate-scan-size=9"],
+			["node", "script", "--capacity-report=audit/capacity-report.json"],
 			["node", "script", "--all-source"],
 			["node", "script", "--all-sources=true"],
 			["node", "script", "--confirm-write"],
@@ -614,7 +1047,7 @@ describe("Carrefour direct refresh manifest dry-run", () => {
 		]) {
 			assert.throws(
 				() => parseDirectRefreshManifestCliOptions(argv),
-				/carrefour|read-only|candidate-scan-size/,
+				/carrefour|read-only|candidate-scan-size|issue-number/,
 			);
 		}
 	});

@@ -113,6 +113,150 @@ function masLikeRows(count: number): DirectRefreshPrewriteExistingRow[] {
 	}));
 }
 
+function capacityEvidence({
+	source = "vea",
+	targetBatchSize = 10,
+	viableRows = 10,
+	recommendedBatchSize = 10,
+	issue = 169,
+	expectedIssueNumber = issue,
+	filtersSources,
+	summarySourceCount = 1,
+	extraSources = [],
+	writeBoundary = "read-only operating capacity audit; no production writes, no staging/ingestion runs, no scheduler/cron/workflow side effects",
+	rows,
+}: {
+	source?: string;
+	targetBatchSize?: number;
+	viableRows?: number;
+	recommendedBatchSize?: number;
+	issue?: number;
+	expectedIssueNumber?: number;
+	filtersSources?: string[];
+	summarySourceCount?: number;
+	extraSources?: Array<{ slug: string }>;
+	writeBoundary?: string;
+	rows: Array<{ rowId: string; status: "PASS" | "FAIL" }>;
+}) {
+	const report = {
+		schemaVersion: 1,
+		audit: "direct-refresh-operating-capacity",
+		issue,
+		status: "WARN",
+		generatedAt: "2026-06-05T00:00:00.000Z",
+		basis: "production",
+		dryRun: true,
+		writeBoundary,
+		filters: {
+			sources: filtersSources ?? [source],
+			candidateScanSize: rows.length,
+			targetBatchSize,
+			freshnessTargetsPercent: [80, 95],
+			slaHours: 24,
+			maxPriceDeltaPercent: 200,
+		},
+		summary: {
+			sourceCount: summarySourceCount,
+			publicRankableRows: rows.length,
+			freshRows: 0,
+			staleRows: rows.length,
+			viableRowsInScan: viableRows,
+			blockedRowsInScan: rows.length - viableRows,
+			excludedSources: [],
+			warnSources: [source],
+			failSources: [],
+			recommendedNextPhase: "phase-2-batch-size-generalization",
+		},
+		sources: [
+			{
+				slug: source,
+				displayName: source,
+				directRefreshSupport: "writer-supported",
+				classification: "mixed",
+				status: "WARN",
+				sourceHealth: null,
+				denominator: {
+					totalRows: rows.length,
+					publicRankableRows: rows.length,
+					excludedRows: 0,
+					freshRows: 0,
+					staleRows: rows.length,
+					unknownRows: 0,
+					freshnessPercent: 0,
+				},
+				candidateScan: {
+					requestedRows: rows.length,
+					evaluatedRows: rows.length,
+					viableRows,
+					blockedRows: rows.length - viableRows,
+					passFillRatePercent: 0,
+					scanRowsNeededForBatch: null,
+				},
+				blockers: [
+					{
+						reason: "live product is unavailable",
+						count: rows.length - viableRows,
+					},
+				],
+				capacity: {
+					recommendedBatchSize,
+					recommendedCandidateScanSize: rows.length,
+					estimatedChunks: { "80": 1 },
+					estimatedRowsToRefresh: { "80": targetBatchSize },
+					estimatedDurationMinutesPerChunk: null,
+				},
+				rows,
+				evidenceGaps: [],
+				recommendation:
+					"eligible for manual-review planning; not approval to write",
+			},
+			...extraSources.map((extraSource) => ({
+				slug: extraSource.slug,
+				displayName: extraSource.slug,
+				directRefreshSupport: "writer-supported",
+				classification: "mixed",
+				status: "WARN",
+				sourceHealth: null,
+				denominator: {
+					totalRows: 0,
+					publicRankableRows: 0,
+					excludedRows: 0,
+					freshRows: 0,
+					staleRows: 0,
+					unknownRows: 0,
+					freshnessPercent: 0,
+				},
+				candidateScan: {
+					requestedRows: 0,
+					evaluatedRows: 0,
+					viableRows: 0,
+					blockedRows: 0,
+					passFillRatePercent: 0,
+					scanRowsNeededForBatch: null,
+				},
+				blockers: [],
+				capacity: {
+					recommendedBatchSize: 0,
+					recommendedCandidateScanSize: 0,
+					estimatedChunks: {},
+					estimatedRowsToRefresh: {},
+					estimatedDurationMinutesPerChunk: null,
+				},
+				rows: [],
+				evidenceGaps: [],
+				recommendation: "not selected",
+			})),
+		],
+		stopConditions: [],
+	};
+	return {
+		path: "capacity-report.json",
+		raw: JSON.stringify(report),
+		report,
+		expectedIssueNumber,
+	};
+}
+
 function repository(rows: DirectRefreshPrewriteExistingRow[]) {
 	return {
 		async getSource(sourceSlug: string) {
@@ -311,6 +455,254 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		assert.deepEqual(report.futureConfirmation.shape.skuIds, ["sku-1"]);
 		assert.equal(report.rows[0].sourceSlug, "vea");
 		assert.equal(report.rows[0].guards.carrefourHostOnly, true);
+	});
+
+	it("passes with mixed capacity evidence when selected prewrite rows passed capacity", async () => {
+		const veaRows: DirectRefreshPrewriteExistingRow[] = Array.from(
+			{ length: 10 },
+			(_, index) => ({
+				...passRow,
+				id: String(index + 1),
+				sourceSlug: "vea",
+				supermarketId: 20,
+				ean: `77920000000${String(index + 1).padStart(2, "0")}`,
+				skuId: `vea-sku-${index + 1}`,
+				productUrl: "https://www.vea.com.ar/leche-1/p",
+				product: passRow.product
+					? {
+							...passRow.product,
+							ean: `77920000000${String(index + 1).padStart(2, "0")}`,
+							imageUrl: "https://www.vea.com.ar/old.jpg",
+							images: ["https://www.vea.com.ar/old.jpg"],
+						}
+					: null,
+				latestPriceHistory: passRow.latestPriceHistory
+					? {
+							...passRow.latestPriceHistory,
+							supermarketProductId: index + 1,
+						}
+					: null,
+			}),
+		);
+		const report = await buildDirectRefreshPrewriteGate({
+			sourceSlug: "vea",
+			sampleSize: 10,
+			repository: repository(veaRows),
+			now: new Date("2026-06-01T00:00:00.000Z"),
+			capacityEvidence: capacityEvidence({
+				rows: [
+					...veaRows.map((row) => ({ rowId: row.id, status: "PASS" as const })),
+					{ rowId: "blocked", status: "FAIL" },
+				],
+			}),
+			fetchDirectProducts: async (_sourceSlug, lookup) => {
+				const row = veaRows.find((entry) => entry.skuId === lookup.value);
+				return [
+					live({
+						ean: row?.ean ?? "missing",
+						skuId: lookup.value,
+						productUrl: "https://www.vea.com.ar/leche-1/p",
+						imageUrl: "https://www.vea.com.ar/new.jpg",
+						images: ["https://www.vea.com.ar/new.jpg"],
+					}),
+				];
+			},
+		});
+		const hashPayload: Record<string, unknown> = { ...report };
+		delete hashPayload.futureConfirmation;
+
+		assert.equal(report.status, "PASS");
+		assert.equal(report.lineage.parentArtifacts[0].present, true);
+		assert.equal(report.lineage.parentArtifacts[0].status, "WARN");
+		assert.equal(
+			report.lineage.parentArtifacts[0].source?.classification,
+			"mixed",
+		);
+		assert.deepEqual(report.lineage.parentArtifacts[0].guardReasons, []);
+		assert.equal(
+			report.futureConfirmation.shape.reportHash,
+			buildPrewriteReportHash(hashPayload),
+		);
+	});
+
+	it("fails when a selected prewrite row did not pass capacity evidence", async () => {
+		const veaRows: DirectRefreshPrewriteExistingRow[] = Array.from(
+			{ length: 10 },
+			(_, index) => ({
+				...passRow,
+				id: String(index + 1),
+				sourceSlug: "vea",
+				supermarketId: 20,
+				ean: `77920000000${String(index + 1).padStart(2, "0")}`,
+				skuId: `vea-sku-${index + 1}`,
+				productUrl: "https://www.vea.com.ar/leche-1/p",
+				product: passRow.product
+					? {
+							...passRow.product,
+							ean: `77920000000${String(index + 1).padStart(2, "0")}`,
+							imageUrl: "https://www.vea.com.ar/old.jpg",
+							images: ["https://www.vea.com.ar/old.jpg"],
+						}
+					: null,
+			}),
+		);
+		const report = await buildDirectRefreshPrewriteGate({
+			sourceSlug: "vea",
+			sampleSize: 10,
+			repository: repository(veaRows),
+			capacityEvidence: capacityEvidence({
+				rows: veaRows.map((row, index) => ({
+					rowId: row.id,
+					status: index === 0 ? "FAIL" : "PASS",
+				})),
+			}),
+			fetchDirectProducts: async (_sourceSlug, lookup) => {
+				const row = veaRows.find((entry) => entry.skuId === lookup.value);
+				return [
+					live({
+						ean: row?.ean ?? "missing",
+						skuId: lookup.value,
+						productUrl: "https://www.vea.com.ar/leche-1/p",
+					}),
+				];
+			},
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/selected row 1 did not PASS capacity evidence/,
+		);
+	});
+
+	it("fails on capacity source, count, viable row, and recommended batch mismatches", async () => {
+		const veaRows: DirectRefreshPrewriteExistingRow[] = Array.from(
+			{ length: 10 },
+			(_, index) => ({
+				...passRow,
+				id: String(index + 1),
+				sourceSlug: "vea",
+				supermarketId: 20,
+				ean: `77920000000${String(index + 1).padStart(2, "0")}`,
+				skuId: `vea-sku-${index + 1}`,
+				productUrl: "https://www.vea.com.ar/leche-1/p",
+				product: passRow.product
+					? {
+							...passRow.product,
+							ean: `77920000000${String(index + 1).padStart(2, "0")}`,
+							imageUrl: "https://www.vea.com.ar/old.jpg",
+							images: ["https://www.vea.com.ar/old.jpg"],
+						}
+					: null,
+			}),
+		);
+		const report = await buildDirectRefreshPrewriteGate({
+			sourceSlug: "vea",
+			sampleSize: 10,
+			repository: repository(veaRows),
+			capacityEvidence: capacityEvidence({
+				targetBatchSize: 25,
+				viableRows: 9,
+				recommendedBatchSize: 9,
+				rows: veaRows.map((row) => ({ rowId: row.id, status: "PASS" })),
+			}),
+			fetchDirectProducts: async (_sourceSlug, lookup) => {
+				const row = veaRows.find((entry) => entry.skuId === lookup.value);
+				return [
+					live({
+						ean: row?.ean ?? "missing",
+						skuId: lookup.value,
+						productUrl: "https://www.vea.com.ar/leche-1/p",
+					}),
+				];
+			},
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/targetBatchSize must equal requested sample size 10/,
+		);
+		assert.match(reasons, /viable rows must be >= requested sample size 10/);
+		assert.match(
+			reasons,
+			/recommended batch size must be >= requested sample size 10/,
+		);
+	});
+
+	it("fails on multi-source, issue mismatch, missing row, and weak capacity boundary", async () => {
+		const veaRows: DirectRefreshPrewriteExistingRow[] = Array.from(
+			{ length: 10 },
+			(_, index) => ({
+				...passRow,
+				id: String(index + 1),
+				sourceSlug: "vea",
+				supermarketId: 20,
+				ean: `77920000000${String(index + 1).padStart(2, "0")}`,
+				skuId: `vea-sku-${index + 1}`,
+				productUrl: "https://www.vea.com.ar/leche-1/p",
+				product: passRow.product
+					? {
+							...passRow.product,
+							ean: `77920000000${String(index + 1).padStart(2, "0")}`,
+							imageUrl: "https://www.vea.com.ar/old.jpg",
+							images: ["https://www.vea.com.ar/old.jpg"],
+						}
+					: null,
+			}),
+		);
+		const report = await buildDirectRefreshPrewriteGate({
+			sourceSlug: "vea",
+			sampleSize: 10,
+			repository: repository(veaRows),
+			capacityEvidence: capacityEvidence({
+				issue: 82,
+				expectedIssueNumber: 169,
+				filtersSources: ["vea", "mas"],
+				summarySourceCount: 2,
+				extraSources: [{ slug: "mas" }],
+				writeBoundary:
+					"read-only operating capacity audit; no production writes",
+				rows: veaRows
+					.slice(1)
+					.map((row) => ({ rowId: row.id, status: "PASS" })),
+			}),
+			fetchDirectProducts: async (_sourceSlug, lookup) => {
+				const row = veaRows.find((entry) => entry.skuId === lookup.value);
+				return [
+					live({
+						ean: row?.ean ?? "missing",
+						skuId: lookup.value,
+						productUrl: "https://www.vea.com.ar/leche-1/p",
+					}),
+				];
+			},
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /filters\.sources must be exactly vea/);
+		assert.match(reasons, /source-scoped to exactly one source/);
+		assert.match(reasons, /summary\.sourceCount must be 1/);
+		assert.match(reasons, /issue must equal expected issue 169/);
+		assert.match(reasons, /write boundary must be read-only/);
+		assert.match(
+			reasons,
+			/selected row 1 is missing from capacity report evidence/,
+		);
+	});
+
+	it("preserves existing prewrite behavior with absent capacity lineage", async () => {
+		const report = await buildCarrefourDirectRefreshPrewriteGate({
+			repository: repository([passRow]),
+			fetchDirectProducts: async () => [live()],
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.deepEqual(report.summary.failClosedReasons, []);
+		assert.equal(report.lineage.parentArtifacts[0].present, false);
+		assert.deepEqual(report.lineage.parentArtifacts[0].guardReasons, []);
 	});
 
 	it("supports Disco allowlisted source with source-specific host and confirmation guards", async () => {
@@ -724,6 +1116,8 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				sampleSize: 25,
 				candidateScanSize: 25,
 				output: "prewrite.json",
+				capacityReport: null,
+				issueNumber: null,
 			},
 		);
 		assert.deepEqual(
@@ -732,7 +1126,14 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"script",
 				"--source=vea",
 			]),
-			{ source: "vea", sampleSize: 10, candidateScanSize: 10, output: null },
+			{
+				source: "vea",
+				sampleSize: 10,
+				candidateScanSize: 10,
+				output: null,
+				capacityReport: null,
+				issueNumber: null,
+			},
 		);
 		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions([
@@ -740,7 +1141,14 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"script",
 				"--source=disco",
 			]),
-			{ source: "disco", sampleSize: 10, candidateScanSize: 10, output: null },
+			{
+				source: "disco",
+				sampleSize: 10,
+				candidateScanSize: 10,
+				output: null,
+				capacityReport: null,
+				issueNumber: null,
+			},
 		);
 		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions([
@@ -748,7 +1156,14 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"script",
 				"--source=jumbo",
 			]),
-			{ source: "jumbo", sampleSize: 10, candidateScanSize: 10, output: null },
+			{
+				source: "jumbo",
+				sampleSize: 10,
+				candidateScanSize: 10,
+				output: null,
+				capacityReport: null,
+				issueNumber: null,
+			},
 		);
 		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions([
@@ -756,7 +1171,14 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"script",
 				"--source=mas",
 			]),
-			{ source: "mas", sampleSize: 10, candidateScanSize: 10, output: null },
+			{
+				source: "mas",
+				sampleSize: 10,
+				candidateScanSize: 10,
+				output: null,
+				capacityReport: null,
+				issueNumber: null,
+			},
 		);
 		assert.deepEqual(
 			parseDirectRefreshPrewriteGateCliOptions(["node", "script"]),
@@ -765,6 +1187,8 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				sampleSize: 10,
 				candidateScanSize: 10,
 				output: null,
+				capacityReport: null,
+				issueNumber: null,
 			},
 		);
 		assert.deepEqual(
@@ -775,7 +1199,32 @@ describe("Carrefour direct refresh pre-write gate", () => {
 				"--sample-size=50",
 				"--candidate-scan-size=60",
 			]),
-			{ source: "mas", sampleSize: 50, candidateScanSize: 60, output: null },
+			{
+				source: "mas",
+				sampleSize: 50,
+				candidateScanSize: 60,
+				output: null,
+				capacityReport: null,
+				issueNumber: null,
+			},
+		);
+		assert.deepEqual(
+			parseDirectRefreshPrewriteGateCliOptions([
+				"node",
+				"script",
+				"--source=vea",
+				"--sample-size=10",
+				"--capacity-report=audit/capacity-report.json",
+				"--issue-number=169",
+			]),
+			{
+				source: "vea",
+				sampleSize: 10,
+				candidateScanSize: 10,
+				output: null,
+				capacityReport: "audit/capacity-report.json",
+				issueNumber: 169,
+			},
 		);
 		for (const argv of [
 			["node", "script", "--source=dia"],
@@ -784,6 +1233,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			["node", "script", "--sample-size=9"],
 			["node", "script", "--sample-size=100"],
 			["node", "script", "--sample-size=10", "--candidate-scan-size=9"],
+			["node", "script", "--capacity-report=audit/capacity-report.json"],
 			["node", "script", "--all-source"],
 			["node", "script", "--all-sources=true"],
 			["node", "script", "--confirm-write"],
@@ -800,7 +1250,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		]) {
 			assert.throws(
 				() => parseDirectRefreshPrewriteGateCliOptions(argv),
-				/carrefour|read-only|candidate-scan-size|sample-size/,
+				/carrefour|read-only|candidate-scan-size|sample-size|issue-number/,
 			);
 		}
 	});

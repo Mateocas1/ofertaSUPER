@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 
 import type { NormalizedProduct } from "../../src/lib/vtex/normalize";
+import {
+	validateDirectRefreshCapacityEvidence,
+	type DirectRefreshCapacityEvidenceInput,
+	type DirectRefreshCapacityEvidenceLineage,
+} from "./direct-refresh-capacity-lineage";
 
 type GateStatus = "PASS" | "FAIL";
 type RowGuardStatus = "PASS" | "FAIL";
@@ -170,6 +175,7 @@ export type CarrefourDirectRefreshPrewriteGate = {
 		expectedPriceHistoryInserts: number;
 		failClosedReasons: string[];
 	};
+	lineage: DirectRefreshCapacityEvidenceLineage;
 	rollbackSnapshot: {
 		requiresConfirmation: true;
 		touchedProductEans: string[];
@@ -296,6 +302,7 @@ export async function buildDirectRefreshPrewriteGate({
 	candidateScanSize = sampleSize,
 	now = new Date(),
 	maxPriceDeltaPercent = MAX_PRICE_DELTA_PERCENT,
+	capacityEvidence = null,
 }: {
 	repository: DirectRefreshPrewriteRepository;
 	fetchDirectProducts(
@@ -307,6 +314,7 @@ export async function buildDirectRefreshPrewriteGate({
 	candidateScanSize?: number;
 	now?: Date;
 	maxPriceDeltaPercent?: number;
+	capacityEvidence?: DirectRefreshCapacityEvidenceInput | null;
 }): Promise<CarrefourDirectRefreshPrewriteGate> {
 	const config = sourceConfig(sourceSlug);
 	const generatedAt = now.toISOString();
@@ -364,11 +372,18 @@ export async function buildDirectRefreshPrewriteGate({
 		: rows.flatMap((row) =>
 				row.guards.status === "FAIL" ? row.guards.reasons : [],
 			);
+	const capacityValidation = validateDirectRefreshCapacityEvidence({
+		evidence: capacityEvidence,
+		sourceSlug: config.slug,
+		sampleSize,
+		selectedRows: rows,
+	});
 	const failClosedReasons = uniqueSorted([
 		...sourceFailReasons,
 		...selectedFailReasons,
 		...insufficientViableReasons,
 		...rowFailReasons,
+		...capacityValidation.failClosedReasons,
 	]);
 	const passRows = rows.filter((row) => row.guards.status === "PASS");
 	const failRows = rows.length - passRows.length;
@@ -449,6 +464,7 @@ export async function buildDirectRefreshPrewriteGate({
 			skippedBlockedRows: skippedRows.length,
 		},
 		summary,
+		lineage: capacityValidation.lineage,
 		rollbackSnapshot,
 		rows,
 		skippedRows,
