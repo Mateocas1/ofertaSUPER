@@ -41,7 +41,7 @@ The snapshot shows `0%` fresh rows for all writer-supported sources. This is fre
 | Source | Public-rankable rows | Fresh rows | Rows needed for 80% | Rows needed for 95% | Capacity status | Current blockers |
 | --- | ---: | ---: | ---: | ---: | --- | --- |
 | Carrefour | 990 | 0 | 792 | 941 | WARN | freshness debt; mixed capacity; 6 blocked rows |
-| Vea | 666 | 0 | 533 | 633 | PASS | freshness debt |
+| Vea | 666 | 0 | 533 | 633 | WARN | freshness debt; mixed capacity in fresh issue #166 evidence |
 | Disco | 777 | 0 | 622 | 739 | WARN | freshness debt; mixed capacity; 2 blocked rows |
 | Jumbo | 778 | 0 | 623 | 740 | WARN | freshness debt; mixed capacity; 6 blocked rows |
 | MAS | 831 | 0 | 665 | 790 | WARN | freshness debt; mixed capacity; 5 blocked rows |
@@ -198,9 +198,11 @@ This foundation still does not execute production writes, scheduler jobs, manife
 
 Issue [#163](https://github.com/Mateocas1/ofertaSUPER/issues/163) defines the first source-specific recovery operation plan in `docs/direct-refresh-vea-controlled-recovery-plan.md`.
 
-The plan uses cadence controller evidence from issue [#162](https://github.com/Mateocas1/ofertaSUPER/issues/162): Vea is the only writer-supported source currently `PASS` / `ready-for-human-confirmation` at `count=50`; Carrefour, Disco, Jumbo, and MAS remain `WARN` / `manual-review`.
+That plan originally used cadence controller evidence from issue [#162](https://github.com/Mateocas1/ofertaSUPER/issues/162): Vea was the only writer-supported source with `PASS` / `ready-for-human-confirmation` at `count=50`. Fresh issue [#165](https://github.com/Mateocas1/ofertaSUPER/issues/165) and issue [#166](https://github.com/Mateocas1/ofertaSUPER/issues/166) evidence supersedes that as the current posture. Vea is now `WARN` / `manual-review`: scan70 found 51 viable rows for `count=50`, but capacity remains `WARN` / `mixed` because 19 live products were unavailable.
 
-The Vea-first plan is documentation only. It does not authorize production writes, manifest/prewrite generation, scheduler execution, repeated batches, VTEX scans, notifications, deploys, secrets, remote config, cache purge, or DIA writer support.
+Default policy requires fresh capacity `PASS` and cadence `PASS` / `ready-for-human-confirmation` for normal operation readiness. A manual-review operation with mixed capacity may be proposed only in a separate approved issue that explicitly accepts the risk and restricts selection to rows that passed fresh capacity evidence.
+
+The Vea-first plan is documentation only. It does not authorize production writes, manifest/prewrite generation, scheduler execution, repeated batches, VTEX scans or direct lookups, notifications, deploys, secrets, remote config, cache purge, or DIA writer support.
 
 ## Future production cadence controller execution
 
@@ -244,8 +246,9 @@ It must be production-shaped from the start:
 | 2 | `feat(data): add direct-refresh run ledger and advisory lock` | implementation | No writes; state and concurrency guard foundations. |
 | 3 | `feat(data): add direct-refresh cadence controller foundation` | implementation | Still read-only; consumes planner/ledger evidence and stops at human confirmation. |
 | 4 | `docs(data): define Vea-first direct-refresh recovery plan` | docs | First source-specific operation plan; no writes or gate generation. |
-| 5 | `docs(data): define direct-refresh cadence executor design` | docs | Future production executor architecture, budgets, TTL, alert ownership. |
-| 6 | `ops(data): run controlled recovery batch vea count50` | operation | Only after fresh planner/cadence evidence and normal write gates; one source/count/run. |
+| 5 | `docs(data): define Vea manual-review capacity policy` | docs | Clarify issue #165/#166 posture and whether mixed capacity can ever proceed. |
+| 6 | `docs(data): define direct-refresh cadence executor design` | docs | Future production executor architecture, budgets, TTL, alert ownership. |
+| 7 | `ops(data): run controlled recovery batch vea count50` | operation | Only after fresh capacity/cadence readiness or a separately approved manual-review operation policy, plus normal write gates; one source/count/run. |
 
 ## Launch posture
 

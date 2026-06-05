@@ -97,13 +97,16 @@ Allowed planning responses:
 - reduce batch size;
 - increase evidence confidence requirements;
 - require manual review before manifest/prewrite;
-- require larger candidate scan only in a separately approved VTEX read-scan slice;
+- require larger candidate scan only in a separately approved VTEX/direct-read evidence slice;
 - exclude source temporarily from recovery plan if blocker density is too high;
 - keep MAS in rapid-confirmation protocol for large batches.
+
+Default normal-readiness policy still requires capacity `PASS`. Capacity `WARN` / `mixed` maps to `manual-review`, not `ready-for-human-confirmation`. A future operation that proceeds from manual review must have a separate approved issue that explicitly accepts the mixed-capacity risk, limits selection to rows that passed fresh capacity evidence, and preserves all normal manifest, prewrite, exact confirmation, postwrite, and no-partial controls.
 
 Disallowed responses:
 
 - treating capacity WARN as automatic write approval;
+- presenting mixed capacity as normal operation readiness;
 - hiding skipped/blocked rows;
 - using all-source or repeated-batch execution to compensate for poor fill rate;
 - relaxing identity, host, price, no-create, or postwrite checks.
