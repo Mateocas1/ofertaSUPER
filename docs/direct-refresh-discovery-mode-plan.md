@@ -73,14 +73,26 @@ Discovery starts with tiny caps because row creation changes catalog shape:
 
 Discovery must not be used to chase the 90%/95% freshness target. Freshness recovery is refresh-existing first; discovery improves catalog coverage only after safety and ownership are proven.
 
+## Create-gate rollout
+
+Issue [#181](https://github.com/Mateocas1/ofertaSUPER/issues/181) promotes discovery from read-only planning to a create-capable gate without weakening `refresh-existing`.
+
+| Gate | Contract |
+| --- | --- |
+| Read-only audit | `npm run audit:direct-refresh-discovery -- --source=<source> --terms=<term> --count=<1-5> --scan-count=<count-50> --issue-number=<issue>` emits discovery idempotency keys and rollback previews only. |
+| Create prewrite | `npm run direct-refresh:discovery-create -- prewrite ... --selected-keys=<keys>` reruns live candidate selection and DB checks before emitting exact confirmation text. |
+| Create apply | `npm run direct-refresh:discovery-create -- apply --prewrite=<report> --confirm="<exactConfirmation>"` writes only the prewrite-selected missing rows. |
+
+The apply gate rechecks product/source/staging/SKU state inside the transaction, acquires a source-scoped discovery advisory lock, and inserts only the missing `products` row when classification is `product-and-source-discovery`, one `supermarket_products` row, and one `price_history` row. Wrong confirmation, stale prewrite, existing source rows, staging conflicts, duplicate source SKU, unsupported source, or unavailable lock fail closed before writes.
+
 ## Success gates for implementation planning
 
-- [ ] Add a read-only discovery audit that emits candidate identity, missing-row classification, quality flags, idempotency key, and rollback preview.
-- [ ] Add tests for missing global product, missing source row, duplicate SKU, host drift, stale evidence, staging conflict, and rollback-bound deletes.
-- [ ] Add a create-mode design that uses a transaction, advisory/source lock, final preflight, and exact created-row report.
+- [x] Add a read-only discovery audit that emits candidate identity, missing-row classification, quality flags, idempotency key, and rollback preview.
+- [x] Add tests for missing global product, missing source row, duplicate SKU, host drift, stale evidence, staging conflict, and rollback-bound deletes.
+- [x] Add a create-mode design that uses a transaction, advisory/source lock, final preflight, and exact created-row report.
 - [ ] Keep `refresh-existing` no-create tests green; discovery must not weaken existing guards.
-- [ ] Produce a reviewer-friendly issue summary before any write-capable discovery PR.
+- [x] Produce a reviewer-friendly issue summary before any write-capable discovery PR.
 
 ## Next step
 
-Start discovery with a read-only design/proposal for issue #21. Do not implement writes until the read-only audit contract, rollback contract, edge cases, race mitigations, and scaling caps are reviewed.
+Run the create prewrite against a fresh PASS discovery audit, then stop unless the exact confirmation string and postwrite audit scope are reviewed. Do not use scheduler/all-source/repeated batches or DIA for discovery.
