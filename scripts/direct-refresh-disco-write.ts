@@ -11,6 +11,7 @@ import { getSourceAdapter } from "../src/lib/ingestion/adapters/registry";
 import {
 	DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS,
 	assertFreshPrewriteRerunMatches,
+	readActiveWriteCapacityEvidence,
 	executeDiscoActiveWrite,
 	parseDiscoActiveWriteCliOptions,
 	readPrewriteReport,
@@ -250,12 +251,17 @@ async function buildFreshPrewrite(
 	options: DiscoActiveWriteCliOptions,
 	prewriteReport: Awaited<ReturnType<typeof readPrewriteReport>>,
 ) {
+	const capacityEvidence = await readActiveWriteCapacityEvidence(
+		options,
+		prewriteReport,
+	);
 	return buildDirectRefreshPrewriteGate({
 		repository: createDirectRefreshPrewriteRepository(),
 		sourceSlug: options.source,
 		sampleSize: options.count,
 		candidateScanSize: prewriteReport.selection.candidateScanSize,
 		now: new Date(prewriteReport.generatedAt),
+		capacityEvidence,
 		fetchDirectProducts: async (_sourceSlug, lookup) =>
 			getSourceAdapter("disco").fetchDirectProducts(lookup),
 	});

@@ -26,6 +26,7 @@ import {
 	parseJumboActiveWriteCliOptions,
 	parseMasActiveWriteCliOptions,
 	parseVeaActiveWriteCliOptions,
+	readActiveWriteCapacityEvidence,
 	validatePrewriteReportForActiveWrite,
 	type ActiveWriteRepository,
 	type ActiveWriteTransaction,
@@ -513,7 +514,10 @@ function tx(overrides: Partial<ActiveWriteTransaction> = {}) {
 	};
 	return { ...base, ...overrides };
 }
-function repo(transaction: ActiveWriteTransaction, onTransaction?: () => void): ActiveWriteRepository {
+function repo(
+	transaction: ActiveWriteTransaction,
+	onTransaction?: () => void,
+): ActiveWriteRepository {
 	return {
 		async withTransaction(fn) {
 			onTransaction?.();
@@ -526,6 +530,100 @@ async function writeKillSwitchControl(control: unknown) {
 	const dir = await mkdtemp(join(tmpdir(), "direct-refresh-kill-switch-"));
 	const path = join(dir, "control.json");
 	await writeFile(path, `${JSON.stringify(control, null, 2)}\n`, "utf8");
+	return path;
+}
+
+function capacityEvidenceForRows({
+	source,
+	issue = 176,
+	rows,
+}: {
+	source: "carrefour" | "vea";
+	issue?: number;
+	rows: DirectRefreshPrewriteExistingRow[];
+}) {
+	const report = {
+		schemaVersion: 1,
+		audit: "direct-refresh-operating-capacity",
+		issue,
+		status: "WARN",
+		generatedAt: "2026-06-01T00:00:00.000Z",
+		basis: "production",
+		dryRun: true,
+		writeBoundary:
+			"read-only operating capacity audit; no production writes, no staging/ingestion runs, no scheduler/cron/workflow side effects",
+		filters: {
+			sources: [source],
+			candidateScanSize: rows.length,
+			targetBatchSize: rows.length,
+			freshnessTargetsPercent: [80, 95],
+			slaHours: 24,
+			maxPriceDeltaPercent: 200,
+		},
+		summary: {
+			sourceCount: 1,
+			publicRankableRows: rows.length,
+			freshRows: 0,
+			staleRows: rows.length,
+			viableRowsInScan: rows.length,
+			blockedRowsInScan: 0,
+			excludedSources: [],
+			warnSources: [source],
+			failSources: [],
+			recommendedNextPhase: "phase-2-batch-size-generalization",
+		},
+		sources: [
+			{
+				slug: source,
+				displayName: source,
+				directRefreshSupport: "writer-supported",
+				classification: "mixed",
+				status: "WARN",
+				sourceHealth: null,
+				denominator: {
+					totalRows: rows.length,
+					publicRankableRows: rows.length,
+					excludedRows: 0,
+					freshRows: 0,
+					staleRows: rows.length,
+					unknownRows: 0,
+					freshnessPercent: 0,
+				},
+				candidateScan: {
+					requestedRows: rows.length,
+					evaluatedRows: rows.length,
+					viableRows: rows.length,
+					blockedRows: 0,
+					passFillRatePercent: 100,
+					scanRowsNeededForBatch: null,
+				},
+				blockers: [],
+				capacity: {
+					recommendedBatchSize: rows.length,
+					recommendedCandidateScanSize: rows.length,
+					estimatedChunks: { "80": 1 },
+					estimatedRowsToRefresh: { "80": rows.length },
+					estimatedDurationMinutesPerChunk: null,
+				},
+				rows: rows.map((row) => ({ rowId: row.id, status: "PASS" })),
+				evidenceGaps: [],
+				recommendation:
+					"eligible for manual-review planning; not approval to write",
+			},
+		],
+		stopConditions: [],
+	};
+	return {
+		report,
+		raw: JSON.stringify(report),
+		expectedIssueNumber: issue,
+	};
+}
+
+async function writeCapacityReport(raw: string) {
+	const dir = await mkdtemp(join(tmpdir(), "direct-refresh-capacity-"));
+	const path = join(dir, "capacity-report.json");
+	await writeFile(path, raw, "utf8");
 	return path;
 }
 
@@ -766,7 +864,8 @@ describe("Carrefour active refresh writer contract", () => {
 		).length;
 		const hashPayload = { ...report } as Record<string, unknown>;
 		delete hashPayload.futureConfirmation;
-		report.futureConfirmation.shape.reportHash = buildPrewriteReportHash(hashPayload);
+		report.futureConfirmation.shape.reportHash =
+			buildPrewriteReportHash(hashPayload);
 		const options = parseCarrefourActiveWriteCliOptions(argv(report));
 		let productUpdateCalls = 0;
 		const writeReport = await executeCarrefourActiveWrite({
@@ -884,12 +983,168 @@ describe("Carrefour active refresh writer contract", () => {
 			["--all-source"],
 			["--cron=true"],
 			["--confirm-write=carrefour-direct-refresh-count10"],
+			["--capacity-report=capacity.json"],
+			["--capacity-report="],
+			["--issue-number=176"],
 		]) {
 			assert.throws(
 				() => parseVeaActiveWriteCliOptions(veaArgv(report, bad)),
-				/vea|count|rejects|confirmation|unknown|exactly one/,
+				/vea|count|rejects|confirmation|unknown|exactly one|issue-number|capacity-report/,
 			);
 		}
+	});
+
+	it("replays capacity evidence for capacity-bound Vea prewrite reports", async () => {
+		const existingRows = veaRows();
+		const capacity = capacityEvidenceForRows({
+			source: "vea",
+			rows: existingRows,
+		});
+		const fetchDirectProducts = async (
+			_sourceSlug: string,
+			lookup: { value: string },
+		) => {
+			const row = existingRows.find((entry) => entry.skuId === lookup.value);
+			return [
+				{
+					ean: row?.ean ?? "",
+					name: `${row?.product?.name} Nuevo`,
+					brand: "Nueva",
+					description: "Nueva",
+					imageUrl: "https://www.vea.com.ar/new.jpg",
+					images: ["https://www.vea.com.ar/new.jpg"],
+					category: "Test",
+					skuId: lookup.value,
+					sellerId: "1",
+					productUrl: row?.productUrl ?? null,
+					price: 1100,
+					listPrice: 1100,
+					referencePrice: null,
+					referenceUnit: null,
+					isAvailable: true,
+				},
+			];
+		};
+		const capacityPath = await writeCapacityReport(capacity.raw);
+		const report = await buildDirectRefreshPrewriteGate({
+			repository: veaRepository(existingRows),
+			sourceSlug: "vea",
+			now: new Date("2026-06-01T00:00:00.000Z"),
+			capacityEvidence: { ...capacity, path: capacityPath },
+			fetchDirectProducts,
+		});
+		const options = parseVeaActiveWriteCliOptions(
+			veaArgv(report, [
+				`--capacity-report=${capacityPath}`,
+				"--issue-number=176",
+			]),
+		);
+		const replayEvidence = await readActiveWriteCapacityEvidence(
+			options,
+			report,
+		);
+		const rerun = await buildDirectRefreshPrewriteGate({
+			repository: veaRepository(existingRows),
+			sourceSlug: "vea",
+			now: new Date(report.generatedAt),
+			capacityEvidence: replayEvidence,
+			fetchDirectProducts,
+		});
+
+		assert.equal(options.capacityReport, capacityPath);
+		assert.equal(options.issueNumber, 176);
+		assert.doesNotThrow(() =>
+			assertFreshPrewriteRerunMatches(report, rerun, options),
+		);
+	});
+
+	it("fails Vea capacity-bound prewrite replay before transaction on missing or mismatched evidence", async () => {
+		const existingRows = veaRows();
+		const capacity = capacityEvidenceForRows({
+			source: "vea",
+			rows: existingRows,
+		});
+		const fetchDirectProducts = async (
+			_sourceSlug: string,
+			lookup: { value: string },
+		) => {
+			const row = existingRows.find((entry) => entry.skuId === lookup.value);
+			return [
+				{
+					ean: row?.ean ?? "",
+					name: `${row?.product?.name} Nuevo`,
+					brand: "Nueva",
+					description: "Nueva",
+					imageUrl: "https://www.vea.com.ar/new.jpg",
+					images: ["https://www.vea.com.ar/new.jpg"],
+					category: "Test",
+					skuId: lookup.value,
+					sellerId: "1",
+					productUrl: row?.productUrl ?? null,
+					price: 1100,
+					listPrice: 1100,
+					referencePrice: null,
+					referenceUnit: null,
+					isAvailable: true,
+				},
+			];
+		};
+		const capacityPath = await writeCapacityReport(capacity.raw);
+		const report = await buildDirectRefreshPrewriteGate({
+			repository: veaRepository(existingRows),
+			sourceSlug: "vea",
+			now: new Date("2026-06-01T00:00:00.000Z"),
+			capacityEvidence: { ...capacity, path: capacityPath },
+			fetchDirectProducts,
+		});
+		const optionsWithoutCapacity = parseVeaActiveWriteCliOptions(
+			veaArgv(report),
+		);
+		await assert.rejects(
+			() => readActiveWriteCapacityEvidence(optionsWithoutCapacity, report),
+			/requires --capacity-report/,
+		);
+
+		const optionsWithWrongIssue = parseVeaActiveWriteCliOptions(
+			veaArgv(report, [
+				`--capacity-report=${capacityPath}`,
+				"--issue-number=999",
+			]),
+		);
+		await assert.rejects(
+			() => readActiveWriteCapacityEvidence(optionsWithWrongIssue, report),
+			/capacity report issue must match/,
+		);
+
+		const mismatchedCapacityPath = await writeCapacityReport(
+			capacity.raw.replace('"issue":176', '"issue":999'),
+		);
+		const optionsWithMismatch = parseVeaActiveWriteCliOptions(
+			veaArgv(report, [
+				`--capacity-report=${mismatchedCapacityPath}`,
+				"--issue-number=176",
+			]),
+		);
+		await assert.rejects(
+			() => readActiveWriteCapacityEvidence(optionsWithMismatch, report),
+			/capacity report hash mismatch/,
+		);
+
+		const legacyReport = await veaPrewrite();
+		const optionsWithUnexpectedCapacity = parseVeaActiveWriteCliOptions(
+			veaArgv(legacyReport, [
+				`--capacity-report=${capacityPath}`,
+				"--issue-number=176",
+			]),
+		);
+		await assert.rejects(
+			() =>
+				readActiveWriteCapacityEvidence(
+					optionsWithUnexpectedCapacity,
+					legacyReport,
+				),
+			/without capacity lineage/,
+		);
 	});
 
 	it("executes Vea selected-row-only transaction and emits source report schema", async () => {
