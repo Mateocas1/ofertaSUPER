@@ -1,4 +1,5 @@
 import {
+	getDirectRefreshCapacityPassRowIds,
 	validateDirectRefreshCapacityEvidence,
 	type DirectRefreshCapacityEvidenceInput,
 	type DirectRefreshCapacityEvidenceLineage,
@@ -112,12 +113,19 @@ export type CarrefourDirectRefreshManifestDryRun = {
 	selection: {
 		strategy:
 			| "oldest-public-rankable-existing-rows"
-			| "oldest-public-rankable-existing-rows-bounded-viable-scan";
+			| "oldest-public-rankable-existing-rows-bounded-viable-scan"
+			| "capacity-pass-existing-rows"
+			| "capacity-pass-existing-rows-bounded-viable-scan";
 		requestedSampleSize: number;
 		candidateScanSize: number;
 		candidateRows: number;
 		selectedRows: number;
 		skippedBlockedRows: number;
+		capacityEvidence: {
+			applied: boolean;
+			passCandidateRows: number;
+			excludedCandidateRows: number;
+		};
 	};
 	summary: {
 		passRows: number;
@@ -237,21 +245,38 @@ export async function buildDirectRefreshManifestDryRun({
 		);
 	}
 	const boundedViableScan = candidateScanSize > sampleSize;
+	const capacityPassRowIds = getDirectRefreshCapacityPassRowIds(
+		capacityEvidence,
+		config.slug,
+	);
+	const capacityAlignedSelection = capacityPassRowIds !== null;
 	const viableRows = candidateEvaluations.filter(
 		(row) => row.guards.status === "PASS",
 	);
-	const skippedRows = boundedViableScan
+	const capacityPassRows = capacityAlignedSelection
+		? viableRows.filter((row) => capacityPassRowIds.has(row.rowId))
+		: viableRows;
+	const capacityExcludedRows = capacityAlignedSelection
+		? viableRows.filter((row) => !capacityPassRowIds.has(row.rowId))
+		: [];
+	const shouldFilterSelection = boundedViableScan || capacityAlignedSelection;
+	const selectionPoolRows = capacityAlignedSelection
+		? capacityPassRows
+		: viableRows;
+	const skippedRows = shouldFilterSelection
 		? candidateEvaluations.filter((row) => row.guards.status === "FAIL")
 		: [];
-	const rows = boundedViableScan
-		? viableRows.slice(0, sampleSize)
+	const rows = shouldFilterSelection
+		? selectionPoolRows.slice(0, sampleSize)
 		: candidateEvaluations;
 	const selectedFailReasons =
 		candidateRows.length === 0 ? ["no rows selected"] : [];
 	const insufficientViableReasons =
-		boundedViableScan && rows.length < sampleSize
+		shouldFilterSelection && rows.length < sampleSize
 			? [
-					`insufficient viable rows: selected ${rows.length} of ${sampleSize} from ${candidateRows.length} candidates`,
+					capacityAlignedSelection
+						? `insufficient capacity-PASS rows: selected ${rows.length} of ${sampleSize} from ${candidateRows.length} candidates (${capacityPassRows.length} capacity-PASS candidates)`
+						: `insufficient viable rows: selected ${rows.length} of ${sampleSize} from ${candidateRows.length} candidates`,
 				]
 			: [];
 	const skippedBlockedReasons = uniqueSorted(
@@ -310,14 +335,23 @@ export async function buildDirectRefreshManifestDryRun({
 			guards: identityGuards(config),
 		},
 		selection: {
-			strategy: boundedViableScan
-				? "oldest-public-rankable-existing-rows-bounded-viable-scan"
-				: "oldest-public-rankable-existing-rows",
+			strategy: capacityAlignedSelection
+				? boundedViableScan
+					? "capacity-pass-existing-rows-bounded-viable-scan"
+					: "capacity-pass-existing-rows"
+				: boundedViableScan
+					? "oldest-public-rankable-existing-rows-bounded-viable-scan"
+					: "oldest-public-rankable-existing-rows",
 			requestedSampleSize: sampleSize,
 			candidateScanSize,
 			candidateRows: candidateRows.length,
 			selectedRows: rows.length,
 			skippedBlockedRows: skippedRows.length,
+			capacityEvidence: {
+				applied: capacityAlignedSelection,
+				passCandidateRows: capacityPassRows.length,
+				excludedCandidateRows: capacityExcludedRows.length,
+			},
 		},
 		summary: {
 			passRows: rows.length - failRows,

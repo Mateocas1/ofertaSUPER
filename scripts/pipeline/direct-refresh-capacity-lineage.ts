@@ -58,6 +58,33 @@ export type DirectRefreshCapacityEvidenceValidation = {
 	failClosedReasons: string[];
 };
 
+export function getDirectRefreshCapacityPassRowIds(
+	evidence: DirectRefreshCapacityEvidenceInput | null | undefined,
+	sourceSlug: string,
+): Set<string> | null {
+	if (!evidence) return null;
+	const report = evidence.report;
+	if (!isRecord(report)) return new Set();
+	const sources = Array.isArray(report.sources) ? report.sources : [];
+	const matchingSources = sources.filter(
+		(source) => source?.slug === sourceSlug,
+	);
+	if (matchingSources.length !== 1) return new Set();
+	const source = matchingSources[0];
+	const rows =
+		isRecord(source) && Array.isArray(source.rows) ? source.rows : [];
+	return new Set(
+		rows
+			.filter(
+				(row): row is { rowId: string; status: unknown } =>
+					isRecord(row) &&
+					typeof row.rowId === "string" &&
+					row.status === "PASS",
+			)
+			.map((row) => row.rowId),
+	);
+}
+
 const READ_ONLY_CAPACITY_AUDIT = "direct-refresh-operating-capacity";
 const READ_ONLY_CAPACITY_WRITE_BOUNDARY =
 	"read-only operating capacity audit; no production writes, no staging/ingestion runs, no scheduler/cron/workflow side effects";
