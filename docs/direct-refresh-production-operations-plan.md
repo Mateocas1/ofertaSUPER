@@ -134,9 +134,23 @@ Every future planner or orchestrator artifact must be lineage-safe:
 
 ## Next implementation slice
 
-Create an approved issue for an evidence-only freshness debt and cadence planner.
+Issue [#156](https://github.com/Mateocas1/ofertaSUPER/issues/156) implements the evidence-only freshness debt and cadence planner as:
 
-The planner should:
+```bash
+npm run audit:direct-refresh-freshness-debt-planner -- \
+  --source=carrefour,vea,disco,jumbo,mas \
+  --source-health=<source-health-report.json> \
+  --issue-url=<approved-issue-url> \
+  --issue-number=<approved-issue-number> \
+  --issue-title="<approved issue title>" \
+  --issue-type-label=<exactly-one-type-label> \
+  --issue-approval-label=status:approved \
+  --attempt-id=<attempt> \
+  --output-dir=<attempt-output-dir> \
+  --output=<attempt-output-dir>/freshness-debt-plan.json
+```
+
+The planner must:
 
 1. read existing DB/audit evidence only;
 2. reject DIA as writer-supported source;

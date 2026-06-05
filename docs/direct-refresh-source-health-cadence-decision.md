@@ -190,6 +190,6 @@ Tradeoffs:
 
 ## Next slice
 
-Implement `feat(data): add direct-refresh freshness debt planner` as read-only/evidence-only.
+Issue [#156](https://github.com/Mateocas1/ofertaSUPER/issues/156) implements `audit:direct-refresh-freshness-debt-planner` as read-only/evidence-only.
 
 The planner must not run VTEX scans, manifest, prewrite, active writer, scheduler, notifications, deploy, secrets, remote config, cache purge, all-source mode, repeated batches, or DIA writes.
