@@ -55,8 +55,16 @@ For any future manual write, restart from the controlled write gates instead of 
 4. one source and one count only;
 5. postwrite audit and baseline evidence.
 
+## Latest source-health reality
+
+A later writer-supported-only source-health snapshot shows that every writer-supported source is currently freshness WARN:
+
+- `audit/direct-refresh-source-health/writer-supported-snapshot/20260605T032242Z/source-health-report.json`
+
+This means minimal dry-run PASS coverage should not be confused with fully gated freshness readiness. The current production strategy is documented in [`docs/direct-refresh-production-operations-plan.md`](./direct-refresh-production-operations-plan.md), and the source-health gating decision is documented in [`docs/direct-refresh-source-health-cadence-decision.md`](./direct-refresh-source-health-cadence-decision.md).
+
 ## Next safe slices
 
-- Refresh optional source-health evidence and run one fully gated PASS dry-run chain if source-health becomes PASS.
-- Draft a separate scheduler MVP issue only under the constraints in [`docs/direct-refresh-scheduler-gate.md`](./direct-refresh-scheduler-gate.md).
+- Do not chase fully gated PASS until freshness debt is understood and planned.
+- Build an evidence-only freshness debt/cadence planner before any repeated-batch or scheduler work.
 - Keep DIA as `audit-only-no-writer` unless a separate approved design changes that posture.
