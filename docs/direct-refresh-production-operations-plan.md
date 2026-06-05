@@ -194,9 +194,17 @@ The controller must stay production-shaped without becoming production execution
 
 This foundation still does not execute production writes, scheduler jobs, manifest/prewrite generation, all-source runs, repeated batches, VTEX scans, notifications, deploys, secrets changes, remote config changes, or cache purge.
 
+## Vea-first controlled recovery plan
+
+Issue [#163](https://github.com/Mateocas1/ofertaSUPER/issues/163) defines the first source-specific recovery operation plan in `docs/direct-refresh-vea-controlled-recovery-plan.md`.
+
+The plan uses cadence controller evidence from issue [#162](https://github.com/Mateocas1/ofertaSUPER/issues/162): Vea is the only writer-supported source currently `PASS` / `ready-for-human-confirmation` at `count=50`; Carrefour, Disco, Jumbo, and MAS remain `WARN` / `manual-review`.
+
+The Vea-first plan is documentation only. It does not authorize production writes, manifest/prewrite generation, scheduler execution, repeated batches, VTEX scans, notifications, deploys, secrets, remote config, cache purge, or DIA writer support.
+
 ## Future production cadence controller execution
 
-A production cadence executor may be designed later, but only after the evidence-only planner, run ledger/source lock foundation, and cadence controller foundation are reviewed.
+A production cadence executor may be designed later, but only after the evidence-only planner, run ledger/source lock foundation, cadence controller foundation, and Vea-first controlled operation plan are reviewed.
 
 It must be production-shaped from the start:
 
@@ -235,8 +243,9 @@ It must be production-shaped from the start:
 | 1 | `feat(data): add direct-refresh freshness debt planner` | implementation | Evidence-only/read-only planner; no VTEX scans or writes. |
 | 2 | `feat(data): add direct-refresh run ledger and advisory lock` | implementation | No writes; state and concurrency guard foundations. |
 | 3 | `feat(data): add direct-refresh cadence controller foundation` | implementation | Still read-only; consumes planner/ledger evidence and stops at human confirmation. |
-| 4 | `docs(data): define direct-refresh cadence executor design` | docs | Future production executor architecture, budgets, TTL, alert ownership. |
-| 5 | `ops(data): run controlled recovery batch <source> count50` | operation | Only after planner evidence and normal write gates; one source/count/run. |
+| 4 | `docs(data): define Vea-first direct-refresh recovery plan` | docs | First source-specific operation plan; no writes or gate generation. |
+| 5 | `docs(data): define direct-refresh cadence executor design` | docs | Future production executor architecture, budgets, TTL, alert ownership. |
+| 6 | `ops(data): run controlled recovery batch vea count50` | operation | Only after fresh planner/cadence evidence and normal write gates; one source/count/run. |
 
 ## Launch posture
 
