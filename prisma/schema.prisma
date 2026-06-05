@@ -30,6 +30,14 @@ enum StagingStatus {
   DUPLICATE
 }
 
+enum DirectRefreshRunStatus {
+  PLANNED
+  RUNNING
+  STOPPED
+  FAILED
+  COMPLETED
+}
+
 model Supermarket {
   id                   Int                  @id @default(autoincrement())
   name                 String
@@ -199,15 +207,46 @@ model StagingProduct {
 }
 
 model SourceHealth {
-  id               Int      @id @default(autoincrement())
-  source_slug      String
-  checked_at       DateTime @default(now())
-  is_healthy       Boolean
-  response_time_ms Int
-  error_type       String?
-  hash_valid       Boolean
-  products_returned Int     @default(0)
+  id                Int      @id @default(autoincrement())
+  source_slug       String
+  checked_at        DateTime @default(now())
+  is_healthy        Boolean
+  response_time_ms  Int
+  error_type        String?
+  hash_valid        Boolean
+  products_returned Int      @default(0)
 
   @@index([source_slug, checked_at])
   @@map("source_health")
+}
+
+model DirectRefreshRunLedger {
+  id                   Int                    @id @default(autoincrement())
+  run_key              String                 @unique
+  source_slug          String
+  count                Int
+  attempt_id           String
+  source_lock_key      Int
+  issue_url            String
+  issue_number         Int
+  issue_title          String
+  issue_type_label     String
+  issue_approval_label String
+  status               DirectRefreshRunStatus @default(PLANNED)
+  artifact_root        String
+  lineage              Json                   @default("{}")
+  planned_at           DateTime               @default(now())
+  started_at           DateTime?
+  finished_at          DateTime?
+  last_heartbeat_at    DateTime?
+  stop_reason          String?
+  error_summary        String?
+  created_at           DateTime               @default(now())
+  updated_at           DateTime               @updatedAt
+
+  @@unique([source_slug, attempt_id])
+  @@index([source_slug, status])
+  @@index([issue_number])
+  @@index([planned_at])
+  @@map("direct_refresh_run_ledger")
 }

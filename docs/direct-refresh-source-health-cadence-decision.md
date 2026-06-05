@@ -192,4 +192,6 @@ Tradeoffs:
 
 Issue [#156](https://github.com/Mateocas1/ofertaSUPER/issues/156) implements `audit:direct-refresh-freshness-debt-planner` as read-only/evidence-only.
 
-The planner must not run VTEX scans, manifest, prewrite, active writer, scheduler, notifications, deploy, secrets, remote config, cache purge, all-source mode, repeated batches, or DIA writes.
+Issue [#158](https://github.com/Mateocas1/ofertaSUPER/issues/158) adds the run ledger and source advisory lock foundation required before any repeated-batch or cadence execution.
+
+The planner and ledger foundation must not run VTEX scans, manifest, prewrite, active writer, scheduler, notifications, deploy, secrets, remote config, cache purge, all-source mode, repeated batches, or DIA writes.
