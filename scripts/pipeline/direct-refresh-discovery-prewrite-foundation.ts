@@ -39,6 +39,8 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		mode: "non-prod-prod-like" | "controlled-disposable-row" | "read-only-review";
 		rollbackIds: string[];
 		postRollbackVerification: boolean;
+		postRollbackVerificationArtifact: string;
+		postRollbackVerificationSha256: string;
 		preimageCaptured: boolean;
 		pitrBackupPosture: string;
 		cacheHandling: string;
@@ -238,6 +240,8 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[rollback.rollbackIds.length > 0, "rollback IDs are required"],
 			[hasExactRollbackIds(rollback.rollbackIds), "rollback IDs must be exact table:id entries"],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
+			[hasPostRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
+			[hasSha256Lineage(rollback.postRollbackVerificationSha256), "post-rollback verification sha256 is required"],
 			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
 		]),
 		check("vtex-budgets", [
@@ -363,6 +367,14 @@ function hasExactRollbackIds(values: string[] | undefined) {
 		values.every((value) =>
 			/^(products|supermarket_products|price_history|staging_products|direct_refresh_run_ledger):[1-9]\d*$/.test(value),
 		)
+	);
+}
+
+function hasPostRollbackVerificationArtifact(value: string | undefined) {
+	return (
+		typeof value === "string" &&
+		/^audit\/direct-refresh-discovery-rollback-verification\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
+		!value.includes("..")
 	);
 }
 
