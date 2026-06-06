@@ -158,13 +158,15 @@ export function parseDirectRefreshDiscoveryPrewriteFoundationCliOptions(
 export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 	evidence,
 	evidencePath,
+	evidenceSha256,
 	now = new Date(),
 }: {
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
 	evidencePath: string;
+	evidenceSha256: string;
 	now?: Date;
 }) {
-	const checks = buildChecks(evidence, evidencePath, now);
+	const checks = buildChecks(evidence, evidencePath, evidenceSha256, now);
 	const failClosedReasons = uniqueSorted(checks.flatMap((check) => check.reasons));
 	const failCount = checks.filter((check) => check.status === "FAIL").length;
 	return {
@@ -195,6 +197,7 @@ export function parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
 function buildChecks(
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 	evidencePath: string,
+	evidenceSha256: string,
 	now: Date,
 ) {
 	const schema = evidence.schemaConstraints ?? {};
@@ -238,6 +241,10 @@ function buildChecks(
 				"artifact path lineage must match evidence path",
 			],
 			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
+			[
+				hasMatchingArtifactSha256(lineage.artifactSha256, evidenceSha256),
+				"artifact sha256 lineage must match evidence file hash",
+			],
 			[hasGitCommitLineage(lineage.gitCommit), "git commit lineage must be hex"],
 			[hasToolVersionLineage(lineage.toolVersion), "tool version lineage must include @version"],
 			[hasNumericSchemaVersion(lineage.schemaVersion), "schema version lineage must be numeric"],
@@ -345,6 +352,13 @@ function hasMatchingArtifactPath(
 	evidencePath: string,
 ) {
 	return normalizeAuditPath(lineagePath) === normalizeAuditPath(evidencePath);
+}
+
+function hasMatchingArtifactSha256(
+	lineageSha256: string | undefined,
+	evidenceSha256: string,
+) {
+	return lineageSha256 === evidenceSha256;
 }
 
 function normalizeAuditPath(value: string | undefined) {

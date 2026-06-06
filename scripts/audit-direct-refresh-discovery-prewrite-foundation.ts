@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -18,12 +19,14 @@ async function writeJson(output: string, report: unknown) {
 
 async function main() {
 	const options = parseDirectRefreshDiscoveryPrewriteFoundationCliOptions();
+	const rawEvidence = await readFile(options.evidence, "utf8");
 	const evidence = parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
-		await readFile(options.evidence, "utf8"),
+		rawEvidence,
 	);
 	const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 		evidence,
 		evidencePath: options.evidence,
+		evidenceSha256: `sha256:${createHash("sha256").update(rawEvidence).digest("hex")}`,
 	});
 	await writeJson(options.output, report);
 	if (report.status === "FAIL") process.exitCode = 1;
