@@ -53,6 +53,10 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		postRollbackVerificationSha256:
 			"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 		preimageCaptured: true,
+		preimageArtifact:
+			"audit/direct-refresh-discovery-rollback-verification/preimage.json",
+		preimageSha256:
+			"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		pitrBackupPosture: "Supabase PITR/backup posture reviewed before write",
 		cacheHandling: "No cache purge needed for disposable-row drill; public cache TTL reviewed",
 	},
@@ -334,6 +338,29 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /rollback preimage capture is required/);
 		assert.match(reasons, /PITR\/backup posture is required/);
 		assert.match(reasons, /rollback cache handling is required/);
+	});
+
+	it("fails closed when preimage artifact evidence is missing or malformed", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					preimageArtifact: "../preimage.json",
+					preimageSha256: "not-a-sha",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/preimage artifact must be rollback verification audit json/,
+		);
+		assert.match(reasons, /preimage sha256 is required/);
 	});
 
 	it("fails closed when post-rollback verification artifact evidence is missing or malformed", () => {

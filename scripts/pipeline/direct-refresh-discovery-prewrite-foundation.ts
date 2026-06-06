@@ -42,6 +42,8 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		postRollbackVerificationArtifact: string;
 		postRollbackVerificationSha256: string;
 		preimageCaptured: boolean;
+		preimageArtifact: string;
+		preimageSha256: string;
 		pitrBackupPosture: string;
 		cacheHandling: string;
 	};
@@ -236,11 +238,13 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[rollback.executed, "rollback drill must be executed before discovery apply"],
 			[rollback.mode !== "read-only-review", "read-only rollback review is preparatory only"],
 			[rollback.preimageCaptured === true, "rollback preimage capture is required"],
+			[hasRollbackVerificationArtifact(rollback.preimageArtifact), "preimage artifact must be rollback verification audit json"],
+			[hasSha256Lineage(rollback.preimageSha256), "preimage sha256 is required"],
 			[hasText(rollback.pitrBackupPosture), "PITR/backup posture is required"],
 			[rollback.rollbackIds.length > 0, "rollback IDs are required"],
 			[hasExactRollbackIds(rollback.rollbackIds), "rollback IDs must be exact table:id entries"],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
-			[hasPostRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
+			[hasRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.postRollbackVerificationSha256), "post-rollback verification sha256 is required"],
 			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
 		]),
@@ -370,7 +374,7 @@ function hasExactRollbackIds(values: string[] | undefined) {
 	);
 }
 
-function hasPostRollbackVerificationArtifact(value: string | undefined) {
+function hasRollbackVerificationArtifact(value: string | undefined) {
 	return (
 		typeof value === "string" &&
 		/^audit\/direct-refresh-discovery-rollback-verification\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
