@@ -77,6 +77,8 @@ export type DirectRefreshDiscoveryPrewriteFoundationCliOptions = {
 
 type Rule = [boolean, string];
 const FOUNDATION_EVIDENCE_MAX_AGE_MS = 15 * 60 * 1000;
+const MAX_VTEX_FOUNDATION_REQUEST_CAP = 20;
+const MAX_VTEX_FOUNDATION_TIMEOUT_MS = 10_000;
 const WRITER_SUPPORTED_SOURCES = new Set(["carrefour", "vea", "disco", "jumbo", "mas"]);
 
 const WRITE_BOUNDARY =
@@ -232,8 +234,11 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 		]),
 		check("vtex-budgets", [
 			[budget.requestCap > 0, "VTEX request cap must be positive"],
+			[budget.requestCap <= MAX_VTEX_FOUNDATION_REQUEST_CAP, "VTEX request cap must be <= 20"],
 			[budget.concurrency > 0, "VTEX concurrency must be positive"],
+			[budget.concurrency === 1, "VTEX concurrency must be serial"],
 			[budget.timeoutMs > 0, "VTEX timeout must be positive"],
+			[budget.timeoutMs <= MAX_VTEX_FOUNDATION_TIMEOUT_MS, "VTEX timeout must be <= 10000ms"],
 			[hasText(budget.backoffPolicy), "VTEX backoff policy is required"],
 			[hasText(budget.stopRule), "VTEX stop rule is required"],
 			[hasText(budget.headerPolicy), "VTEX header policy is required"],

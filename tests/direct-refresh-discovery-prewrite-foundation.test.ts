@@ -327,6 +327,28 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /public API baseline is required/);
 	});
 
+	it("fails closed when VTEX budgets are not tightly bounded", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				vtexBudgets: {
+					...completeEvidence.vtexBudgets,
+					requestCap: 10_000,
+					concurrency: 10,
+					timeoutMs: 60_000,
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /VTEX request cap must be <= 20/);
+		assert.match(reasons, /VTEX concurrency must be serial/);
+		assert.match(reasons, /VTEX timeout must be <= 10000ms/);
+	});
+
 	it("parses a read-only CLI boundary and rejects write-like flags", () => {
 		const options = parseDirectRefreshDiscoveryPrewriteFoundationCliOptions([
 			"tsx",
