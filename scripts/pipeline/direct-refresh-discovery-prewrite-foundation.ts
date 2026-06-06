@@ -2,6 +2,7 @@ import { getOptionalSingleFlag, uniqueSorted } from "./audit-utils";
 
 export type DirectRefreshDiscoveryPrewriteFoundationStatus = "PASS" | "FAIL";
 export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
+	generatedAt: string;
 	schemaConstraints: {
 		productEanPrimaryKey: boolean;
 		productSourceUnique: boolean;
@@ -69,6 +70,7 @@ export type DirectRefreshDiscoveryPrewriteFoundationCliOptions = {
 };
 
 type Rule = [boolean, string];
+const FOUNDATION_EVIDENCE_MAX_AGE_MS = 15 * 60 * 1000;
 
 const WRITE_BOUNDARY =
 	"read-only discovery prewrite foundation audit; no discovery apply, no VTEX live scan, no scheduler/all-source/retry side effects" as const;
@@ -142,7 +144,7 @@ export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 	evidencePath: string;
 	now?: Date;
 }) {
-	const checks = buildChecks(evidence);
+	const checks = buildChecks(evidence, now);
 	const failClosedReasons = uniqueSorted(checks.flatMap((check) => check.reasons));
 	const failCount = checks.filter((check) => check.status === "FAIL").length;
 	return {
@@ -170,7 +172,7 @@ export function parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
 	return JSON.parse(raw.replace(/^\uFEFF/, "")) as DirectRefreshDiscoveryPrewriteFoundationEvidence;
 }
 
-function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence) {
+function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence, now: Date) {
 	const schema = evidence.schemaConstraints;
 	const control = evidence.controlPlane;
 	const lineage = evidence.artifactLineage;
@@ -180,6 +182,7 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence)
 	const alert = evidence.alertChannel;
 	const perf = evidence.performanceGuard;
 	return [
+		check("evidence-freshness", buildEvidenceFreshnessRules(evidence, now)),
 		check("schema-constraints", [
 			[schema.productEanPrimaryKey, "Product.ean primary key is required"],
 			[schema.productSourceUnique, "SupermarketProduct(product_ean, supermarket_id) unique is required"],
@@ -240,6 +243,24 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence)
 			[hasText(perf.publicApiBaseline), "public API baseline is required"],
 			[hasText(perf.cacheTtlBaseline), "cache TTL baseline is required"],
 		]),
+	];
+}
+
+function buildEvidenceFreshnessRules(
+	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
+	now: Date,
+): Rule[] {
+	const generatedAt = Date.parse(evidence.generatedAt);
+	if (!Number.isFinite(generatedAt)) {
+		return [[false, "foundation evidence generatedAt is required"]];
+	}
+	const nowMs = now.getTime();
+	return [
+		[
+			generatedAt <= nowMs &&
+				nowMs - generatedAt <= FOUNDATION_EVIDENCE_MAX_AGE_MS,
+			"foundation evidence must be fresh within 15 minutes",
+		],
 	];
 }
 

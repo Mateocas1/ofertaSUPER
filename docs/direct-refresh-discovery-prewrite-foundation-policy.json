@@ -1,4 +1,5 @@
 {
+  "generatedAt": "",
   "schemaConstraints": {
     "productEanPrimaryKey": true,
     "productSourceUnique": true,

@@ -10,6 +10,7 @@ import {
 } from "../scripts/pipeline/direct-refresh-discovery-prewrite-foundation";
 
 const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
+	generatedAt: "2026-06-06T12:25:00.000Z",
 	schemaConstraints: {
 		productEanPrimaryKey: true,
 		productSourceUnique: true,
@@ -126,6 +127,39 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(report.writeBoundary, /no discovery apply/);
 		assert.equal(report.summary.passCount, report.checks.length);
 		assert.deepEqual(report.summary.failClosedReasons, []);
+	});
+
+	it("fails closed when Phase 1 foundation evidence is stale", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				generatedAt: "2026-06-06T11:44:59.000Z",
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:00:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/foundation evidence must be fresh within 15 minutes/,
+		);
+	});
+
+	it("reports missing foundation evidence timestamp without stale-noise duplication", () => {
+		const { generatedAt: _generatedAt, ...evidenceWithoutTimestamp } =
+			completeEvidence;
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence:
+				evidenceWithoutTimestamp as DirectRefreshDiscoveryPrewriteFoundationEvidence,
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:00:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.deepEqual(report.checks[0].reasons, [
+			"foundation evidence generatedAt is required",
+		]);
 	});
 
 	it("fails closed when rollback proof is read-only instead of executed", () => {
