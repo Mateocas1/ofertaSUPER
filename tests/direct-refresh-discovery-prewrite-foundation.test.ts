@@ -39,7 +39,8 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		toolVersion: "direct-refresh-discovery-create@1",
 		schemaVersion: "1",
 		dbEnvironmentIdentity: "local-test-db",
-		sourceConfigSnapshot: "config-hash",
+		sourceConfigSnapshot:
+			"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; files:src/lib/supermarkets.ts",
 		vtexProbeTimestamp: "2026-06-06T12:00:00.000Z",
 	},
 	rollbackDrill: {
@@ -194,6 +195,26 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /attempt lineage is required/);
 		assert.match(reasons, /artifact path lineage is required/);
 		assert.match(reasons, /artifact sha256 lineage is required/);
+	});
+
+	it("fails closed when source config snapshot or VTEX probe timestamp are malformed", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+					sourceConfigSnapshot: "config-hash-without-sha256",
+					vtexProbeTimestamp: "not-a-timestamp",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /source config snapshot sha256 is required/);
+		assert.match(reasons, /VTEX probe timestamp must be ISO datetime/);
 	});
 
 	it("fails closed when rollback proof is read-only instead of executed", () => {

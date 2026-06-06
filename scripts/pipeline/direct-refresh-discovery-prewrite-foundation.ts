@@ -217,8 +217,8 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[hasText(lineage.toolVersion), "tool version lineage is required"],
 			[hasText(lineage.schemaVersion), "schema version lineage is required"],
 			[hasText(lineage.dbEnvironmentIdentity), "DB/environment identity is required"],
-			[hasText(lineage.sourceConfigSnapshot), "source config snapshot is required"],
-			[hasText(lineage.vtexProbeTimestamp), "VTEX probe timestamp is required"],
+			[hasSourceConfigSnapshot(lineage.sourceConfigSnapshot), "source config snapshot sha256 is required"],
+			[hasIsoDatetime(lineage.vtexProbeTimestamp), "VTEX probe timestamp must be ISO datetime"],
 		]),
 		check("rollback-drill", [
 			[rollback.executed, "rollback drill must be executed before discovery apply"],
@@ -287,4 +287,14 @@ function hasText(value: string | undefined) {
 
 function hasSha256Lineage(value: string | undefined) {
 	return typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
+}
+
+function hasSourceConfigSnapshot(value: string | undefined) {
+	return typeof value === "string" && /^sha256:[a-f0-9]{64}; files:\S+/.test(value);
+}
+
+function hasIsoDatetime(value: string | undefined) {
+	if (typeof value !== "string" || value.trim().length === 0) return false;
+	const parsed = Date.parse(value);
+	return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
 }
