@@ -190,10 +190,10 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /issue lineage is required/);
-		assert.match(reasons, /source lineage is required/);
+		assert.match(reasons, /source lineage must be writer-supported/);
 		assert.match(reasons, /count lineage is required/);
 		assert.match(reasons, /attempt lineage is required/);
-		assert.match(reasons, /artifact path lineage is required/);
+		assert.match(reasons, /artifact path lineage must be foundation audit json/);
 		assert.match(reasons, /artifact sha256 lineage is required/);
 	});
 
@@ -237,6 +237,28 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /git commit lineage must be hex/);
 		assert.match(reasons, /tool version lineage must include @version/);
 		assert.match(reasons, /schema version lineage must be numeric/);
+	});
+
+	it("fails closed when source, artifact path, or DB environment lineage are invalid", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+					source: "dia",
+					artifactPath: "../foundation.json",
+					dbEnvironmentIdentity: "unknown",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /source lineage must be writer-supported/);
+		assert.match(reasons, /artifact path lineage must be foundation audit json/);
+		assert.match(reasons, /DB\/environment identity must be explicit/);
 	});
 
 	it("fails closed when rollback proof is read-only instead of executed", () => {

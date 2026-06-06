@@ -77,6 +77,7 @@ export type DirectRefreshDiscoveryPrewriteFoundationCliOptions = {
 
 type Rule = [boolean, string];
 const FOUNDATION_EVIDENCE_MAX_AGE_MS = 15 * 60 * 1000;
+const WRITER_SUPPORTED_SOURCES = new Set(["carrefour", "vea", "disco", "jumbo", "mas"]);
 
 const WRITE_BOUNDARY =
 	"read-only discovery prewrite foundation audit; no discovery apply, no VTEX live scan, no scheduler/all-source/retry side effects" as const;
@@ -208,15 +209,15 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 		]),
 		check("artifact-lineage", [
 			[lineage.issue > 0, "issue lineage is required"],
-			[hasText(lineage.source), "source lineage is required"],
+			[hasWriterSupportedSource(lineage.source), "source lineage must be writer-supported"],
 			[lineage.count > 0, "count lineage is required"],
 			[hasText(lineage.attemptId), "attempt lineage is required"],
-			[hasText(lineage.artifactPath), "artifact path lineage is required"],
+			[hasFoundationArtifactPath(lineage.artifactPath), "artifact path lineage must be foundation audit json"],
 			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
 			[hasGitCommitLineage(lineage.gitCommit), "git commit lineage must be hex"],
 			[hasToolVersionLineage(lineage.toolVersion), "tool version lineage must include @version"],
 			[hasNumericSchemaVersion(lineage.schemaVersion), "schema version lineage must be numeric"],
-			[hasText(lineage.dbEnvironmentIdentity), "DB/environment identity is required"],
+			[hasExplicitEnvironmentIdentity(lineage.dbEnvironmentIdentity), "DB/environment identity must be explicit"],
 			[hasSourceConfigSnapshot(lineage.sourceConfigSnapshot), "source config snapshot sha256 is required"],
 			[hasIsoDatetime(lineage.vtexProbeTimestamp), "VTEX probe timestamp must be ISO datetime"],
 		]),
@@ -283,6 +284,26 @@ function check(name: string, rules: Rule[]) {
 
 function hasText(value: string | undefined) {
 	return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasWriterSupportedSource(value: string | undefined) {
+	return typeof value === "string" && WRITER_SUPPORTED_SOURCES.has(value);
+}
+
+function hasFoundationArtifactPath(value: string | undefined) {
+	return (
+		typeof value === "string" &&
+		/^audit\/direct-refresh-discovery-prewrite-foundation\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
+		!value.includes("..")
+	);
+}
+
+function hasExplicitEnvironmentIdentity(value: string | undefined) {
+	return (
+		typeof value === "string" &&
+		/^[a-z0-9][a-z0-9-]*$/.test(value) &&
+		value !== "unknown"
+	);
 }
 
 function hasSha256Lineage(value: string | undefined) {
