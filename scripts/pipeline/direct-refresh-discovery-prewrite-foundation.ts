@@ -249,8 +249,8 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[compliance.posture === "approved" || compliance.posture === "risk-accepted", "compliance posture must be approved or risk-accepted"],
 		]),
 		check("alert-channel", [
-			[hasText(alert.channel), "alert channel is required"],
-			[hasText(alert.owner), "alert owner is required"],
+			[hasActionableAlertChannel(alert.channel), "alert channel must include issue evidence comment and concrete alert destination"],
+			[hasExplicitAlertOwner(alert.owner), "alert owner must be explicit and non-placeholder"],
 			[alert.writeFailure, "write failure alert is required"],
 			[alert.postwriteFailure, "postwrite failure alert is required"],
 			[alert.rollbackRequired, "rollback-required alert is required"],
@@ -361,6 +361,23 @@ function hasVtexStopRule(value: string | undefined) {
 
 function hasVtexHeaderPolicy(value: string | undefined) {
 	return hasAllTerms(value, ["documented", "non-evasive"]);
+}
+
+function hasActionableAlertChannel(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return (
+		hasAllTerms(normalized, ["issue"]) &&
+		hasAnyTerm(normalized, ["#", "slack", "email", "pagerduty"]) &&
+		!normalized.includes("placeholder")
+	);
+}
+
+function hasExplicitAlertOwner(value: string | undefined) {
+	const normalized = value?.toLowerCase().trim() ?? "";
+	return (
+		normalized.length > 0 &&
+		!["owner", "operator", "direct-refresh operator", "placeholder"].includes(normalized)
+	);
 }
 
 function hasPrismaPoolPosture(value: string | undefined) {

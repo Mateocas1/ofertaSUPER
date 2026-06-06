@@ -66,7 +66,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	},
 	alertChannel: {
 		channel: "Issue comment + #direct-refresh-alerts",
-		owner: "Direct-refresh operator",
+		owner: "direct-refresh-oncall",
 		writeFailure: true,
 		postwriteFailure: true,
 		rollbackRequired: true,
@@ -323,6 +323,29 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /rollback IDs must be exact table:id entries/);
+	});
+
+	it("fails closed when alert channel or owner are placeholders", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				alertChannel: {
+					...completeEvidence.alertChannel,
+					channel: "alert placeholder",
+					owner: "Direct-refresh operator",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/alert channel must include issue evidence comment and concrete alert destination/,
+		);
+		assert.match(reasons, /alert owner must be explicit and non-placeholder/);
 	});
 
 	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {
