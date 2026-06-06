@@ -34,6 +34,7 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		schemaVersion: string;
 		dbEnvironmentIdentity: string;
 		sourceConfigSnapshot: string;
+		vtexProbeHash: string;
 		vtexProbeTimestamp: string;
 	};
 	rollbackDrill: {
@@ -347,6 +348,7 @@ function buildChecks(
 				"source config snapshot sha256 must match runtime files",
 			],
 			[hasIsoDatetime(lineage.vtexProbeTimestamp), "VTEX probe timestamp must be ISO datetime"],
+			[hasSha256Lineage(lineage.vtexProbeHash), "VTEX probe hash lineage is required"],
 		]),
 		check("rollback-drill", [
 			[rollback.executed, "rollback drill must be executed before discovery apply"],

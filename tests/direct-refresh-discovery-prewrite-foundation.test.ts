@@ -43,6 +43,8 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		dbEnvironmentIdentity: "local-test-db",
 		sourceConfigSnapshot:
 			"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; files:src/lib/supermarkets.ts",
+		vtexProbeHash:
+			"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 		vtexProbeTimestamp: "2026-06-06T12:00:00.000Z",
 	},
 	rollbackDrill: {
@@ -373,6 +375,25 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /source config snapshot sha256 is required/);
 		assert.match(reasons, /VTEX probe timestamp must be ISO datetime/);
+	});
+
+	it("fails closed when VTEX probe hash lineage is missing", () => {
+		const report = evaluateFoundation({
+			evidence: {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+					vtexProbeHash: "",
+				},
+			},
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/VTEX probe hash lineage is required/,
+		);
 	});
 
 	it("fails closed when source config snapshot has no real files", () => {
@@ -881,6 +902,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(policy.controlPlane.ttlPolicy, true);
 		assert.equal(policy.controlPlane.idempotencyPolicy, true);
 		assert.match(policy.artifactLineage.sourceConfigSnapshot, /^sha256:[a-f0-9]{64}; files:/);
+		assert.equal(typeof policy.artifactLineage.vtexProbeHash, "string");
 		assert.equal(policy.vtexBudgets.concurrency, 1);
 		assert.equal(policy.alertChannel.rollbackRequired, true);
 		assert.doesNotMatch(reasons, /TTL policy is required/);
