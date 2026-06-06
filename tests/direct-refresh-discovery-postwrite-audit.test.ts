@@ -99,10 +99,62 @@ function applyReport(
 	};
 }
 
+function productAndSourcePrewrite(): DirectRefreshDiscoveryCreatePrewriteReport {
+	const base = sourceRowPrewrite();
+	return {
+		...base,
+		exactConfirmation:
+			"direct-refresh-discovery-create issue=185 source=vea count=1 keys=discovery:vea:222:sku-222",
+		summary: {
+			selectedKeys: ["discovery:vea:222:sku-222"],
+			productCreatesPlanned: 1,
+			supermarketProductCreatesPlanned: 1,
+			priceHistoryCreatesPlanned: 1,
+			failClosedReasons: [],
+		},
+		plannedCreates: [
+			{
+				...base.plannedCreates[0],
+				idempotencyKey: "discovery:vea:222:sku-222",
+				classification: "product-and-source-discovery",
+				product: {
+					...base.plannedCreates[0].product,
+					ean: "222",
+					name: "Leche 222",
+					imageUrl: "https://www.vea.com.ar/222.jpg",
+					images: ["https://www.vea.com.ar/222.jpg"],
+				},
+				supermarketProduct: {
+					...base.plannedCreates[0].supermarketProduct,
+					productEan: "222",
+					skuId: "sku-222",
+					productUrl: "https://www.vea.com.ar/product/222",
+				},
+				rollbackPreview: {
+					deleteCreatedProduct: true,
+					deleteCreatedSupermarketProduct: true,
+					deleteCreatedPriceHistory: true,
+				},
+			},
+		],
+	};
+}
+
 function repository(
 	overrides: Partial<DirectRefreshDiscoveryCreatePostwriteRepository> = {},
 ): DirectRefreshDiscoveryCreatePostwriteRepository {
 	return {
+		getProductsByEan: async () => [
+			{
+				ean: "222",
+				name: "Leche 222",
+				brand: "Marca",
+				description: "Leche entera",
+				category: "Lacteos",
+				imageUrl: "https://www.vea.com.ar/222.jpg",
+				images: ["https://www.vea.com.ar/222.jpg"],
+			},
+		],
 		getSupermarketProductsByIds: async () => [
 			{
 				id: 901,
@@ -278,6 +330,129 @@ describe("direct-refresh discovery create postwrite audit contract", () => {
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
 			/extra price_history rows for created source rows: 1002/,
+		);
+	});
+
+	it("includes product rollback only for product-and-source discovery", async () => {
+		const report = await buildDirectRefreshDiscoveryCreatePostwriteAudit({
+			prewrite: productAndSourcePrewrite(),
+			apply: applyReport({
+				summary: {
+					productsCreated: 1,
+					supermarketProductsCreated: 1,
+					priceHistoryCreated: 1,
+					failClosedReasons: [],
+				},
+				appliedCreates: [
+					{
+						idempotencyKey: "discovery:vea:222:sku-222",
+						productEan: "222",
+						supermarketProductId: 901,
+						priceHistoryId: 1001,
+					},
+				],
+			}),
+			repository: repository({
+				getSupermarketProductsByIds: async () => [
+					{
+						...(await repository().getSupermarketProductsByIds([]))[0],
+						productEan: "222",
+						skuId: "sku-222",
+						productUrl: "https://www.vea.com.ar/product/222",
+					},
+				],
+				getSupermarketProductsBySourceEanPairs: async () => [
+					{
+						...(await repository().getSupermarketProductsBySourceEanPairs([]))[0],
+						productEan: "222",
+						skuId: "sku-222",
+						productUrl: "https://www.vea.com.ar/product/222",
+					},
+				],
+			}),
+			now: auditNow,
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.deepEqual(report.createdRows.products.map((row) => row.ean), ["222"]);
+		assert.deepEqual(report.rollbackPlan.deleteProductEans, ["222"]);
+	});
+
+	it("fails closed when persisted product fields differ from the prewrite plan", async () => {
+		const report = await buildDirectRefreshDiscoveryCreatePostwriteAudit({
+			prewrite: productAndSourcePrewrite(),
+			apply: applyReport({
+				appliedCreates: [
+					{
+						idempotencyKey: "discovery:vea:222:sku-222",
+						productEan: "222",
+						supermarketProductId: 901,
+						priceHistoryId: 1001,
+					},
+				],
+			}),
+			repository: repository({
+				getProductsByEan: async () => [
+					{
+						ean: "222",
+						name: "Leche 222",
+						brand: "Marca",
+						description: "Descripcion distinta",
+						category: "Lacteos",
+						imageUrl: "https://www.vea.com.ar/222.jpg",
+						images: ["https://www.vea.com.ar/222-alt.jpg"],
+					},
+				],
+			}),
+			now: auditNow,
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/product ean 222 description mismatch/,
+		);
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/product ean 222 images mismatch/,
+		);
+		assert.deepEqual(report.rollbackPlan.deleteProductEans, []);
+	});
+
+	it("fails closed when persisted source fields differ from the prewrite plan", async () => {
+		const report = await buildDirectRefreshDiscoveryCreatePostwriteAudit({
+			prewrite: sourceRowPrewrite(),
+			apply: applyReport(),
+			repository: repository({
+				getSupermarketProductsByIds: async () => [
+					{
+						...(await repository().getSupermarketProductsByIds([]))[0],
+						referencePrice: 101,
+						referenceUnit: "kg",
+						isAvailable: false,
+						sellerId: "other-seller",
+					},
+				],
+			}),
+			now: auditNow,
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/supermarket_products id 901 referencePrice mismatch/,
+		);
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/supermarket_products id 901 referenceUnit mismatch/,
+		);
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/supermarket_products id 901 isAvailable mismatch/,
+		);
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/supermarket_products id 901 sellerId mismatch/,
 		);
 	});
 });

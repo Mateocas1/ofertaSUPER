@@ -40,6 +40,9 @@ export type DirectRefreshDiscoveryPostwritePriceHistoryRow = {
 };
 
 export type DirectRefreshDiscoveryCreatePostwriteRepository = {
+	getProductsByEan(
+		eans: string[],
+	): Promise<DirectRefreshDiscoveryPostwriteProductRow[]>;
 	getSupermarketProductsByIds(
 		ids: number[],
 	): Promise<DirectRefreshDiscoveryPostwriteSupermarketProductRow[]>;
@@ -141,11 +144,6 @@ export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 	const productAndSourceEans = plannedCreates
 		.filter((plan) => plan.classification === "product-and-source-discovery")
 		.map((plan) => plan.product.ean);
-	if (productAndSourceEans.length > 0) {
-		failClosedReasons.push(
-			"product-and-source discovery requires product rollback checks",
-		);
-	}
 	const supermarketProductIds = appliedCreates.map(
 		(row) => row.supermarketProductId,
 	);
@@ -155,6 +153,7 @@ export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 		supermarketId: plan.supermarketProduct.supermarketId,
 	}));
 
+	let products: DirectRefreshDiscoveryPostwriteProductRow[] = [];
 	let supermarketProductsById: DirectRefreshDiscoveryPostwriteSupermarketProductRow[] =
 		[];
 	let sourceRows: DirectRefreshDiscoveryPostwriteSupermarketProductRow[] = [];
@@ -164,11 +163,15 @@ export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 
 	if (failClosedReasons.length === 0) {
 		[
+			products,
 			supermarketProductsById,
 			sourceRows,
 			priceHistoryById,
 			priceHistoryForSourceRows,
 		] = await Promise.all([
+			productAndSourceEans.length
+				? repository.getProductsByEan(productAndSourceEans)
+				: Promise.resolve([]),
 			supermarketProductIds.length
 				? repository.getSupermarketProductsByIds(supermarketProductIds)
 				: Promise.resolve([]),
@@ -186,6 +189,7 @@ export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 				: Promise.resolve([]),
 		]);
 
+		auditProducts({ plannedCreates, products, failClosedReasons });
 		auditSupermarketProducts({
 			plannedCreates,
 			appliedCreates,
@@ -220,6 +224,20 @@ export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 			`extra price_history rows for created source rows: ${extraHistoryIds.join(",")}`,
 		);
 	}
+	const noExtraProductRows = hasExactlyOneProductRowPerEan(
+		productAndSourceEans,
+		products,
+	);
+	if (!noExtraProductRows) {
+		const extraProductEans = productAndSourceEans.filter(
+			(ean) => products.filter((row) => row.ean === ean).length > 1,
+		);
+		if (extraProductEans.length > 0) {
+			failClosedReasons.push(
+				`extra product rows for created product EANs: ${sortedStrings(extraProductEans).join(",")}`,
+			);
+		}
+	}
 
 	const sortedFailClosedReasons = sortedStrings(failClosedReasons);
 	const status: DirectRefreshDiscoveryCreatePostwriteStatus =
@@ -238,7 +256,7 @@ export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 		prewriteGeneratedAt: prewrite.generatedAt,
 		summary: {
 			productsExpected: productAndSourceEans.length,
-			productsFound: 0,
+			productsFound: products.length,
 			supermarketProductsExpected: plannedCreates.length,
 			supermarketProductsFound: supermarketProductsById.length,
 			priceHistoryExpected: plannedCreates.length,
@@ -246,7 +264,9 @@ export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 			failClosedReasons: sortedFailClosedReasons,
 		},
 		createdRows: {
-			products: [],
+			products: [...products].sort((left, right) =>
+				left.ean.localeCompare(right.ean),
+			),
 			supermarketProducts: [...supermarketProductsById].sort(
 				(left, right) => left.id - right.id,
 			),
@@ -255,7 +275,7 @@ export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 			),
 		},
 		noExtraRows: {
-			products: productAndSourceEans.length === 0,
+			products: noExtraProductRows,
 			supermarketProducts: extraSourceIds.length === 0,
 			priceHistory: extraHistoryIds.length === 0,
 		},
@@ -264,7 +284,7 @@ export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 				? {
 						deletePriceHistoryIds: sortedNumbers(priceHistoryIds),
 						deleteSupermarketProductIds: sortedNumbers(supermarketProductIds),
-						deleteProductEans: [],
+						deleteProductEans: sortedStrings(productAndSourceEans),
 					}
 				: {
 						deletePriceHistoryIds: [],
@@ -340,6 +360,32 @@ function validateAppliedRows({
 				`planned supermarket_products productEan mismatch for selected key ${applied.idempotencyKey}`,
 			);
 		}
+	}
+}
+
+function auditProducts({
+	plannedCreates,
+	products,
+	failClosedReasons,
+}: {
+	plannedCreates: DirectRefreshDiscoveryPlannedCreate[];
+	products: DirectRefreshDiscoveryPostwriteProductRow[];
+	failClosedReasons: string[];
+}) {
+	const productByEan = new Map(products.map((row) => [row.ean, row]));
+	for (const plan of plannedCreates) {
+		if (plan.classification !== "product-and-source-discovery") continue;
+		const actual = productByEan.get(plan.product.ean);
+		if (!actual) {
+			failClosedReasons.push(`missing created product ean ${plan.product.ean}`);
+			continue;
+		}
+		addMismatchReason(failClosedReasons, `product ean ${plan.product.ean} name mismatch`, actual.name, plan.product.name);
+		addMismatchReason(failClosedReasons, `product ean ${plan.product.ean} brand mismatch`, actual.brand, plan.product.brand);
+		addMismatchReason(failClosedReasons, `product ean ${plan.product.ean} description mismatch`, actual.description, plan.product.description);
+		addMismatchReason(failClosedReasons, `product ean ${plan.product.ean} category mismatch`, actual.category, plan.product.category);
+		addMismatchReason(failClosedReasons, `product ean ${plan.product.ean} imageUrl mismatch`, actual.imageUrl, plan.product.imageUrl);
+		addArrayMismatchReason(failClosedReasons, `product ean ${plan.product.ean} images mismatch`, actual.images, plan.product.images);
 	}
 }
 
@@ -425,6 +471,24 @@ function addMismatchReason(
 	if (actual !== expected) reasons.push(message);
 }
 
+function addArrayMismatchReason(
+	reasons: string[],
+	message: string,
+	actual: string[],
+	expected: string[],
+) {
+	if (!sameStringArray(actual, expected)) reasons.push(message);
+}
+
+function hasExactlyOneProductRowPerEan(
+	eans: string[],
+	products: DirectRefreshDiscoveryPostwriteProductRow[],
+) {
+	return eans.every(
+		(ean) => products.filter((product) => product.ean === ean).length === 1,
+	);
+}
+
 function isDefined<T>(value: T | undefined): value is T {
 	return value !== undefined;
 }
@@ -435,4 +499,11 @@ function sortedNumbers(values: number[]) {
 
 function sortedStrings(values: string[]) {
 	return Array.from(new Set(values)).sort();
+}
+
+function sameStringArray(left: string[], right: string[]) {
+	return (
+		left.length === right.length &&
+		left.every((value, index) => value === right[index])
+	);
 }
