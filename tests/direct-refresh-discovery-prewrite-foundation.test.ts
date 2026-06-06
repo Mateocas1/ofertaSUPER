@@ -108,6 +108,8 @@ function evaluateFoundation(input: {
 	evidencePath?: string;
 	evidenceSha256?: string;
 	sourceConfigSnapshotSha256?: string;
+	rollbackPreimageSha256?: string;
+	postRollbackVerificationSha256?: string;
 	now?: Date;
 }) {
 	return evaluateDirectRefreshDiscoveryPrewriteFoundation({
@@ -126,6 +128,11 @@ function evaluateFoundation(input: {
 			input.sourceConfigSnapshotSha256 ??
 			input.evidence.artifactLineage?.sourceConfigSnapshot.split(";")[0] ??
 			"sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		rollbackPreimageSha256:
+			input.rollbackPreimageSha256 ?? input.evidence.rollbackDrill?.preimageSha256,
+		postRollbackVerificationSha256:
+			input.postRollbackVerificationSha256 ??
+			input.evidence.rollbackDrill?.postRollbackVerificationSha256,
 		now: input.now,
 	});
 }
@@ -636,6 +643,28 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			/post-rollback verification artifact must be rollback verification audit json/,
 		);
 		assert.match(reasons, /post-rollback verification sha256 is required/);
+	});
+
+	it("fails closed when rollback artifact hashes do not match runtime files", () => {
+		const report = evaluateFoundation({
+			evidence: completeEvidence,
+			rollbackPreimageSha256:
+				"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			postRollbackVerificationSha256:
+				"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/preimage sha256 must match runtime preimage artifact/,
+		);
+		assert.match(
+			reasons,
+			/post-rollback verification sha256 must match runtime artifact/,
+		);
 	});
 
 	it("fails closed when rollback IDs are broad selectors instead of exact table IDs", () => {

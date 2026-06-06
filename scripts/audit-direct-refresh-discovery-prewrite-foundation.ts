@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -17,6 +18,25 @@ async function writeJson(output: string, report: unknown) {
 	process.stdout.write(
 		`Wrote direct-refresh discovery prewrite foundation audit to ${output}\n`,
 	);
+}
+
+async function readSafeRollbackArtifactSha256(path: string | undefined) {
+	if (
+		typeof path !== "string" ||
+		!/^audit\/direct-refresh-discovery-rollback-verification\/[A-Za-z0-9._/-]+\.json$/.test(
+			path,
+		) ||
+		path.includes("..")
+	) {
+		return undefined;
+	}
+	try {
+		return `sha256:${createHash("sha256")
+			.update(await readFile(path, "utf8"))
+			.digest("hex")}`;
+	} catch {
+		return undefined;
+	}
 }
 
 async function main() {
@@ -44,6 +64,12 @@ async function main() {
 			calculateDirectRefreshDiscoverySourceConfigSnapshotSha256(
 				sourceConfigFiles,
 			),
+		rollbackPreimageSha256: await readSafeRollbackArtifactSha256(
+			evidence.rollbackDrill?.preimageArtifact,
+		),
+		postRollbackVerificationSha256: await readSafeRollbackArtifactSha256(
+			evidence.rollbackDrill?.postRollbackVerificationArtifact,
+		),
 	});
 	await writeJson(options.output, report);
 	if (report.status === "FAIL") process.exitCode = 1;

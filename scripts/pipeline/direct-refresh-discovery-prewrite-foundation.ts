@@ -162,12 +162,16 @@ export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 	evidencePath,
 	evidenceSha256,
 	sourceConfigSnapshotSha256,
+	rollbackPreimageSha256,
+	postRollbackVerificationSha256,
 	now = new Date(),
 }: {
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
 	evidencePath: string;
 	evidenceSha256: string;
 	sourceConfigSnapshotSha256: string;
+	rollbackPreimageSha256: string | undefined;
+	postRollbackVerificationSha256: string | undefined;
 	now?: Date;
 }) {
 	const checks = buildChecks(
@@ -175,6 +179,8 @@ export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 		evidencePath,
 		evidenceSha256,
 		sourceConfigSnapshotSha256,
+		rollbackPreimageSha256,
+		postRollbackVerificationSha256,
 		now,
 	);
 	const failClosedReasons = uniqueSorted(checks.flatMap((check) => check.reasons));
@@ -275,6 +281,8 @@ function buildChecks(
 	evidencePath: string,
 	evidenceSha256: string,
 	sourceConfigSnapshotSha256: string,
+	rollbackPreimageSha256: string | undefined,
+	postRollbackVerificationSha256: string | undefined,
 	now: Date,
 ) {
 	const schema = evidence.schemaConstraints ?? {};
@@ -346,6 +354,13 @@ function buildChecks(
 			[rollback.preimageCaptured === true, "rollback preimage capture is required"],
 			[hasRollbackVerificationArtifact(rollback.preimageArtifact), "preimage artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.preimageSha256), "preimage sha256 is required"],
+			[
+				hasMatchingArtifactSha256(
+					rollback.preimageSha256,
+					rollbackPreimageSha256 ?? "",
+				),
+				"preimage sha256 must match runtime preimage artifact",
+			],
 			[hasPitrBackupPosture(rollback.pitrBackupPosture), "PITR/backup posture must include PITR or backup and reviewed or available"],
 			[
 				Array.isArray(rollback.rollbackIds) && rollback.rollbackIds.length > 0,
@@ -355,6 +370,13 @@ function buildChecks(
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
 			[hasRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.postRollbackVerificationSha256), "post-rollback verification sha256 is required"],
+			[
+				hasMatchingArtifactSha256(
+					rollback.postRollbackVerificationSha256,
+					postRollbackVerificationSha256 ?? "",
+				),
+				"post-rollback verification sha256 must match runtime artifact",
+			],
 			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
 		]),
 		check("vtex-budgets", [
