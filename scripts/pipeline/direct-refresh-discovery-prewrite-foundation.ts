@@ -348,6 +348,10 @@ function buildChecks(
 				"source config snapshot sha256 must match runtime files",
 			],
 			[hasIsoDatetime(lineage.vtexProbeTimestamp), "VTEX probe timestamp must be ISO datetime"],
+			[
+				hasFreshTimestamp(lineage.vtexProbeTimestamp, now),
+				"VTEX probe timestamp must be fresh within 15 minutes",
+			],
 			[hasSha256Lineage(lineage.vtexProbeHash), "VTEX probe hash lineage is required"],
 		]),
 		check("rollback-drill", [
@@ -535,6 +539,15 @@ function hasIsoDatetime(value: string | undefined) {
 	if (typeof value !== "string" || value.trim().length === 0) return false;
 	const parsed = Date.parse(value);
 	return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
+function hasFreshTimestamp(value: string | undefined, now: Date) {
+	if (!hasIsoDatetime(value)) return false;
+	const timestamp = Date.parse(value ?? "");
+	const nowMs = now.getTime();
+	return (
+		timestamp <= nowMs && nowMs - timestamp <= FOUNDATION_EVIDENCE_MAX_AGE_MS
+	);
 }
 
 function hasVtexBackoffPolicy(value: string | undefined) {

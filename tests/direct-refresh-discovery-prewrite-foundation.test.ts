@@ -45,7 +45,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 			"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; files:src/lib/supermarkets.ts",
 		vtexProbeHash:
 			"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-		vtexProbeTimestamp: "2026-06-06T12:00:00.000Z",
+		vtexProbeTimestamp: "2026-06-06T12:25:00.000Z",
 	},
 	rollbackDrill: {
 		executed: true,
@@ -393,6 +393,50 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
 			/VTEX probe hash lineage is required/,
+		);
+	});
+
+	it("fails closed when VTEX probe timestamp is stale or future-dated", () => {
+		const staleEvidence = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				vtexProbeTimestamp: "2026-06-06T12:00:00.000Z",
+			},
+		};
+		staleEvidence.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				staleEvidence,
+			);
+		const futureEvidence = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				vtexProbeTimestamp: "2026-06-06T12:31:00.000Z",
+			},
+		};
+		futureEvidence.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				futureEvidence,
+			);
+		const staleReport = evaluateFoundation({
+			evidence: staleEvidence,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+		const futureReport = evaluateFoundation({
+			evidence: futureEvidence,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(staleReport.status, "FAIL");
+		assert.equal(futureReport.status, "FAIL");
+		assert.match(
+			staleReport.summary.failClosedReasons.join("\n"),
+			/VTEX probe timestamp must be fresh within 15 minutes/,
+		);
+		assert.match(
+			futureReport.summary.failClosedReasons.join("\n"),
+			/VTEX probe timestamp must be fresh within 15 minutes/,
 		);
 	});
 
