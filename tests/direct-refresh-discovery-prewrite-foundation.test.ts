@@ -307,6 +307,24 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /rollback cache handling is required/);
 	});
 
+	it("fails closed when rollback IDs are broad selectors instead of exact table IDs", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					rollbackIds: ["ean:7791234567890", "price_history:*"],
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /rollback IDs must be exact table:id entries/);
+	});
+
 	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {
 		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 			evidence: {

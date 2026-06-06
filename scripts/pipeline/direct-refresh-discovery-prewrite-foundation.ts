@@ -229,6 +229,7 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[rollback.preimageCaptured === true, "rollback preimage capture is required"],
 			[hasText(rollback.pitrBackupPosture), "PITR/backup posture is required"],
 			[rollback.rollbackIds.length > 0, "rollback IDs are required"],
+			[hasExactRollbackIds(rollback.rollbackIds), "rollback IDs must be exact table:id entries"],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
 			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
 		]),
@@ -339,6 +340,16 @@ function hasIsoDatetime(value: string | undefined) {
 
 function hasVtexBackoffPolicy(value: string | undefined) {
 	return hasAllTerms(value, ["timeout", "403", "429", "html", "captcha"]);
+}
+
+function hasExactRollbackIds(values: string[] | undefined) {
+	return (
+		Array.isArray(values) &&
+		values.length > 0 &&
+		values.every((value) =>
+			/^(products|supermarket_products|price_history|staging_products|direct_refresh_run_ledger):[1-9]\d*$/.test(value),
+		)
+	);
 }
 
 function hasVtexStopRule(value: string | undefined) {
