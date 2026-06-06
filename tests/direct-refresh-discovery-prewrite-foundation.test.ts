@@ -141,7 +141,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	it("passes only when all Phase 1 pre-write foundation evidence is present", () => {
 		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 			evidence: completeEvidence,
-			evidencePath: "foundation.json",
+			evidencePath: completeEvidence.artifactLineage.artifactPath,
 			now: new Date("2026-06-06T12:30:00.000Z"),
 		});
 
@@ -150,6 +150,21 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(report.writeBoundary, /no discovery apply/);
 		assert.equal(report.summary.passCount, report.checks.length);
 		assert.deepEqual(report.summary.failClosedReasons, []);
+	});
+
+	it("fails closed when artifact path lineage does not match the evidence path", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: completeEvidence,
+			evidencePath:
+				"audit/direct-refresh-discovery-prewrite-foundation/other-foundation-evidence.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/artifact path lineage must match evidence path/,
+		);
 	});
 
 	it("fails closed when Phase 1 foundation evidence is stale", () => {

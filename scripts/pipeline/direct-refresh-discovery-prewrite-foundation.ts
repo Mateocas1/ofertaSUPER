@@ -164,7 +164,7 @@ export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 	evidencePath: string;
 	now?: Date;
 }) {
-	const checks = buildChecks(evidence, now);
+	const checks = buildChecks(evidence, evidencePath, now);
 	const failClosedReasons = uniqueSorted(checks.flatMap((check) => check.reasons));
 	const failCount = checks.filter((check) => check.status === "FAIL").length;
 	return {
@@ -192,7 +192,11 @@ export function parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
 	return JSON.parse(raw.replace(/^\uFEFF/, "")) as DirectRefreshDiscoveryPrewriteFoundationEvidence;
 }
 
-function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence, now: Date) {
+function buildChecks(
+	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
+	evidencePath: string,
+	now: Date,
+) {
 	const schema = evidence.schemaConstraints ?? {};
 	const control = evidence.controlPlane ?? {};
 	const lineage = evidence.artifactLineage ?? {};
@@ -225,7 +229,14 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[hasWriterSupportedSource(lineage.source), "source lineage must be writer-supported"],
 			[lineage.count > 0, "count lineage is required"],
 			[hasText(lineage.attemptId), "attempt lineage is required"],
-			[hasFoundationArtifactPath(lineage.artifactPath), "artifact path lineage must be foundation audit json"],
+			[
+				hasFoundationArtifactPath(lineage.artifactPath),
+				"artifact path lineage must be foundation audit json",
+			],
+			[
+				hasMatchingArtifactPath(lineage.artifactPath, evidencePath),
+				"artifact path lineage must match evidence path",
+			],
 			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
 			[hasGitCommitLineage(lineage.gitCommit), "git commit lineage must be hex"],
 			[hasToolVersionLineage(lineage.toolVersion), "tool version lineage must include @version"],
@@ -327,6 +338,17 @@ function hasFoundationArtifactPath(value: string | undefined) {
 		/^audit\/direct-refresh-discovery-prewrite-foundation\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
 		!value.includes("..")
 	);
+}
+
+function hasMatchingArtifactPath(
+	lineagePath: string | undefined,
+	evidencePath: string,
+) {
+	return normalizeAuditPath(lineagePath) === normalizeAuditPath(evidencePath);
+}
+
+function normalizeAuditPath(value: string | undefined) {
+	return typeof value === "string" ? value.replaceAll("\\", "/") : "";
 }
 
 function hasExplicitEnvironmentIdentity(value: string | undefined) {
