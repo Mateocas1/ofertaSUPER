@@ -200,6 +200,29 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("calculates artifact sha256 independently of object key insertion order", () => {
+		const reorderedEvidence = {
+			performanceGuard: completeEvidence.performanceGuard,
+			alertChannel: completeEvidence.alertChannel,
+			compliance: completeEvidence.compliance,
+			vtexBudgets: completeEvidence.vtexBudgets,
+			rollbackDrill: completeEvidence.rollbackDrill,
+			artifactLineage: completeEvidence.artifactLineage,
+			controlPlane: completeEvidence.controlPlane,
+			schemaConstraints: completeEvidence.schemaConstraints,
+			generatedAt: completeEvidence.generatedAt,
+		} as DirectRefreshDiscoveryPrewriteFoundationEvidence;
+
+		assert.equal(
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				completeEvidence,
+			),
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				reorderedEvidence,
+			),
+		);
+	});
+
 	it("fails closed when artifact path lineage does not match the evidence path", () => {
 		const report = evaluateFoundation({
 			evidence: completeEvidence,
