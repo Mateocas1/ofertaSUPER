@@ -24,7 +24,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		sourceLock: true,
 		ledgerAttemptIdentity: true,
 		ttlPolicy: true,
-		owner: "Direct-refresh operator",
+		owner: "direct-refresh-oncall",
 		stopResumeStates: true,
 		idempotencyPolicy: true,
 	},
@@ -284,6 +284,24 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			report.summary.failClosedReasons.join("\n"),
 			/read-only rollback review is preparatory only/,
 		);
+	});
+
+	it("fails closed when control-plane owner is generic", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				controlPlane: {
+					...completeEvidence.controlPlane,
+					owner: "Direct-refresh operator",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /control-plane owner must be explicit and non-placeholder/);
 	});
 
 	it("fails closed when rollback DR proof omits preimage, PITR, or cache handling", () => {

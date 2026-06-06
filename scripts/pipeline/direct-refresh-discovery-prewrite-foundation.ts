@@ -205,7 +205,7 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[control.sourceLock, "source lock is required"],
 			[control.ledgerAttemptIdentity, "ledger attempt identity is required"],
 			[control.ttlPolicy, "TTL policy is required"],
-			[hasText(control.owner), "owner is required"],
+			[hasExplicitOwner(control.owner), "control-plane owner must be explicit and non-placeholder"],
 			[control.stopResumeStates, "stop/resume states are required"],
 			[control.idempotencyPolicy, "idempotency policy is required"],
 		]),
@@ -373,6 +373,10 @@ function hasActionableAlertChannel(value: string | undefined) {
 }
 
 function hasExplicitAlertOwner(value: string | undefined) {
+	return hasExplicitOwner(value);
+}
+
+function hasExplicitOwner(value: string | undefined) {
 	const normalized = value?.toLowerCase().trim() ?? "";
 	return (
 		normalized.length > 0 &&
