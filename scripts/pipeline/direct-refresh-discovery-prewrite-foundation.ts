@@ -193,14 +193,14 @@ export function parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
 }
 
 function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence, now: Date) {
-	const schema = evidence.schemaConstraints;
-	const control = evidence.controlPlane;
-	const lineage = evidence.artifactLineage;
-	const rollback = evidence.rollbackDrill;
-	const budget = evidence.vtexBudgets;
-	const compliance = evidence.compliance;
-	const alert = evidence.alertChannel;
-	const perf = evidence.performanceGuard;
+	const schema = evidence.schemaConstraints ?? {};
+	const control = evidence.controlPlane ?? {};
+	const lineage = evidence.artifactLineage ?? {};
+	const rollback = evidence.rollbackDrill ?? {};
+	const budget = evidence.vtexBudgets ?? {};
+	const compliance = evidence.compliance ?? {};
+	const alert = evidence.alertChannel ?? {};
+	const perf = evidence.performanceGuard ?? {};
 	return [
 		check("evidence-freshness", buildEvidenceFreshnessRules(evidence, now)),
 		check("schema-constraints", [
@@ -241,7 +241,10 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[hasRollbackVerificationArtifact(rollback.preimageArtifact), "preimage artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.preimageSha256), "preimage sha256 is required"],
 			[hasPitrBackupPosture(rollback.pitrBackupPosture), "PITR/backup posture must include PITR or backup and reviewed or available"],
-			[rollback.rollbackIds.length > 0, "rollback IDs are required"],
+			[
+				Array.isArray(rollback.rollbackIds) && rollback.rollbackIds.length > 0,
+				"rollback IDs are required",
+			],
 			[hasExactRollbackIds(rollback.rollbackIds), "rollback IDs must be exact table:id entries"],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
 			[hasRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],

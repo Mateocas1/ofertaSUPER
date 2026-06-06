@@ -185,6 +185,33 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		]);
 	});
 
+	it("fails closed instead of crashing when foundation evidence sections are malformed", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				generatedAt: "2026-06-06T12:25:00.000Z",
+			} as DirectRefreshDiscoveryPrewriteFoundationEvidence,
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /Product\.ean primary key is required/);
+		assert.match(reasons, /source lock is required/);
+		assert.match(reasons, /artifact path lineage must be foundation audit json/);
+		assert.match(reasons, /rollback drill must be executed before discovery apply/);
+		assert.match(reasons, /VTEX request cap must be positive/);
+		assert.match(reasons, /compliance allowed-use review is required/);
+		assert.match(
+			reasons,
+			/alert channel must include issue evidence comment and concrete alert destination/,
+		);
+		assert.match(
+			reasons,
+			/Prisma pool posture must include pgbouncer, connection_limit, and pool_timeout/,
+		);
+	});
+
 	it("fails closed when artifact lineage omits issue, source, count, attempt, path, or hash", () => {
 		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 			evidence: {
