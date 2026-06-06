@@ -368,6 +368,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /VTEX probe timestamp must be ISO datetime/);
 	});
 
+	it("fails closed when source config snapshot has no real files", () => {
+		const evidenceWithNoSnapshotFiles = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				sourceConfigSnapshot:
+					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; files:,",
+			},
+		};
+		evidenceWithNoSnapshotFiles.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithNoSnapshotFiles,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithNoSnapshotFiles,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/source config snapshot sha256 is required/,
+		);
+	});
+
 	it("fails closed when source config snapshot hash does not match runtime files", () => {
 		const report = evaluateFoundation({
 			evidence: completeEvidence,
@@ -384,6 +410,13 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("rejects unsafe source config snapshot file paths before runtime reads", () => {
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoverySourceConfigSnapshotFiles(
+					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; files:,",
+				),
+			/source config snapshot files must include at least one file/,
+		);
 		assert.throws(
 			() =>
 				parseDirectRefreshDiscoverySourceConfigSnapshotFiles(

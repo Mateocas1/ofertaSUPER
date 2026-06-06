@@ -235,6 +235,9 @@ export function parseDirectRefreshDiscoverySourceConfigSnapshotFiles(
 ) {
 	const match = value?.match(/^sha256:[a-f0-9]{64}; files:(\S+)$/);
 	const files = match ? match[1].split(",").filter((file) => file.length > 0) : [];
+	if (files.length === 0) {
+		throw new Error("source config snapshot files must include at least one file");
+	}
 	if (!files.every(isSafeSourceConfigSnapshotPath)) {
 		throw new Error(
 			"source config snapshot files must be workspace-relative safe paths",
@@ -471,7 +474,11 @@ function hasNumericSchemaVersion(value: string | undefined) {
 }
 
 function hasSourceConfigSnapshot(value: string | undefined) {
-	return typeof value === "string" && /^sha256:[a-f0-9]{64}; files:\S+/.test(value);
+	return (
+		typeof value === "string" &&
+		/^sha256:[a-f0-9]{64}; files:\S+/.test(value) &&
+		hasSourceConfigSnapshotFiles(value)
+	);
 }
 
 function hasMatchingSourceConfigSnapshot(
@@ -480,6 +487,11 @@ function hasMatchingSourceConfigSnapshot(
 ) {
 	const lineageSha256 = lineageSnapshot?.split(";")[0];
 	return lineageSha256 === runtimeSha256;
+}
+
+function hasSourceConfigSnapshotFiles(value: string) {
+	const files = value.split("; files:")[1]?.split(",").filter((file) => file.length > 0);
+	return Array.isArray(files) && files.length > 0;
 }
 
 function hasIsoDatetime(value: string | undefined) {
