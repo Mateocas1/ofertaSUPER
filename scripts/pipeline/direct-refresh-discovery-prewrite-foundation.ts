@@ -234,7 +234,23 @@ export function parseDirectRefreshDiscoverySourceConfigSnapshotFiles(
 	value: string | undefined,
 ) {
 	const match = value?.match(/^sha256:[a-f0-9]{64}; files:(\S+)$/);
-	return match ? match[1].split(",").filter((file) => file.length > 0) : [];
+	const files = match ? match[1].split(",").filter((file) => file.length > 0) : [];
+	if (!files.every(isSafeSourceConfigSnapshotPath)) {
+		throw new Error(
+			"source config snapshot files must be workspace-relative safe paths",
+		);
+	}
+	return files;
+}
+
+function isSafeSourceConfigSnapshotPath(value: string) {
+	return (
+		/^[A-Za-z0-9._/-]+$/.test(value) &&
+		!value.startsWith("/") &&
+		!value.includes("\\") &&
+		!value.split("/").includes("..") &&
+		!value.includes(":")
+	);
 }
 
 function stableStringify(value: unknown): string {

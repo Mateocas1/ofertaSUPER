@@ -7,6 +7,7 @@ import {
 	evaluateDirectRefreshDiscoveryPrewriteFoundation,
 	parseDirectRefreshDiscoveryPrewriteFoundationCliOptions,
 	parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson,
+	parseDirectRefreshDiscoverySourceConfigSnapshotFiles,
 	type DirectRefreshDiscoveryPrewriteFoundationEvidence,
 } from "../scripts/pipeline/direct-refresh-discovery-prewrite-foundation";
 
@@ -379,6 +380,23 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
 			/source config snapshot sha256 must match runtime files/,
+		);
+	});
+
+	it("rejects unsafe source config snapshot file paths before runtime reads", () => {
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoverySourceConfigSnapshotFiles(
+					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; files:../secrets.env",
+				),
+			/source config snapshot files must be workspace-relative safe paths/,
+		);
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoverySourceConfigSnapshotFiles(
+					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; files:C:/Users/picala/.env",
+				),
+			/source config snapshot files must be workspace-relative safe paths/,
 		);
 	});
 
