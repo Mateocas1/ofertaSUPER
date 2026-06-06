@@ -90,9 +90,9 @@ The apply gate rechecks product/source/staging/SKU state inside the transaction,
 - [x] Add a read-only discovery audit that emits candidate identity, missing-row classification, quality flags, idempotency key, and rollback preview.
 - [x] Add tests for missing global product, missing source row, duplicate SKU, host drift, stale evidence, staging conflict, and rollback-bound deletes.
 - [x] Add a create-mode design that uses a transaction, advisory/source lock, final preflight, and exact created-row report.
-- [ ] Keep `refresh-existing` no-create tests green; discovery must not weaken existing guards.
+- [x] Keep `refresh-existing` no-create tests green; discovery must not weaken existing guards. Verified by full test suite after PR #182 (`npm test`: 316/316 pass).
 - [x] Produce a reviewer-friendly issue summary before any write-capable discovery PR.
 
 ## Next step
 
-Run the create prewrite against a fresh PASS discovery audit, then stop unless the exact confirmation string and postwrite audit scope are reviewed. Do not use scheduler/all-source/repeated batches or DIA for discovery.
+Follow `docs/direct-refresh-discovery-controlled-pilot-prd.md`: create a fresh PASS discovery audit, run create prewrite, confirm postwrite scope, and only then run a count=1 controlled apply. Do not use scheduler/all-source/repeated batches or DIA for discovery.
