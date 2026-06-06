@@ -637,28 +637,9 @@ Cada issue debe ser review-sized. Si supera 400 líneas, usar chained PRs o pedi
 
 ## Goal prompt extendido
 
-```text
-/goal Execute the ofertasSUPER direct-refresh discovery prod-final roadmap from docs/direct-refresh-discovery-prod-final-prd.md with zero shortcuts.
+El prompt operativo copy/paste-ready vive en `docs/direct-refresh-discovery-prod-final-goal-prompt.md`.
 
-Rules:
-- Follow the PRD phase order unless a technical decision record documents why a different order is safer.
-- Never run npm run build.
-- Use strict TDD for implementation work.
-- Keep PRs review-sized; use chained PRs when changed lines exceed the review budget.
-- No scheduler execution, all-source operation, repeated batches, DIA writes, deploys, secrets changes, remote config changes, cache purge, or production writes unless the phase has a dedicated approved issue and exact gate evidence.
-- Every production write requires approved issue, fresh audit/prewrite, exact confirmation, apply report, postwrite PASS, rollback IDs, baseline/freshness observation, and issue evidence comment.
-- If a better approach is found, document the decision, technical reason, tradeoff, and affected files before implementation.
-- Fail closed on missing, stale, malformed, mismatched, cross-source, cross-count, cross-attempt, or non-PASS evidence.
-
-Objective:
-Bring direct-refresh discovery from postwrite-ready tooling to prod-final operation: pre-write safety foundation, denominator/coverage measurement, source-row pilot, product-and-source pilot, controlled batch <=5, cross-source validation, ledger/locks/idempotency/TTL, freshness bridge and recovery to SLO, performance scale validation, alerts/ownership/rollback certification, and final prod acceptance.
-
-Prod-final acceptance:
-- writer-supported sources Carrefour, Vea, Disco, Jumbo, and MAS are covered or explicitly excluded with evidence;
-- discovery coverage reaches >=95% of measured per-source denominator, or a lower target is approved with documented technical constraints;
-- freshness for writer-supported public-rankable rows reaches the 95%/12h target; if not, the state is coverage-operational, not prod-final;
-- every discovery run is source-scoped, auditable, reversible, owned, alertable, and safe to stop.
-```
+Ese artifact es la unica version extendida del `/goal`; este PRD conserva las reglas, fases y gates como fuente de verdad. Si el prompt y este PRD difieren, se debe corregir el prompt antes de ejecutar.
 
 ## Stop rules finales
 
