@@ -1,0 +1,59 @@
+{
+  "schemaConstraints": {
+    "productEanPrimaryKey": true,
+    "productSourceUnique": true,
+    "sourceSkuUniqueNonnull": true,
+    "priceHistoryIndex": true,
+    "stagingProductIndex": true,
+    "ledgerUniqueness": true,
+    "migrationStatus": "FAIL"
+  },
+  "controlPlane": {
+    "sourceLock": true,
+    "ledgerAttemptIdentity": true,
+    "ttlPolicy": true,
+    "owner": "Direct-refresh operator",
+    "stopResumeStates": true,
+    "idempotencyPolicy": true
+  },
+  "artifactLineage": {
+    "gitCommit": "d818f8b",
+    "toolVersion": "direct-refresh-discovery-prewrite-foundation@1",
+    "schemaVersion": "1",
+    "dbEnvironmentIdentity": "configured-supabase-pooler-read-only-status-check",
+    "sourceConfigSnapshot": "",
+    "vtexProbeTimestamp": ""
+  },
+  "rollbackDrill": {
+    "executed": false,
+    "mode": "read-only-review",
+    "rollbackIds": [],
+    "postRollbackVerification": false
+  },
+  "vtexBudgets": {
+    "requestCap": 20,
+    "concurrency": 1,
+    "timeoutMs": 10000,
+    "backoffPolicy": "Stop source on timeout/403/429/HTML/captcha/hash_invalid; no automatic retry.",
+    "stopRule": "Source becomes STOPPED before denominator/pilot if blocked, rate-limited, or hash invalid.",
+    "headerPolicy": "Use documented non-evasive request headers only; no anti-bot bypass behavior."
+  },
+  "compliance": {
+    "allowedUseReviewed": false,
+    "posture": "unknown"
+  },
+  "alertChannel": {
+    "channel": "Issue evidence comment plus direct-refresh alert placeholder",
+    "owner": "Direct-refresh operator",
+    "writeFailure": true,
+    "postwriteFailure": true,
+    "rollbackRequired": true
+  },
+  "performanceGuard": {
+    "prismaPoolPosture": "",
+    "transactionTimeoutPosture": "",
+    "priceHistoryBaseline": "",
+    "publicApiBaseline": "",
+    "cacheTtlBaseline": ""
+  }
+}
