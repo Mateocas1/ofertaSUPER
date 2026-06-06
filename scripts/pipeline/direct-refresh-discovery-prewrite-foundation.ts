@@ -58,6 +58,13 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	alertChannel: {
 		channel: string;
 		owner: string;
+		severity: string;
+		ackSla: string;
+		resolutionSla: string;
+		escalationPath: string;
+		suppressionPolicy: string;
+		retryPolicy: string;
+		testAlertProof: string;
 		writeFailure: boolean;
 		postwriteFailure: boolean;
 		rollbackRequired: boolean;
@@ -251,6 +258,13 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 		check("alert-channel", [
 			[hasActionableAlertChannel(alert.channel), "alert channel must include issue evidence comment and concrete alert destination"],
 			[hasExplicitAlertOwner(alert.owner), "alert owner must be explicit and non-placeholder"],
+			[hasAlertSeverity(alert.severity), "alert severity must include write, postwrite, and rollback-required"],
+			[hasAlertAckSla(alert.ackSla), "alert ack SLA is required"],
+			[hasAlertResolutionSla(alert.resolutionSla), "alert resolution SLA is required"],
+			[hasAlertEscalationPath(alert.escalationPath), "alert escalation path must be explicit"],
+			[hasAlertSuppressionPolicy(alert.suppressionPolicy), "alert suppression policy must describe suppression/noise handling"],
+			[hasAlertRetryPolicy(alert.retryPolicy), "alert retry policy must be explicit"],
+			[hasTestAlertProof(alert.testAlertProof), "test-alert proof is required"],
 			[alert.writeFailure, "write failure alert is required"],
 			[alert.postwriteFailure, "postwrite failure alert is required"],
 			[alert.rollbackRequired, "rollback-required alert is required"],
@@ -374,6 +388,34 @@ function hasActionableAlertChannel(value: string | undefined) {
 
 function hasExplicitAlertOwner(value: string | undefined) {
 	return hasExplicitOwner(value);
+}
+
+function hasAlertSeverity(value: string | undefined) {
+	return hasAllTerms(value, ["write", "postwrite", "rollback-required"]);
+}
+
+function hasAlertAckSla(value: string | undefined) {
+	return hasAllTerms(value, ["ack", "sla"]);
+}
+
+function hasAlertResolutionSla(value: string | undefined) {
+	return hasAllTerms(value, ["resolution", "sla"]);
+}
+
+function hasAlertEscalationPath(value: string | undefined) {
+	return hasAnyTerm(value, ["escalate", "escalation"]) && hasAnyTerm(value, ["oncall", "owner"]);
+}
+
+function hasAlertSuppressionPolicy(value: string | undefined) {
+	return hasAllTerms(value, ["suppression", "noise"]);
+}
+
+function hasAlertRetryPolicy(value: string | undefined) {
+	return hasAllTerms(value, ["retry", "policy"]) && hasAnyTerm(value, ["no automatic", "manual", "rollback-required"]);
+}
+
+function hasTestAlertProof(value: string | undefined) {
+	return hasAllTerms(value, ["test-alert", "proof"]);
 }
 
 function hasExplicitOwner(value: string | undefined) {

@@ -67,6 +67,13 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	alertChannel: {
 		channel: "Issue comment + #direct-refresh-alerts",
 		owner: "direct-refresh-oncall",
+		severity: "critical write/postwrite/rollback-required",
+		ackSla: "ack SLA <= 30m",
+		resolutionSla: "resolution SLA <= 4h",
+		escalationPath: "escalate to direct-refresh-oncall then data-platform-oncall",
+		suppressionPolicy: "suppression/noise policy: no suppression for rollback-required",
+		retryPolicy: "retry policy: no automatic retry after rollback-required",
+		testAlertProof: "test-alert proof captured in issue evidence comment",
 		writeFailure: true,
 		postwriteFailure: true,
 		rollbackRequired: true,
@@ -364,6 +371,36 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			/alert channel must include issue evidence comment and concrete alert destination/,
 		);
 		assert.match(reasons, /alert owner must be explicit and non-placeholder/);
+	});
+
+	it("fails closed when alert policy omits severity, SLA, escalation, suppression, retry, or test proof", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				alertChannel: {
+					...completeEvidence.alertChannel,
+					severity: "high",
+					ackSla: "",
+					resolutionSla: "",
+					escalationPath: "ask someone",
+					suppressionPolicy: "quiet",
+					retryPolicy: "retry",
+					testAlertProof: "",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /alert severity must include write, postwrite, and rollback-required/);
+		assert.match(reasons, /alert ack SLA is required/);
+		assert.match(reasons, /alert resolution SLA is required/);
+		assert.match(reasons, /alert escalation path must be explicit/);
+		assert.match(reasons, /alert suppression policy must describe suppression\/noise handling/);
+		assert.match(reasons, /alert retry policy must be explicit/);
+		assert.match(reasons, /test-alert proof is required/);
 	});
 
 	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {
