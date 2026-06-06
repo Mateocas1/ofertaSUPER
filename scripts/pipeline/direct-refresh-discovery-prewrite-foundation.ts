@@ -240,7 +240,7 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[rollback.preimageCaptured === true, "rollback preimage capture is required"],
 			[hasRollbackVerificationArtifact(rollback.preimageArtifact), "preimage artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.preimageSha256), "preimage sha256 is required"],
-			[hasText(rollback.pitrBackupPosture), "PITR/backup posture is required"],
+			[hasPitrBackupPosture(rollback.pitrBackupPosture), "PITR/backup posture must include PITR or backup and reviewed or available"],
 			[rollback.rollbackIds.length > 0, "rollback IDs are required"],
 			[hasExactRollbackIds(rollback.rollbackIds), "rollback IDs must be exact table:id entries"],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
@@ -379,6 +379,13 @@ function hasRollbackVerificationArtifact(value: string | undefined) {
 		typeof value === "string" &&
 		/^audit\/direct-refresh-discovery-rollback-verification\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
 		!value.includes("..")
+	);
+}
+
+function hasPitrBackupPosture(value: string | undefined) {
+	return (
+		hasAnyTerm(value, ["pitr", "backup"]) &&
+		hasAnyTerm(value, ["reviewed", "available"])
 	);
 }
 

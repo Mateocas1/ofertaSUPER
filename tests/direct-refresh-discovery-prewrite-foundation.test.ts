@@ -336,8 +336,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /rollback preimage capture is required/);
-		assert.match(reasons, /PITR\/backup posture is required/);
+		assert.match(
+			reasons,
+			/PITR\/backup posture must include PITR or backup and reviewed or available/,
+		);
 		assert.match(reasons, /rollback cache handling is required/);
+	});
+
+	it("fails closed when PITR/backup posture evidence is vague", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					pitrBackupPosture: "looks ok",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/PITR\/backup posture must include PITR or backup and reviewed or available/,
+		);
 	});
 
 	it("fails closed when preimage artifact evidence is missing or malformed", () => {
