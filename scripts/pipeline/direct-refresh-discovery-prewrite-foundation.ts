@@ -239,9 +239,9 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[budget.concurrency === 1, "VTEX concurrency must be serial"],
 			[budget.timeoutMs > 0, "VTEX timeout must be positive"],
 			[budget.timeoutMs <= MAX_VTEX_FOUNDATION_TIMEOUT_MS, "VTEX timeout must be <= 10000ms"],
-			[hasText(budget.backoffPolicy), "VTEX backoff policy is required"],
-			[hasText(budget.stopRule), "VTEX stop rule is required"],
-			[hasText(budget.headerPolicy), "VTEX header policy is required"],
+			[hasVtexBackoffPolicy(budget.backoffPolicy), "VTEX backoff policy must include timeout, 403, 429, HTML, and captcha"],
+			[hasVtexStopRule(budget.stopRule), "VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry"],
+			[hasVtexHeaderPolicy(budget.headerPolicy), "VTEX header policy must be documented and non-evasive"],
 		]),
 		check("compliance", [
 			[compliance.allowedUseReviewed, "compliance allowed-use review is required"],
@@ -335,4 +335,29 @@ function hasIsoDatetime(value: string | undefined) {
 	if (typeof value !== "string" || value.trim().length === 0) return false;
 	const parsed = Date.parse(value);
 	return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
+function hasVtexBackoffPolicy(value: string | undefined) {
+	return hasAllTerms(value, ["timeout", "403", "429", "html", "captcha"]);
+}
+
+function hasVtexStopRule(value: string | undefined) {
+	return (
+		hasAllTerms(value, ["blocked", "rate-limit", "hash_invalid"]) &&
+		hasAnyTerm(value, ["no automatic retry", "no retry automatico", "no automatic retries"])
+	);
+}
+
+function hasVtexHeaderPolicy(value: string | undefined) {
+	return hasAllTerms(value, ["documented", "non-evasive"]);
+}
+
+function hasAllTerms(value: string | undefined, terms: string[]) {
+	const normalized = value?.toLowerCase() ?? "";
+	return terms.every((term) => normalized.includes(term));
+}
+
+function hasAnyTerm(value: string | undefined, terms: string[]) {
+	const normalized = value?.toLowerCase() ?? "";
+	return terms.some((term) => normalized.includes(term));
 }

@@ -45,7 +45,7 @@
     "concurrency": 1,
     "timeoutMs": 10000,
     "backoffPolicy": "Stop source on timeout/403/429/HTML/captcha/hash_invalid; no automatic retry.",
-    "stopRule": "Source becomes STOPPED before denominator/pilot if blocked, rate-limited, or hash invalid.",
+    "stopRule": "Source becomes STOPPED before denominator/pilot if blocked, rate-limit, or hash_invalid; no automatic retry.",
     "headerPolicy": "Use documented non-evasive request headers only; no anti-bot bypass behavior."
   },
   "compliance": {

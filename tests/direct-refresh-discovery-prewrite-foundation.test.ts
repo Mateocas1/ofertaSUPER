@@ -56,8 +56,8 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		requestCap: 20,
 		concurrency: 1,
 		timeoutMs: 10_000,
-		backoffPolicy: "stop-on-429",
-		stopRule: "source STOPPED on blocked/rate-limit/hash_invalid",
+		backoffPolicy: "backoff on timeout/403/429/HTML/captcha",
+		stopRule: "source STOPPED on blocked/rate-limit/hash_invalid; no automatic retry",
 		headerPolicy: "documented non-evasive headers",
 	},
 	compliance: {
@@ -347,6 +347,28 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /VTEX request cap must be <= 20/);
 		assert.match(reasons, /VTEX concurrency must be serial/);
 		assert.match(reasons, /VTEX timeout must be <= 10000ms/);
+	});
+
+	it("fails closed when VTEX safety policies are too vague", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				vtexBudgets: {
+					...completeEvidence.vtexBudgets,
+					backoffPolicy: "retry later",
+					stopRule: "stop if bad",
+					headerPolicy: "custom headers",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /VTEX backoff policy must include timeout, 403, 429, HTML, and captcha/);
+		assert.match(reasons, /VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry/);
+		assert.match(reasons, /VTEX header policy must be documented and non-evasive/);
 	});
 
 	it("parses a read-only CLI boundary and rejects write-like flags", () => {
