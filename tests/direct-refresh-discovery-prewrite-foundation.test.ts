@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import {
 	evaluateDirectRefreshDiscoveryPrewriteFoundation,
 	parseDirectRefreshDiscoveryPrewriteFoundationCliOptions,
+	parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson,
 	type DirectRefreshDiscoveryPrewriteFoundationEvidence,
 } from "../scripts/pipeline/direct-refresh-discovery-prewrite-foundation";
 
@@ -189,5 +190,14 @@ describe("direct-refresh discovery prewrite foundation", () => {
 				]),
 			/rejects --apply/,
 		);
+	});
+
+	it("parses evidence JSON with an optional UTF-8 BOM", () => {
+		const parsed = parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
+			`\uFEFF${JSON.stringify(completeEvidence)}`,
+		);
+
+		assert.equal(parsed.schemaConstraints.migrationStatus, "PASS");
+		assert.equal(parsed.rollbackDrill.mode, "controlled-disposable-row");
 	});
 });

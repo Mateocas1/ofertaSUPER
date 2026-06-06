@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import {
 	evaluateDirectRefreshDiscoveryPrewriteFoundation,
 	parseDirectRefreshDiscoveryPrewriteFoundationCliOptions,
-	type DirectRefreshDiscoveryPrewriteFoundationEvidence,
+	parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson,
 } from "./pipeline/direct-refresh-discovery-prewrite-foundation";
 
 async function writeJson(output: string, report: unknown) {
@@ -18,9 +18,9 @@ async function writeJson(output: string, report: unknown) {
 
 async function main() {
 	const options = parseDirectRefreshDiscoveryPrewriteFoundationCliOptions();
-	const evidence = JSON.parse(
+	const evidence = parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
 		await readFile(options.evidence, "utf8"),
-	) as DirectRefreshDiscoveryPrewriteFoundationEvidence;
+	);
 	const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 		evidence,
 		evidencePath: options.evidence,
