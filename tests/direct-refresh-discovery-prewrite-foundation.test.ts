@@ -217,6 +217,28 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /VTEX probe timestamp must be ISO datetime/);
 	});
 
+	it("fails closed when commit, tool version, or schema version lineage are malformed", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+					gitCommit: "not-a-commit",
+					toolVersion: "direct-refresh-discovery-create",
+					schemaVersion: "v1",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /git commit lineage must be hex/);
+		assert.match(reasons, /tool version lineage must include @version/);
+		assert.match(reasons, /schema version lineage must be numeric/);
+	});
+
 	it("fails closed when rollback proof is read-only instead of executed", () => {
 		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 			evidence: {

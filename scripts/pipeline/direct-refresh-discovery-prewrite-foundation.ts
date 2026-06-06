@@ -213,9 +213,9 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[hasText(lineage.attemptId), "attempt lineage is required"],
 			[hasText(lineage.artifactPath), "artifact path lineage is required"],
 			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
-			[hasText(lineage.gitCommit), "git commit lineage is required"],
-			[hasText(lineage.toolVersion), "tool version lineage is required"],
-			[hasText(lineage.schemaVersion), "schema version lineage is required"],
+			[hasGitCommitLineage(lineage.gitCommit), "git commit lineage must be hex"],
+			[hasToolVersionLineage(lineage.toolVersion), "tool version lineage must include @version"],
+			[hasNumericSchemaVersion(lineage.schemaVersion), "schema version lineage must be numeric"],
 			[hasText(lineage.dbEnvironmentIdentity), "DB/environment identity is required"],
 			[hasSourceConfigSnapshot(lineage.sourceConfigSnapshot), "source config snapshot sha256 is required"],
 			[hasIsoDatetime(lineage.vtexProbeTimestamp), "VTEX probe timestamp must be ISO datetime"],
@@ -287,6 +287,18 @@ function hasText(value: string | undefined) {
 
 function hasSha256Lineage(value: string | undefined) {
 	return typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
+}
+
+function hasGitCommitLineage(value: string | undefined) {
+	return typeof value === "string" && /^[a-f0-9]{7,40}$/.test(value);
+}
+
+function hasToolVersionLineage(value: string | undefined) {
+	return typeof value === "string" && /^[a-z0-9][a-z0-9-]*@\d+(?:\.\d+)*$/.test(value);
+}
+
+function hasNumericSchemaVersion(value: string | undefined) {
+	return typeof value === "string" && /^[1-9]\d*$/.test(value);
 }
 
 function hasSourceConfigSnapshot(value: string | undefined) {
