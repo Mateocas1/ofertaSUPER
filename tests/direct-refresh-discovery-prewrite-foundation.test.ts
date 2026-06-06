@@ -433,6 +433,34 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when evaluator receives unsafe source config snapshot paths", () => {
+		const evidenceWithUnsafeSnapshotPath = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				sourceConfigSnapshot:
+					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; files:../secrets.env",
+			},
+		};
+		evidenceWithUnsafeSnapshotPath.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithUnsafeSnapshotPath,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithUnsafeSnapshotPath,
+			sourceConfigSnapshotSha256:
+				"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/source config snapshot files must be workspace-relative safe paths/,
+		);
+	});
+
 	it("fails closed when commit, tool version, or schema version lineage are malformed", () => {
 		const report = evaluateFoundation({
 			evidence: {

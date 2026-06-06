@@ -328,6 +328,10 @@ function buildChecks(
 			[hasExplicitEnvironmentIdentity(lineage.dbEnvironmentIdentity), "DB/environment identity must be explicit"],
 			[hasSourceConfigSnapshot(lineage.sourceConfigSnapshot), "source config snapshot sha256 is required"],
 			[
+				hasSafeSourceConfigSnapshotFiles(lineage.sourceConfigSnapshot),
+				"source config snapshot files must be workspace-relative safe paths",
+			],
+			[
 				hasMatchingSourceConfigSnapshot(
 					lineage.sourceConfigSnapshot,
 					sourceConfigSnapshotSha256,
@@ -492,6 +496,15 @@ function hasMatchingSourceConfigSnapshot(
 function hasSourceConfigSnapshotFiles(value: string) {
 	const files = value.split("; files:")[1]?.split(",").filter((file) => file.length > 0);
 	return Array.isArray(files) && files.length > 0;
+}
+
+function hasSafeSourceConfigSnapshotFiles(value: string | undefined) {
+	const files = value?.split("; files:")[1]?.split(",").filter((file) => file.length > 0);
+	return (
+		Array.isArray(files) &&
+		files.length > 0 &&
+		files.every(isSafeSourceConfigSnapshotPath)
+	);
 }
 
 function hasIsoDatetime(value: string | undefined) {
