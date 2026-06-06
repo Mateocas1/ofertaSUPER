@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
 	buildDirectRefreshDiscoveryCreatePostwriteAudit,
+	type DirectRefreshDiscoveryCreatePostwriteRepository,
 } from "../scripts/pipeline/direct-refresh-discovery-postwrite-audit";
 import type {
 	DirectRefreshDiscoveryCreateApplyReport,
@@ -98,6 +99,64 @@ function applyReport(
 	};
 }
 
+function repository(
+	overrides: Partial<DirectRefreshDiscoveryCreatePostwriteRepository> = {},
+): DirectRefreshDiscoveryCreatePostwriteRepository {
+	return {
+		getSupermarketProductsByIds: async () => [
+			{
+				id: 901,
+				productEan: "111",
+				supermarketId: 7,
+				skuId: "sku-111",
+				price: 100,
+				listPrice: 120,
+				referencePrice: 100,
+				referenceUnit: "lt",
+				isAvailable: true,
+				sellerId: "seller",
+				productUrl: "https://www.vea.com.ar/product/111",
+				lastCheckedAt: prewriteGeneratedAt,
+			},
+		],
+		getSupermarketProductsBySourceEanPairs: async () => [
+			{
+				id: 901,
+				productEan: "111",
+				supermarketId: 7,
+				skuId: "sku-111",
+				price: 100,
+				listPrice: 120,
+				referencePrice: 100,
+				referenceUnit: "lt",
+				isAvailable: true,
+				sellerId: "seller",
+				productUrl: "https://www.vea.com.ar/product/111",
+				lastCheckedAt: prewriteGeneratedAt,
+			},
+		],
+		getPriceHistoryRowsByIds: async () => [
+			{
+				id: 1001,
+				supermarketProductId: 901,
+				price: 100,
+				listPrice: 120,
+				scrapedAt: prewriteGeneratedAt,
+			},
+		],
+		getPriceHistoryRowsForSupermarketProductsSince: async () => [
+			{
+				id: 1001,
+				supermarketProductId: 901,
+				price: 100,
+				listPrice: 120,
+				scrapedAt: prewriteGeneratedAt,
+			},
+		],
+		...overrides,
+	};
+}
+
 describe("direct-refresh discovery create postwrite audit contract", () => {
 	it("fails closed when prewrite and apply artifacts describe different attempts", async () => {
 		const report = await buildDirectRefreshDiscoveryCreatePostwriteAudit({
@@ -106,6 +165,7 @@ describe("direct-refresh discovery create postwrite audit contract", () => {
 				issue: 999,
 				prewriteGeneratedAt: "2026-06-06T09:59:00.000Z",
 			}),
+			repository: repository(),
 			now: auditNow,
 		});
 
@@ -131,22 +191,93 @@ describe("direct-refresh discovery create postwrite audit contract", () => {
 		});
 	});
 
-	it("keeps clean artifacts fail-closed until row verification is present", async () => {
+	it("passes when source and history rows match the apply artifact exactly", async () => {
 		const report = await buildDirectRefreshDiscoveryCreatePostwriteAudit({
 			prewrite: sourceRowPrewrite(),
 			apply: applyReport(),
+			repository: repository(),
+			now: auditNow,
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(report.summary.supermarketProductsFound, 1);
+		assert.equal(report.summary.priceHistoryFound, 1);
+		assert.deepEqual(report.createdRows.supermarketProducts.map((row) => row.id), [901]);
+		assert.deepEqual(report.createdRows.priceHistory.map((row) => row.id), [1001]);
+		assert.deepEqual(report.noExtraRows, {
+			products: true,
+			supermarketProducts: true,
+			priceHistory: true,
+		});
+		assert.deepEqual(report.rollbackPlan, {
+			deletePriceHistoryIds: [1001],
+			deleteSupermarketProductIds: [901],
+			deleteProductEans: [],
+		});
+	});
+
+	it("fails closed when the created source row is missing", async () => {
+		const report = await buildDirectRefreshDiscoveryCreatePostwriteAudit({
+			prewrite: sourceRowPrewrite(),
+			apply: applyReport(),
+			repository: repository({ getSupermarketProductsByIds: async () => [] }),
 			now: auditNow,
 		});
 
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/postwrite row verification requires source and history checks/,
+			/missing created supermarket_products id 901/,
 		);
-		assert.deepEqual(report.rollbackPlan, {
-			deletePriceHistoryIds: [],
-			deleteSupermarketProductIds: [],
-			deleteProductEans: [],
+		assert.deepEqual(report.rollbackPlan.deleteSupermarketProductIds, []);
+	});
+
+	it("fails closed when extra source or price history rows exist", async () => {
+		const report = await buildDirectRefreshDiscoveryCreatePostwriteAudit({
+			prewrite: sourceRowPrewrite(),
+			apply: applyReport(),
+			repository: repository({
+				getSupermarketProductsBySourceEanPairs: async () => [
+					...(await repository().getSupermarketProductsBySourceEanPairs([])),
+					{
+						id: 902,
+						productEan: "111",
+						supermarketId: 7,
+						skuId: "sku-duplicate",
+						price: 101,
+						listPrice: 121,
+						referencePrice: 101,
+						referenceUnit: "lt",
+						isAvailable: true,
+						sellerId: "seller",
+						productUrl: "https://www.vea.com.ar/product/111-duplicate",
+						lastCheckedAt: applyGeneratedAt,
+					},
+				],
+				getPriceHistoryRowsForSupermarketProductsSince: async () => [
+					...(await repository().getPriceHistoryRowsForSupermarketProductsSince([], "")),
+					{
+						id: 1002,
+						supermarketProductId: 901,
+						price: 101,
+						listPrice: 121,
+						scrapedAt: applyGeneratedAt,
+					},
+				],
+			}),
+			now: auditNow,
 		});
+
+		assert.equal(report.status, "FAIL");
+		assert.equal(report.noExtraRows.supermarketProducts, false);
+		assert.equal(report.noExtraRows.priceHistory, false);
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/extra supermarket_products rows for selected source\/EAN: 902/,
+		);
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/extra price_history rows for created source rows: 1002/,
+		);
 	});
 });
