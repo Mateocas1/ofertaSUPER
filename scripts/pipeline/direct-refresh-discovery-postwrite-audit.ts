@@ -39,6 +39,22 @@ export type DirectRefreshDiscoveryPostwritePriceHistoryRow = {
 	scrapedAt: string | null;
 };
 
+export type DirectRefreshDiscoveryCreatePostwriteRepository = {
+	getSupermarketProductsByIds(
+		ids: number[],
+	): Promise<DirectRefreshDiscoveryPostwriteSupermarketProductRow[]>;
+	getSupermarketProductsBySourceEanPairs(
+		pairs: Array<{ productEan: string; supermarketId: number }>,
+	): Promise<DirectRefreshDiscoveryPostwriteSupermarketProductRow[]>;
+	getPriceHistoryRowsByIds(
+		ids: number[],
+	): Promise<DirectRefreshDiscoveryPostwritePriceHistoryRow[]>;
+	getPriceHistoryRowsForSupermarketProductsSince(
+		supermarketProductIds: number[],
+		sinceIso: string,
+	): Promise<DirectRefreshDiscoveryPostwritePriceHistoryRow[]>;
+};
+
 export type DirectRefreshDiscoveryCreatePostwriteReport = {
 	schemaVersion: 1;
 	audit: "direct-refresh-discovery-create-postwrite";
@@ -79,6 +95,7 @@ export type DirectRefreshDiscoveryCreatePostwriteReport = {
 export type BuildDirectRefreshDiscoveryCreatePostwriteAuditOptions = {
 	prewrite: DirectRefreshDiscoveryCreatePrewriteReport;
 	apply: DirectRefreshDiscoveryCreateApplyReport;
+	repository: DirectRefreshDiscoveryCreatePostwriteRepository;
 	now?: Date;
 };
 
@@ -87,6 +104,7 @@ type AppliedCreate = DirectRefreshDiscoveryCreateApplyReport["appliedCreates"][n
 export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 	prewrite,
 	apply,
+	repository,
 	now = new Date(),
 }: BuildDirectRefreshDiscoveryCreatePostwriteAuditOptions): Promise<DirectRefreshDiscoveryCreatePostwriteReport> {
 	const generatedAt = now.toISOString();
@@ -120,21 +138,97 @@ export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 
 	validateAppliedRows({ plannedCreates, appliedCreates, failClosedReasons });
 
-	if (failClosedReasons.length === 0) {
-		failClosedReasons.push(
-			"postwrite row verification requires source and history checks",
-		);
-	}
-
 	const productAndSourceEans = plannedCreates
 		.filter((plan) => plan.classification === "product-and-source-discovery")
 		.map((plan) => plan.product.ean);
+	if (productAndSourceEans.length > 0) {
+		failClosedReasons.push(
+			"product-and-source discovery requires product rollback checks",
+		);
+	}
+	const supermarketProductIds = appliedCreates.map(
+		(row) => row.supermarketProductId,
+	);
+	const priceHistoryIds = appliedCreates.map((row) => row.priceHistoryId);
+	const sourcePairs = plannedCreates.map((plan) => ({
+		productEan: plan.product.ean,
+		supermarketId: plan.supermarketProduct.supermarketId,
+	}));
+
+	let supermarketProductsById: DirectRefreshDiscoveryPostwriteSupermarketProductRow[] =
+		[];
+	let sourceRows: DirectRefreshDiscoveryPostwriteSupermarketProductRow[] = [];
+	let priceHistoryById: DirectRefreshDiscoveryPostwritePriceHistoryRow[] = [];
+	let priceHistoryForSourceRows: DirectRefreshDiscoveryPostwritePriceHistoryRow[] =
+		[];
+
+	if (failClosedReasons.length === 0) {
+		[
+			supermarketProductsById,
+			sourceRows,
+			priceHistoryById,
+			priceHistoryForSourceRows,
+		] = await Promise.all([
+			supermarketProductIds.length
+				? repository.getSupermarketProductsByIds(supermarketProductIds)
+				: Promise.resolve([]),
+			sourcePairs.length
+				? repository.getSupermarketProductsBySourceEanPairs(sourcePairs)
+				: Promise.resolve([]),
+			priceHistoryIds.length
+				? repository.getPriceHistoryRowsByIds(priceHistoryIds)
+				: Promise.resolve([]),
+			supermarketProductIds.length
+				? repository.getPriceHistoryRowsForSupermarketProductsSince(
+						supermarketProductIds,
+						prewrite.generatedAt,
+					)
+				: Promise.resolve([]),
+		]);
+
+		auditSupermarketProducts({
+			plannedCreates,
+			appliedCreates,
+			supermarketProductsById,
+			failClosedReasons,
+		});
+		auditPriceHistory({
+			plannedCreates,
+			appliedCreates,
+			priceHistoryById,
+			failClosedReasons,
+		});
+	}
+
+	const expectedSourceIds = new Set(supermarketProductIds);
+	const expectedHistoryIds = new Set(priceHistoryIds);
+	const extraSourceIds = sortedNumbers(
+		sourceRows.map((row) => row.id).filter((id) => !expectedSourceIds.has(id)),
+	);
+	if (extraSourceIds.length > 0) {
+		failClosedReasons.push(
+			`extra supermarket_products rows for selected source/EAN: ${extraSourceIds.join(",")}`,
+		);
+	}
+	const extraHistoryIds = sortedNumbers(
+		priceHistoryForSourceRows
+			.map((row) => row.id)
+			.filter((id) => !expectedHistoryIds.has(id)),
+	);
+	if (extraHistoryIds.length > 0) {
+		failClosedReasons.push(
+			`extra price_history rows for created source rows: ${extraHistoryIds.join(",")}`,
+		);
+	}
+
 	const sortedFailClosedReasons = sortedStrings(failClosedReasons);
+	const status: DirectRefreshDiscoveryCreatePostwriteStatus =
+		sortedFailClosedReasons.length === 0 ? "PASS" : "FAIL";
 
 	return {
 		schemaVersion: 1,
 		audit: "direct-refresh-discovery-create-postwrite",
-		status: "FAIL",
+		status,
 		issue: prewrite.issue,
 		generatedAt,
 		source: prewrite.filters.source,
@@ -146,26 +240,37 @@ export async function buildDirectRefreshDiscoveryCreatePostwriteAudit({
 			productsExpected: productAndSourceEans.length,
 			productsFound: 0,
 			supermarketProductsExpected: plannedCreates.length,
-			supermarketProductsFound: 0,
+			supermarketProductsFound: supermarketProductsById.length,
 			priceHistoryExpected: plannedCreates.length,
-			priceHistoryFound: 0,
+			priceHistoryFound: priceHistoryById.length,
 			failClosedReasons: sortedFailClosedReasons,
 		},
 		createdRows: {
 			products: [],
-			supermarketProducts: [],
-			priceHistory: [],
+			supermarketProducts: [...supermarketProductsById].sort(
+				(left, right) => left.id - right.id,
+			),
+			priceHistory: [...priceHistoryById].sort(
+				(left, right) => left.id - right.id,
+			),
 		},
 		noExtraRows: {
-			products: false,
-			supermarketProducts: false,
-			priceHistory: false,
+			products: productAndSourceEans.length === 0,
+			supermarketProducts: extraSourceIds.length === 0,
+			priceHistory: extraHistoryIds.length === 0,
 		},
-		rollbackPlan: {
-			deletePriceHistoryIds: [],
-			deleteSupermarketProductIds: [],
-			deleteProductEans: [],
-		},
+		rollbackPlan:
+			status === "PASS"
+				? {
+						deletePriceHistoryIds: sortedNumbers(priceHistoryIds),
+						deleteSupermarketProductIds: sortedNumbers(supermarketProductIds),
+						deleteProductEans: [],
+					}
+				: {
+						deletePriceHistoryIds: [],
+						deleteSupermarketProductIds: [],
+						deleteProductEans: [],
+					},
 	};
 }
 
@@ -238,8 +343,94 @@ function validateAppliedRows({
 	}
 }
 
+function auditSupermarketProducts({
+	plannedCreates,
+	appliedCreates,
+	supermarketProductsById,
+	failClosedReasons,
+}: {
+	plannedCreates: DirectRefreshDiscoveryPlannedCreate[];
+	appliedCreates: AppliedCreate[];
+	supermarketProductsById: DirectRefreshDiscoveryPostwriteSupermarketProductRow[];
+	failClosedReasons: string[];
+}) {
+	const plannedByKey = new Map(
+		plannedCreates.map((row) => [row.idempotencyKey, row]),
+	);
+	const actualById = new Map(supermarketProductsById.map((row) => [row.id, row]));
+
+	for (const applied of appliedCreates) {
+		const planned = plannedByKey.get(applied.idempotencyKey);
+		const actual = actualById.get(applied.supermarketProductId);
+		if (!planned) continue;
+		if (!actual) {
+			failClosedReasons.push(
+				`missing created supermarket_products id ${applied.supermarketProductId}`,
+			);
+			continue;
+		}
+		addMismatchReason(failClosedReasons, `supermarket_products id ${applied.supermarketProductId} productEan mismatch`, actual.productEan, planned.supermarketProduct.productEan);
+		addMismatchReason(failClosedReasons, `supermarket_products id ${applied.supermarketProductId} supermarketId mismatch`, actual.supermarketId, planned.supermarketProduct.supermarketId);
+		addMismatchReason(failClosedReasons, `supermarket_products id ${applied.supermarketProductId} skuId mismatch`, actual.skuId, planned.supermarketProduct.skuId);
+		addMismatchReason(failClosedReasons, `supermarket_products id ${applied.supermarketProductId} price mismatch`, actual.price, planned.supermarketProduct.price);
+		addMismatchReason(failClosedReasons, `supermarket_products id ${applied.supermarketProductId} listPrice mismatch`, actual.listPrice, planned.supermarketProduct.listPrice);
+		addMismatchReason(failClosedReasons, `supermarket_products id ${applied.supermarketProductId} referencePrice mismatch`, actual.referencePrice, planned.supermarketProduct.referencePrice);
+		addMismatchReason(failClosedReasons, `supermarket_products id ${applied.supermarketProductId} referenceUnit mismatch`, actual.referenceUnit, planned.supermarketProduct.referenceUnit);
+		addMismatchReason(failClosedReasons, `supermarket_products id ${applied.supermarketProductId} isAvailable mismatch`, actual.isAvailable, planned.supermarketProduct.isAvailable);
+		addMismatchReason(failClosedReasons, `supermarket_products id ${applied.supermarketProductId} sellerId mismatch`, actual.sellerId, planned.supermarketProduct.sellerId);
+		addMismatchReason(failClosedReasons, `supermarket_products id ${applied.supermarketProductId} productUrl mismatch`, actual.productUrl, planned.supermarketProduct.productUrl);
+		addMismatchReason(failClosedReasons, `supermarket_products id ${applied.supermarketProductId} lastCheckedAt mismatch`, actual.lastCheckedAt, planned.supermarketProduct.lastCheckedAt);
+	}
+}
+
+function auditPriceHistory({
+	plannedCreates,
+	appliedCreates,
+	priceHistoryById,
+	failClosedReasons,
+}: {
+	plannedCreates: DirectRefreshDiscoveryPlannedCreate[];
+	appliedCreates: AppliedCreate[];
+	priceHistoryById: DirectRefreshDiscoveryPostwritePriceHistoryRow[];
+	failClosedReasons: string[];
+}) {
+	const plannedByKey = new Map(
+		plannedCreates.map((row) => [row.idempotencyKey, row]),
+	);
+	const actualById = new Map(priceHistoryById.map((row) => [row.id, row]));
+
+	for (const applied of appliedCreates) {
+		const planned = plannedByKey.get(applied.idempotencyKey);
+		const actual = actualById.get(applied.priceHistoryId);
+		if (!planned) continue;
+		if (!actual) {
+			failClosedReasons.push(
+				`missing created price_history id ${applied.priceHistoryId}`,
+			);
+			continue;
+		}
+		addMismatchReason(failClosedReasons, `price_history id ${applied.priceHistoryId} supermarketProductId mismatch`, actual.supermarketProductId, applied.supermarketProductId);
+		addMismatchReason(failClosedReasons, `price_history id ${applied.priceHistoryId} price mismatch`, actual.price, planned.priceHistory.price);
+		addMismatchReason(failClosedReasons, `price_history id ${applied.priceHistoryId} listPrice mismatch`, actual.listPrice, planned.priceHistory.listPrice);
+		addMismatchReason(failClosedReasons, `price_history id ${applied.priceHistoryId} scrapedAt mismatch`, actual.scrapedAt, planned.priceHistory.scrapedAt);
+	}
+}
+
+function addMismatchReason(
+	reasons: string[],
+	message: string,
+	actual: unknown,
+	expected: unknown,
+) {
+	if (actual !== expected) reasons.push(message);
+}
+
 function isDefined<T>(value: T | undefined): value is T {
 	return value !== undefined;
+}
+
+function sortedNumbers(values: number[]) {
+	return Array.from(new Set(values)).sort((left, right) => left - right);
 }
 
 function sortedStrings(values: string[]) {
