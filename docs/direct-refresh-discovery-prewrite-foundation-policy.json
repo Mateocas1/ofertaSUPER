@@ -21,7 +21,7 @@
     "toolVersion": "direct-refresh-discovery-prewrite-foundation@1",
     "schemaVersion": "1",
     "dbEnvironmentIdentity": "configured-supabase-pooler-read-only-status-check",
-    "sourceConfigSnapshot": "",
+    "sourceConfigSnapshot": "sha256:2400b6d774d1359c96a10c6b8043af4f23c41a662d42a37ed1194c36cfb402dc; files:src/lib/supermarkets.ts,scripts/pipeline/direct-refresh-source-health.ts,scripts/pipeline/direct-refresh-discovery-audit.ts,scripts/pipeline/direct-refresh-discovery-create-gate.ts,src/lib/vtex/client.ts",
     "vtexProbeTimestamp": ""
   },
   "rollbackDrill": {
