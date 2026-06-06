@@ -31,6 +31,19 @@ Non-negotiable operating rules:
 - Save Engram/project memory at the end of every completed phase, and immediately after any architecture decision, bug fix, non-obvious discovery, convention, or tradeoff.
 - Do not mark the goal complete because of time, token budget, or partial progress. If not all final gates pass, persist state and report the last valid state.
 
+Startup verification before work:
+1. Read this goal prompt, the PRD, AGENTS.md, and current git status before modifying anything.
+2. Reconstruct current phase from live evidence, not from memory. At authoring time, Phase 1 was still expected to fail until migration status, compliance posture, performance guard, and rollback-drill evidence are actually PASS; verify current truth.
+3. List the active phase, last valid state, blocking gates, touched files, and allowed next work unit.
+4. If local docs, memory, git history, and generated artifacts disagree, treat the disagreement as a blocker and resolve the source of truth before implementing.
+
+Plan-adherence governor:
+- Before each work unit, write the exact PRD requirement it advances and the gate it is intended to satisfy.
+- After each work unit, prove whether that gate is PASS, STOPPED, or DEFERRED with artifact paths and command output.
+- If a better technical path is found, do not silently pivot. Create a decision record containing: original plan step, proposed change, technical reason, tradeoff, risk, rollback impact, and affected acceptance gates.
+- Never reduce acceptance criteria to make progress look better. If the real prod-final target is not feasible, document the lower operational state and why.
+- Edge cases are first-class requirements: race conditions, stale evidence, malformed artifacts, duplicated SKU/EAN, cross-source leakage, cross-count leakage, cross-attempt leakage, DB env mismatch, VTEX hash drift, rate limits, blocked/captcha/HTML responses, mojibake, invalid GTIN, multi-seller ambiguity, stale public API claims, cache inconsistency, rollback partials, ledger conflicts, and owner/alert gaps must be inspected or explicitly justified as out of scope for the current phase.
+
 Execution loop for every phase:
 1. Read the relevant PRD phase and current files before acting.
 2. State the phase objective, allowed boundary (read-only, dry-run, prewrite, apply), required artifacts, and hard stop rules.
@@ -131,12 +144,15 @@ Final success closure protocol:
 1. Produce a final evidence report with phase-by-phase PASS/STOP status, artifacts, issue links/comments, commit hashes, verification commands, and remaining risks.
 2. Run final hygiene checks for changed files, including `git diff --check`; run focused tests relevant to changed code; do not build.
 3. Run adversarial review/Judgment Day on the final evidence if subagents/reviewers are available. Do not declare prod-final with any CRITICAL or real WARNING unresolved.
-4. Save Engram session summary with goal, instructions, discoveries, accomplished work, next steps, and relevant files.
-5. Only then mark the goal complete and report:
+4. Re-run a final plan-adherence audit: every PRD acceptance item must map to current PASS evidence, and every documented tradeoff must still preserve prod-final semantics or explicitly lower the final state.
+5. Reconfirm public truth: discovered products exist in the site/API with correct source association, prices/freshness semantics are honest, stale rows are not presented as current, and cache behavior matches policy.
+6. Save Engram session summary with goal, instructions, discoveries, accomplished work, next steps, and relevant files.
+7. Only then mark the goal complete and report:
    - final state: `discovery-prod-final` or the exact lower state reached;
    - evidence paths;
    - commits/PRs/issues;
    - verification performed;
+   - rollback certification and owner/alert handoff status;
    - explicit statement that no build was run.
 
 If blocked:
