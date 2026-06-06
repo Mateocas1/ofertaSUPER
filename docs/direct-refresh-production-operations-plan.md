@@ -63,7 +63,7 @@ Fresh audit recorded on 2026-06-05 for issue [#178](https://github.com/Mateocas1
 
 ## Source-health taxonomy
 
-The previous wording “source degraded = no write” is too broad for recovery operations. It creates a circular blocker: stale sources cannot be refreshed because they are stale.
+The previous wording "source degraded = no write" is too broad for recovery operations. It creates a circular blocker: stale sources cannot be refreshed because they are stale.
 
 Going forward, source health must be evaluated as separate dimensions.
 
@@ -131,7 +131,7 @@ Every future planner or orchestrator artifact must be lineage-safe:
 
 ## Blind spots still needing explicit handling
 
-- Public UI copy must not imply “fresh today” unless evidence supports it.
+- Public UI copy must not imply "fresh today" unless evidence supports it.
 - DIA exclusion is safe for writer-supported operations, but whole-system product claims need separate wording.
 - Capacity reports are sample-based and can be stale; planner output must include confidence and TTL.
 - `count=50` contracts do not imply `count=100` or repeated-run safety.
@@ -246,7 +246,40 @@ It must be production-shaped from the start:
 - deploy, secrets, remote config, or cache purge;
 - public freshness copy changes.
 
-## Recommended next issues
+## Current plan status after discovery gate
+
+Several items in the original recommended sequence are now completed and should be treated as history, not pending work.
+
+| Item | Current state |
+| --- | --- |
+| Freshness debt planner | Complete: issue #156 closed. |
+| Run ledger and source lock foundation | Complete: issue #158 closed. |
+| Cadence controller foundation | Complete: issue #160 closed. |
+| Vea-first recovery plan | Complete: issue #163 closed. |
+| Vea manual-review capacity policy | Complete: issue #167 closed. |
+| 90/95 planning and discovery plan | Complete: issue #178 closed. |
+| Discovery read-only audit | Complete: issue #21 / PR #180 closed. |
+| Discovery create gate | Complete: issue #181 / PR #182 closed. |
+
+The remaining production work is no longer basic planning. The next honest gates are:
+
+1. discovery controlled pilot PRD/postwrite acceptance;
+2. discovery-specific postwrite audit if current tooling cannot prove created discovery rows;
+3. first count=1 controlled discovery apply with exact confirmation;
+4. separate cadence executor design for freshness recovery.
+
+Current recommended next issues:
+
+| Order | Issue | Type | Scope |
+| ---: | --- | --- | --- |
+| 1 | `docs(data): specify direct-refresh discovery controlled pilot` | docs | PRD/postwrite acceptance and docs-state cleanup; no writes. |
+| 2 | `feat(data): add direct-refresh discovery postwrite audit` | implementation | Prove exact created discovery rows and rollback IDs before any apply. |
+| 3 | `ops(data): run Vea count1 discovery controlled pilot` | operation | One source-row discovery apply after fresh audit/prewrite and exact confirmation. |
+| 4 | `docs(data): define direct-refresh cadence executor design` | docs | Separate freshness-recovery executor architecture after discovery pilot gates are closed. |
+
+## Original recommended next issues
+
+These items remain below for history. Several are now closed and should not be treated as the active queue.
 
 | Order | Issue | Type | Scope |
 | ---: | --- | --- | --- |
