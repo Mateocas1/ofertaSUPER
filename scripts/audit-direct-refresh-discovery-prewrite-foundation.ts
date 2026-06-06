@@ -1,9 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+	calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256,
 	evaluateDirectRefreshDiscoveryPrewriteFoundation,
 	parseDirectRefreshDiscoveryPrewriteFoundationCliOptions,
 	parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson,
@@ -26,7 +26,10 @@ async function main() {
 	const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 		evidence,
 		evidencePath: options.evidence,
-		evidenceSha256: `sha256:${createHash("sha256").update(rawEvidence).digest("hex")}`,
+		evidenceSha256:
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidence,
+			),
 	});
 	await writeJson(options.output, report);
 	if (report.status === "FAIL") process.exitCode = 1;

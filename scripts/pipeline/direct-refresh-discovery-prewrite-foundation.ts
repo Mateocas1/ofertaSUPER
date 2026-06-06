@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { getOptionalSingleFlag, uniqueSorted } from "./audit-utils";
 
 export type DirectRefreshDiscoveryPrewriteFoundationStatus = "PASS" | "FAIL";
@@ -192,6 +194,21 @@ export function parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
 	raw: string,
 ): DirectRefreshDiscoveryPrewriteFoundationEvidence {
 	return JSON.parse(raw.replace(/^\uFEFF/, "")) as DirectRefreshDiscoveryPrewriteFoundationEvidence;
+}
+
+export function calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
+) {
+	const canonicalEvidence = {
+		...evidence,
+		artifactLineage: {
+			...(evidence.artifactLineage ?? {}),
+			artifactSha256: "",
+		},
+	};
+	return `sha256:${createHash("sha256")
+		.update(JSON.stringify(canonicalEvidence))
+		.digest("hex")}`;
 }
 
 function buildChecks(

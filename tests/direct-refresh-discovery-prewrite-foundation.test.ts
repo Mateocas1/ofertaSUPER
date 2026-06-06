@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
 import {
+	calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256,
 	evaluateDirectRefreshDiscoveryPrewriteFoundation,
 	parseDirectRefreshDiscoveryPrewriteFoundationCliOptions,
 	parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson,
@@ -96,6 +97,11 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	},
 };
 
+completeEvidence.artifactLineage.artifactSha256 =
+	calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+		completeEvidence,
+	);
+
 function evaluateFoundation(input: {
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
 	evidencePath?: string;
@@ -110,7 +116,9 @@ function evaluateFoundation(input: {
 			"foundation.json",
 		evidenceSha256:
 			input.evidenceSha256 ??
-			input.evidence.artifactLineage?.artifactSha256 ??
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				input.evidence,
+			) ??
 			"sha256:0000000000000000000000000000000000000000000000000000000000000000",
 		now: input.now,
 	});
@@ -170,6 +178,26 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(report.writeBoundary, /no discovery apply/);
 		assert.equal(report.summary.passCount, report.checks.length);
 		assert.deepEqual(report.summary.failClosedReasons, []);
+	});
+
+	it("calculates artifact sha256 canonically without self-referential artifactSha256", () => {
+		const withDifferentSelfHash = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				artifactSha256:
+					"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			},
+		};
+
+		assert.equal(
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				completeEvidence,
+			),
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				withDifferentSelfHash,
+			),
+		);
 	});
 
 	it("fails closed when artifact path lineage does not match the evidence path", () => {
