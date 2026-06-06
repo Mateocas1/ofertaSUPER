@@ -72,10 +72,11 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		rollbackRequired: true,
 	},
 	performanceGuard: {
-		prismaPoolPosture: "bounded",
-		transactionTimeoutPosture: "bounded",
-		priceHistoryBaseline: "insert/read baseline captured",
-		publicApiBaseline: "search/product baseline captured",
+		prismaPoolPosture: "pgbouncer=true; connection_limit=3; pool_timeout=10",
+		transactionTimeoutPosture:
+			"statement_timeout=2min; idle_in_transaction_session_timeout=0",
+		priceHistoryBaseline: "PriceHistory insert/read baseline captured",
+		publicApiBaseline: "public API search/products baseline captured",
 		cacheTtlBaseline: "TTL baseline captured",
 	},
 };
@@ -324,7 +325,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /VTEX request cap must be positive/);
 		assert.match(reasons, /compliance allowed-use review is required/);
-		assert.match(reasons, /public API baseline is required/);
+		assert.match(reasons, /public API baseline must include search and products/);
 	});
 
 	it("fails closed when VTEX budgets are not tightly bounded", () => {
@@ -369,6 +370,37 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /VTEX backoff policy must include timeout, 403, 429, HTML, and captcha/);
 		assert.match(reasons, /VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry/);
 		assert.match(reasons, /VTEX header policy must be documented and non-evasive/);
+	});
+
+	it("fails closed when performance guard evidence is too vague", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				performanceGuard: {
+					prismaPoolPosture: "ok",
+					transactionTimeoutPosture: "ok",
+					priceHistoryBaseline: "ok",
+					publicApiBaseline: "ok",
+					cacheTtlBaseline: "ok",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/Prisma pool posture must include pgbouncer, connection_limit, and pool_timeout/,
+		);
+		assert.match(
+			reasons,
+			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout/,
+		);
+		assert.match(reasons, /PriceHistory baseline must include insert and read/);
+		assert.match(reasons, /public API baseline must include search and products/);
+		assert.match(reasons, /cache TTL baseline must include TTL/);
 	});
 
 	it("parses a read-only CLI boundary and rejects write-like flags", () => {
@@ -427,6 +459,6 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.doesNotMatch(reasons, /alert channel is required/);
 		assert.match(reasons, /rollback drill must be executed/);
 		assert.match(reasons, /migration status must be PASS/);
-		assert.match(reasons, /public API baseline is required/);
+		assert.match(reasons, /public API baseline must include search and products/);
 	});
 });

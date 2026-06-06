@@ -255,11 +255,11 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[alert.rollbackRequired, "rollback-required alert is required"],
 		]),
 		check("performance-guard", [
-			[hasText(perf.prismaPoolPosture), "Prisma pool posture is required"],
-			[hasText(perf.transactionTimeoutPosture), "transaction timeout posture is required"],
-			[hasText(perf.priceHistoryBaseline), "PriceHistory baseline is required"],
-			[hasText(perf.publicApiBaseline), "public API baseline is required"],
-			[hasText(perf.cacheTtlBaseline), "cache TTL baseline is required"],
+			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, and pool_timeout"],
+			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout"],
+			[hasPriceHistoryBaseline(perf.priceHistoryBaseline), "PriceHistory baseline must include insert and read"],
+			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline must include search and products"],
+			[hasCacheTtlBaseline(perf.cacheTtlBaseline), "cache TTL baseline must include TTL"],
 		]),
 	];
 }
@@ -350,6 +350,29 @@ function hasVtexStopRule(value: string | undefined) {
 
 function hasVtexHeaderPolicy(value: string | undefined) {
 	return hasAllTerms(value, ["documented", "non-evasive"]);
+}
+
+function hasPrismaPoolPosture(value: string | undefined) {
+	return hasAllTerms(value, ["pgbouncer", "connection_limit", "pool_timeout"]);
+}
+
+function hasTransactionTimeoutPosture(value: string | undefined) {
+	return hasAllTerms(value, [
+		"statement_timeout",
+		"idle_in_transaction_session_timeout",
+	]);
+}
+
+function hasPriceHistoryBaseline(value: string | undefined) {
+	return hasAllTerms(value, ["pricehistory", "insert", "read"]);
+}
+
+function hasPublicApiBaseline(value: string | undefined) {
+	return hasAllTerms(value, ["search", "products"]);
+}
+
+function hasCacheTtlBaseline(value: string | undefined) {
+	return hasAllTerms(value, ["ttl"]);
 }
 
 function hasAllTerms(value: string | undefined, terms: string[]) {
