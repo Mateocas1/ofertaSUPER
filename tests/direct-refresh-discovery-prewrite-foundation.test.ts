@@ -106,6 +106,7 @@ function evaluateFoundation(input: {
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
 	evidencePath?: string;
 	evidenceSha256?: string;
+	sourceConfigSnapshotSha256?: string;
 	now?: Date;
 }) {
 	return evaluateDirectRefreshDiscoveryPrewriteFoundation({
@@ -119,6 +120,10 @@ function evaluateFoundation(input: {
 			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
 				input.evidence,
 			) ??
+			"sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		sourceConfigSnapshotSha256:
+			input.sourceConfigSnapshotSha256 ??
+			input.evidence.artifactLineage?.sourceConfigSnapshot.split(";")[0] ??
 			"sha256:0000000000000000000000000000000000000000000000000000000000000000",
 		now: input.now,
 	});
@@ -360,6 +365,21 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /source config snapshot sha256 is required/);
 		assert.match(reasons, /VTEX probe timestamp must be ISO datetime/);
+	});
+
+	it("fails closed when source config snapshot hash does not match runtime files", () => {
+		const report = evaluateFoundation({
+			evidence: completeEvidence,
+			sourceConfigSnapshotSha256:
+				"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/source config snapshot sha256 must match runtime files/,
+		);
 	});
 
 	it("fails closed when commit, tool version, or schema version lineage are malformed", () => {

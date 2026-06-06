@@ -4,7 +4,9 @@ import { pathToFileURL } from "node:url";
 
 import {
 	calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256,
+	calculateDirectRefreshDiscoverySourceConfigSnapshotSha256,
 	evaluateDirectRefreshDiscoveryPrewriteFoundation,
+	parseDirectRefreshDiscoverySourceConfigSnapshotFiles,
 	parseDirectRefreshDiscoveryPrewriteFoundationCliOptions,
 	parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson,
 } from "./pipeline/direct-refresh-discovery-prewrite-foundation";
@@ -23,12 +25,24 @@ async function main() {
 	const evidence = parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
 		rawEvidence,
 	);
+	const sourceConfigFiles = await Promise.all(
+		parseDirectRefreshDiscoverySourceConfigSnapshotFiles(
+			evidence.artifactLineage?.sourceConfigSnapshot,
+		).map(async (filePath) => ({
+			path: filePath,
+			content: await readFile(filePath, "utf8"),
+		})),
+	);
 	const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 		evidence,
 		evidencePath: options.evidence,
 		evidenceSha256:
 			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
 				evidence,
+			),
+		sourceConfigSnapshotSha256:
+			calculateDirectRefreshDiscoverySourceConfigSnapshotSha256(
+				sourceConfigFiles,
 			),
 	});
 	await writeJson(options.output, report);

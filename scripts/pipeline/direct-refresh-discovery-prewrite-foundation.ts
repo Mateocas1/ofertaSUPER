@@ -161,14 +161,22 @@ export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 	evidence,
 	evidencePath,
 	evidenceSha256,
+	sourceConfigSnapshotSha256,
 	now = new Date(),
 }: {
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
 	evidencePath: string;
 	evidenceSha256: string;
+	sourceConfigSnapshotSha256: string;
 	now?: Date;
 }) {
-	const checks = buildChecks(evidence, evidencePath, evidenceSha256, now);
+	const checks = buildChecks(
+		evidence,
+		evidencePath,
+		evidenceSha256,
+		sourceConfigSnapshotSha256,
+		now,
+	);
 	const failClosedReasons = uniqueSorted(checks.flatMap((check) => check.reasons));
 	const failCount = checks.filter((check) => check.status === "FAIL").length;
 	return {
@@ -211,6 +219,24 @@ export function calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
 		.digest("hex")}`;
 }
 
+export function calculateDirectRefreshDiscoverySourceConfigSnapshotSha256(
+	files: Array<{ path: string; content: string }>,
+) {
+	const canonicalFiles = files
+		.map((file) => ({ path: normalizeAuditPath(file.path), content: file.content }))
+		.sort((left, right) => left.path.localeCompare(right.path));
+	return `sha256:${createHash("sha256")
+		.update(stableStringify(canonicalFiles))
+		.digest("hex")}`;
+}
+
+export function parseDirectRefreshDiscoverySourceConfigSnapshotFiles(
+	value: string | undefined,
+) {
+	const match = value?.match(/^sha256:[a-f0-9]{64}; files:(\S+)$/);
+	return match ? match[1].split(",").filter((file) => file.length > 0) : [];
+}
+
 function stableStringify(value: unknown): string {
 	if (Array.isArray(value)) {
 		return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
@@ -229,6 +255,7 @@ function buildChecks(
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 	evidencePath: string,
 	evidenceSha256: string,
+	sourceConfigSnapshotSha256: string,
 	now: Date,
 ) {
 	const schema = evidence.schemaConstraints ?? {};
@@ -281,6 +308,13 @@ function buildChecks(
 			[hasNumericSchemaVersion(lineage.schemaVersion), "schema version lineage must be numeric"],
 			[hasExplicitEnvironmentIdentity(lineage.dbEnvironmentIdentity), "DB/environment identity must be explicit"],
 			[hasSourceConfigSnapshot(lineage.sourceConfigSnapshot), "source config snapshot sha256 is required"],
+			[
+				hasMatchingSourceConfigSnapshot(
+					lineage.sourceConfigSnapshot,
+					sourceConfigSnapshotSha256,
+				),
+				"source config snapshot sha256 must match runtime files",
+			],
 			[hasIsoDatetime(lineage.vtexProbeTimestamp), "VTEX probe timestamp must be ISO datetime"],
 		]),
 		check("rollback-drill", [
@@ -422,6 +456,14 @@ function hasNumericSchemaVersion(value: string | undefined) {
 
 function hasSourceConfigSnapshot(value: string | undefined) {
 	return typeof value === "string" && /^sha256:[a-f0-9]{64}; files:\S+/.test(value);
+}
+
+function hasMatchingSourceConfigSnapshot(
+	lineageSnapshot: string | undefined,
+	runtimeSha256: string,
+) {
+	const lineageSha256 = lineageSnapshot?.split(";")[0];
+	return lineageSha256 === runtimeSha256;
 }
 
 function hasIsoDatetime(value: string | undefined) {
