@@ -82,8 +82,11 @@ Issue [#181](https://github.com/Mateocas1/ofertaSUPER/issues/181) promotes disco
 | Read-only audit | `npm run audit:direct-refresh-discovery -- --source=<source> --terms=<term> --count=<1-5> --scan-count=<count-50> --issue-number=<issue>` emits discovery idempotency keys and rollback previews only. |
 | Create prewrite | `npm run direct-refresh:discovery-create -- prewrite ... --selected-keys=<keys>` reruns live candidate selection and DB checks before emitting exact confirmation text. |
 | Create apply | `npm run direct-refresh:discovery-create -- apply --prewrite=<report> --confirm="<exactConfirmation>"` writes only the prewrite-selected missing rows. |
+| Create postwrite | `npm run direct-refresh:discovery-create -- postwrite --prewrite=<prewrite-report> --apply=<apply-report> --output=<postwrite-report>` validates exact created IDs, no extra source/history rows, and ID-bound rollback. |
 
 The apply gate rechecks product/source/staging/SKU state inside the transaction, acquires a source-scoped discovery advisory lock, and inserts only the missing `products` row when classification is `product-and-source-discovery`, one `supermarket_products` row, and one `price_history` row. Wrong confirmation, stale prewrite, existing source rows, staging conflicts, duplicate source SKU, unsupported source, or unavailable lock fail closed before writes.
+
+The postwrite gate is read-only and exits non-zero on `FAIL`. Stop if it cannot prove exact `supermarket_products.id`, exact `price_history.id`, no extra selected source/history rows, and rollback IDs bound to the apply artifact.
 
 ## Success gates for implementation planning
 
@@ -95,4 +98,4 @@ The apply gate rechecks product/source/staging/SKU state inside the transaction,
 
 ## Next step
 
-Follow `docs/direct-refresh-discovery-controlled-pilot-prd.md`: create a fresh PASS discovery audit, run create prewrite, confirm postwrite scope, and only then run a count=1 controlled apply. Do not use scheduler/all-source/repeated batches or DIA for discovery.
+Follow `docs/direct-refresh-discovery-controlled-pilot-prd.md`: create a fresh PASS discovery audit, run create prewrite, run apply with the exact confirmation, then run postwrite and require `PASS`. Do not use scheduler/all-source/repeated batches or DIA for discovery.
