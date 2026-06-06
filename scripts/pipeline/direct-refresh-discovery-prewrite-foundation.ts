@@ -21,6 +21,12 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		idempotencyPolicy: boolean;
 	};
 	artifactLineage: {
+		issue: number;
+		source: string;
+		count: number;
+		attemptId: string;
+		artifactPath: string;
+		artifactSha256: string;
 		gitCommit: string;
 		toolVersion: string;
 		schemaVersion: string;
@@ -201,6 +207,12 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[control.idempotencyPolicy, "idempotency policy is required"],
 		]),
 		check("artifact-lineage", [
+			[lineage.issue > 0, "issue lineage is required"],
+			[hasText(lineage.source), "source lineage is required"],
+			[lineage.count > 0, "count lineage is required"],
+			[hasText(lineage.attemptId), "attempt lineage is required"],
+			[hasText(lineage.artifactPath), "artifact path lineage is required"],
+			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
 			[hasText(lineage.gitCommit), "git commit lineage is required"],
 			[hasText(lineage.toolVersion), "tool version lineage is required"],
 			[hasText(lineage.schemaVersion), "schema version lineage is required"],
@@ -271,4 +283,8 @@ function check(name: string, rules: Rule[]) {
 
 function hasText(value: string | undefined) {
 	return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasSha256Lineage(value: string | undefined) {
+	return typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
 }

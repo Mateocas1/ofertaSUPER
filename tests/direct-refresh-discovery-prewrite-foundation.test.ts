@@ -29,6 +29,12 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		idempotencyPolicy: true,
 	},
 	artifactLineage: {
+		issue: 185,
+		source: "vea",
+		count: 1,
+		attemptId: "foundation-attempt-001",
+		artifactPath: "audit/direct-refresh-discovery-prewrite-foundation/foundation-evidence.json",
+		artifactSha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		gitCommit: "ccc7535",
 		toolVersion: "direct-refresh-discovery-create@1",
 		schemaVersion: "1",
@@ -160,6 +166,34 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.deepEqual(report.checks[0].reasons, [
 			"foundation evidence generatedAt is required",
 		]);
+	});
+
+	it("fails closed when artifact lineage omits issue, source, count, attempt, path, or hash", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+					issue: 0,
+					source: "",
+					count: 0,
+					attemptId: "",
+					artifactPath: "",
+					artifactSha256: "",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /issue lineage is required/);
+		assert.match(reasons, /source lineage is required/);
+		assert.match(reasons, /count lineage is required/);
+		assert.match(reasons, /attempt lineage is required/);
+		assert.match(reasons, /artifact path lineage is required/);
+		assert.match(reasons, /artifact sha256 lineage is required/);
 	});
 
 	it("fails closed when rollback proof is read-only instead of executed", () => {
