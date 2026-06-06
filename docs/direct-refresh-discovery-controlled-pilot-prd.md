@@ -155,7 +155,16 @@ Stop if:
 
 ### 4. Postwrite audit
 
-A dedicated postwrite audit is required before the pilot can be called successful. If the existing postwrite audit cannot validate discovery-created rows, implement a discovery-specific postwrite audit before applying.
+A dedicated postwrite audit is required before the pilot can be called successful. Run it with the fresh prewrite and apply artifacts from the same attempt directory:
+
+```bash
+npm run direct-refresh:discovery-create -- postwrite \
+  --prewrite=audit/direct-refresh-discovery-controlled-pilot/issue183/<timestamp>/discovery-create-prewrite.json \
+  --apply=audit/direct-refresh-discovery-controlled-pilot/issue183/<timestamp>/discovery-create-apply.json \
+  --output=audit/direct-refresh-discovery-controlled-pilot/issue183/<timestamp>/discovery-create-postwrite.json
+```
+
+This command is read-only: it loads the artifacts, reads current `products`, `supermarket_products`, and `price_history` rows, emits `discovery-create-postwrite.json`, and exits non-zero on `FAIL`.
 
 The postwrite report must prove:
 
@@ -167,7 +176,7 @@ The postwrite report must prove:
 - no extra price history rows beyond the created one;
 - rollback plan references created IDs, not broad EAN deletes.
 
-Postwrite status must be `PASS`. Anything else is an incident, not a partial success.
+Postwrite status must be `PASS`. Stop immediately on `FAIL`, missing output, malformed JSON, artifact mismatch, unproven created IDs, extra selected source/history rows, or rollback without exact created IDs. Anything else is an incident, not a partial success.
 
 ### 5. Freshness/baseline observation
 
@@ -212,7 +221,16 @@ The pilot is accepted only when all of these are true:
 
 ## Required implementation before apply
 
-If current tooling cannot emit `discovery-create-postwrite.json`, the next implementation PR must add it before any production apply.
+The discovery-specific postwrite command is required before any pilot can be accepted:
+
+```bash
+npm run direct-refresh:discovery-create -- postwrite \
+  --prewrite=audit/direct-refresh-discovery-controlled-pilot/issue183/<timestamp>/discovery-create-prewrite.json \
+  --apply=audit/direct-refresh-discovery-controlled-pilot/issue183/<timestamp>/discovery-create-apply.json \
+  --output=audit/direct-refresh-discovery-controlled-pilot/issue183/<timestamp>/discovery-create-postwrite.json
+```
+
+The command is read-only and `PASS` is mandatory before accepting the pilot or starting another discovery operation.
 
 Expected shape:
 

@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 
 import {
 	parseDirectRefreshDiscoveryCreateApplyCliOptions,
+	parseDirectRefreshDiscoveryCreatePostwriteCliOptions,
 	parseDirectRefreshDiscoveryCreatePrewriteCliOptions,
 } from "../scripts/direct-refresh-discovery-create";
 import {
@@ -272,6 +273,20 @@ describe("direct-refresh discovery create CLI", () => {
 		assert.match(apply.confirm, /issue=181/);
 		assert.equal(apply.output, "audit/apply.json");
 
+		const postwrite = parseDirectRefreshDiscoveryCreatePostwriteCliOptions([
+			"node",
+			"script",
+			"postwrite",
+			"--prewrite=audit/prewrite.json",
+			"--apply=audit/apply.json",
+			"--output=audit/postwrite.json",
+		]);
+		assert.deepEqual(postwrite, {
+			prewrite: "audit/prewrite.json",
+			apply: "audit/apply.json",
+			output: "audit/postwrite.json",
+		});
+
 		assert.throws(
 			() =>
 				parseDirectRefreshDiscoveryCreatePrewriteCliOptions([
@@ -284,6 +299,18 @@ describe("direct-refresh discovery create CLI", () => {
 					"--all-source",
 				]),
 			/read-only selection rejects --all-source/,
+		);
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoveryCreatePostwriteCliOptions([
+					"node",
+					"script",
+					"postwrite",
+					"--prewrite=audit/prewrite.json",
+					"--apply=audit/apply.json",
+					"--scheduler",
+				]),
+			/direct-refresh discovery create postwrite rejects --scheduler/,
 		);
 	});
 

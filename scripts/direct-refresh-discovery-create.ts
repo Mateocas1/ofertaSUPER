@@ -10,12 +10,17 @@ import { stageSourceProducts } from "./pipeline/stage";
 import {
 	applyDirectRefreshDiscoveryCreatePrewrite,
 	buildDirectRefreshDiscoveryCreatePrewrite,
+	type DirectRefreshDiscoveryCreateApplyReport,
 	type DirectRefreshDiscoveryCreatePrewriteReport,
 	type DirectRefreshDiscoveryCreateProductRow,
 	type DirectRefreshDiscoveryCreateRepository,
 	type DirectRefreshDiscoveryCreateSupermarketProductRow,
 	type DirectRefreshDiscoveryCreatePriceHistoryRow,
 } from "./pipeline/direct-refresh-discovery-create-gate";
+import {
+	buildDirectRefreshDiscoveryCreatePostwriteAudit,
+	type DirectRefreshDiscoveryCreatePostwriteRepository,
+} from "./pipeline/direct-refresh-discovery-postwrite-audit";
 
 export type DirectRefreshDiscoveryCreatePrewriteCliOptions = {
 	source: string;
@@ -30,6 +35,12 @@ export type DirectRefreshDiscoveryCreatePrewriteCliOptions = {
 export type DirectRefreshDiscoveryCreateApplyCliOptions = {
 	prewrite: string;
 	confirm: string;
+	output: string | null;
+};
+
+export type DirectRefreshDiscoveryCreatePostwriteCliOptions = {
+	prewrite: string;
+	apply: string;
 	output: string | null;
 };
 
@@ -61,6 +72,7 @@ const PREWRITE_ALLOWED_FLAGS = new Set([
 	"--output",
 ]);
 const APPLY_ALLOWED_FLAGS = new Set(["--prewrite", "--confirm", "--output"]);
+const POSTWRITE_ALLOWED_FLAGS = new Set(["--prewrite", "--apply", "--output"]);
 
 export function parseDirectRefreshDiscoveryCreatePrewriteCliOptions(
 	argv = process.argv,
@@ -87,6 +99,19 @@ export function parseDirectRefreshDiscoveryCreateApplyCliOptions(
 	return {
 		prewrite: requiredRawFlag(argv, "--prewrite"),
 		confirm: requiredRawFlag(argv, "--confirm"),
+		output: optionalSingleRawFlag(argv, "--output"),
+	};
+}
+
+export function parseDirectRefreshDiscoveryCreatePostwriteCliOptions(
+	argv = process.argv,
+): DirectRefreshDiscoveryCreatePostwriteCliOptions {
+	const args = argv.slice(3);
+	assertNoForbidden(args, "direct-refresh discovery create postwrite");
+	assertOnlyAllowed(args, POSTWRITE_ALLOWED_FLAGS);
+	return {
+		prewrite: requiredRawFlag(argv, "--prewrite"),
+		apply: requiredRawFlag(argv, "--apply"),
 		output: optionalSingleRawFlag(argv, "--output"),
 	};
 }
@@ -157,6 +182,14 @@ function requiredList(argv: string[], flagName: string) {
 
 function decimal(value: number | null) {
 	return value === null ? null : new Prisma.Decimal(value.toFixed(2));
+}
+
+function numberOrNull(value: Prisma.Decimal | number | null) {
+	return value === null ? null : Number(value);
+}
+
+function isoOrNull(value: Date | null) {
+	return value ? value.toISOString() : null;
 }
 
 function createPrismaDiscoveryCreateRepository(
@@ -281,6 +314,164 @@ function createPrismaDiscoveryCreateRepository(
 	};
 }
 
+function createPrismaDiscoveryPostwriteRepository(
+	client: typeof db = db,
+): DirectRefreshDiscoveryCreatePostwriteRepository {
+	return {
+		async getProductsByEan(eans) {
+			if (eans.length === 0) return [];
+			const rows = await client.product.findMany({
+				where: { ean: { in: eans } },
+				select: {
+					ean: true,
+					name: true,
+					brand: true,
+					description: true,
+					image_url: true,
+					images: true,
+					category: true,
+				},
+			});
+			return rows.map((row) => ({
+				ean: row.ean,
+				name: row.name,
+				brand: row.brand,
+				description: row.description,
+				imageUrl: row.image_url,
+				images: row.images,
+				category: row.category,
+			}));
+		},
+		async getSupermarketProductsByIds(ids) {
+			if (ids.length === 0) return [];
+			const rows = await client.supermarketProduct.findMany({
+				where: { id: { in: ids } },
+				select: {
+					id: true,
+					product_ean: true,
+					supermarket_id: true,
+					sku_id: true,
+					price: true,
+					list_price: true,
+					reference_price: true,
+					reference_unit: true,
+					is_available: true,
+					seller_id: true,
+					product_url: true,
+					last_checked_at: true,
+				},
+			});
+			return rows.map(mapSupermarketProductPostwriteRow);
+		},
+		async getSupermarketProductsBySourceEanPairs(pairs) {
+			if (pairs.length === 0) return [];
+			const rows = await client.supermarketProduct.findMany({
+				where: {
+					OR: pairs.map((pair) => ({
+						product_ean: pair.productEan,
+						supermarket_id: pair.supermarketId,
+					})),
+				},
+				select: {
+					id: true,
+					product_ean: true,
+					supermarket_id: true,
+					sku_id: true,
+					price: true,
+					list_price: true,
+					reference_price: true,
+					reference_unit: true,
+					is_available: true,
+					seller_id: true,
+					product_url: true,
+					last_checked_at: true,
+				},
+			});
+			return rows.map(mapSupermarketProductPostwriteRow);
+		},
+		async getPriceHistoryRowsByIds(ids) {
+			if (ids.length === 0) return [];
+			const rows = await client.priceHistory.findMany({
+				where: { id: { in: ids } },
+				select: {
+					id: true,
+					supermarket_product_id: true,
+					price: true,
+					list_price: true,
+					scraped_at: true,
+				},
+			});
+			return rows.map(mapPriceHistoryPostwriteRow);
+		},
+		async getPriceHistoryRowsForSupermarketProductsSince(
+			supermarketProductIds,
+			sinceIso,
+		) {
+			if (supermarketProductIds.length === 0) return [];
+			const rows = await client.priceHistory.findMany({
+				where: {
+					supermarket_product_id: { in: supermarketProductIds },
+					scraped_at: { gte: new Date(sinceIso) },
+				},
+				select: {
+					id: true,
+					supermarket_product_id: true,
+					price: true,
+					list_price: true,
+					scraped_at: true,
+				},
+			});
+			return rows.map(mapPriceHistoryPostwriteRow);
+		},
+	};
+}
+
+function mapSupermarketProductPostwriteRow(row: {
+	id: number;
+	product_ean: string;
+	supermarket_id: number;
+	sku_id: string | null;
+	price: Prisma.Decimal | null;
+	list_price: Prisma.Decimal | null;
+	reference_price: Prisma.Decimal | null;
+	reference_unit: string | null;
+	is_available: boolean;
+	seller_id: string | null;
+	product_url: string | null;
+	last_checked_at: Date | null;
+}) {
+	return {
+		id: row.id,
+		productEan: row.product_ean,
+		supermarketId: row.supermarket_id,
+		skuId: row.sku_id,
+		price: numberOrNull(row.price),
+		listPrice: numberOrNull(row.list_price),
+		referencePrice: numberOrNull(row.reference_price),
+		referenceUnit: row.reference_unit,
+		isAvailable: row.is_available,
+		sellerId: row.seller_id,
+		productUrl: row.product_url,
+		lastCheckedAt: isoOrNull(row.last_checked_at),
+	};
+}
+
+function mapPriceHistoryPostwriteRow(row: {
+	id: number;
+	supermarket_product_id: number;
+	price: Prisma.Decimal | null;
+	list_price: Prisma.Decimal | null;
+	scraped_at: Date | null;
+}) {
+	return {
+		id: row.id,
+		supermarketProductId: row.supermarket_product_id,
+		price: numberOrNull(row.price),
+		listPrice: numberOrNull(row.list_price),
+		scrapedAt: isoOrNull(row.scraped_at),
+	};
+}
+
 async function writeJson(output: string | null, report: unknown) {
 	const serialized = `${JSON.stringify(report, null, 2)}\n`;
 	if (!output) {
@@ -333,11 +524,31 @@ async function runApply() {
 	if (report.status === "FAIL") process.exitCode = 1;
 }
 
+async function runPostwrite() {
+	const options = parseDirectRefreshDiscoveryCreatePostwriteCliOptions();
+	const prewrite = await readJson<DirectRefreshDiscoveryCreatePrewriteReport>(
+		options.prewrite,
+	);
+	const apply = await readJson<DirectRefreshDiscoveryCreateApplyReport>(
+		options.apply,
+	);
+	const report = await buildDirectRefreshDiscoveryCreatePostwriteAudit({
+		prewrite,
+		apply,
+		repository: createPrismaDiscoveryPostwriteRepository(),
+	});
+	await writeJson(options.output, report);
+	if (report.status === "FAIL") process.exitCode = 1;
+}
+
 async function main() {
 	const mode = process.argv[2];
 	if (mode === "prewrite") return runPrewrite();
 	if (mode === "apply") return runApply();
-	throw new Error("direct-refresh discovery create requires mode: prewrite or apply");
+	if (mode === "postwrite") return runPostwrite();
+	throw new Error(
+		"direct-refresh discovery create requires mode: prewrite, apply, or postwrite",
+	);
 }
 
 if (
