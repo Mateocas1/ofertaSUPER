@@ -32,6 +32,9 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		mode: "non-prod-prod-like" | "controlled-disposable-row" | "read-only-review";
 		rollbackIds: string[];
 		postRollbackVerification: boolean;
+		preimageCaptured: boolean;
+		pitrBackupPosture: string;
+		cacheHandling: string;
 	};
 	vtexBudgets: {
 		requestCap: number;
@@ -205,8 +208,11 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence)
 		check("rollback-drill", [
 			[rollback.executed, "rollback drill must be executed before discovery apply"],
 			[rollback.mode !== "read-only-review", "read-only rollback review is preparatory only"],
+			[rollback.preimageCaptured === true, "rollback preimage capture is required"],
+			[hasText(rollback.pitrBackupPosture), "PITR/backup posture is required"],
 			[rollback.rollbackIds.length > 0, "rollback IDs are required"],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
+			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
 		]),
 		check("vtex-budgets", [
 			[budget.requestCap > 0, "VTEX request cap must be positive"],
@@ -242,6 +248,6 @@ function check(name: string, rules: Rule[]) {
 	return { name, status: reasons.length === 0 ? "PASS" : "FAIL", reasons };
 }
 
-function hasText(value: string) {
-	return value.trim().length > 0;
+function hasText(value: string | undefined) {
+	return typeof value === "string" && value.trim().length > 0;
 }

@@ -40,6 +40,9 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		mode: "controlled-disposable-row",
 		rollbackIds: ["supermarket_products:901", "price_history:1001"],
 		postRollbackVerification: true,
+		preimageCaptured: true,
+		pitrBackupPosture: "Supabase PITR/backup posture reviewed before write",
+		cacheHandling: "No cache purge needed for disposable-row drill; public cache TTL reviewed",
 	},
 	vtexBudgets: {
 		requestCap: 20,
@@ -147,6 +150,27 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			report.summary.failClosedReasons.join("\n"),
 			/read-only rollback review is preparatory only/,
 		);
+	});
+
+	it("fails closed when rollback DR proof omits preimage, PITR, or cache handling", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					preimageCaptured: false,
+					pitrBackupPosture: "",
+					cacheHandling: "",
+				},
+			},
+			evidencePath: "foundation.json",
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /rollback preimage capture is required/);
+		assert.match(reasons, /PITR\/backup posture is required/);
+		assert.match(reasons, /rollback cache handling is required/);
 	});
 
 	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {

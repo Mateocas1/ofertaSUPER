@@ -28,7 +28,10 @@
     "executed": false,
     "mode": "read-only-review",
     "rollbackIds": [],
-    "postRollbackVerification": false
+    "postRollbackVerification": false,
+    "preimageCaptured": false,
+    "pitrBackupPosture": "",
+    "cacheHandling": ""
   },
   "vtexBudgets": {
     "requestCap": 20,
