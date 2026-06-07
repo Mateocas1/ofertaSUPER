@@ -319,7 +319,7 @@ function buildChecks(
 			[lineage.issue > 0, "issue lineage is required"],
 			[hasWriterSupportedSource(lineage.source), "source lineage must be writer-supported"],
 			[hasPositiveInteger(lineage.count), "count lineage must be a positive integer"],
-			[hasText(lineage.attemptId), "attempt lineage is required"],
+			[hasSafeAttemptId(lineage.attemptId), "attempt lineage must be a safe attempt ID"],
 			[
 				hasFoundationArtifactPath(lineage.artifactPath),
 				"artifact path lineage must be foundation audit json",
@@ -475,6 +475,13 @@ function hasText(value: string | undefined) {
 
 function hasPositiveInteger(value: number | undefined) {
 	return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function hasSafeAttemptId(value: string | undefined) {
+	return (
+		typeof value === "string" &&
+		/^[a-z0-9][a-z0-9._-]{2,63}$/.test(value)
+	);
 }
 
 function hasWriterSupportedSource(value: string | undefined) {

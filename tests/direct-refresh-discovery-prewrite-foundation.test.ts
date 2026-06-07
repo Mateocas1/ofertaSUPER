@@ -354,9 +354,34 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /issue lineage is required/);
 		assert.match(reasons, /source lineage must be writer-supported/);
 		assert.match(reasons, /count lineage must be a positive integer/);
-		assert.match(reasons, /attempt lineage is required/);
+		assert.match(reasons, /attempt lineage must be a safe attempt ID/);
 		assert.match(reasons, /artifact path lineage must be foundation audit json/);
 		assert.match(reasons, /artifact sha256 lineage is required/);
+	});
+
+	it("fails closed when attempt lineage is not a safe attempt ID", () => {
+		const evidenceWithUnsafeAttemptId = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				attemptId: " other attempt ",
+			},
+		};
+		evidenceWithUnsafeAttemptId.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithUnsafeAttemptId,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithUnsafeAttemptId,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/attempt lineage must be a safe attempt ID/,
+		);
 	});
 
 	it("fails closed when count lineage is fractional", () => {
