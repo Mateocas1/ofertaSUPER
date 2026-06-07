@@ -1433,6 +1433,31 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /cache TTL baseline must include TTL/);
 	});
 
+	it("fails closed when cache TTL baseline evidence is generic", () => {
+		const evidenceWithGenericCacheTtlBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				cacheTtlBaseline: "TTL",
+			},
+		};
+		evidenceWithGenericCacheTtlBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericCacheTtlBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericCacheTtlBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/cache TTL baseline must include TTL/,
+		);
+	});
+
 	it("parses a read-only CLI boundary and rejects write-like flags", () => {
 		const options = parseDirectRefreshDiscoveryPrewriteFoundationCliOptions([
 			"tsx",

@@ -831,7 +831,7 @@ function hasPublicApiBaseline(value: string | undefined) {
 }
 
 function hasCacheTtlBaseline(value: string | undefined) {
-	return hasAllTerms(value, ["ttl"]);
+	return hasAllTerms(value, ["ttl", "baseline"]);
 }
 
 function hasAllTerms(value: string | undefined, terms: string[]) {
