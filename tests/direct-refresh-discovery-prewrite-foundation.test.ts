@@ -63,7 +63,8 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 			"audit/direct-refresh-discovery-rollback-verification/preimage.json",
 		preimageSha256:
 			"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-		pitrBackupPosture: "Supabase PITR/backup posture reviewed before write",
+		pitrBackupPosture:
+			"Supabase PITR/backup posture reviewed for local-test-db at 2026-06-06T12:00:00Z; retention=7d",
 		cacheHandling: "No cache purge needed for disposable-row drill; public cache TTL reviewed",
 	},
 	vtexBudgets: {
@@ -914,7 +915,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /rollback preimage capture is required/);
 		assert.match(
 			reasons,
-			/PITR\/backup posture must include PITR or backup and reviewed or available/,
+			/PITR\/backup posture requires reviewed availability plus environment\/timestamp\/retention\/artifact detail/,
 		);
 		assert.match(
 			reasons,
@@ -972,7 +973,35 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			reasons,
-			/PITR\/backup posture must include PITR or backup and reviewed or available/,
+			/PITR\/backup posture requires reviewed availability plus environment\/timestamp\/retention\/artifact detail/,
+		);
+	});
+
+	it("fails closed when PITR/backup posture has only generic backup availability", () => {
+		const evidenceWithGenericBackupAvailability = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+			},
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				pitrBackupPosture: "backup available",
+			},
+		};
+		evidenceWithGenericBackupAvailability.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericBackupAvailability,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericBackupAvailability,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/PITR\/backup posture requires reviewed availability plus environment\/timestamp\/retention\/artifact detail/,
 		);
 	});
 

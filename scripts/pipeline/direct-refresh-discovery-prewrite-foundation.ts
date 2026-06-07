@@ -402,7 +402,7 @@ function buildChecks(
 				),
 				"preimage sha256 must match runtime preimage artifact",
 			],
-			[hasPitrBackupPosture(rollback.pitrBackupPosture), "PITR/backup posture must include PITR or backup and reviewed or available"],
+			[hasPitrBackupPosture(rollback.pitrBackupPosture), "PITR/backup posture requires reviewed availability plus environment/timestamp/retention/artifact detail"],
 			[
 				Array.isArray(rollback.rollbackIds) && rollback.rollbackIds.length > 0,
 				"rollback IDs are required",
@@ -737,7 +737,33 @@ function hasRollbackVerificationArtifact(
 function hasPitrBackupPosture(value: string | undefined) {
 	return (
 		hasAnyTerm(value, ["pitr", "backup"]) &&
-		hasAnyTerm(value, ["reviewed", "available"])
+		hasAnyTerm(value, ["reviewed", "reviewedat", "verified", "available"]) &&
+		hasConcretePitrBackupDetail(value)
+	);
+}
+
+function hasConcretePitrBackupDetail(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return (
+		/\b(?:environment|env|db(?:\s+environment)?(?:\s+identity)?)\s*[:=]?\s*[a-z0-9][a-z0-9._-]{2,}\b/.test(
+			normalized,
+		) ||
+		/\b(?:supabase|postgres|postgresql)\b/.test(normalized) ||
+		/\b\d{4}-\d{2}-\d{2}(?:t\d{2}:\d{2}:\d{2}(?:\.\d{3})?z)?\b/.test(
+			normalized,
+		) ||
+		/\b(?:retention|window)\s*[:=]?\s*\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|w|week|weeks)\b/.test(
+			normalized,
+		) ||
+		/\brestore[-\s_]?point\s*[:=]?\s*[a-z0-9][a-z0-9._:-]{2,}\b/.test(
+			normalized,
+		) ||
+		/\b(?:backup|snapshot)[-\s_]?id\s*[:=]?\s*[a-z0-9][a-z0-9._:-]{2,}\b/.test(
+			normalized,
+		) ||
+		/\b(?:artifact|evidence)\s*[:=]?\s*[a-z0-9][a-z0-9._/-]*\.(?:json|md|txt|sql)\b/.test(
+			normalized,
+		)
 	);
 }
 
