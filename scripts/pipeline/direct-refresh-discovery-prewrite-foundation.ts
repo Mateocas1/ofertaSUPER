@@ -440,7 +440,7 @@ function buildChecks(
 			[hasPositiveInteger(budget.timeoutMs), "VTEX timeout must be a positive integer in milliseconds"],
 			[budget.timeoutMs <= MAX_VTEX_FOUNDATION_TIMEOUT_MS, "VTEX timeout must be <= 10000ms"],
 			[hasVtexBackoffPolicy(budget.backoffPolicy), "VTEX backoff policy must include backoff plus timeout, 403, 429, HTML, and captcha"],
-			[hasVtexStopRule(budget.stopRule), "VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry"],
+			[hasVtexStopRule(budget.stopRule), "VTEX stop rule must set source STOPPED on blocked/rate-limit/hash_invalid and no automatic retry"],
 			[hasVtexHeaderPolicy(budget.headerPolicy), "VTEX header policy must be documented, non-evasive, and include user-agent or headers"],
 		]),
 		check("compliance", [
@@ -741,7 +741,8 @@ function hasPitrBackupPosture(value: string | undefined) {
 function hasVtexStopRule(value: string | undefined) {
 	return (
 		hasAllTerms(value, ["blocked", "rate-limit", "hash_invalid"]) &&
-		hasAnyTerm(value, ["no automatic retry", "no retry automatico", "no automatic retries"])
+		hasAnyTerm(value, ["no automatic retry", "no retry automatico", "no automatic retries"]) &&
+		hasAnyTerm(value, ["stopped", "stop source", "source stopped"])
 	);
 }
 
