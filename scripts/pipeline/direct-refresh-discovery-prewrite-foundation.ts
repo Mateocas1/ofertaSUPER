@@ -457,7 +457,7 @@ function buildChecks(
 			[hasAlertSeverity(alert.severity), "alert severity must include write, postwrite, and rollback-required"],
 			[hasAlertAckSla(alert.ackSla), "alert ack SLA must include an explicit time bound"],
 			[hasAlertResolutionSla(alert.resolutionSla), "alert resolution SLA must include an explicit time bound"],
-			[hasAlertEscalationPath(alert.escalationPath), "alert escalation path must be explicit"],
+			[hasAlertEscalationPath(alert.escalationPath), "alert escalation path must include a concrete route"],
 			[hasAlertSuppressionPolicy(alert.suppressionPolicy), "alert suppression policy must describe suppression/noise handling"],
 			[hasAlertRetryPolicy(alert.retryPolicy), "alert retry policy must be explicit"],
 			[hasTestAlertProof(alert.testAlertProof), "test-alert proof is required"],
@@ -794,7 +794,28 @@ function hasExplicitTimeBound(value: string | undefined) {
 }
 
 function hasAlertEscalationPath(value: string | undefined) {
-	return hasAnyTerm(value, ["escalate", "escalation"]) && hasAnyTerm(value, ["oncall", "owner"]);
+	return (
+		hasAnyTerm(value, ["escalate", "escalation"]) &&
+		hasAnyTerm(value, ["oncall", "owner"]) &&
+		hasConcreteAlertEscalationRoute(value)
+	);
+}
+
+function hasConcreteAlertEscalationRoute(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	const routeParts = normalized
+		.split(/\s*(?:->|=>|\bthen\b|\bto\b)\s*/)
+		.map((part) => part.trim())
+		.filter((part) => part.length > 0);
+	return routeParts.slice(1).some(hasConcreteEscalationDestination);
+}
+
+function hasConcreteEscalationDestination(value: string) {
+	const destination = value.split(/[\s,;]+/, 1)[0] ?? "";
+	return (
+		/^[a-z0-9][a-z0-9._#/@-]{2,}$/.test(destination) &&
+		!["owner", "oncall", "operator", "someone"].includes(destination)
+	);
 }
 
 function hasAlertSuppressionPolicy(value: string | undefined) {

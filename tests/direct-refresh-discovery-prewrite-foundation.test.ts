@@ -1226,10 +1226,36 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /alert severity must include write, postwrite, and rollback-required/);
 		assert.match(reasons, /alert ack SLA must include an explicit time bound/);
 		assert.match(reasons, /alert resolution SLA must include an explicit time bound/);
-		assert.match(reasons, /alert escalation path must be explicit/);
+		assert.match(reasons, /alert escalation path must include a concrete route/);
 		assert.match(reasons, /alert suppression policy must describe suppression\/noise handling/);
 		assert.match(reasons, /alert retry policy must be explicit/);
 		assert.match(reasons, /test-alert proof is required/);
+	});
+
+	it("fails closed when alert escalation path is generic instead of a concrete route", () => {
+		const evidenceWithGenericEscalationPath = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				escalationPath: "escalate owner",
+			},
+		};
+		evidenceWithGenericEscalationPath.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericEscalationPath,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericEscalationPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/alert escalation path must include a concrete route/,
+		);
 	});
 
 	it("fails closed when alert SLA evidence omits explicit time bounds", () => {
