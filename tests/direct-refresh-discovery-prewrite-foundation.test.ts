@@ -802,6 +802,38 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when rollback ID coverage is lower than count lineage", () => {
+		const evidenceWithInsufficientRollbackCount = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				count: 2,
+			},
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				rollbackIds: [
+					"supermarket_products:901",
+					"price_history:1001",
+				],
+			},
+		};
+		evidenceWithInsufficientRollbackCount.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithInsufficientRollbackCount,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithInsufficientRollbackCount,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/rollback ID coverage must be at least count lineage per affected table/,
+		);
+	});
+
 	it("fails closed when alert channel or owner are placeholders", () => {
 		const report = evaluateFoundation({
 			evidence: {

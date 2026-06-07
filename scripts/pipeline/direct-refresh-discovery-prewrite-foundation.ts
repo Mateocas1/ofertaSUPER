@@ -383,6 +383,10 @@ function buildChecks(
 				hasMinimumRollbackTableCoverage(rollback.rollbackIds),
 				"rollback IDs must include supermarket_products and price_history entries",
 			],
+			[
+				hasRollbackTableCoverageForCount(rollback.rollbackIds, lineage.count),
+				"rollback ID coverage must be at least count lineage per affected table",
+			],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
 			[hasRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.postRollbackVerificationSha256), "post-rollback verification sha256 is required"],
@@ -594,6 +598,21 @@ function hasMinimumRollbackTableCoverage(values: string[] | undefined) {
 		Array.isArray(values) &&
 		values.some((value) => value.startsWith("supermarket_products:")) &&
 		values.some((value) => value.startsWith("price_history:"))
+	);
+}
+
+function hasRollbackTableCoverageForCount(
+	values: string[] | undefined,
+	count: number | undefined,
+) {
+	if (!Array.isArray(values) || typeof count !== "number" || count <= 0) {
+		return false;
+	}
+
+	return (
+		values.filter((value) => value.startsWith("supermarket_products:")).length >=
+			count &&
+		values.filter((value) => value.startsWith("price_history:")).length >= count
 	);
 }
 
