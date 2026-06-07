@@ -916,7 +916,43 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			reasons,
 			/PITR\/backup posture must include PITR or backup and reviewed or available/,
 		);
-		assert.match(reasons, /rollback cache handling is required/);
+		assert.match(
+			reasons,
+			/rollback cache handling requires cache plus TTL\/invalidation\/no-purge\/post-rollback cache proof/,
+		);
+	});
+
+	it("fails closed when rollback cache handling proof is generic", () => {
+		for (const cacheHandling of ["cache reviewed", "cache handled", "cache ok"]) {
+			const evidenceWithGenericRollbackCacheHandling = {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+				},
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					cacheHandling,
+				},
+			};
+			evidenceWithGenericRollbackCacheHandling.artifactLineage.artifactSha256 =
+				calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+					evidenceWithGenericRollbackCacheHandling,
+				);
+
+			const report = evaluateFoundation({
+				evidence: evidenceWithGenericRollbackCacheHandling,
+				evidencePath: completeEvidence.artifactLineage.artifactPath,
+				now: new Date("2026-06-06T12:30:00.000Z"),
+			});
+
+			const reasons = report.summary.failClosedReasons.join("\n");
+			assert.equal(report.status, "FAIL", cacheHandling);
+			assert.match(
+				reasons,
+				/rollback cache handling requires cache plus TTL\/invalidation\/no-purge\/post-rollback cache proof/,
+				cacheHandling,
+			);
+		}
 	});
 
 	it("fails closed when PITR/backup posture evidence is vague", () => {

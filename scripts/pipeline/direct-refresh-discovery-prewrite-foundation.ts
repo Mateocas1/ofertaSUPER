@@ -426,7 +426,10 @@ function buildChecks(
 				),
 				"post-rollback verification sha256 must match runtime artifact",
 			],
-			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
+			[
+				hasRollbackCacheHandling(rollback.cacheHandling),
+				"rollback cache handling requires cache plus TTL/invalidation/no-purge/post-rollback cache proof",
+			],
 		]),
 		check("vtex-budgets", [
 			[hasPositiveInteger(budget.requestCap), "VTEX request cap must be a positive integer"],
@@ -735,6 +738,22 @@ function hasPitrBackupPosture(value: string | undefined) {
 	return (
 		hasAnyTerm(value, ["pitr", "backup"]) &&
 		hasAnyTerm(value, ["reviewed", "available"])
+	);
+}
+
+function hasRollbackCacheHandling(value: string | undefined) {
+	return (
+		hasAnyTerm(value, ["cache"]) &&
+		hasAnyTerm(value, [
+			"ttl",
+			"invalidation policy",
+			"manual purge forbidden",
+			"no cache purge",
+			"no purge",
+			"cache key",
+			"cache version",
+			"post-rollback cache verification",
+		])
 	);
 }
 
