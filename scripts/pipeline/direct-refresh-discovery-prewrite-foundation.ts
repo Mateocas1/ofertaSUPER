@@ -340,6 +340,10 @@ function buildChecks(
 				),
 				"artifact path lineage must include source and count",
 			],
+			[
+				hasArtifactPathIssueLineage(lineage.artifactPath, lineage.issue),
+				"artifact path lineage must include issue",
+			],
 			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
 			[
 				hasMatchingArtifactSha256(lineage.artifactSha256, evidenceSha256),
@@ -533,6 +537,16 @@ function hasArtifactPathSourceCountLineage(
 	}
 	const segments = normalizeAuditPath(lineagePath).split("/");
 	return segments.includes(source ?? "") && segments.includes(`count${count}`);
+}
+
+function hasArtifactPathIssueLineage(
+	lineagePath: string | undefined,
+	issue: number | undefined,
+) {
+	if (!hasPositiveInteger(issue)) {
+		return false;
+	}
+	return normalizeAuditPath(lineagePath).split("/").includes(`issue-${issue}`);
 }
 
 function hasMatchingArtifactSha256(

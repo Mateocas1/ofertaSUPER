@@ -36,7 +36,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		count: 1,
 		attemptId: "foundation-attempt-001",
 		artifactPath:
-			"audit/direct-refresh-discovery-prewrite-foundation/vea/count1/foundation-attempt-001/foundation-evidence.json",
+			"audit/direct-refresh-discovery-prewrite-foundation/issue-185/vea/count1/foundation-attempt-001/foundation-evidence.json",
 		artifactSha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		gitCommit: "ccc7535",
 		toolVersion: "direct-refresh-discovery-create@1",
@@ -307,6 +307,33 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
 			/artifact path lineage must include source and count/,
+		);
+	});
+
+	it("fails closed when artifact path does not include issue lineage", () => {
+		const evidenceWithUnboundIssuePath = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				artifactPath:
+					"audit/direct-refresh-discovery-prewrite-foundation/vea/count1/foundation-attempt-001/foundation-evidence.json",
+			},
+		};
+		evidenceWithUnboundIssuePath.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithUnboundIssuePath,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithUnboundIssuePath,
+			evidencePath: evidenceWithUnboundIssuePath.artifactLineage.artifactPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/artifact path lineage must include issue/,
 		);
 	});
 
