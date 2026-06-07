@@ -1231,7 +1231,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			reasons,
 			/alert suppression\/noise policy must protect rollback-required or write\/postwrite failures/,
 		);
-		assert.match(reasons, /alert retry policy must be explicit/);
+		assert.match(reasons, /alert retry policy must prohibit automatic retry or bind to rollback-required/);
 		assert.match(reasons, /test-alert proof is required/);
 	});
 
@@ -1310,6 +1310,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
 			/suppression\/noise policy must protect rollback-required or write\/postwrite failures/,
+		);
+	});
+
+	it("fails closed when alert retry policy is generic manual retry", () => {
+		const evidenceWithGenericRetryPolicy = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				retryPolicy: "retry policy manual",
+			},
+		};
+		evidenceWithGenericRetryPolicy.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericRetryPolicy,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericRetryPolicy,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/retry policy must prohibit automatic retry or bind to rollback-required/,
 		);
 	});
 

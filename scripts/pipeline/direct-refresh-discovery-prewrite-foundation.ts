@@ -459,7 +459,7 @@ function buildChecks(
 			[hasAlertResolutionSla(alert.resolutionSla), "alert resolution SLA must include an explicit time bound"],
 			[hasAlertEscalationPath(alert.escalationPath), "alert escalation path must include a concrete route"],
 			[hasAlertSuppressionPolicy(alert.suppressionPolicy), "alert suppression/noise policy must protect rollback-required or write/postwrite failures"],
-			[hasAlertRetryPolicy(alert.retryPolicy), "alert retry policy must be explicit"],
+			[hasAlertRetryPolicy(alert.retryPolicy), "alert retry policy must prohibit automatic retry or bind to rollback-required"],
 			[hasTestAlertProof(alert.testAlertProof), "test-alert proof is required"],
 			[alert.writeFailure, "write failure alert is required"],
 			[alert.postwriteFailure, "postwrite failure alert is required"],
@@ -833,7 +833,10 @@ function hasAlertSuppressionPolicy(value: string | undefined) {
 }
 
 function hasAlertRetryPolicy(value: string | undefined) {
-	return hasAllTerms(value, ["retry", "policy"]) && hasAnyTerm(value, ["no automatic", "manual", "rollback-required"]);
+	return (
+		hasAllTerms(value, ["retry", "policy"]) &&
+		hasAnyTerm(value, ["no automatic retry", "no automatic retries", "rollback-required"])
+	);
 }
 
 function hasTestAlertProof(value: string | undefined) {
