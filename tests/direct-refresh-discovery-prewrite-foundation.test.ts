@@ -364,6 +364,33 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when artifact path lineage segments are out of canonical order", () => {
+		const evidenceWithWrongArtifactPathOrder = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				artifactPath:
+					"audit/direct-refresh-discovery-prewrite-foundation/vea/issue-185/count1/foundation-attempt-001/foundation-evidence.json",
+			},
+		};
+		evidenceWithWrongArtifactPathOrder.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWrongArtifactPathOrder,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithWrongArtifactPathOrder,
+			evidencePath: evidenceWithWrongArtifactPathOrder.artifactLineage.artifactPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/artifact path lineage must follow issue\/source\/count\/attempt order/,
+		);
+	});
+
 	it("fails closed when artifact sha256 lineage does not match the evidence file hash", () => {
 		const report = evaluateFoundation({
 			evidence: completeEvidence,

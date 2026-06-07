@@ -344,6 +344,16 @@ function buildChecks(
 				hasArtifactPathIssueLineage(lineage.artifactPath, lineage.issue),
 				"artifact path lineage must include issue",
 			],
+			[
+				hasCanonicalArtifactPathLineage(
+					lineage.artifactPath,
+					lineage.issue,
+					lineage.source,
+					lineage.count,
+					lineage.attemptId,
+				),
+				"artifact path lineage must follow issue/source/count/attempt order",
+			],
 			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
 			[
 				hasMatchingArtifactSha256(lineage.artifactSha256, evidenceSha256),
@@ -550,6 +560,27 @@ function hasArtifactPathIssueLineage(
 		return false;
 	}
 	return normalizeAuditPath(lineagePath).split("/").includes(`issue-${issue}`);
+}
+
+function hasCanonicalArtifactPathLineage(
+	lineagePath: string | undefined,
+	issue: number | undefined,
+	source: string | undefined,
+	count: number | undefined,
+	attemptId: string | undefined,
+) {
+	if (
+		!hasPositiveInteger(issue) ||
+		!hasWriterSupportedSource(source) ||
+		!hasPositiveInteger(count) ||
+		!hasSafeAttemptId(attemptId)
+	) {
+		return false;
+	}
+	return (
+		normalizeAuditPath(lineagePath) ===
+		`audit/direct-refresh-discovery-prewrite-foundation/issue-${issue}/${source}/count${count}/${attemptId}/foundation-evidence.json`
+	);
 }
 
 function hasMatchingArtifactSha256(
