@@ -441,7 +441,7 @@ function buildChecks(
 			[budget.timeoutMs <= MAX_VTEX_FOUNDATION_TIMEOUT_MS, "VTEX timeout must be <= 10000ms"],
 			[hasVtexBackoffPolicy(budget.backoffPolicy), "VTEX backoff policy must include timeout, 403, 429, HTML, and captcha"],
 			[hasVtexStopRule(budget.stopRule), "VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry"],
-			[hasVtexHeaderPolicy(budget.headerPolicy), "VTEX header policy must be documented and non-evasive"],
+			[hasVtexHeaderPolicy(budget.headerPolicy), "VTEX header policy must be documented, non-evasive, and include user-agent or headers"],
 		]),
 		check("compliance", [
 			[compliance.allowedUseReviewed, "compliance allowed-use review is required"],
@@ -746,7 +746,10 @@ function hasVtexStopRule(value: string | undefined) {
 }
 
 function hasVtexHeaderPolicy(value: string | undefined) {
-	return hasAllTerms(value, ["documented", "non-evasive"]);
+	return (
+		hasAllTerms(value, ["documented", "non-evasive"]) &&
+		hasAnyTerm(value, ["user-agent", "headers"])
+	);
 }
 
 function hasComplianceForSource(

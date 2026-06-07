@@ -1487,6 +1487,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when VTEX header policy is documented and non-evasive but omits headers and user-agent", () => {
+		const evidenceWithGenericHeaderPolicy = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			vtexBudgets: {
+				...completeEvidence.vtexBudgets,
+				headerPolicy: "documented non-evasive",
+			},
+		};
+		evidenceWithGenericHeaderPolicy.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericHeaderPolicy,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericHeaderPolicy,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/VTEX header policy must be documented, non-evasive, and include user-agent or headers/,
+		);
+	});
+
 	it("fails closed when VTEX safety policies are too vague", () => {
 		const report = evaluateFoundation({
 			evidence: {
@@ -1506,7 +1532,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /VTEX backoff policy must include timeout, 403, 429, HTML, and captcha/);
 		assert.match(reasons, /VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry/);
-		assert.match(reasons, /VTEX header policy must be documented and non-evasive/);
+		assert.match(reasons, /VTEX header policy must be documented, non-evasive, and include user-agent or headers/);
 	});
 
 	it("fails closed when performance guard evidence is too vague", () => {
