@@ -96,7 +96,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	performanceGuard: {
 		prismaPoolPosture: "pgbouncer=true; connection_limit=3; pool_timeout=10",
 		transactionTimeoutPosture:
-			"statement_timeout=2min; idle_in_transaction_session_timeout=0",
+			"statement_timeout=2min; idle_in_transaction_session_timeout=30s",
 		priceHistoryBaseline:
 			"PriceHistory insert/read baseline captured; insert_p95=50ms; read_p95=30ms",
 		publicApiBaseline: "public API search/products baseline captured; p95=120ms",
@@ -1671,7 +1671,34 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with explicit values/,
+			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with positive temporal values/,
+		);
+	});
+
+	it("fails closed when transaction timeout posture disables idle transaction timeout", () => {
+		const evidenceWithDisabledIdleTransactionTimeout = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				transactionTimeoutPosture:
+					"statement_timeout=2min; idle_in_transaction_session_timeout=0",
+			},
+		};
+		evidenceWithDisabledIdleTransactionTimeout.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithDisabledIdleTransactionTimeout,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithDisabledIdleTransactionTimeout,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with positive temporal values/,
 		);
 	});
 

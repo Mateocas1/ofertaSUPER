@@ -467,7 +467,7 @@ function buildChecks(
 		]),
 		check("performance-guard", [
 			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values"],
-			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with explicit values"],
+			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with positive temporal values"],
 			[hasPriceHistoryBaseline(perf.priceHistoryBaseline), "PriceHistory baseline requires insert/read and an explicit metric"],
 			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline requires search/products and an explicit performance metric"],
 			[hasCacheTtlBaseline(perf.cacheTtlBaseline), "cache TTL baseline requires TTL and an explicit temporal value"],
@@ -868,16 +868,22 @@ function hasPrismaPoolPosture(value: string | undefined) {
 function hasTransactionTimeoutPosture(value: string | undefined) {
 	const normalized = value?.toLowerCase() ?? "";
 	return (
-		hasExplicitPostureValue(normalized, "statement_timeout") &&
-		hasExplicitPostureValue(
+		hasPositiveTemporalPostureValue(normalized, "statement_timeout") &&
+		hasPositiveTemporalPostureValue(
 			normalized,
 			"idle_in_transaction_session_timeout",
 		)
 	);
 }
 
-function hasExplicitPostureValue(value: string, key: string) {
-	return new RegExp(`\\b${key}\\s*=\\s*[^=\\s;]+\\b`).test(value);
+function hasPositiveTemporalPostureValue(value: string, key: string) {
+	const postureValue = value.match(new RegExp(`\\b${key}\\s*=\\s*([^;\\s]+)`))?.[1];
+	if (!postureValue || /^(?:0(?:ms|s)?|off|disabled|none)$/i.test(postureValue)) {
+		return false;
+	}
+	return /^[1-9]\d*(?:\.\d+)?(?:ms|s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours)$/.test(
+		postureValue,
+	);
 }
 
 function hasPriceHistoryBaseline(value: string | undefined) {
