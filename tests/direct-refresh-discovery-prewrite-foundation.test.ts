@@ -337,6 +337,33 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when artifact path filename is not canonical", () => {
+		const evidenceWithWrongArtifactFilename = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				artifactPath:
+					"audit/direct-refresh-discovery-prewrite-foundation/issue-185/vea/count1/foundation-attempt-001/other.json",
+			},
+		};
+		evidenceWithWrongArtifactFilename.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWrongArtifactFilename,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithWrongArtifactFilename,
+			evidencePath: evidenceWithWrongArtifactFilename.artifactLineage.artifactPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/artifact path lineage must be foundation audit json/,
+		);
+	});
+
 	it("fails closed when artifact sha256 lineage does not match the evidence file hash", () => {
 		const report = evaluateFoundation({
 			evidence: completeEvidence,

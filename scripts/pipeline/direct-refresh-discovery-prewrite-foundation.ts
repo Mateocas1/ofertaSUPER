@@ -510,7 +510,7 @@ function hasWriterSupportedSource(value: string | undefined) {
 function hasFoundationArtifactPath(value: string | undefined) {
 	return (
 		typeof value === "string" &&
-		/^audit\/direct-refresh-discovery-prewrite-foundation\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
+		/^audit\/direct-refresh-discovery-prewrite-foundation\/[A-Za-z0-9._/-]+\/foundation-evidence\.json$/.test(value) &&
 		!value.includes("..")
 	);
 }
