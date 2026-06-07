@@ -75,6 +75,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	compliance: {
 		allowedUseReviewed: true,
 		posture: "approved",
+		reviewedSources: ["vea"],
 	},
 	alertChannel: {
 		channel: "Issue comment + #direct-refresh-alerts",
@@ -822,6 +823,30 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /VTEX request cap must be positive/);
 		assert.match(reasons, /compliance allowed-use review is required/);
 		assert.match(reasons, /public API baseline must include search and products/);
+	});
+
+	it("fails closed when compliance does not cover the lineage source", () => {
+		const evidenceWithWrongComplianceSource = {
+			...completeEvidence,
+			compliance: {
+				...completeEvidence.compliance,
+				reviewedSources: ["carrefour"],
+			},
+		};
+		evidenceWithWrongComplianceSource.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWrongComplianceSource,
+			);
+		const report = evaluateFoundation({
+			evidence: evidenceWithWrongComplianceSource,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/compliance reviewed sources must include lineage source/,
+		);
 	});
 
 	it("fails closed when VTEX budgets are not tightly bounded", () => {

@@ -51,7 +51,8 @@
   },
   "compliance": {
     "allowedUseReviewed": false,
-    "posture": "unknown"
+    "posture": "unknown",
+    "reviewedSources": []
   },
   "alertChannel": {
     "channel": "Issue evidence comment plus direct-refresh alert placeholder",

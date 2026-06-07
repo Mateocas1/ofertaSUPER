@@ -61,6 +61,7 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	compliance: {
 		allowedUseReviewed: boolean;
 		posture: "approved" | "risk-accepted" | "blocked" | "unknown";
+		reviewedSources: string[];
 	};
 	alertChannel: {
 		channel: string;
@@ -399,6 +400,10 @@ function buildChecks(
 		check("compliance", [
 			[compliance.allowedUseReviewed, "compliance allowed-use review is required"],
 			[compliance.posture === "approved" || compliance.posture === "risk-accepted", "compliance posture must be approved or risk-accepted"],
+			[
+				hasComplianceForSource(compliance.reviewedSources, lineage.source),
+				"compliance reviewed sources must include lineage source",
+			],
 		]),
 		check("alert-channel", [
 			[hasActionableAlertChannel(alert.channel), "alert channel must include issue evidence comment and concrete alert destination"],
@@ -588,6 +593,18 @@ function hasVtexStopRule(value: string | undefined) {
 
 function hasVtexHeaderPolicy(value: string | undefined) {
 	return hasAllTerms(value, ["documented", "non-evasive"]);
+}
+
+function hasComplianceForSource(
+	reviewedSources: string[] | undefined,
+	lineageSource: string | undefined,
+) {
+	return (
+		typeof lineageSource === "string" &&
+		hasWriterSupportedSource(lineageSource) &&
+		Array.isArray(reviewedSources) &&
+		reviewedSources.includes(lineageSource)
+	);
 }
 
 function hasActionableAlertChannel(value: string | undefined) {
