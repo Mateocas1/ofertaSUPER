@@ -34,6 +34,7 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		schemaVersion: string;
 		dbEnvironmentIdentity: string;
 		sourceConfigSnapshot: string;
+		vtexProbeSource: string;
 		vtexProbeHash: string;
 		vtexProbeTimestamp: string;
 	};
@@ -353,6 +354,10 @@ function buildChecks(
 				hasFreshTimestamp(lineage.vtexProbeTimestamp, now),
 				"VTEX probe timestamp must be fresh within 15 minutes",
 			],
+			[
+				hasMatchingVtexProbeSource(lineage.vtexProbeSource, lineage.source),
+				"VTEX probe source must match lineage source",
+			],
 			[hasSha256Lineage(lineage.vtexProbeHash), "VTEX probe hash lineage is required"],
 		]),
 		check("rollback-drill", [
@@ -553,6 +558,13 @@ function hasFreshTimestamp(value: string | undefined, now: Date) {
 	return (
 		timestamp <= nowMs && nowMs - timestamp <= FOUNDATION_EVIDENCE_MAX_AGE_MS
 	);
+}
+
+function hasMatchingVtexProbeSource(
+	probeSource: string | undefined,
+	lineageSource: string | undefined,
+) {
+	return hasWriterSupportedSource(probeSource) && probeSource === lineageSource;
 }
 
 function hasVtexBackoffPolicy(value: string | undefined) {

@@ -43,6 +43,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		dbEnvironmentIdentity: "local-test-db",
 		sourceConfigSnapshot:
 			"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; files:src/lib/supermarkets.ts",
+		vtexProbeSource: "vea",
 		vtexProbeHash:
 			"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 		vtexProbeTimestamp: "2026-06-06T12:25:00.000Z",
@@ -394,6 +395,31 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
 			/VTEX probe hash lineage is required/,
+		);
+	});
+
+	it("fails closed when VTEX probe source does not match lineage source", () => {
+		const evidenceWithWrongProbeSource = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				vtexProbeSource: "carrefour",
+			},
+		};
+		evidenceWithWrongProbeSource.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWrongProbeSource,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithWrongProbeSource,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/VTEX probe source must match lineage source/,
 		);
 	});
 
