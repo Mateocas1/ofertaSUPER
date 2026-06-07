@@ -470,7 +470,7 @@ function buildChecks(
 			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with explicit values"],
 			[hasPriceHistoryBaseline(perf.priceHistoryBaseline), "PriceHistory baseline must include insert and read"],
 			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline must include search and products"],
-			[hasCacheTtlBaseline(perf.cacheTtlBaseline), "cache TTL baseline must include TTL"],
+			[hasCacheTtlBaseline(perf.cacheTtlBaseline), "cache TTL baseline requires TTL and an explicit temporal value"],
 		]),
 	];
 }
@@ -889,7 +889,7 @@ function hasPublicApiBaseline(value: string | undefined) {
 }
 
 function hasCacheTtlBaseline(value: string | undefined) {
-	return hasAllTerms(value, ["ttl", "baseline"]);
+	return hasAllTerms(value, ["ttl", "baseline"]) && hasExplicitTimeBound(value);
 }
 
 function hasAllTerms(value: string | undefined, terms: string[]) {

@@ -99,7 +99,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 			"statement_timeout=2min; idle_in_transaction_session_timeout=0",
 		priceHistoryBaseline: "PriceHistory insert/read baseline captured",
 		publicApiBaseline: "public API search/products baseline captured",
-		cacheTtlBaseline: "TTL baseline captured",
+		cacheTtlBaseline: "cache TTL baseline captured; ttl=300s",
 	},
 };
 
@@ -1615,7 +1615,10 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 		assert.match(reasons, /PriceHistory baseline must include insert and read/);
 		assert.match(reasons, /public API baseline must include search and products/);
-		assert.match(reasons, /cache TTL baseline must include TTL/);
+		assert.match(
+			reasons,
+			/cache TTL baseline requires TTL and an explicit temporal value/,
+		);
 	});
 
 	it("fails closed when Prisma pool posture lists required terms without values", () => {
@@ -1717,7 +1720,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/cache TTL baseline must include TTL/,
+			/cache TTL baseline requires TTL and an explicit temporal value/,
+		);
+	});
+
+	it("fails closed when cache TTL baseline omits an explicit temporal value", () => {
+		const evidenceWithGenericCacheTtlBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				cacheTtlBaseline: "TTL baseline captured",
+			},
+		};
+		evidenceWithGenericCacheTtlBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericCacheTtlBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericCacheTtlBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/cache TTL baseline requires TTL and an explicit temporal value/,
 		);
 	});
 
