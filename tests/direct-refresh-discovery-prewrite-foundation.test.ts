@@ -1123,12 +1123,13 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /VTEX timeout must be <= 10000ms/);
 	});
 
-	it("fails closed when VTEX request cap or timeout are fractional", () => {
+	it("fails closed when VTEX request cap, concurrency, or timeout are fractional", () => {
 		const evidenceWithFractionalBudgets = {
 			...completeEvidence,
 			vtexBudgets: {
 				...completeEvidence.vtexBudgets,
 				requestCap: 1.5,
+				concurrency: 1.5,
 				timeoutMs: 999.5,
 			},
 		};
@@ -1145,6 +1146,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /VTEX request cap must be a positive integer/);
+		assert.match(reasons, /VTEX concurrency must be a positive integer/);
 		assert.match(reasons, /VTEX timeout must be a positive integer in milliseconds/);
 	});
 

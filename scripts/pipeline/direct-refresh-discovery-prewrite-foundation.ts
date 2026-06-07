@@ -422,7 +422,7 @@ function buildChecks(
 				hasPositiveInteger(lineage.count) && lineage.count <= budget.requestCap,
 				"count lineage must not exceed VTEX request cap",
 			],
-			[budget.concurrency > 0, "VTEX concurrency must be positive"],
+			[hasPositiveInteger(budget.concurrency), "VTEX concurrency must be a positive integer"],
 			[budget.concurrency === 1, "VTEX concurrency must be serial"],
 			[hasPositiveInteger(budget.timeoutMs), "VTEX timeout must be a positive integer in milliseconds"],
 			[budget.timeoutMs <= MAX_VTEX_FOUNDATION_TIMEOUT_MS, "VTEX timeout must be <= 10000ms"],
