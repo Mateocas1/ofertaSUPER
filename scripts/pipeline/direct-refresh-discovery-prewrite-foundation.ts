@@ -332,6 +332,14 @@ function buildChecks(
 				hasArtifactPathAttemptLineage(lineage.artifactPath, lineage.attemptId),
 				"artifact path lineage must include attempt ID",
 			],
+			[
+				hasArtifactPathSourceCountLineage(
+					lineage.artifactPath,
+					lineage.source,
+					lineage.count,
+				),
+				"artifact path lineage must include source and count",
+			],
 			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
 			[
 				hasMatchingArtifactSha256(lineage.artifactSha256, evidenceSha256),
@@ -513,6 +521,18 @@ function hasArtifactPathAttemptLineage(
 ) {
 	if (!hasSafeAttemptId(attemptId)) return false;
 	return normalizeAuditPath(lineagePath).split("/").includes(attemptId ?? "");
+}
+
+function hasArtifactPathSourceCountLineage(
+	lineagePath: string | undefined,
+	source: string | undefined,
+	count: number | undefined,
+) {
+	if (!hasWriterSupportedSource(source) || !hasPositiveInteger(count)) {
+		return false;
+	}
+	const segments = normalizeAuditPath(lineagePath).split("/");
+	return segments.includes(source ?? "") && segments.includes(`count${count}`);
 }
 
 function hasMatchingArtifactSha256(
