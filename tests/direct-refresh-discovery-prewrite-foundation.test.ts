@@ -747,8 +747,33 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /git commit lineage must be hex/);
-		assert.match(reasons, /tool version lineage must include @version/);
+		assert.match(reasons, /tool version lineage must include positive @version/);
 		assert.match(reasons, /schema version lineage must be numeric/);
+	});
+
+	it("fails closed when tool version lineage is zero", () => {
+		const evidenceWithZeroToolVersion = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				toolVersion: "direct-refresh-discovery-create@0",
+			},
+		};
+		evidenceWithZeroToolVersion.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithZeroToolVersion,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithZeroToolVersion,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/tool version lineage must include positive @version/,
+		);
 	});
 
 	it("fails closed when source, artifact path, or DB environment lineage are invalid", () => {

@@ -350,7 +350,10 @@ function buildChecks(
 				"artifact sha256 lineage must match evidence file hash",
 			],
 			[hasGitCommitLineage(lineage.gitCommit), "git commit lineage must be hex"],
-			[hasToolVersionLineage(lineage.toolVersion), "tool version lineage must include @version"],
+			[
+				hasToolVersionLineage(lineage.toolVersion),
+				"tool version lineage must include positive @version",
+			],
 			[hasNumericSchemaVersion(lineage.schemaVersion), "schema version lineage must be numeric"],
 			[hasExplicitEnvironmentIdentity(lineage.dbEnvironmentIdentity), "DB/environment identity must be explicit"],
 			[hasSourceConfigSnapshot(lineage.sourceConfigSnapshot), "source config snapshot sha256 is required"],
@@ -577,7 +580,10 @@ function hasGitCommitLineage(value: string | undefined) {
 }
 
 function hasToolVersionLineage(value: string | undefined) {
-	return typeof value === "string" && /^[a-z0-9][a-z0-9-]*@\d+(?:\.\d+)*$/.test(value);
+	return (
+		typeof value === "string" &&
+		/^[a-z0-9][a-z0-9-]*@[1-9]\d*(?:\.\d+)*$/.test(value)
+	);
 }
 
 function hasNumericSchemaVersion(value: string | undefined) {
