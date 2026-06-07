@@ -455,8 +455,8 @@ function buildChecks(
 			[hasActionableAlertChannel(alert.channel), "alert channel must include issue evidence comment and concrete alert destination"],
 			[hasExplicitAlertOwner(alert.owner), "alert owner must be explicit and non-placeholder"],
 			[hasAlertSeverity(alert.severity), "alert severity must include write, postwrite, and rollback-required"],
-			[hasAlertAckSla(alert.ackSla), "alert ack SLA is required"],
-			[hasAlertResolutionSla(alert.resolutionSla), "alert resolution SLA is required"],
+			[hasAlertAckSla(alert.ackSla), "alert ack SLA must include an explicit time bound"],
+			[hasAlertResolutionSla(alert.resolutionSla), "alert resolution SLA must include an explicit time bound"],
 			[hasAlertEscalationPath(alert.escalationPath), "alert escalation path must be explicit"],
 			[hasAlertSuppressionPolicy(alert.suppressionPolicy), "alert suppression policy must describe suppression/noise handling"],
 			[hasAlertRetryPolicy(alert.retryPolicy), "alert retry policy must be explicit"],
@@ -779,11 +779,18 @@ function hasAlertSeverity(value: string | undefined) {
 }
 
 function hasAlertAckSla(value: string | undefined) {
-	return hasAllTerms(value, ["ack", "sla"]);
+	return hasAllTerms(value, ["ack", "sla"]) && hasExplicitTimeBound(value);
 }
 
 function hasAlertResolutionSla(value: string | undefined) {
-	return hasAllTerms(value, ["resolution", "sla"]);
+	return hasAllTerms(value, ["resolution", "sla"]) && hasExplicitTimeBound(value);
+}
+
+function hasExplicitTimeBound(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return /(?:<=|>=|<|>|=)?\s*\b\d+\s*(?:ms|s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours)\b/.test(
+		normalized,
+	);
 }
 
 function hasAlertEscalationPath(value: string | undefined) {
