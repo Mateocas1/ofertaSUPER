@@ -328,6 +328,10 @@ function buildChecks(
 				hasMatchingArtifactPath(lineage.artifactPath, evidencePath),
 				"artifact path lineage must match evidence path",
 			],
+			[
+				hasArtifactPathAttemptLineage(lineage.artifactPath, lineage.attemptId),
+				"artifact path lineage must include attempt ID",
+			],
 			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
 			[
 				hasMatchingArtifactSha256(lineage.artifactSha256, evidenceSha256),
@@ -501,6 +505,14 @@ function hasMatchingArtifactPath(
 	evidencePath: string,
 ) {
 	return normalizeAuditPath(lineagePath) === normalizeAuditPath(evidencePath);
+}
+
+function hasArtifactPathAttemptLineage(
+	lineagePath: string | undefined,
+	attemptId: string | undefined,
+) {
+	if (!hasSafeAttemptId(attemptId)) return false;
+	return normalizeAuditPath(lineagePath).split("/").includes(attemptId ?? "");
 }
 
 function hasMatchingArtifactSha256(
