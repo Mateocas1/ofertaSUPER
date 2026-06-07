@@ -713,7 +713,7 @@ function hasRollbackTableCoverageForCount(
 function hasRollbackVerificationArtifact(value: string | undefined) {
 	return (
 		typeof value === "string" &&
-		/^audit\/direct-refresh-discovery-rollback-verification\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
+		/^audit\/direct-refresh-discovery-rollback-verification\/(?:[A-Za-z0-9._-]+\/)*(?:preimage|post-rollback-verification)\.json$/.test(value) &&
 		!value.includes("..")
 	);
 }

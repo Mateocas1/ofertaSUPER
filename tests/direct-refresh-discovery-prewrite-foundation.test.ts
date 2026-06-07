@@ -985,6 +985,39 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /post-rollback verification sha256 is required/);
 	});
 
+	it("fails closed when rollback artifact filenames are not canonical", () => {
+		const evidenceWithWrongRollbackArtifactFilenames = {
+			...completeEvidence,
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				preimageArtifact:
+					"audit/direct-refresh-discovery-rollback-verification/other-preimage.json",
+				postRollbackVerificationArtifact:
+					"audit/direct-refresh-discovery-rollback-verification/other-post-rollback.json",
+			},
+		};
+		evidenceWithWrongRollbackArtifactFilenames.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWrongRollbackArtifactFilenames,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithWrongRollbackArtifactFilenames,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/preimage artifact must be rollback verification audit json/,
+		);
+		assert.match(
+			reasons,
+			/post-rollback verification artifact must be rollback verification audit json/,
+		);
+	});
+
 	it("fails closed when rollback artifact hashes do not match runtime files", () => {
 		const report = evaluateFoundation({
 			evidence: completeEvidence,
