@@ -318,7 +318,7 @@ function buildChecks(
 		check("artifact-lineage", [
 			[lineage.issue > 0, "issue lineage is required"],
 			[hasWriterSupportedSource(lineage.source), "source lineage must be writer-supported"],
-			[lineage.count > 0, "count lineage is required"],
+			[hasPositiveInteger(lineage.count), "count lineage must be a positive integer"],
 			[hasText(lineage.attemptId), "attempt lineage is required"],
 			[
 				hasFoundationArtifactPath(lineage.artifactPath),
@@ -403,7 +403,7 @@ function buildChecks(
 			[budget.requestCap > 0, "VTEX request cap must be positive"],
 			[budget.requestCap <= MAX_VTEX_FOUNDATION_REQUEST_CAP, "VTEX request cap must be <= 20"],
 			[
-				lineage.count > 0 && lineage.count <= budget.requestCap,
+				hasPositiveInteger(lineage.count) && lineage.count <= budget.requestCap,
 				"count lineage must not exceed VTEX request cap",
 			],
 			[budget.concurrency > 0, "VTEX concurrency must be positive"],
@@ -471,6 +471,10 @@ function check(name: string, rules: Rule[]) {
 
 function hasText(value: string | undefined) {
 	return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasPositiveInteger(value: number | undefined) {
+	return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
 function hasWriterSupportedSource(value: string | undefined) {

@@ -353,10 +353,44 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /issue lineage is required/);
 		assert.match(reasons, /source lineage must be writer-supported/);
-		assert.match(reasons, /count lineage is required/);
+		assert.match(reasons, /count lineage must be a positive integer/);
 		assert.match(reasons, /attempt lineage is required/);
 		assert.match(reasons, /artifact path lineage must be foundation audit json/);
 		assert.match(reasons, /artifact sha256 lineage is required/);
+	});
+
+	it("fails closed when count lineage is fractional", () => {
+		const evidenceWithFractionalCount = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				count: 1.5,
+			},
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				rollbackIds: [
+					"supermarket_products:901",
+					"supermarket_products:902",
+					"price_history:1001",
+					"price_history:1002",
+				],
+			},
+		};
+		evidenceWithFractionalCount.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithFractionalCount,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithFractionalCount,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/count lineage must be a positive integer/,
+		);
 	});
 
 	it("fails closed when source config snapshot or VTEX probe timestamp are malformed", () => {
