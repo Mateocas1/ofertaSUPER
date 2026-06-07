@@ -393,7 +393,7 @@ function buildChecks(
 			[rollback.executed, "rollback drill must be executed before discovery apply"],
 			[rollback.mode !== "read-only-review", "read-only rollback review is preparatory only"],
 			[rollback.preimageCaptured === true, "rollback preimage capture is required"],
-			[hasRollbackVerificationArtifact(rollback.preimageArtifact), "preimage artifact must be rollback verification audit json"],
+			[hasRollbackPreimageArtifact(rollback.preimageArtifact), "preimage artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.preimageSha256), "preimage sha256 is required"],
 			[
 				hasMatchingArtifactSha256(
@@ -417,7 +417,7 @@ function buildChecks(
 				"rollback ID coverage must be at least count lineage per affected table",
 			],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
-			[hasRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
+			[hasPostRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.postRollbackVerificationSha256), "post-rollback verification sha256 is required"],
 			[
 				hasMatchingArtifactSha256(
@@ -710,10 +710,23 @@ function hasRollbackTableCoverageForCount(
 	);
 }
 
-function hasRollbackVerificationArtifact(value: string | undefined) {
+function hasRollbackPreimageArtifact(value: string | undefined) {
+	return hasRollbackVerificationArtifact(value, "preimage");
+}
+
+function hasPostRollbackVerificationArtifact(value: string | undefined) {
+	return hasRollbackVerificationArtifact(value, "post-rollback-verification");
+}
+
+function hasRollbackVerificationArtifact(
+	value: string | undefined,
+	filename: "preimage" | "post-rollback-verification",
+) {
 	return (
 		typeof value === "string" &&
-		/^audit\/direct-refresh-discovery-rollback-verification\/(?:[A-Za-z0-9._-]+\/)*(?:preimage|post-rollback-verification)\.json$/.test(value) &&
+		new RegExp(
+			`^audit/direct-refresh-discovery-rollback-verification/(?:[A-Za-z0-9._-]+/)*${filename}\\.json$`,
+		).test(value) &&
 		!value.includes("..")
 	);
 }

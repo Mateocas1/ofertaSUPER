@@ -1018,6 +1018,39 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when rollback artifact roles are swapped", () => {
+		const evidenceWithSwappedRollbackArtifacts = {
+			...completeEvidence,
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				preimageArtifact:
+					"audit/direct-refresh-discovery-rollback-verification/post-rollback-verification.json",
+				postRollbackVerificationArtifact:
+					"audit/direct-refresh-discovery-rollback-verification/preimage.json",
+			},
+		};
+		evidenceWithSwappedRollbackArtifacts.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithSwappedRollbackArtifacts,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithSwappedRollbackArtifacts,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/preimage artifact must be rollback verification audit json/,
+		);
+		assert.match(
+			reasons,
+			/post-rollback verification artifact must be rollback verification audit json/,
+		);
+	});
+
 	it("fails closed when rollback artifact hashes do not match runtime files", () => {
 		const report = evaluateFoundation({
 			evidence: completeEvidence,
