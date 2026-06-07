@@ -897,6 +897,35 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /VTEX timeout must be <= 10000ms/);
 	});
 
+	it("fails closed when count lineage exceeds the VTEX request cap", () => {
+		const evidenceWithCountAboveBudget = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				count: 25,
+			},
+			vtexBudgets: {
+				...completeEvidence.vtexBudgets,
+				requestCap: 20,
+			},
+		};
+		evidenceWithCountAboveBudget.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithCountAboveBudget,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithCountAboveBudget,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/count lineage must not exceed VTEX request cap/,
+		);
+	});
+
 	it("fails closed when VTEX safety policies are too vague", () => {
 		const report = evaluateFoundation({
 			evidence: {

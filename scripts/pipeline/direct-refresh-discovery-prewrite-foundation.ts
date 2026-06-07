@@ -394,6 +394,10 @@ function buildChecks(
 		check("vtex-budgets", [
 			[budget.requestCap > 0, "VTEX request cap must be positive"],
 			[budget.requestCap <= MAX_VTEX_FOUNDATION_REQUEST_CAP, "VTEX request cap must be <= 20"],
+			[
+				lineage.count > 0 && lineage.count <= budget.requestCap,
+				"count lineage must not exceed VTEX request cap",
+			],
 			[budget.concurrency > 0, "VTEX concurrency must be positive"],
 			[budget.concurrency === 1, "VTEX concurrency must be serial"],
 			[budget.timeoutMs > 0, "VTEX timeout must be positive"],
