@@ -98,7 +98,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		transactionTimeoutPosture:
 			"statement_timeout=2min; idle_in_transaction_session_timeout=0",
 		priceHistoryBaseline: "PriceHistory insert/read baseline captured",
-		publicApiBaseline: "public API search/products baseline captured",
+		publicApiBaseline: "public API search/products baseline captured; p95=120ms",
 		cacheTtlBaseline: "cache TTL baseline captured; ttl=300s",
 	},
 };
@@ -1382,7 +1382,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /VTEX request cap must be a positive integer/);
 		assert.match(reasons, /compliance allowed-use review is required/);
-		assert.match(reasons, /public API baseline must include search and products/);
+		assert.match(reasons, /public API baseline requires search\/products and an explicit performance metric/);
 	});
 
 	it("fails closed when compliance does not cover the lineage source", () => {
@@ -1614,7 +1614,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout/,
 		);
 		assert.match(reasons, /PriceHistory baseline must include insert and read/);
-		assert.match(reasons, /public API baseline must include search and products/);
+		assert.match(reasons, /public API baseline requires search\/products and an explicit performance metric/);
 		assert.match(
 			reasons,
 			/cache TTL baseline requires TTL and an explicit temporal value/,
@@ -1770,7 +1770,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/public API baseline must include search and products/,
+			/public API baseline requires search\/products and an explicit performance metric/,
+		);
+	});
+
+	it("fails closed when public API baseline omits an explicit performance metric", () => {
+		const evidenceWithNominalPublicApiBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				publicApiBaseline: "public API search/products baseline captured",
+			},
+		};
+		evidenceWithNominalPublicApiBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithNominalPublicApiBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithNominalPublicApiBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/public API baseline requires search\/products and an explicit performance metric/,
 		);
 	});
 
@@ -1831,6 +1856,6 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.doesNotMatch(reasons, /alert channel is required/);
 		assert.match(reasons, /rollback drill must be executed/);
 		assert.match(reasons, /migration status must be PASS/);
-		assert.match(reasons, /public API baseline must include search and products/);
+		assert.match(reasons, /public API baseline requires search\/products and an explicit performance metric/);
 	});
 });

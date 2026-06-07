@@ -469,7 +469,7 @@ function buildChecks(
 			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values"],
 			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with explicit values"],
 			[hasPriceHistoryBaseline(perf.priceHistoryBaseline), "PriceHistory baseline must include insert and read"],
-			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline must include search and products"],
+			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline requires search/products and an explicit performance metric"],
 			[hasCacheTtlBaseline(perf.cacheTtlBaseline), "cache TTL baseline requires TTL and an explicit temporal value"],
 		]),
 	];
@@ -885,11 +885,21 @@ function hasPriceHistoryBaseline(value: string | undefined) {
 }
 
 function hasPublicApiBaseline(value: string | undefined) {
-	return hasAllTerms(value, ["search", "products", "baseline"]);
+	return (
+		hasAllTerms(value, ["search", "products", "baseline"]) &&
+		hasExplicitPerformanceMetric(value)
+	);
 }
 
 function hasCacheTtlBaseline(value: string | undefined) {
 	return hasAllTerms(value, ["ttl", "baseline"]) && hasExplicitTimeBound(value);
+}
+
+function hasExplicitPerformanceMetric(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return /\b(?:p\d{2}|latency|response_time|response-time|duration|time|elapsed)\s*=\s*\d+(?:\.\d+)?\s*(?:ms|s|sec|secs|second|seconds)\b/.test(
+		normalized,
+	);
 }
 
 function hasAllTerms(value: string | undefined, terms: string[]) {
