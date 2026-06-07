@@ -1459,6 +1459,33 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when transaction timeout posture lists required terms without values", () => {
+		const evidenceWithGenericTransactionTimeoutPosture = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				transactionTimeoutPosture:
+					"statement_timeout idle_in_transaction_session_timeout",
+			},
+		};
+		evidenceWithGenericTransactionTimeoutPosture.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericTransactionTimeoutPosture,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericTransactionTimeoutPosture,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with explicit values/,
+		);
+	});
+
 	it("fails closed when PriceHistory insert/read evidence omits baseline", () => {
 		const evidenceWithGenericPriceHistoryBaseline = {
 			...completeEvidence,

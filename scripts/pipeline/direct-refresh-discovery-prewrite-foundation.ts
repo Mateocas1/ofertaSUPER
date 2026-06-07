@@ -467,7 +467,7 @@ function buildChecks(
 		]),
 		check("performance-guard", [
 			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values"],
-			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout"],
+			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with explicit values"],
 			[hasPriceHistoryBaseline(perf.priceHistoryBaseline), "PriceHistory baseline must include insert and read"],
 			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline must include search and products"],
 			[hasCacheTtlBaseline(perf.cacheTtlBaseline), "cache TTL baseline must include TTL"],
@@ -821,10 +821,18 @@ function hasPrismaPoolPosture(value: string | undefined) {
 }
 
 function hasTransactionTimeoutPosture(value: string | undefined) {
-	return hasAllTerms(value, [
-		"statement_timeout",
-		"idle_in_transaction_session_timeout",
-	]);
+	const normalized = value?.toLowerCase() ?? "";
+	return (
+		hasExplicitPostureValue(normalized, "statement_timeout") &&
+		hasExplicitPostureValue(
+			normalized,
+			"idle_in_transaction_session_timeout",
+		)
+	);
+}
+
+function hasExplicitPostureValue(value: string, key: string) {
+	return new RegExp(`\\b${key}\\s*=\\s*[^=\\s;]+\\b`).test(value);
 }
 
 function hasPriceHistoryBaseline(value: string | undefined) {
