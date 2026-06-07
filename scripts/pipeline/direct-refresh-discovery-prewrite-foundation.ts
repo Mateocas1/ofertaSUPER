@@ -827,7 +827,7 @@ function hasPriceHistoryBaseline(value: string | undefined) {
 }
 
 function hasPublicApiBaseline(value: string | undefined) {
-	return hasAllTerms(value, ["search", "products"]);
+	return hasAllTerms(value, ["search", "products", "baseline"]);
 }
 
 function hasCacheTtlBaseline(value: string | undefined) {

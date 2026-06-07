@@ -1458,6 +1458,31 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when public API baseline evidence is generic", () => {
+		const evidenceWithGenericPublicApiBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				publicApiBaseline: "search products",
+			},
+		};
+		evidenceWithGenericPublicApiBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericPublicApiBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericPublicApiBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/public API baseline must include search and products/,
+		);
+	});
+
 	it("parses a read-only CLI boundary and rejects write-like flags", () => {
 		const options = parseDirectRefreshDiscoveryPrewriteFoundationCliOptions([
 			"tsx",
