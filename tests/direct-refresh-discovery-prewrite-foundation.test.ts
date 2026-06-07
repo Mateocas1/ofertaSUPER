@@ -1171,6 +1171,37 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /alert owner must be explicit and non-placeholder/);
 	});
 
+	it("fails closed when owners contain placeholder text", () => {
+		const evidenceWithEmbeddedPlaceholderOwners = {
+			...completeEvidence,
+			controlPlane: {
+				...completeEvidence.controlPlane,
+				owner: "placeholder-oncall",
+			},
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				owner: "direct-refresh-placeholder-oncall",
+			},
+		};
+		evidenceWithEmbeddedPlaceholderOwners.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithEmbeddedPlaceholderOwners,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithEmbeddedPlaceholderOwners,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/control-plane owner must be explicit and non-placeholder/,
+		);
+		assert.match(reasons, /alert owner must be explicit and non-placeholder/);
+	});
+
 	it("fails closed when alert policy omits severity, SLA, escalation, suppression, retry, or test proof", () => {
 		const report = evaluateFoundation({
 			evidence: {

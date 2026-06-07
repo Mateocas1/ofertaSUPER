@@ -806,7 +806,8 @@ function hasExplicitOwner(value: string | undefined) {
 	const normalized = value?.toLowerCase().trim() ?? "";
 	return (
 		normalized.length > 0 &&
-		!["owner", "operator", "direct-refresh operator", "placeholder"].includes(normalized)
+		!["owner", "operator", "direct-refresh operator"].includes(normalized) &&
+		!normalized.includes("placeholder")
 	);
 }
 
