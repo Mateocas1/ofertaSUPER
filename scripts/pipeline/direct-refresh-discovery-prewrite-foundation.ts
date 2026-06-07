@@ -823,7 +823,7 @@ function hasTransactionTimeoutPosture(value: string | undefined) {
 }
 
 function hasPriceHistoryBaseline(value: string | undefined) {
-	return hasAllTerms(value, ["pricehistory", "insert", "read"]);
+	return hasAllTerms(value, ["pricehistory", "insert", "read", "baseline"]);
 }
 
 function hasPublicApiBaseline(value: string | undefined) {

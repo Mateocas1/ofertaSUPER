@@ -1433,6 +1433,31 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /cache TTL baseline must include TTL/);
 	});
 
+	it("fails closed when PriceHistory insert/read evidence omits baseline", () => {
+		const evidenceWithGenericPriceHistoryBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				priceHistoryBaseline: "PriceHistory insert/read",
+			},
+		};
+		evidenceWithGenericPriceHistoryBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericPriceHistoryBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericPriceHistoryBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/PriceHistory baseline must include insert and read/,
+		);
+	});
+
 	it("fails closed when cache TTL baseline evidence is generic", () => {
 		const evidenceWithGenericCacheTtlBaseline = {
 			...completeEvidence,
