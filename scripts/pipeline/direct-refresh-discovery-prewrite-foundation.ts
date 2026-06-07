@@ -316,7 +316,7 @@ function buildChecks(
 			[control.idempotencyPolicy, "idempotency policy is required"],
 		]),
 		check("artifact-lineage", [
-			[lineage.issue > 0, "issue lineage is required"],
+			[hasPositiveInteger(lineage.issue), "issue lineage must be a positive integer"],
 			[hasWriterSupportedSource(lineage.source), "source lineage must be writer-supported"],
 			[hasPositiveInteger(lineage.count), "count lineage must be a positive integer"],
 			[hasSafeAttemptId(lineage.attemptId), "attempt lineage must be a safe attempt ID"],

@@ -433,7 +433,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
-		assert.match(reasons, /issue lineage is required/);
+		assert.match(reasons, /issue lineage must be a positive integer/);
 		assert.match(reasons, /source lineage must be writer-supported/);
 		assert.match(reasons, /count lineage must be a positive integer/);
 		assert.match(reasons, /attempt lineage must be a safe attempt ID/);
@@ -497,6 +497,34 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
 			/count lineage must be a positive integer/,
+		);
+	});
+
+	it("fails closed when issue lineage is fractional", () => {
+		const evidenceWithFractionalIssue = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				issue: 185.5,
+				artifactPath:
+					"audit/direct-refresh-discovery-prewrite-foundation/issue-185.5/vea/count1/foundation-attempt-001/foundation-evidence.json",
+			},
+		};
+		evidenceWithFractionalIssue.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithFractionalIssue,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithFractionalIssue,
+			evidencePath: evidenceWithFractionalIssue.artifactLineage.artifactPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/issue lineage must be a positive integer/,
 		);
 	});
 
