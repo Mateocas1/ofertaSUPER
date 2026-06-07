@@ -464,7 +464,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 		assert.match(
 			reasons,
-			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values/,
 		);
 	});
 
@@ -1608,7 +1608,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			reasons,
-			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values/,
 		);
 		assert.match(
 			reasons,
@@ -1644,7 +1644,61 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values/,
+		);
+	});
+
+	it("fails closed when Prisma pool posture uses non-positive pool values", () => {
+		const evidenceWithNonPositivePrismaPoolPosture = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				prismaPoolPosture:
+					"pgbouncer=true; connection_limit=0; pool_timeout=0",
+			},
+		};
+		evidenceWithNonPositivePrismaPoolPosture.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithNonPositivePrismaPoolPosture,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithNonPositivePrismaPoolPosture,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values/,
+		);
+	});
+
+	it("fails closed when Prisma pool posture disables pgbouncer", () => {
+		const evidenceWithDisabledPgbouncer = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				prismaPoolPosture:
+					"pgbouncer=false; connection_limit=3; pool_timeout=10",
+			},
+		};
+		evidenceWithDisabledPgbouncer.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithDisabledPgbouncer,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithDisabledPgbouncer,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values/,
 		);
 	});
 

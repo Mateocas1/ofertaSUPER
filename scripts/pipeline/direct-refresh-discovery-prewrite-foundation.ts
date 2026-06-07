@@ -466,7 +466,7 @@ function buildChecks(
 			[alert.rollbackRequired, "rollback-required alert is required"],
 		]),
 		check("performance-guard", [
-			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values"],
+			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values"],
 			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with positive temporal values"],
 			[hasPriceHistoryBaseline(perf.priceHistoryBaseline), "PriceHistory baseline requires insert/read and an explicit metric"],
 			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline requires search/products and an explicit performance metric"],
@@ -859,10 +859,20 @@ function hasExplicitOwner(value: string | undefined) {
 function hasPrismaPoolPosture(value: string | undefined) {
 	const normalized = value?.toLowerCase() ?? "";
 	return (
-		hasAllTerms(normalized, ["pgbouncer", "connection_limit", "pool_timeout"]) &&
-		/\bconnection_limit\s*=\s*\d+\b/.test(normalized) &&
-		/\bpool_timeout\s*=\s*\d+\b/.test(normalized)
+		hasEnabledPgbouncer(normalized) &&
+		hasPositivePoolPostureValue(normalized, "connection_limit") &&
+		hasPositivePoolPostureValue(normalized, "pool_timeout")
 	);
+}
+
+function hasEnabledPgbouncer(value: string) {
+	return /\bpgbouncer\s*=\s*(?:true|on|enabled|1)\b/.test(value);
+}
+
+function hasPositivePoolPostureValue(value: string, key: string) {
+	const postureValue = value.match(new RegExp(`\\b${key}\\s*=\\s*(\\d+)\\b`))?.[1];
+	if (!postureValue) return false;
+	return Number.parseInt(postureValue, 10) > 0;
 }
 
 function hasTransactionTimeoutPosture(value: string | undefined) {
