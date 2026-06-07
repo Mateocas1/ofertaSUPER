@@ -400,7 +400,7 @@ function buildChecks(
 			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
 		]),
 		check("vtex-budgets", [
-			[budget.requestCap > 0, "VTEX request cap must be positive"],
+			[hasPositiveInteger(budget.requestCap), "VTEX request cap must be a positive integer"],
 			[budget.requestCap <= MAX_VTEX_FOUNDATION_REQUEST_CAP, "VTEX request cap must be <= 20"],
 			[
 				hasPositiveInteger(lineage.count) && lineage.count <= budget.requestCap,
@@ -408,7 +408,7 @@ function buildChecks(
 			],
 			[budget.concurrency > 0, "VTEX concurrency must be positive"],
 			[budget.concurrency === 1, "VTEX concurrency must be serial"],
-			[budget.timeoutMs > 0, "VTEX timeout must be positive"],
+			[hasPositiveInteger(budget.timeoutMs), "VTEX timeout must be a positive integer in milliseconds"],
 			[budget.timeoutMs <= MAX_VTEX_FOUNDATION_TIMEOUT_MS, "VTEX timeout must be <= 10000ms"],
 			[hasVtexBackoffPolicy(budget.backoffPolicy), "VTEX backoff policy must include timeout, 403, 429, HTML, and captcha"],
 			[hasVtexStopRule(budget.stopRule), "VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry"],

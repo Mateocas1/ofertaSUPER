@@ -319,7 +319,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /source lock is required/);
 		assert.match(reasons, /artifact path lineage must be foundation audit json/);
 		assert.match(reasons, /rollback drill must be executed before discovery apply/);
-		assert.match(reasons, /VTEX request cap must be positive/);
+		assert.match(reasons, /VTEX request cap must be a positive integer/);
 		assert.match(reasons, /compliance allowed-use review is required/);
 		assert.match(
 			reasons,
@@ -937,7 +937,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
-		assert.match(reasons, /VTEX request cap must be positive/);
+		assert.match(reasons, /VTEX request cap must be a positive integer/);
 		assert.match(reasons, /compliance allowed-use review is required/);
 		assert.match(reasons, /public API baseline must include search and products/);
 	});
@@ -986,6 +986,31 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /VTEX request cap must be <= 20/);
 		assert.match(reasons, /VTEX concurrency must be serial/);
 		assert.match(reasons, /VTEX timeout must be <= 10000ms/);
+	});
+
+	it("fails closed when VTEX request cap or timeout are fractional", () => {
+		const evidenceWithFractionalBudgets = {
+			...completeEvidence,
+			vtexBudgets: {
+				...completeEvidence.vtexBudgets,
+				requestCap: 1.5,
+				timeoutMs: 999.5,
+			},
+		};
+		evidenceWithFractionalBudgets.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithFractionalBudgets,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithFractionalBudgets,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /VTEX request cap must be a positive integer/);
+		assert.match(reasons, /VTEX timeout must be a positive integer in milliseconds/);
 	});
 
 	it("fails closed when count lineage exceeds the VTEX request cap", () => {
