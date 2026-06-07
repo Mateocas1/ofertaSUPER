@@ -1227,7 +1227,10 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /alert ack SLA must include an explicit time bound/);
 		assert.match(reasons, /alert resolution SLA must include an explicit time bound/);
 		assert.match(reasons, /alert escalation path must include a concrete route/);
-		assert.match(reasons, /alert suppression policy must describe suppression\/noise handling/);
+		assert.match(
+			reasons,
+			/alert suppression\/noise policy must protect rollback-required or write\/postwrite failures/,
+		);
 		assert.match(reasons, /alert retry policy must be explicit/);
 		assert.match(reasons, /test-alert proof is required/);
 	});
@@ -1282,6 +1285,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /alert ack SLA must include an explicit time bound/);
 		assert.match(reasons, /alert resolution SLA must include an explicit time bound/);
+	});
+
+	it("fails closed when alert suppression policy is generic noise handling", () => {
+		const evidenceWithGenericSuppressionPolicy = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				suppressionPolicy: "suppression noise",
+			},
+		};
+		evidenceWithGenericSuppressionPolicy.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericSuppressionPolicy,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericSuppressionPolicy,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/suppression\/noise policy must protect rollback-required or write\/postwrite failures/,
+		);
 	});
 
 	it("fails closed when test-alert proof is not tied to an issue evidence comment", () => {

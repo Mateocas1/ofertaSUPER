@@ -458,7 +458,7 @@ function buildChecks(
 			[hasAlertAckSla(alert.ackSla), "alert ack SLA must include an explicit time bound"],
 			[hasAlertResolutionSla(alert.resolutionSla), "alert resolution SLA must include an explicit time bound"],
 			[hasAlertEscalationPath(alert.escalationPath), "alert escalation path must include a concrete route"],
-			[hasAlertSuppressionPolicy(alert.suppressionPolicy), "alert suppression policy must describe suppression/noise handling"],
+			[hasAlertSuppressionPolicy(alert.suppressionPolicy), "alert suppression/noise policy must protect rollback-required or write/postwrite failures"],
 			[hasAlertRetryPolicy(alert.retryPolicy), "alert retry policy must be explicit"],
 			[hasTestAlertProof(alert.testAlertProof), "test-alert proof is required"],
 			[alert.writeFailure, "write failure alert is required"],
@@ -819,7 +819,17 @@ function hasConcreteEscalationDestination(value: string) {
 }
 
 function hasAlertSuppressionPolicy(value: string | undefined) {
-	return hasAllTerms(value, ["suppression", "noise"]);
+	return (
+		hasAllTerms(value, ["suppression", "noise"]) &&
+		hasAnyTerm(value, [
+			"no suppression",
+			"never suppress",
+			"not suppress",
+			"rollback-required",
+			"write",
+			"postwrite",
+		])
+	);
 }
 
 function hasAlertRetryPolicy(value: string | undefined) {
