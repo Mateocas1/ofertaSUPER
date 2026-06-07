@@ -379,6 +379,10 @@ function buildChecks(
 				"rollback IDs are required",
 			],
 			[hasExactRollbackIds(rollback.rollbackIds), "rollback IDs must be exact table:id entries"],
+			[
+				hasMinimumRollbackTableCoverage(rollback.rollbackIds),
+				"rollback IDs must include supermarket_products and price_history entries",
+			],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
 			[hasRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.postRollbackVerificationSha256), "post-rollback verification sha256 is required"],
@@ -582,6 +586,14 @@ function hasExactRollbackIds(values: string[] | undefined) {
 		values.every((value) =>
 			/^(products|supermarket_products|price_history|staging_products|direct_refresh_run_ledger):[1-9]\d*$/.test(value),
 		)
+	);
+}
+
+function hasMinimumRollbackTableCoverage(values: string[] | undefined) {
+	return (
+		Array.isArray(values) &&
+		values.some((value) => value.startsWith("supermarket_products:")) &&
+		values.some((value) => value.startsWith("price_history:"))
 	);
 }
 

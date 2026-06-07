@@ -777,6 +777,31 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /rollback IDs must be exact table:id entries/);
 	});
 
+	it("fails closed when rollback IDs omit source row or price history coverage", () => {
+		const evidenceWithPartialRollbackIds = {
+			...completeEvidence,
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				rollbackIds: ["price_history:1001"],
+			},
+		};
+		evidenceWithPartialRollbackIds.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithPartialRollbackIds,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithPartialRollbackIds,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/rollback IDs must include supermarket_products and price_history entries/,
+		);
+	});
+
 	it("fails closed when alert channel or owner are placeholders", () => {
 		const report = evaluateFoundation({
 			evidence: {
