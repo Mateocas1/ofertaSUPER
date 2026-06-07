@@ -97,7 +97,8 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		prismaPoolPosture: "pgbouncer=true; connection_limit=3; pool_timeout=10",
 		transactionTimeoutPosture:
 			"statement_timeout=2min; idle_in_transaction_session_timeout=0",
-		priceHistoryBaseline: "PriceHistory insert/read baseline captured",
+		priceHistoryBaseline:
+			"PriceHistory insert/read baseline captured; insert_p95=50ms; read_p95=30ms",
 		publicApiBaseline: "public API search/products baseline captured; p95=120ms",
 		cacheTtlBaseline: "cache TTL baseline captured; ttl=300s",
 	},
@@ -1613,7 +1614,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			reasons,
 			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout/,
 		);
-		assert.match(reasons, /PriceHistory baseline must include insert and read/);
+		assert.match(reasons, /PriceHistory baseline requires insert\/read and an explicit metric/);
 		assert.match(reasons, /public API baseline requires search\/products and an explicit performance metric/);
 		assert.match(
 			reasons,
@@ -1695,7 +1696,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/PriceHistory baseline must include insert and read/,
+			/PriceHistory baseline requires insert\/read and an explicit metric/,
+		);
+	});
+
+	it("fails closed when PriceHistory insert/read baseline evidence omits explicit metrics", () => {
+		const evidenceWithNominalPriceHistoryBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				priceHistoryBaseline: "PriceHistory insert/read baseline captured",
+			},
+		};
+		evidenceWithNominalPriceHistoryBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithNominalPriceHistoryBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithNominalPriceHistoryBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/PriceHistory baseline requires insert\/read and an explicit metric/,
 		);
 	});
 
