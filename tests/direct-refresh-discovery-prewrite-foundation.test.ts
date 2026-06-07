@@ -1201,6 +1201,31 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /test-alert proof is required/);
 	});
 
+	it("fails closed when test-alert proof is not tied to an issue evidence comment", () => {
+		const evidenceWithGenericTestAlertProof = {
+			...completeEvidence,
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				testAlertProof: "test-alert proof captured",
+			},
+		};
+		evidenceWithGenericTestAlertProof.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericTestAlertProof,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericTestAlertProof,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/test-alert proof is required/,
+		);
+	});
+
 	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {
 		const report = evaluateFoundation({
 			evidence: {

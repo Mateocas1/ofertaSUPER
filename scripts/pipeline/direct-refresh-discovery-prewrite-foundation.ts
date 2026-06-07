@@ -799,7 +799,7 @@ function hasAlertRetryPolicy(value: string | undefined) {
 }
 
 function hasTestAlertProof(value: string | undefined) {
-	return hasAllTerms(value, ["test-alert", "proof"]);
+	return hasAllTerms(value, ["test-alert", "proof", "issue", "comment"]);
 }
 
 function hasExplicitOwner(value: string | undefined) {
