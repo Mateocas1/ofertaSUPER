@@ -466,7 +466,7 @@ function buildChecks(
 			[alert.rollbackRequired, "rollback-required alert is required"],
 		]),
 		check("performance-guard", [
-			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, and pool_timeout"],
+			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values"],
 			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout"],
 			[hasPriceHistoryBaseline(perf.priceHistoryBaseline), "PriceHistory baseline must include insert and read"],
 			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline must include search and products"],
@@ -812,7 +812,12 @@ function hasExplicitOwner(value: string | undefined) {
 }
 
 function hasPrismaPoolPosture(value: string | undefined) {
-	return hasAllTerms(value, ["pgbouncer", "connection_limit", "pool_timeout"]);
+	const normalized = value?.toLowerCase() ?? "";
+	return (
+		hasAllTerms(normalized, ["pgbouncer", "connection_limit", "pool_timeout"]) &&
+		/\bconnection_limit\s*=\s*\d+\b/.test(normalized) &&
+		/\bpool_timeout\s*=\s*\d+\b/.test(normalized)
+	);
 }
 
 function hasTransactionTimeoutPosture(value: string | undefined) {

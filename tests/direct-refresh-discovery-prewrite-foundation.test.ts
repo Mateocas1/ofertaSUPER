@@ -463,7 +463,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 		assert.match(
 			reasons,
-			/Prisma pool posture must include pgbouncer, connection_limit, and pool_timeout/,
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
 		);
 	});
 
@@ -1422,7 +1422,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			reasons,
-			/Prisma pool posture must include pgbouncer, connection_limit, and pool_timeout/,
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
 		);
 		assert.match(
 			reasons,
@@ -1431,6 +1431,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /PriceHistory baseline must include insert and read/);
 		assert.match(reasons, /public API baseline must include search and products/);
 		assert.match(reasons, /cache TTL baseline must include TTL/);
+	});
+
+	it("fails closed when Prisma pool posture lists required terms without values", () => {
+		const evidenceWithGenericPrismaPoolPosture = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				prismaPoolPosture: "pgbouncer connection_limit pool_timeout",
+			},
+		};
+		evidenceWithGenericPrismaPoolPosture.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericPrismaPoolPosture,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericPrismaPoolPosture,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
+		);
 	});
 
 	it("fails closed when PriceHistory insert/read evidence omits baseline", () => {
