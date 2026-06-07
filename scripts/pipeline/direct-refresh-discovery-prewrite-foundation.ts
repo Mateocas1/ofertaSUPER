@@ -439,7 +439,7 @@ function buildChecks(
 			[budget.concurrency === 1, "VTEX concurrency must be serial"],
 			[hasPositiveInteger(budget.timeoutMs), "VTEX timeout must be a positive integer in milliseconds"],
 			[budget.timeoutMs <= MAX_VTEX_FOUNDATION_TIMEOUT_MS, "VTEX timeout must be <= 10000ms"],
-			[hasVtexBackoffPolicy(budget.backoffPolicy), "VTEX backoff policy must include timeout, 403, 429, HTML, and captcha"],
+			[hasVtexBackoffPolicy(budget.backoffPolicy), "VTEX backoff policy must include backoff plus timeout, 403, 429, HTML, and captcha"],
 			[hasVtexStopRule(budget.stopRule), "VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry"],
 			[hasVtexHeaderPolicy(budget.headerPolicy), "VTEX header policy must be documented, non-evasive, and include user-agent or headers"],
 		]),
@@ -674,7 +674,7 @@ function hasMatchingVtexProbeSource(
 }
 
 function hasVtexBackoffPolicy(value: string | undefined) {
-	return hasAllTerms(value, ["timeout", "403", "429", "html", "captcha"]);
+	return hasAllTerms(value, ["backoff", "timeout", "403", "429", "html", "captcha"]);
 }
 
 function hasExactRollbackIds(values: string[] | undefined) {
