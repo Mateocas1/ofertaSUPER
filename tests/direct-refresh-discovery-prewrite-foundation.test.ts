@@ -1238,6 +1238,29 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /alert owner must be explicit and non-placeholder/);
 	});
 
+	it("fails closed when alert channel has issue but no explicit comment", () => {
+		const evidenceWithIssueOnlyChannel = {
+			...completeEvidence,
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				channel: "Issue #109 + #direct-refresh-alerts",
+			},
+		};
+		evidenceWithIssueOnlyChannel.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithIssueOnlyChannel,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithIssueOnlyChannel,
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(report.summary.failClosedReasons.join("\n"), /alert channel must include issue evidence comment and concrete alert destination/);
+	});
+
 	it("fails closed when owners contain placeholder text", () => {
 		const evidenceWithEmbeddedPlaceholderOwners = {
 			...completeEvidence,

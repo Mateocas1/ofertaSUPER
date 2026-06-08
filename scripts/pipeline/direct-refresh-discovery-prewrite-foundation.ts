@@ -816,7 +816,7 @@ function hasComplianceForSource(
 function hasActionableAlertChannel(value: string | undefined) {
 	const normalized = value?.toLowerCase() ?? "";
 	return (
-		hasAllTerms(normalized, ["issue"]) &&
+		hasAllTerms(normalized, ["issue", "comment"]) &&
 		hasAnyTerm(normalized, ["#", "slack", "email", "pagerduty"]) &&
 		!normalized.includes("placeholder")
 	);
