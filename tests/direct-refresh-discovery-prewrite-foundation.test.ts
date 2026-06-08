@@ -81,7 +81,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		reviewedSources: ["vea"],
 	},
 	alertChannel: {
-		channel: "Issue comment + #direct-refresh-alerts",
+		channel: "Issue #109 comment + #direct-refresh-alerts",
 		owner: "direct-refresh-oncall",
 		severity: "critical write/postwrite/rollback-required",
 		ackSla: "ack SLA <= 30m",
@@ -1259,6 +1259,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 
 		assert.equal(report.status, "FAIL");
 		assert.match(report.summary.failClosedReasons.join("\n"), /alert channel must include issue evidence comment and concrete alert destination/);
+	});
+
+	it("fails closed when alert channel has issue/comment text but no concrete reference", () => {
+		const evidenceWithWeakChannel = {
+			...completeEvidence,
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				channel: "Issue comment + #direct-refresh-alerts",
+			},
+		};
+		evidenceWithWeakChannel.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWeakChannel,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithWeakChannel,
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/alert channel must include issue evidence comment and concrete alert destination/,
+		);
 	});
 
 	it("fails closed when owners contain placeholder text", () => {

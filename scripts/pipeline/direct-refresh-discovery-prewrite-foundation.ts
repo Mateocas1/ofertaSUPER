@@ -817,8 +817,21 @@ function hasActionableAlertChannel(value: string | undefined) {
 	const normalized = value?.toLowerCase() ?? "";
 	return (
 		hasAllTerms(normalized, ["issue", "comment"]) &&
+		hasConcreteAlertIssueOrCommentReference(normalized) &&
 		hasAnyTerm(normalized, ["#", "slack", "email", "pagerduty"]) &&
 		!normalized.includes("placeholder")
+	);
+}
+
+function hasConcreteAlertIssueOrCommentReference(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return (
+		/\bissue\s*#\s*[1-9]\d*\b/.test(normalized) ||
+		/https?:\/\/\S+\/issues\/[1-9]\d*\b/.test(normalized) ||
+		/\bcomment[-_\s]?(?:id)?\s*[:#=]?\s*[1-9]\d*\b/.test(normalized) ||
+		/https?:\/\/\S+\/(?:issues\/[1-9]\d*#issuecomment-[1-9]\d*|pull\/[1-9]\d*#discussion_r[1-9]\d*)\b/.test(
+			normalized,
+		)
 	);
 }
 
