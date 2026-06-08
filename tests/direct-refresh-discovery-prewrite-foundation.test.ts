@@ -89,7 +89,8 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		escalationPath: "escalate to direct-refresh-oncall then data-platform-oncall",
 		suppressionPolicy: "suppression/noise policy: no suppression for rollback-required",
 		retryPolicy: "retry policy: no automatic retry after rollback-required",
-		testAlertProof: "test-alert proof captured in issue evidence comment",
+		testAlertProof:
+			"test-alert proof captured in issue #109 evidence comment at 2026-06-06T12:10:00Z",
 		writeFailure: true,
 		postwriteFailure: true,
 		rollbackRequired: true,
@@ -1298,7 +1299,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			/alert suppression\/noise policy must protect rollback-required or write\/postwrite failures/,
 		);
 		assert.match(reasons, /alert retry policy must prohibit automatic retry or bind to rollback-required/);
-		assert.match(reasons, /test-alert proof is required/);
+		assert.match(reasons, /test-alert proof requires issue\/comment plus concrete reference/);
 	});
 
 	it("fails closed when alert escalation path is generic instead of a concrete route", () => {
@@ -1426,7 +1427,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/test-alert proof is required/,
+			/test-alert proof requires issue\/comment plus concrete reference/,
+		);
+	});
+
+	it("fails closed when test-alert proof is nominal but has no concrete evidence reference", () => {
+		const evidenceWithNominalTestAlertProof = {
+			...completeEvidence,
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				testAlertProof: "test-alert proof captured in issue evidence comment",
+			},
+		};
+		evidenceWithNominalTestAlertProof.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithNominalTestAlertProof,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithNominalTestAlertProof,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/test-alert proof requires issue\/comment plus concrete reference/,
 		);
 	});
 

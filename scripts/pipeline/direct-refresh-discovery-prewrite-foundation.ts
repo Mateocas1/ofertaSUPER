@@ -463,7 +463,10 @@ function buildChecks(
 			[hasAlertEscalationPath(alert.escalationPath), "alert escalation path must include a concrete route"],
 			[hasAlertSuppressionPolicy(alert.suppressionPolicy), "alert suppression/noise policy must protect rollback-required or write/postwrite failures"],
 			[hasAlertRetryPolicy(alert.retryPolicy), "alert retry policy must prohibit automatic retry or bind to rollback-required"],
-			[hasTestAlertProof(alert.testAlertProof), "test-alert proof is required"],
+			[
+				hasTestAlertProof(alert.testAlertProof),
+				"test-alert proof requires issue/comment plus concrete reference",
+			],
 			[alert.writeFailure, "write failure alert is required"],
 			[alert.postwriteFailure, "postwrite failure alert is required"],
 			[alert.rollbackRequired, "rollback-required alert is required"],
@@ -889,7 +892,32 @@ function hasAlertRetryPolicy(value: string | undefined) {
 }
 
 function hasTestAlertProof(value: string | undefined) {
-	return hasAllTerms(value, ["test-alert", "proof", "issue", "comment"]);
+	return (
+		hasAllTerms(value, ["test-alert", "proof", "issue", "comment"]) &&
+		hasConcreteTestAlertProofReference(value)
+	);
+}
+
+function hasConcreteTestAlertProofReference(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return (
+		/\bissue\s*#\s*[1-9]\d*\b/.test(normalized) ||
+		/https?:\/\/\S+\/issues\/[1-9]\d*\b/.test(normalized) ||
+		/\bcomment[-_\s]?(?:id)?\s*[:#=]?\s*[1-9]\d*\b/.test(normalized) ||
+		/https?:\/\/\S+\/(?:issues\/[1-9]\d*#issuecomment-[1-9]\d*|pull\/[1-9]\d*#discussion_r[1-9]\d*)\b/.test(
+			normalized,
+		) ||
+		/\b(?:artifact|evidence)\s*[:=]?\s*[a-z0-9][a-z0-9._/-]*\.(?:json|md|txt|log)\b/.test(
+			normalized,
+		) ||
+		/\b\d{4}-\d{2}-\d{2}t\d{2}:\d{2}:\d{2}(?:\.\d{3})?z\b/.test(
+			normalized,
+		) ||
+		/\b(?:evidence[-_\s]?id|evidence[-_\s]?hash)\s*[:#=]\s*[a-z0-9][a-z0-9._:-]{5,}\b/.test(
+			normalized,
+		) ||
+		hasSha256Lineage(value)
+	);
 }
 
 function hasExplicitOwner(value: string | undefined) {
