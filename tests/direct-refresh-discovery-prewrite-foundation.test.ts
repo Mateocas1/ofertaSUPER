@@ -200,4 +200,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(parsed.schemaConstraints.migrationStatus, "PASS");
 		assert.equal(parsed.rollbackDrill.mode, "controlled-disposable-row");
 	});
+
+	it("keeps a versioned Phase 1 policy artifact for static pre-write gates", async () => {
+		const policy = parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
+			await readFile(
+				"docs/direct-refresh-discovery-prewrite-foundation-policy.json",
+				"utf8",
+			),
+		);
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: policy,
+			evidencePath: "docs/direct-refresh-discovery-prewrite-foundation-policy.json",
+		});
+		const reasons = report.summary.failClosedReasons.join("\n");
+
+		assert.equal(policy.controlPlane.ttlPolicy, true);
+		assert.equal(policy.controlPlane.idempotencyPolicy, true);
+		assert.match(policy.artifactLineage.sourceConfigSnapshot, /^sha256:[a-f0-9]{64}; files:/);
+		assert.equal(policy.vtexBudgets.concurrency, 1);
+		assert.equal(policy.alertChannel.rollbackRequired, true);
+		assert.doesNotMatch(reasons, /TTL policy is required/);
+		assert.doesNotMatch(reasons, /idempotency policy is required/);
+		assert.doesNotMatch(reasons, /source config snapshot is required/);
+		assert.doesNotMatch(reasons, /VTEX request cap must be positive/);
+		assert.doesNotMatch(reasons, /alert channel is required/);
+		assert.match(reasons, /rollback drill must be executed/);
+		assert.match(reasons, /migration status must be PASS/);
+		assert.match(reasons, /public API baseline is required/);
+	});
 });
