@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
+import { runDirectRefreshDiscoveryRollbackDrillCli } from "../scripts/audit-direct-refresh-discovery-rollback-drill";
 import {
 	assertNoDirectRefreshDiscoveryRollbackDrillForbiddenFlags,
 	buildDirectRefreshDiscoveryRollbackDrill,
+	parseDirectRefreshDiscoveryRollbackDrillCliOptions,
 	expectedDirectRefreshDiscoveryRollbackDrillArtifactFilename,
 	validateDirectRefreshDiscoveryRollbackDrillArtifactPath,
 	type DirectRefreshDiscoveryRollbackDrillRepository,
@@ -235,6 +240,10 @@ describe("direct-refresh discovery rollback drill core", () => {
 
 	it("validates role-specific artifact filenames", () => {
 		assert.equal(
+			expectedDirectRefreshDiscoveryRollbackDrillArtifactFilename("rollback-drill"),
+			"rollback-drill.json",
+		);
+		assert.equal(
 			expectedDirectRefreshDiscoveryRollbackDrillArtifactFilename("preimage"),
 			"preimage.json",
 		);
@@ -270,13 +279,17 @@ describe("direct-refresh discovery rollback drill core", () => {
 	it("rejects forbidden flags", () => {
 		for (const flag of [
 			"--apply",
+			"--write",
+			"--confirm",
+			"--execute",
+			"--rollback",
+			"--delete",
 			"--all-source",
 			"--all-sources",
 			"--scheduler",
 			"--purge-cache",
 			"--deploy",
 			"--migrations",
-			"--write",
 		]) {
 			assert.throws(
 				() =>
@@ -288,5 +301,151 @@ describe("direct-refresh discovery rollback drill core", () => {
 				new RegExp(`rejects ${flag}`),
 			);
 		}
+	});
+
+	it("parses mock/no-db CLI options and requires explicit inputs", () => {
+		assert.deepEqual(
+			parseDirectRefreshDiscoveryRollbackDrillCliOptions([
+				"node",
+				"script",
+				"--mock",
+				"--postwrite=postwrite.json",
+				"--output-dir=out",
+			]),
+			{ mode: "mock", postwrite: "postwrite.json", outputDir: "out" },
+		);
+		assert.deepEqual(
+			parseDirectRefreshDiscoveryRollbackDrillCliOptions([
+				"node",
+				"script",
+				"--no-db",
+				"--postwrite=postwrite.json",
+				"--output-dir=out",
+			]).mode,
+			"no-db",
+		);
+
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoveryRollbackDrillCliOptions([
+					"node",
+					"script",
+					"--postwrite=postwrite.json",
+					"--output-dir=out",
+				]),
+			/requires --mock or --no-db/,
+		);
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoveryRollbackDrillCliOptions([
+					"node",
+					"script",
+					"--mock",
+					"--output-dir=out",
+				]),
+			/requires --postwrite=\.\.\./,
+		);
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoveryRollbackDrillCliOptions([
+					"node",
+					"script",
+					"--mock",
+					"--postwrite=postwrite.json",
+				]),
+			/requires --output-dir=\.\.\./,
+		);
+	});
+
+	it("rejects unknown and bare value flags", () => {
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoveryRollbackDrillCliOptions([
+					"node",
+					"script",
+					"--mock",
+					"--postwrite=postwrite.json",
+					"--output-dir=out",
+					"--surprise",
+				]),
+			/unknown direct-refresh discovery rollback drill flag --surprise/,
+		);
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoveryRollbackDrillCliOptions([
+					"node",
+					"script",
+					"--mock",
+					"--postwrite",
+					"--output-dir=out",
+				]),
+			/requires --postwrite=\.\.\./,
+		);
+	});
+
+	it("wrapper writes the exact three mock/no-db artifact filenames", async () => {
+		const tempDir = await mkdtemp(join(tmpdir(), "rollback-drill-"));
+		try {
+			const postwritePath = join(tempDir, "postwrite.json");
+			const outputDir = join(tempDir, "out");
+			await writeFile(postwritePath, JSON.stringify(postwrite), "utf8");
+
+			const report = await runDirectRefreshDiscoveryRollbackDrillCli([
+				"node",
+				"script",
+				"--mock",
+				`--postwrite=${postwritePath}`,
+				`--output-dir=${outputDir}`,
+			]);
+			const filenames = await readdir(outputDir);
+			assert.deepEqual(filenames.sort(), [
+				"post-rollback-verification.json",
+				"preimage.json",
+				"rollback-drill.json",
+			]);
+
+			const rollbackDrill = JSON.parse(
+				await readFile(join(outputDir, "rollback-drill.json"), "utf8"),
+			);
+			const preimage = JSON.parse(
+				await readFile(join(outputDir, "preimage.json"), "utf8"),
+			);
+			const verification = JSON.parse(
+				await readFile(join(outputDir, "post-rollback-verification.json"), "utf8"),
+			);
+
+			assert.equal(report.status, "PASS");
+			assert.match(rollbackDrill.generatedAt, /^\d{4}-\d{2}-\d{2}T.*Z$/);
+			assert.match(preimage.generatedAt, /^\d{4}-\d{2}-\d{2}T.*Z$/);
+			assert.match(verification.generatedAt, /^\d{4}-\d{2}-\d{2}T.*Z$/);
+			assert.deepEqual(rollbackDrill.deletionResults, {
+				priceHistoryDeleted: 1,
+				supermarketProductsDeleted: 1,
+				productsDeleted: 0,
+			});
+			assert.deepEqual(preimage.rows.priceHistory, [{ id: 1001 }]);
+			assert.deepEqual(preimage.rows.supermarketProducts, [{ id: 901 }]);
+			assert.deepEqual(verification.remainingRows.priceHistory, []);
+			assert.deepEqual(verification.remainingRows.supermarketProducts, []);
+		} finally {
+			await rm(tempDir, { force: true, recursive: true });
+		}
+	});
+
+	it("keeps the wrapper/source static no-db and exposes package script", async () => {
+		const wrapperSource = await readFile(
+			"scripts/audit-direct-refresh-discovery-rollback-drill.ts",
+			"utf8",
+		);
+		assert.doesNotMatch(
+			wrapperSource,
+			/import .*(@prisma|prisma|src\/lib\/db|load-env|vtex|redis|cache)/i,
+		);
+
+		const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+		assert.equal(
+			packageJson.scripts["audit:direct-refresh-discovery-rollback-drill"],
+			"tsx scripts/audit-direct-refresh-discovery-rollback-drill.ts",
+		);
 	});
 });

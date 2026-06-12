@@ -1,7 +1,9 @@
+import { getOptionalSingleFlag } from "./audit-utils";
 import type { DirectRefreshDiscoveryCreatePostwriteReport } from "./direct-refresh-discovery-postwrite-audit";
 
 export type DirectRefreshDiscoveryRollbackDrillStatus = "PASS" | "FAIL";
 export type DirectRefreshDiscoveryRollbackDrillArtifactRole =
+	| "rollback-drill"
 	| "preimage"
 	| "post-rollback-verification";
 
@@ -21,23 +23,34 @@ export type BuildDirectRefreshDiscoveryRollbackDrillOptions = {
 	cacheHandling: string;
 	now?: Date;
 };
+export type DirectRefreshDiscoveryRollbackDrillCliOptions = {
+	mode: "mock" | "no-db";
+	postwrite: string;
+	outputDir: string;
+};
 
 const WRITE_BOUNDARY =
 	"controlled disposable-row direct-refresh discovery rollback drill; exact rollback plan only; injected repository only; no Prisma/client/DB adapter/network/cache/PITR automation" as const;
 const FORBIDDEN_FLAGS = [
 	"--apply",
+	"--write",
+	"--confirm",
+	"--execute",
+	"--rollback",
+	"--delete",
 	"--all-source",
 	"--all-sources",
 	"--scheduler",
 	"--purge-cache",
 	"--deploy",
 	"--migrations",
-	"--write",
 ];
 const EXPECTED_ARTIFACT_FILENAMES = {
+	"rollback-drill": "rollback-drill.json",
 	preimage: "preimage.json",
 	"post-rollback-verification": "post-rollback-verification.json",
 } as const;
+const ALLOWED_FLAGS = new Set(["--mock", "--no-db", "--postwrite", "--output-dir"]);
 const BROAD_ROLLBACK_PLAN_KEYS = new Set([
 	"deleteAll",
 	"deleteAllSources",
@@ -64,6 +77,115 @@ export function assertNoDirectRefreshDiscoveryRollbackDrillForbiddenFlags(
 			`direct-refresh discovery rollback drill rejects ${foundForbidden}`,
 		);
 	}
+}
+
+export function parseDirectRefreshDiscoveryRollbackDrillCliOptions(
+	argv = process.argv,
+): DirectRefreshDiscoveryRollbackDrillCliOptions {
+	assertNoDirectRefreshDiscoveryRollbackDrillForbiddenFlags(argv);
+
+	const unknownFlag = argv
+		.slice(2)
+		.find(
+			(entry) =>
+				entry.startsWith("--") && !ALLOWED_FLAGS.has(entry.split("=", 1)[0]),
+		);
+	if (unknownFlag) {
+		throw new Error(
+			`unknown direct-refresh discovery rollback drill flag ${unknownFlag}`,
+		);
+	}
+
+	const bareValueFlag = argv
+		.slice(2)
+		.find((entry) => entry === "--postwrite" || entry === "--output-dir");
+	if (bareValueFlag) {
+		throw new Error(
+			`direct-refresh discovery rollback drill requires ${bareValueFlag}=...`,
+		);
+	}
+
+	const mock = argv.slice(2).includes("--mock");
+	const noDb = argv.slice(2).includes("--no-db");
+	if (!mock && !noDb) {
+		throw new Error(
+			"direct-refresh discovery rollback drill requires --mock or --no-db",
+		);
+	}
+	if (mock && noDb) {
+		throw new Error(
+			"direct-refresh discovery rollback drill accepts only one of --mock or --no-db",
+		);
+	}
+
+	const postwrite = getOptionalSingleFlag(argv, "--postwrite");
+	if (!postwrite?.trim()) {
+		throw new Error(
+			"direct-refresh discovery rollback drill requires --postwrite=...",
+		);
+	}
+	const outputDir = getOptionalSingleFlag(argv, "--output-dir");
+	if (!outputDir?.trim()) {
+		throw new Error(
+			"direct-refresh discovery rollback drill requires --output-dir=...",
+		);
+	}
+
+	return {
+		mode: mock ? "mock" : "no-db",
+		postwrite: postwrite.trim(),
+		outputDir: outputDir.trim(),
+	};
+}
+
+export function parseDirectRefreshDiscoveryRollbackDrillPostwriteJson(
+	raw: string,
+): DirectRefreshDiscoveryCreatePostwriteReport {
+	return JSON.parse(raw.replace(/^\uFEFF/, "")) as DirectRefreshDiscoveryCreatePostwriteReport;
+}
+
+export function createMockDirectRefreshDiscoveryRollbackDrillRepository(
+	postwrite: DirectRefreshDiscoveryCreatePostwriteReport,
+): DirectRefreshDiscoveryRollbackDrillRepository {
+	const rollbackPlan = postwrite.rollbackPlan;
+	const products = new Set(normalizeStrings(rollbackPlan?.deleteProductEans ?? []));
+	const supermarketProducts = new Set(
+		normalizeNumberIds(rollbackPlan?.deleteSupermarketProductIds ?? []),
+	);
+	const priceHistory = new Set(
+		normalizeNumberIds(rollbackPlan?.deletePriceHistoryIds ?? []),
+	);
+
+	return {
+		async getProductsByEan(eans) {
+			return normalizeStrings(eans)
+				.filter((ean) => products.has(ean))
+				.map((ean) => ({ ean }));
+		},
+		async getSupermarketProductsByIds(ids) {
+			return normalizeNumberIds(ids)
+				.filter((id) => supermarketProducts.has(id))
+				.map((id) => ({ id }));
+		},
+		async getPriceHistoryRowsByIds(ids) {
+			return normalizeNumberIds(ids)
+				.filter((id) => priceHistory.has(id))
+				.map((id) => ({ id }));
+		},
+		async deletePriceHistoryByIds(ids) {
+			return { deletedCount: deleteNumberIds(priceHistory, ids) };
+		},
+		async deleteSupermarketProductsByIds(ids) {
+			return { deletedCount: deleteNumberIds(supermarketProducts, ids) };
+		},
+		async deleteProductsByEan(eans) {
+			let deletedCount = 0;
+			for (const ean of normalizeStrings(eans)) {
+				if (products.delete(ean)) deletedCount += 1;
+			}
+			return { deletedCount };
+		},
+	};
 }
 
 export function expectedDirectRefreshDiscoveryRollbackDrillArtifactFilename(
@@ -304,6 +426,14 @@ function normalizeNumberIds(values: number[]) {
 
 function normalizeStrings(values: string[]) {
 	return Array.from(new Set(values.map((value) => value.trim()))).sort();
+}
+
+function deleteNumberIds(target: Set<number>, ids: number[]) {
+	let deletedCount = 0;
+	for (const id of normalizeNumberIds(ids)) {
+		if (target.delete(id)) deletedCount += 1;
+	}
+	return deletedCount;
 }
 
 function uniqueSorted(values: string[]) {
