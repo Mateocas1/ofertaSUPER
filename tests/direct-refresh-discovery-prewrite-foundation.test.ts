@@ -10,6 +10,7 @@ import {
 } from "../scripts/pipeline/direct-refresh-discovery-prewrite-foundation";
 
 const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
+	generatedAt: "2026-06-06T12:25:00.000Z",
 	schemaConstraints: {
 		productEanPrimaryKey: true,
 		productSourceUnique: true,
@@ -28,11 +29,18 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		idempotencyPolicy: true,
 	},
 	artifactLineage: {
+		issue: 185,
+		source: "vea",
+		count: 1,
+		attemptId: "foundation-attempt-001",
+		artifactPath: "audit/direct-refresh-discovery-prewrite-foundation/foundation-evidence.json",
+		artifactSha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		gitCommit: "ccc7535",
 		toolVersion: "direct-refresh-discovery-create@1",
 		schemaVersion: "1",
 		dbEnvironmentIdentity: "local-test-db",
-		sourceConfigSnapshot: "config-hash",
+		sourceConfigSnapshot:
+			"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; files:src/lib/supermarkets.ts",
 		vtexProbeTimestamp: "2026-06-06T12:00:00.000Z",
 	},
 	rollbackDrill: {
@@ -40,6 +48,9 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		mode: "controlled-disposable-row",
 		rollbackIds: ["supermarket_products:901", "price_history:1001"],
 		postRollbackVerification: true,
+		preimageCaptured: true,
+		pitrBackupPosture: "Supabase PITR/backup posture reviewed before write",
+		cacheHandling: "No cache purge needed for disposable-row drill; public cache TTL reviewed",
 	},
 	vtexBudgets: {
 		requestCap: 20,
@@ -125,6 +136,131 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.deepEqual(report.summary.failClosedReasons, []);
 	});
 
+	it("fails closed when Phase 1 foundation evidence is stale", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				generatedAt: "2026-06-06T11:44:59.000Z",
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:00:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/foundation evidence must be fresh within 15 minutes/,
+		);
+	});
+
+	it("reports missing foundation evidence timestamp without stale-noise duplication", () => {
+		const { generatedAt: _generatedAt, ...evidenceWithoutTimestamp } =
+			completeEvidence;
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence:
+				evidenceWithoutTimestamp as DirectRefreshDiscoveryPrewriteFoundationEvidence,
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:00:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.deepEqual(report.checks[0].reasons, [
+			"foundation evidence generatedAt is required",
+		]);
+	});
+
+	it("fails closed when artifact lineage omits issue, source, count, attempt, path, or hash", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+					issue: 0,
+					source: "",
+					count: 0,
+					attemptId: "",
+					artifactPath: "",
+					artifactSha256: "",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /issue lineage is required/);
+		assert.match(reasons, /source lineage must be writer-supported/);
+		assert.match(reasons, /count lineage is required/);
+		assert.match(reasons, /attempt lineage is required/);
+		assert.match(reasons, /artifact path lineage must be foundation audit json/);
+		assert.match(reasons, /artifact sha256 lineage is required/);
+	});
+
+	it("fails closed when source config snapshot or VTEX probe timestamp are malformed", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+					sourceConfigSnapshot: "config-hash-without-sha256",
+					vtexProbeTimestamp: "not-a-timestamp",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /source config snapshot sha256 is required/);
+		assert.match(reasons, /VTEX probe timestamp must be ISO datetime/);
+	});
+
+	it("fails closed when commit, tool version, or schema version lineage are malformed", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+					gitCommit: "not-a-commit",
+					toolVersion: "direct-refresh-discovery-create",
+					schemaVersion: "v1",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /git commit lineage must be hex/);
+		assert.match(reasons, /tool version lineage must include @version/);
+		assert.match(reasons, /schema version lineage must be numeric/);
+	});
+
+	it("fails closed when source, artifact path, or DB environment lineage are invalid", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+					source: "dia",
+					artifactPath: "../foundation.json",
+					dbEnvironmentIdentity: "unknown",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /source lineage must be writer-supported/);
+		assert.match(reasons, /artifact path lineage must be foundation audit json/);
+		assert.match(reasons, /DB\/environment identity must be explicit/);
+	});
+
 	it("fails closed when rollback proof is read-only instead of executed", () => {
 		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 			evidence: {
@@ -147,6 +283,27 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			report.summary.failClosedReasons.join("\n"),
 			/read-only rollback review is preparatory only/,
 		);
+	});
+
+	it("fails closed when rollback DR proof omits preimage, PITR, or cache handling", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					preimageCaptured: false,
+					pitrBackupPosture: "",
+					cacheHandling: "",
+				},
+			},
+			evidencePath: "foundation.json",
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /rollback preimage capture is required/);
+		assert.match(reasons, /PITR\/backup posture is required/);
+		assert.match(reasons, /rollback cache handling is required/);
 	});
 
 	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {

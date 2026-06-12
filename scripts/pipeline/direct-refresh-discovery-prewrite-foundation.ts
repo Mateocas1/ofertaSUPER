@@ -2,6 +2,7 @@ import { getOptionalSingleFlag, uniqueSorted } from "./audit-utils";
 
 export type DirectRefreshDiscoveryPrewriteFoundationStatus = "PASS" | "FAIL";
 export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
+	generatedAt: string;
 	schemaConstraints: {
 		productEanPrimaryKey: boolean;
 		productSourceUnique: boolean;
@@ -20,6 +21,12 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		idempotencyPolicy: boolean;
 	};
 	artifactLineage: {
+		issue: number;
+		source: string;
+		count: number;
+		attemptId: string;
+		artifactPath: string;
+		artifactSha256: string;
 		gitCommit: string;
 		toolVersion: string;
 		schemaVersion: string;
@@ -32,6 +39,9 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		mode: "non-prod-prod-like" | "controlled-disposable-row" | "read-only-review";
 		rollbackIds: string[];
 		postRollbackVerification: boolean;
+		preimageCaptured: boolean;
+		pitrBackupPosture: string;
+		cacheHandling: string;
 	};
 	vtexBudgets: {
 		requestCap: number;
@@ -66,6 +76,8 @@ export type DirectRefreshDiscoveryPrewriteFoundationCliOptions = {
 };
 
 type Rule = [boolean, string];
+const FOUNDATION_EVIDENCE_MAX_AGE_MS = 15 * 60 * 1000;
+const WRITER_SUPPORTED_SOURCES = new Set(["carrefour", "vea", "disco", "jumbo", "mas"]);
 
 const WRITE_BOUNDARY =
 	"read-only discovery prewrite foundation audit; no discovery apply, no VTEX live scan, no scheduler/all-source/retry side effects" as const;
@@ -139,7 +151,7 @@ export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 	evidencePath: string;
 	now?: Date;
 }) {
-	const checks = buildChecks(evidence);
+	const checks = buildChecks(evidence, now);
 	const failClosedReasons = uniqueSorted(checks.flatMap((check) => check.reasons));
 	const failCount = checks.filter((check) => check.status === "FAIL").length;
 	return {
@@ -167,7 +179,7 @@ export function parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
 	return JSON.parse(raw.replace(/^\uFEFF/, "")) as DirectRefreshDiscoveryPrewriteFoundationEvidence;
 }
 
-function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence) {
+function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence, now: Date) {
 	const schema = evidence.schemaConstraints;
 	const control = evidence.controlPlane;
 	const lineage = evidence.artifactLineage;
@@ -177,6 +189,7 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence)
 	const alert = evidence.alertChannel;
 	const perf = evidence.performanceGuard;
 	return [
+		check("evidence-freshness", buildEvidenceFreshnessRules(evidence, now)),
 		check("schema-constraints", [
 			[schema.productEanPrimaryKey, "Product.ean primary key is required"],
 			[schema.productSourceUnique, "SupermarketProduct(product_ean, supermarket_id) unique is required"],
@@ -195,18 +208,27 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence)
 			[control.idempotencyPolicy, "idempotency policy is required"],
 		]),
 		check("artifact-lineage", [
-			[hasText(lineage.gitCommit), "git commit lineage is required"],
-			[hasText(lineage.toolVersion), "tool version lineage is required"],
-			[hasText(lineage.schemaVersion), "schema version lineage is required"],
-			[hasText(lineage.dbEnvironmentIdentity), "DB/environment identity is required"],
-			[hasText(lineage.sourceConfigSnapshot), "source config snapshot is required"],
-			[hasText(lineage.vtexProbeTimestamp), "VTEX probe timestamp is required"],
+			[lineage.issue > 0, "issue lineage is required"],
+			[hasWriterSupportedSource(lineage.source), "source lineage must be writer-supported"],
+			[lineage.count > 0, "count lineage is required"],
+			[hasText(lineage.attemptId), "attempt lineage is required"],
+			[hasFoundationArtifactPath(lineage.artifactPath), "artifact path lineage must be foundation audit json"],
+			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
+			[hasGitCommitLineage(lineage.gitCommit), "git commit lineage must be hex"],
+			[hasToolVersionLineage(lineage.toolVersion), "tool version lineage must include @version"],
+			[hasNumericSchemaVersion(lineage.schemaVersion), "schema version lineage must be numeric"],
+			[hasExplicitEnvironmentIdentity(lineage.dbEnvironmentIdentity), "DB/environment identity must be explicit"],
+			[hasSourceConfigSnapshot(lineage.sourceConfigSnapshot), "source config snapshot sha256 is required"],
+			[hasIsoDatetime(lineage.vtexProbeTimestamp), "VTEX probe timestamp must be ISO datetime"],
 		]),
 		check("rollback-drill", [
 			[rollback.executed, "rollback drill must be executed before discovery apply"],
 			[rollback.mode !== "read-only-review", "read-only rollback review is preparatory only"],
+			[rollback.preimageCaptured === true, "rollback preimage capture is required"],
+			[hasText(rollback.pitrBackupPosture), "PITR/backup posture is required"],
 			[rollback.rollbackIds.length > 0, "rollback IDs are required"],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
+			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
 		]),
 		check("vtex-budgets", [
 			[budget.requestCap > 0, "VTEX request cap must be positive"],
@@ -237,11 +259,75 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence)
 	];
 }
 
+function buildEvidenceFreshnessRules(
+	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
+	now: Date,
+): Rule[] {
+	const generatedAt = Date.parse(evidence.generatedAt);
+	if (!Number.isFinite(generatedAt)) {
+		return [[false, "foundation evidence generatedAt is required"]];
+	}
+	const nowMs = now.getTime();
+	return [
+		[
+			generatedAt <= nowMs &&
+				nowMs - generatedAt <= FOUNDATION_EVIDENCE_MAX_AGE_MS,
+			"foundation evidence must be fresh within 15 minutes",
+		],
+	];
+}
+
 function check(name: string, rules: Rule[]) {
 	const reasons = rules.filter(([passed]) => !passed).map(([, reason]) => reason);
 	return { name, status: reasons.length === 0 ? "PASS" : "FAIL", reasons };
 }
 
-function hasText(value: string) {
-	return value.trim().length > 0;
+function hasText(value: string | undefined) {
+	return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasWriterSupportedSource(value: string | undefined) {
+	return typeof value === "string" && WRITER_SUPPORTED_SOURCES.has(value);
+}
+
+function hasFoundationArtifactPath(value: string | undefined) {
+	return (
+		typeof value === "string" &&
+		/^audit\/direct-refresh-discovery-prewrite-foundation\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
+		!value.includes("..")
+	);
+}
+
+function hasExplicitEnvironmentIdentity(value: string | undefined) {
+	return (
+		typeof value === "string" &&
+		/^[a-z0-9][a-z0-9-]*$/.test(value) &&
+		value !== "unknown"
+	);
+}
+
+function hasSha256Lineage(value: string | undefined) {
+	return typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
+}
+
+function hasGitCommitLineage(value: string | undefined) {
+	return typeof value === "string" && /^[a-f0-9]{7,40}$/.test(value);
+}
+
+function hasToolVersionLineage(value: string | undefined) {
+	return typeof value === "string" && /^[a-z0-9][a-z0-9-]*@\d+(?:\.\d+)*$/.test(value);
+}
+
+function hasNumericSchemaVersion(value: string | undefined) {
+	return typeof value === "string" && /^[1-9]\d*$/.test(value);
+}
+
+function hasSourceConfigSnapshot(value: string | undefined) {
+	return typeof value === "string" && /^sha256:[a-f0-9]{64}; files:\S+/.test(value);
+}
+
+function hasIsoDatetime(value: string | undefined) {
+	if (typeof value !== "string" || value.trim().length === 0) return false;
+	const parsed = Date.parse(value);
+	return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
 }

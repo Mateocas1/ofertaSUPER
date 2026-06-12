@@ -1,4 +1,5 @@
 {
+  "generatedAt": "",
   "schemaConstraints": {
     "productEanPrimaryKey": true,
     "productSourceUnique": true,
@@ -17,6 +18,12 @@
     "idempotencyPolicy": true
   },
   "artifactLineage": {
+    "issue": 0,
+    "source": "",
+    "count": 0,
+    "attemptId": "",
+    "artifactPath": "",
+    "artifactSha256": "",
     "gitCommit": "d818f8b",
     "toolVersion": "direct-refresh-discovery-prewrite-foundation@1",
     "schemaVersion": "1",
@@ -28,7 +35,10 @@
     "executed": false,
     "mode": "read-only-review",
     "rollbackIds": [],
-    "postRollbackVerification": false
+    "postRollbackVerification": false,
+    "preimageCaptured": false,
+    "pitrBackupPosture": "",
+    "cacheHandling": ""
   },
   "vtexBudgets": {
     "requestCap": 20,
