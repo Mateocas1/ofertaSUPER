@@ -8,7 +8,9 @@ import { runDirectRefreshDiscoveryRollbackDrillCli } from "../scripts/audit-dire
 import {
 	assertNoDirectRefreshDiscoveryRollbackDrillForbiddenFlags,
 	buildDirectRefreshDiscoveryRollbackDrill,
+	createPrismaDirectRefreshDiscoveryRollbackDrillRepository,
 	parseDirectRefreshDiscoveryRollbackDrillCliOptions,
+	parseDirectRefreshDiscoveryRollbackDrillRealCliOptions,
 	expectedDirectRefreshDiscoveryRollbackDrillArtifactFilename,
 	validateDirectRefreshDiscoveryRollbackDrillArtifactPath,
 	type DirectRefreshDiscoveryRollbackDrillRepository,
@@ -276,6 +278,85 @@ describe("direct-refresh discovery rollback drill core", () => {
 		);
 	});
 
+	it("Prisma adapter uses exact selectors and maps delete counts", async () => {
+		const calls: Array<{ model: string; method: string; args: unknown }> = [];
+		const client = {
+			priceHistory: {
+				findMany: async (args: unknown) => {
+					calls.push({ model: "priceHistory", method: "findMany", args });
+					return [{ id: 1001 }];
+				},
+				deleteMany: async (args: unknown) => {
+					calls.push({ model: "priceHistory", method: "deleteMany", args });
+					return { count: 1 };
+				},
+			},
+			supermarketProduct: {
+				findMany: async (args: unknown) => {
+					calls.push({ model: "supermarketProduct", method: "findMany", args });
+					return [{ id: 901 }];
+				},
+				deleteMany: async (args: unknown) => {
+					calls.push({ model: "supermarketProduct", method: "deleteMany", args });
+					return { count: 1 };
+				},
+			},
+			product: {
+				findMany: async (args: unknown) => {
+					calls.push({ model: "product", method: "findMany", args });
+					return [{ ean: "222" }];
+				},
+				deleteMany: async (args: unknown) => {
+					calls.push({ model: "product", method: "deleteMany", args });
+					return { count: 1 };
+				},
+			},
+		};
+		const repo = createPrismaDirectRefreshDiscoveryRollbackDrillRepository(client);
+
+		assert.deepEqual(await repo.getPriceHistoryRowsByIds([1001]), [{ id: 1001 }]);
+		assert.deepEqual(await repo.getSupermarketProductsByIds([901]), [{ id: 901 }]);
+		assert.deepEqual(await repo.getProductsByEan(["222"]), [{ ean: "222" }]);
+		assert.deepEqual(await repo.deletePriceHistoryByIds([1001]), { deletedCount: 1 });
+		assert.deepEqual(await repo.deleteSupermarketProductsByIds([901]), {
+			deletedCount: 1,
+		});
+		assert.deepEqual(await repo.deleteProductsByEan(["222"]), { deletedCount: 1 });
+
+		assert.deepEqual(calls, [
+			{
+				model: "priceHistory",
+				method: "findMany",
+				args: { where: { id: { in: [1001] } }, select: { id: true } },
+			},
+			{
+				model: "supermarketProduct",
+				method: "findMany",
+				args: { where: { id: { in: [901] } }, select: { id: true } },
+			},
+			{
+				model: "product",
+				method: "findMany",
+				args: { where: { ean: { in: ["222"] } }, select: { ean: true } },
+			},
+			{
+				model: "priceHistory",
+				method: "deleteMany",
+				args: { where: { id: { in: [1001] } } },
+			},
+			{
+				model: "supermarketProduct",
+				method: "deleteMany",
+				args: { where: { id: { in: [901] } } },
+			},
+			{
+				model: "product",
+				method: "deleteMany",
+				args: { where: { ean: { in: ["222"] } } },
+			},
+		]);
+	});
+
 	it("rejects forbidden flags", () => {
 		for (const flag of [
 			"--apply",
@@ -288,6 +369,7 @@ describe("direct-refresh discovery rollback drill core", () => {
 			"--all-sources",
 			"--scheduler",
 			"--purge-cache",
+			"--cache-purge",
 			"--deploy",
 			"--migrations",
 		]) {
@@ -301,6 +383,45 @@ describe("direct-refresh discovery rollback drill core", () => {
 				new RegExp(`rejects ${flag}`),
 			);
 		}
+	});
+
+	it("parses real CLI options only with specific rollback drill confirmation", () => {
+		assert.deepEqual(
+			parseDirectRefreshDiscoveryRollbackDrillRealCliOptions([
+				"node",
+				"script",
+				"--postwrite=postwrite.json",
+				"--output-dir=out",
+				"--rollback-drill-confirm=CONTROLLED_DISPOSABLE_ROW_ROLLBACK_DRILL",
+			]),
+			{
+				postwrite: "postwrite.json",
+				outputDir: "out",
+				rollbackDrillConfirm: "CONTROLLED_DISPOSABLE_ROW_ROLLBACK_DRILL",
+			},
+		);
+
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoveryRollbackDrillRealCliOptions([
+					"node",
+					"script",
+					"--postwrite=postwrite.json",
+					"--output-dir=out",
+				]),
+			/requires --rollback-drill-confirm=CONTROLLED_DISPOSABLE_ROW_ROLLBACK_DRILL/,
+		);
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoveryRollbackDrillRealCliOptions([
+					"node",
+					"script",
+					"--postwrite=postwrite.json",
+					"--output-dir=out",
+					"--confirm=CONTROLLED_DISPOSABLE_ROW_ROLLBACK_DRILL",
+				]),
+			/rejects --confirm=CONTROLLED_DISPOSABLE_ROW_ROLLBACK_DRILL/,
+		);
 	});
 
 	it("parses mock/no-db CLI options and requires explicit inputs", () => {
@@ -446,6 +567,10 @@ describe("direct-refresh discovery rollback drill core", () => {
 		assert.equal(
 			packageJson.scripts["audit:direct-refresh-discovery-rollback-drill"],
 			"tsx scripts/audit-direct-refresh-discovery-rollback-drill.ts",
+		);
+		assert.equal(
+			packageJson.scripts["direct-refresh:discovery-rollback-drill"],
+			"tsx scripts/direct-refresh-discovery-rollback-drill.ts",
 		);
 	});
 });

@@ -28,9 +28,40 @@ export type DirectRefreshDiscoveryRollbackDrillCliOptions = {
 	postwrite: string;
 	outputDir: string;
 };
+export type DirectRefreshDiscoveryRollbackDrillRealCliOptions = {
+	postwrite: string;
+	outputDir: string;
+	rollbackDrillConfirm: typeof ROLLBACK_DRILL_CONFIRMATION_VALUE;
+};
+
+type PrismaDirectRefreshDiscoveryRollbackDrillClient = {
+	priceHistory: {
+		findMany(args: {
+			where: { id: { in: number[] } };
+			select: { id: true };
+		}): Promise<Array<{ id: number }>>;
+		deleteMany(args: { where: { id: { in: number[] } } }): Promise<{ count: number }>;
+	};
+	supermarketProduct: {
+		findMany(args: {
+			where: { id: { in: number[] } };
+			select: { id: true };
+		}): Promise<Array<{ id: number }>>;
+		deleteMany(args: { where: { id: { in: number[] } } }): Promise<{ count: number }>;
+	};
+	product: {
+		findMany(args: {
+			where: { ean: { in: string[] } };
+			select: { ean: true };
+		}): Promise<Array<{ ean: string }>>;
+		deleteMany(args: { where: { ean: { in: string[] } } }): Promise<{ count: number }>;
+	};
+};
 
 const WRITE_BOUNDARY =
 	"controlled disposable-row direct-refresh discovery rollback drill; exact rollback plan only; injected repository only; no Prisma/client/DB adapter/network/cache/PITR automation" as const;
+export const ROLLBACK_DRILL_CONFIRMATION_VALUE =
+	"CONTROLLED_DISPOSABLE_ROW_ROLLBACK_DRILL" as const;
 const FORBIDDEN_FLAGS = [
 	"--apply",
 	"--write",
@@ -42,6 +73,7 @@ const FORBIDDEN_FLAGS = [
 	"--all-sources",
 	"--scheduler",
 	"--purge-cache",
+	"--cache-purge",
 	"--deploy",
 	"--migrations",
 ];
@@ -51,6 +83,11 @@ const EXPECTED_ARTIFACT_FILENAMES = {
 	"post-rollback-verification": "post-rollback-verification.json",
 } as const;
 const ALLOWED_FLAGS = new Set(["--mock", "--no-db", "--postwrite", "--output-dir"]);
+const REAL_ALLOWED_FLAGS = new Set([
+	"--postwrite",
+	"--output-dir",
+	"--rollback-drill-confirm",
+]);
 const BROAD_ROLLBACK_PLAN_KEYS = new Set([
 	"deleteAll",
 	"deleteAllSources",
@@ -138,6 +175,58 @@ export function parseDirectRefreshDiscoveryRollbackDrillCliOptions(
 	};
 }
 
+export function parseDirectRefreshDiscoveryRollbackDrillRealCliOptions(
+	argv = process.argv,
+): DirectRefreshDiscoveryRollbackDrillRealCliOptions {
+	assertNoDirectRefreshDiscoveryRollbackDrillForbiddenFlags(argv);
+
+	const args = argv.slice(2);
+	const unknownFlag = args.find(
+		(entry) =>
+			entry.startsWith("--") && !REAL_ALLOWED_FLAGS.has(entry.split("=", 1)[0]),
+	);
+	if (unknownFlag) {
+		throw new Error(
+			`unknown direct-refresh discovery rollback drill flag ${unknownFlag}`,
+		);
+	}
+
+	const bareValueFlag = args.find((entry) => REAL_ALLOWED_FLAGS.has(entry));
+	if (bareValueFlag) {
+		throw new Error(
+			`direct-refresh discovery rollback drill requires ${bareValueFlag}=...`,
+		);
+	}
+
+	const postwrite = getOptionalSingleFlag(argv, "--postwrite");
+	if (!postwrite?.trim()) {
+		throw new Error(
+			"direct-refresh discovery rollback drill requires --postwrite=...",
+		);
+	}
+	const outputDir = getOptionalSingleFlag(argv, "--output-dir");
+	if (!outputDir?.trim()) {
+		throw new Error(
+			"direct-refresh discovery rollback drill requires --output-dir=...",
+		);
+	}
+	const rollbackDrillConfirm = getOptionalSingleFlag(
+		argv,
+		"--rollback-drill-confirm",
+	);
+	if (rollbackDrillConfirm !== ROLLBACK_DRILL_CONFIRMATION_VALUE) {
+		throw new Error(
+			`direct-refresh discovery rollback drill requires --rollback-drill-confirm=${ROLLBACK_DRILL_CONFIRMATION_VALUE}`,
+		);
+	}
+
+	return {
+		postwrite: postwrite.trim(),
+		outputDir: outputDir.trim(),
+		rollbackDrillConfirm,
+	};
+}
+
 export function parseDirectRefreshDiscoveryRollbackDrillPostwriteJson(
 	raw: string,
 ): DirectRefreshDiscoveryCreatePostwriteReport {
@@ -184,6 +273,52 @@ export function createMockDirectRefreshDiscoveryRollbackDrillRepository(
 				if (products.delete(ean)) deletedCount += 1;
 			}
 			return { deletedCount };
+		},
+	};
+}
+
+export function createPrismaDirectRefreshDiscoveryRollbackDrillRepository(
+	client: PrismaDirectRefreshDiscoveryRollbackDrillClient,
+): DirectRefreshDiscoveryRollbackDrillRepository {
+	return {
+		async getProductsByEan(eans) {
+			if (eans.length === 0) return [];
+			return client.product.findMany({
+				where: { ean: { in: eans } },
+				select: { ean: true },
+			});
+		},
+		async getSupermarketProductsByIds(ids) {
+			if (ids.length === 0) return [];
+			return client.supermarketProduct.findMany({
+				where: { id: { in: ids } },
+				select: { id: true },
+			});
+		},
+		async getPriceHistoryRowsByIds(ids) {
+			if (ids.length === 0) return [];
+			return client.priceHistory.findMany({
+				where: { id: { in: ids } },
+				select: { id: true },
+			});
+		},
+		async deletePriceHistoryByIds(ids) {
+			const result = await client.priceHistory.deleteMany({
+				where: { id: { in: ids } },
+			});
+			return { deletedCount: result.count };
+		},
+		async deleteSupermarketProductsByIds(ids) {
+			const result = await client.supermarketProduct.deleteMany({
+				where: { id: { in: ids } },
+			});
+			return { deletedCount: result.count };
+		},
+		async deleteProductsByEan(eans) {
+			const result = await client.product.deleteMany({
+				where: { ean: { in: eans } },
+			});
+			return { deletedCount: result.count };
 		},
 	};
 }
