@@ -246,9 +246,11 @@ It must be production-shaped from the start:
 - deploy, secrets, remote config, or cache purge;
 - public freshness copy changes.
 
-## Current plan status after discovery gate
+## Current plan status after discovery prod-final PRD
 
-Several items in the original recommended sequence are now completed and should be treated as history, not pending work.
+The active discovery roadmap is now `docs/direct-refresh-discovery-prod-final-prd.md`, with the executable `/goal` prompt in `docs/direct-refresh-discovery-prod-final-goal-prompt.md`.
+
+Several items in the previous recommended discovery sequence are completed and must be treated as history, not pending work.
 
 | Item | Current state |
 | --- | --- |
@@ -260,22 +262,31 @@ Several items in the original recommended sequence are now completed and should 
 | 90/95 planning and discovery plan | Complete: issue #178 closed. |
 | Discovery read-only audit | Complete: issue #21 / PR #180 closed. |
 | Discovery create gate | Complete: issue #181 / PR #182 closed. |
+| Discovery controlled pilot PRD | Complete/history: issue #183 scope is superseded by the prod-final PRD. |
+| Discovery create postwrite audit | Complete/history: issue #185 / PR chain #186-#189 closed. |
 
-The remaining production work is no longer basic planning. The next honest gates are:
+The next honest gate is **not** the old Vea count1 pilot queue. The active sequence starts with prod-final Phase 0/1:
 
-1. discovery controlled pilot PRD/postwrite acceptance;
-2. discovery-specific postwrite audit if current tooling cannot prove created discovery rows;
-3. first count=1 controlled discovery apply with exact confirmation;
-4. separate cadence executor design for freshness recovery.
+1. keep docs truth aligned with `docs/direct-refresh-discovery-prod-final-prd.md`;
+2. implement `feat(data): add discovery prewrite safety foundation`;
+3. do not run any discovery apply until pre-write foundation PASS proves DB constraints, control plane, lineage, executed rollback drill, minimum performance guard, VTEX budgets and compliance posture.
 
-Current recommended next issues:
+Current recommended next issues now follow the prod-final PRD issue sequence:
 
 | Order | Issue | Type | Scope |
 | ---: | --- | --- | --- |
-| 1 | `docs(data): specify direct-refresh discovery controlled pilot` | docs | PRD/postwrite acceptance and docs-state cleanup; no writes. |
-| 2 | `feat(data): add direct-refresh discovery postwrite audit` | implementation | Prove exact created discovery rows and rollback IDs before any apply. |
-| 3 | `ops(data): run Vea count1 discovery controlled pilot` | operation | One source-row discovery apply after fresh audit/prewrite and exact confirmation. |
-| 4 | `docs(data): define direct-refresh cadence executor design` | docs | Separate freshness-recovery executor architecture after discovery pilot gates are closed. |
+| 1 | `docs(data): add direct-refresh discovery prod-final PRD` | docs | Completed: PRD, audit hardening and docs truth cleanup. |
+| 2 | `feat(data): add discovery prewrite safety foundation` | feature | DB constraints, minimum control plane, lineage, rollback drill executed, minimum performance guard, VTEX budgets and compliance gates. |
+| 3 | `feat(data): add discovery denominator audit` | feature | Coverage denominator measurement by source with formulas and request budgets. |
+| 4 | `ops(data): run source-row discovery pilot count1` | ops | First create source-row PASS after foundation. |
+| 5 | `ops(data): run product-and-source discovery pilot count1` | ops | First global product create PASS. |
+| 6 | `ops(data): run controlled discovery batch count5` | ops | Small batch PASS. |
+| 7 | `ops(data): validate discovery across writer-supported sources` | ops | Carrefour/Vea/Disco/Jumbo/MAS evidence. |
+| 8 | `feat(data): add discovery freshness bridge and recovery gate` | feature | Discovered rows integrated into refresh-existing and freshness SLO. |
+| 9 | `perf(data): add discovery scale performance validation` | perf | Scale validation against pre-write baselines. |
+| 10 | `feat(data): add discovery alerts and rollback drill certification` | feature | Alerts plus final rollback/no-partial/post-rollback certification. |
+| 11 | `docs(data): design discovery source-scoped cadence` | docs | Cadence plan without all-source automation. |
+| 12 | `ops(data): certify discovery prod-final gate` | ops | Final acceptance with coverage, freshness and ops evidence. |
 
 ## Original recommended next issues
 
