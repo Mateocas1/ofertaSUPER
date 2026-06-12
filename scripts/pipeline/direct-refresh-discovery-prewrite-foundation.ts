@@ -6,6 +6,7 @@ export type DirectRefreshDiscoveryPrewriteFoundationStatus = "PASS" | "FAIL";
 export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	generatedAt: string;
 	schemaConstraints: {
+		verifiedAt: string;
 		productEanPrimaryKey: boolean;
 		productSourceUnique: boolean;
 		sourceSkuUniqueNonnull: boolean;
@@ -15,6 +16,7 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		migrationStatus: "PASS" | "FAIL" | "UNKNOWN";
 	};
 	controlPlane: {
+		verifiedAt: string;
 		sourceLock: boolean;
 		ledgerAttemptIdentity: boolean;
 		ttlPolicy: boolean;
@@ -52,6 +54,7 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		cacheHandling: string;
 	};
 	vtexBudgets: {
+		verifiedAt: string;
 		requestCap: number;
 		concurrency: number;
 		timeoutMs: number;
@@ -60,11 +63,13 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		headerPolicy: string;
 	};
 	compliance: {
+		reviewedAt: string;
 		allowedUseReviewed: boolean;
 		posture: "approved" | "risk-accepted" | "blocked" | "unknown";
 		reviewedSources: string[];
 	};
 	alertChannel: {
+		policyVerifiedAt: string;
 		channel: string;
 		owner: string;
 		severity: string;
@@ -166,7 +171,9 @@ export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 	evidenceSha256,
 	sourceConfigSnapshotSha256,
 	rollbackPreimageSha256,
+	rollbackPreimageGeneratedAt,
 	postRollbackVerificationSha256,
+	postRollbackVerificationGeneratedAt,
 	now = new Date(),
 }: {
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
@@ -174,7 +181,9 @@ export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 	evidenceSha256: string;
 	sourceConfigSnapshotSha256: string;
 	rollbackPreimageSha256: string | undefined;
+	rollbackPreimageGeneratedAt?: string;
 	postRollbackVerificationSha256: string | undefined;
+	postRollbackVerificationGeneratedAt?: string;
 	now?: Date;
 }) {
 	const checks = buildChecks(
@@ -183,7 +192,9 @@ export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 		evidenceSha256,
 		sourceConfigSnapshotSha256,
 		rollbackPreimageSha256,
+		rollbackPreimageGeneratedAt,
 		postRollbackVerificationSha256,
+		postRollbackVerificationGeneratedAt,
 		now,
 	);
 	const failClosedReasons = uniqueSorted(checks.flatMap((check) => check.reasons));
@@ -285,7 +296,9 @@ function buildChecks(
 	evidenceSha256: string,
 	sourceConfigSnapshotSha256: string,
 	rollbackPreimageSha256: string | undefined,
+	rollbackPreimageGeneratedAt: string | undefined,
 	postRollbackVerificationSha256: string | undefined,
+	postRollbackVerificationGeneratedAt: string | undefined,
 	now: Date,
 ) {
 	const schema = evidence.schemaConstraints ?? {};
@@ -299,6 +312,11 @@ function buildChecks(
 	return [
 		check("evidence-freshness", buildEvidenceFreshnessRules(evidence, now)),
 		check("schema-constraints", [
+			...buildExplicitTimestampRules(
+				schema.verifiedAt,
+				"schema constraints verifiedAt",
+				now,
+			),
 			[schema.productEanPrimaryKey, "Product.ean primary key is required"],
 			[schema.productSourceUnique, "SupermarketProduct(product_ean, supermarket_id) unique is required"],
 			[schema.sourceSkuUniqueNonnull, "SupermarketProduct(supermarket_id, sku_id) non-null unique guard is required"],
@@ -308,6 +326,11 @@ function buildChecks(
 			[schema.migrationStatus === "PASS", "migration status must be PASS"],
 		]),
 		check("control-plane", [
+			...buildExplicitTimestampRules(
+				control.verifiedAt,
+				"control-plane verifiedAt",
+				now,
+			),
 			[control.sourceLock, "source lock is required"],
 			[control.ledgerAttemptIdentity, "ledger attempt identity is required"],
 			[control.ttlPolicy, "TTL policy is required"],
@@ -402,7 +425,17 @@ function buildChecks(
 				),
 				"preimage sha256 must match runtime preimage artifact",
 			],
+			...buildArtifactGeneratedAtRules(
+				rollbackPreimageGeneratedAt,
+				"preimage artifact",
+				now,
+			),
 			[hasPitrBackupPosture(rollback.pitrBackupPosture), "PITR/backup posture requires reviewed availability plus environment/timestamp/retention/artifact detail"],
+			...buildStringEvidenceTimestampRules(
+				rollback.pitrBackupPosture,
+				"PITR/backup posture",
+				now,
+			),
 			[
 				Array.isArray(rollback.rollbackIds) && rollback.rollbackIds.length > 0,
 				"rollback IDs are required",
@@ -426,12 +459,27 @@ function buildChecks(
 				),
 				"post-rollback verification sha256 must match runtime artifact",
 			],
+			...buildArtifactGeneratedAtRules(
+				postRollbackVerificationGeneratedAt,
+				"post-rollback verification artifact",
+				now,
+			),
 			[
 				hasRollbackCacheHandling(rollback.cacheHandling),
 				"rollback cache handling requires cache plus TTL/invalidation/no-purge/post-rollback cache proof",
 			],
+			...buildStringEvidenceTimestampRules(
+				rollback.cacheHandling,
+				"rollback cache handling",
+				now,
+			),
 		]),
 		check("vtex-budgets", [
+			...buildExplicitTimestampRules(
+				budget.verifiedAt,
+				"VTEX budgets verifiedAt",
+				now,
+			),
 			[hasPositiveInteger(budget.requestCap), "VTEX request cap must be a positive integer"],
 			[budget.requestCap <= MAX_VTEX_FOUNDATION_REQUEST_CAP, "VTEX request cap must be <= 20"],
 			[
@@ -447,6 +495,11 @@ function buildChecks(
 			[hasVtexHeaderPolicy(budget.headerPolicy), "VTEX header policy must be documented, non-evasive, and include user-agent or headers"],
 		]),
 		check("compliance", [
+			...buildExplicitTimestampRules(
+				compliance.reviewedAt,
+				"compliance reviewedAt",
+				now,
+			),
 			[compliance.allowedUseReviewed, "compliance allowed-use review is required"],
 			[compliance.posture === "approved" || compliance.posture === "risk-accepted", "compliance posture must be approved or risk-accepted"],
 			[
@@ -455,6 +508,11 @@ function buildChecks(
 			],
 		]),
 		check("alert-channel", [
+			...buildExplicitTimestampRules(
+				alert.policyVerifiedAt,
+				"alert policy verifiedAt",
+				now,
+			),
 			[hasActionableAlertChannel(alert.channel), "alert channel must include issue evidence comment and concrete alert destination"],
 			[hasExplicitAlertOwner(alert.owner), "alert owner must be explicit and non-placeholder"],
 			[hasAlertSeverity(alert.severity), "alert severity must include write, postwrite, and rollback-required"],
@@ -467,16 +525,42 @@ function buildChecks(
 				hasTestAlertProof(alert.testAlertProof),
 				"test-alert proof requires issue/comment plus concrete reference",
 			],
+			...buildTestAlertProofTimestampRules(alert.testAlertProof, now),
 			[alert.writeFailure, "write failure alert is required"],
 			[alert.postwriteFailure, "postwrite failure alert is required"],
 			[alert.rollbackRequired, "rollback-required alert is required"],
 		]),
 		check("performance-guard", [
 			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values"],
+			...buildPerformancePostureTimestampRules(
+				perf.prismaPoolPosture,
+				"Prisma pool posture",
+				now,
+			),
 			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with positive temporal values"],
+			...buildPerformancePostureTimestampRules(
+				perf.transactionTimeoutPosture,
+				"transaction timeout posture",
+				now,
+			),
 			[hasPriceHistoryBaseline(perf.priceHistoryBaseline), "PriceHistory baseline requires insert/read and an explicit metric"],
+			...buildPerformanceBaselineTimestampRules(
+				perf.priceHistoryBaseline,
+				"PriceHistory",
+				now,
+			),
 			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline requires search/products and an explicit performance metric"],
+			...buildPerformanceBaselineTimestampRules(
+				perf.publicApiBaseline,
+				"public API",
+				now,
+			),
 			[hasCacheTtlBaseline(perf.cacheTtlBaseline), "cache TTL baseline requires TTL and an explicit temporal value"],
+			...buildPerformanceBaselineTimestampRules(
+				perf.cacheTtlBaseline,
+				"cache TTL",
+				now,
+			),
 		]),
 	];
 }
@@ -495,6 +579,25 @@ function buildEvidenceFreshnessRules(
 			generatedAt <= nowMs &&
 				nowMs - generatedAt <= FOUNDATION_EVIDENCE_MAX_AGE_MS,
 			"foundation evidence must be fresh within 15 minutes",
+		],
+	];
+}
+
+function buildExplicitTimestampRules(
+	value: string | undefined,
+	fieldName: string,
+	now: Date,
+): Rule[] {
+	if (!value) {
+		return [[false, `${fieldName} is required`]];
+	}
+	if (!hasIsoDatetime(value)) {
+		return [[false, `${fieldName} must be ISO datetime`]];
+	}
+	return [
+		[
+			hasFreshTimestamp(value, now),
+			`${fieldName} must be fresh within 15 minutes`,
 		],
 	];
 }
@@ -909,6 +1012,116 @@ function hasTestAlertProof(value: string | undefined) {
 		hasAllTerms(value, ["test-alert", "proof", "issue", "comment"]) &&
 		hasConcreteTestAlertProofReference(value)
 	);
+}
+
+function buildTestAlertProofTimestampRules(
+	value: string | undefined,
+	now: Date,
+): Rule[] {
+	const timestamp = parseTestAlertProofTimestamp(value);
+	if (!timestamp) {
+		return [[false, "test-alert proof timestamp is required"]];
+	}
+	if (!hasIsoDatetime(timestamp)) {
+		return [[false, "test-alert proof timestamp must be ISO datetime"]];
+	}
+	return [
+		[
+			hasFreshTimestamp(timestamp, now),
+			"test-alert proof timestamp must be fresh within 15 minutes",
+		],
+	];
+}
+
+function buildStringEvidenceTimestampRules(
+	value: string | undefined,
+	fieldName: "PITR/backup posture" | "rollback cache handling",
+	now: Date,
+): Rule[] {
+	const timestamp = parseStringEvidenceTimestamp(value);
+	if (!timestamp) {
+		return [[false, `${fieldName} timestamp is required`]];
+	}
+	if (!hasIsoDatetime(timestamp)) {
+		return [[false, `${fieldName} timestamp must be ISO datetime`]];
+	}
+	return [
+		[
+			hasFreshTimestamp(timestamp, now),
+			`${fieldName} timestamp must be fresh within 15 minutes`,
+		],
+	];
+}
+
+function buildArtifactGeneratedAtRules(
+	value: string | undefined,
+	artifactName: "preimage artifact" | "post-rollback verification artifact",
+	now: Date,
+): Rule[] {
+	if (!value) {
+		return [[false, `${artifactName} generatedAt is required`]];
+	}
+	if (!hasIsoDatetime(value)) {
+		return [[false, `${artifactName} generatedAt must be ISO datetime`]];
+	}
+	return [
+		[
+			hasFreshTimestamp(value, now),
+			`${artifactName} generatedAt must be fresh within 15 minutes`,
+		],
+	];
+}
+
+function parseStringEvidenceTimestamp(value: string | undefined) {
+	return value?.match(/\b(?:timestamp|verifiedAt)=([^\s,;]+)/)?.[1];
+}
+
+function parseTestAlertProofTimestamp(value: string | undefined) {
+	return value?.match(/\b(?:timestamp|testedAt)=([^\s,;]+)/)?.[1];
+}
+
+function buildPerformanceBaselineTimestampRules(
+	value: string | undefined,
+	baselineName: "PriceHistory" | "public API" | "cache TTL",
+	now: Date,
+): Rule[] {
+	const timestamp = parsePerformanceBaselineTimestamp(value);
+	if (!timestamp) {
+		return [[false, `${baselineName} baseline timestamp is required`]];
+	}
+	if (!hasIsoDatetime(timestamp)) {
+		return [[false, `${baselineName} baseline timestamp must be ISO datetime`]];
+	}
+	return [
+		[
+			hasFreshTimestamp(timestamp, now),
+			`${baselineName} baseline timestamp must be fresh within 15 minutes`,
+		],
+	];
+}
+
+function buildPerformancePostureTimestampRules(
+	value: string | undefined,
+	postureName: "Prisma pool posture" | "transaction timeout posture",
+	now: Date,
+): Rule[] {
+	const timestamp = parseStringEvidenceTimestamp(value);
+	if (!timestamp) {
+		return [[false, `${postureName} timestamp is required`]];
+	}
+	if (!hasIsoDatetime(timestamp)) {
+		return [[false, `${postureName} timestamp must be ISO datetime`]];
+	}
+	return [
+		[
+			hasFreshTimestamp(timestamp, now),
+			`${postureName} timestamp must be fresh within 15 minutes`,
+		],
+	];
+}
+
+function parsePerformanceBaselineTimestamp(value: string | undefined) {
+	return value?.match(/\b(?:timestamp|measuredAt)=([^\s,;]+)/)?.[1];
 }
 
 function hasConcreteTestAlertProofReference(value: string | undefined) {

@@ -20,7 +20,7 @@ async function writeJson(output: string, report: unknown) {
 	);
 }
 
-async function readSafeRollbackArtifactSha256(path: string | undefined) {
+async function readSafeRollbackArtifact(path: string | undefined) {
 	if (
 		typeof path !== "string" ||
 		!/^audit\/direct-refresh-discovery-rollback-verification\/[A-Za-z0-9._/-]+\.json$/.test(
@@ -31,9 +31,22 @@ async function readSafeRollbackArtifactSha256(path: string | undefined) {
 		return undefined;
 	}
 	try {
-		return `sha256:${createHash("sha256")
-			.update(await readFile(path, "utf8"))
-			.digest("hex")}`;
+		const content = await readFile(path, "utf8");
+		return {
+			sha256: `sha256:${createHash("sha256").update(content).digest("hex")}`,
+			generatedAt: parseGeneratedAt(content),
+		};
+	} catch {
+		return undefined;
+	}
+}
+
+function parseGeneratedAt(content: string) {
+	try {
+		const parsed = JSON.parse(content.replace(/^\uFEFF/, "")) as unknown;
+		if (!parsed || typeof parsed !== "object") return undefined;
+		const generatedAt = (parsed as { generatedAt?: unknown }).generatedAt;
+		return typeof generatedAt === "string" ? generatedAt : undefined;
 	} catch {
 		return undefined;
 	}
@@ -53,6 +66,12 @@ async function main() {
 			content: await readFile(filePath, "utf8"),
 		})),
 	);
+	const rollbackPreimageArtifact = await readSafeRollbackArtifact(
+		evidence.rollbackDrill?.preimageArtifact,
+	);
+	const postRollbackVerificationArtifact = await readSafeRollbackArtifact(
+		evidence.rollbackDrill?.postRollbackVerificationArtifact,
+	);
 	const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 		evidence,
 		evidencePath: options.evidence,
@@ -64,12 +83,11 @@ async function main() {
 			calculateDirectRefreshDiscoverySourceConfigSnapshotSha256(
 				sourceConfigFiles,
 			),
-		rollbackPreimageSha256: await readSafeRollbackArtifactSha256(
-			evidence.rollbackDrill?.preimageArtifact,
-		),
-		postRollbackVerificationSha256: await readSafeRollbackArtifactSha256(
-			evidence.rollbackDrill?.postRollbackVerificationArtifact,
-		),
+		rollbackPreimageSha256: rollbackPreimageArtifact?.sha256,
+		rollbackPreimageGeneratedAt: rollbackPreimageArtifact?.generatedAt,
+		postRollbackVerificationSha256: postRollbackVerificationArtifact?.sha256,
+		postRollbackVerificationGeneratedAt:
+			postRollbackVerificationArtifact?.generatedAt,
 	});
 	await writeJson(options.output, report);
 	if (report.status === "FAIL") process.exitCode = 1;
