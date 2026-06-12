@@ -77,6 +77,8 @@ export type DirectRefreshDiscoveryPrewriteFoundationCliOptions = {
 
 type Rule = [boolean, string];
 const FOUNDATION_EVIDENCE_MAX_AGE_MS = 15 * 60 * 1000;
+const MAX_VTEX_FOUNDATION_REQUEST_CAP = 20;
+const MAX_VTEX_FOUNDATION_TIMEOUT_MS = 10_000;
 const WRITER_SUPPORTED_SOURCES = new Set(["carrefour", "vea", "disco", "jumbo", "mas"]);
 
 const WRITE_BOUNDARY =
@@ -227,16 +229,20 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[rollback.preimageCaptured === true, "rollback preimage capture is required"],
 			[hasText(rollback.pitrBackupPosture), "PITR/backup posture is required"],
 			[rollback.rollbackIds.length > 0, "rollback IDs are required"],
+			[hasExactRollbackIds(rollback.rollbackIds), "rollback IDs must be exact table:id entries"],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
 			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
 		]),
 		check("vtex-budgets", [
 			[budget.requestCap > 0, "VTEX request cap must be positive"],
+			[budget.requestCap <= MAX_VTEX_FOUNDATION_REQUEST_CAP, "VTEX request cap must be <= 20"],
 			[budget.concurrency > 0, "VTEX concurrency must be positive"],
+			[budget.concurrency === 1, "VTEX concurrency must be serial"],
 			[budget.timeoutMs > 0, "VTEX timeout must be positive"],
-			[hasText(budget.backoffPolicy), "VTEX backoff policy is required"],
-			[hasText(budget.stopRule), "VTEX stop rule is required"],
-			[hasText(budget.headerPolicy), "VTEX header policy is required"],
+			[budget.timeoutMs <= MAX_VTEX_FOUNDATION_TIMEOUT_MS, "VTEX timeout must be <= 10000ms"],
+			[hasVtexBackoffPolicy(budget.backoffPolicy), "VTEX backoff policy must include timeout, 403, 429, HTML, and captcha"],
+			[hasVtexStopRule(budget.stopRule), "VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry"],
+			[hasVtexHeaderPolicy(budget.headerPolicy), "VTEX header policy must be documented and non-evasive"],
 		]),
 		check("compliance", [
 			[compliance.allowedUseReviewed, "compliance allowed-use review is required"],
@@ -250,11 +256,11 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[alert.rollbackRequired, "rollback-required alert is required"],
 		]),
 		check("performance-guard", [
-			[hasText(perf.prismaPoolPosture), "Prisma pool posture is required"],
-			[hasText(perf.transactionTimeoutPosture), "transaction timeout posture is required"],
-			[hasText(perf.priceHistoryBaseline), "PriceHistory baseline is required"],
-			[hasText(perf.publicApiBaseline), "public API baseline is required"],
-			[hasText(perf.cacheTtlBaseline), "cache TTL baseline is required"],
+			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, and pool_timeout"],
+			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout"],
+			[hasPriceHistoryBaseline(perf.priceHistoryBaseline), "PriceHistory baseline must include insert and read"],
+			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline must include search and products"],
+			[hasCacheTtlBaseline(perf.cacheTtlBaseline), "cache TTL baseline must include TTL"],
 		]),
 	];
 }
@@ -330,4 +336,62 @@ function hasIsoDatetime(value: string | undefined) {
 	if (typeof value !== "string" || value.trim().length === 0) return false;
 	const parsed = Date.parse(value);
 	return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
+function hasVtexBackoffPolicy(value: string | undefined) {
+	return hasAllTerms(value, ["timeout", "403", "429", "html", "captcha"]);
+}
+
+function hasExactRollbackIds(values: string[] | undefined) {
+	return (
+		Array.isArray(values) &&
+		values.length > 0 &&
+		values.every((value) =>
+			/^(products|supermarket_products|price_history|staging_products|direct_refresh_run_ledger):[1-9]\d*$/.test(value),
+		)
+	);
+}
+
+function hasVtexStopRule(value: string | undefined) {
+	return (
+		hasAllTerms(value, ["blocked", "rate-limit", "hash_invalid"]) &&
+		hasAnyTerm(value, ["no automatic retry", "no retry automatico", "no automatic retries"])
+	);
+}
+
+function hasVtexHeaderPolicy(value: string | undefined) {
+	return hasAllTerms(value, ["documented", "non-evasive"]);
+}
+
+function hasPrismaPoolPosture(value: string | undefined) {
+	return hasAllTerms(value, ["pgbouncer", "connection_limit", "pool_timeout"]);
+}
+
+function hasTransactionTimeoutPosture(value: string | undefined) {
+	return hasAllTerms(value, [
+		"statement_timeout",
+		"idle_in_transaction_session_timeout",
+	]);
+}
+
+function hasPriceHistoryBaseline(value: string | undefined) {
+	return hasAllTerms(value, ["pricehistory", "insert", "read"]);
+}
+
+function hasPublicApiBaseline(value: string | undefined) {
+	return hasAllTerms(value, ["search", "products"]);
+}
+
+function hasCacheTtlBaseline(value: string | undefined) {
+	return hasAllTerms(value, ["ttl"]);
+}
+
+function hasAllTerms(value: string | undefined, terms: string[]) {
+	const normalized = value?.toLowerCase() ?? "";
+	return terms.every((term) => normalized.includes(term));
+}
+
+function hasAnyTerm(value: string | undefined, terms: string[]) {
+	const normalized = value?.toLowerCase() ?? "";
+	return terms.some((term) => normalized.includes(term));
 }

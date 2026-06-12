@@ -56,8 +56,8 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		requestCap: 20,
 		concurrency: 1,
 		timeoutMs: 10_000,
-		backoffPolicy: "stop-on-429",
-		stopRule: "source STOPPED on blocked/rate-limit/hash_invalid",
+		backoffPolicy: "backoff on timeout/403/429/HTML/captcha",
+		stopRule: "source STOPPED on blocked/rate-limit/hash_invalid; no automatic retry",
 		headerPolicy: "documented non-evasive headers",
 	},
 	compliance: {
@@ -72,10 +72,11 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		rollbackRequired: true,
 	},
 	performanceGuard: {
-		prismaPoolPosture: "bounded",
-		transactionTimeoutPosture: "bounded",
-		priceHistoryBaseline: "insert/read baseline captured",
-		publicApiBaseline: "search/product baseline captured",
+		prismaPoolPosture: "pgbouncer=true; connection_limit=3; pool_timeout=10",
+		transactionTimeoutPosture:
+			"statement_timeout=2min; idle_in_transaction_session_timeout=0",
+		priceHistoryBaseline: "PriceHistory insert/read baseline captured",
+		publicApiBaseline: "public API search/products baseline captured",
 		cacheTtlBaseline: "TTL baseline captured",
 	},
 };
@@ -306,6 +307,24 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /rollback cache handling is required/);
 	});
 
+	it("fails closed when rollback IDs are broad selectors instead of exact table IDs", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					rollbackIds: ["ean:7791234567890", "price_history:*"],
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /rollback IDs must be exact table:id entries/);
+	});
+
 	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {
 		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 			evidence: {
@@ -324,7 +343,82 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /VTEX request cap must be positive/);
 		assert.match(reasons, /compliance allowed-use review is required/);
-		assert.match(reasons, /public API baseline is required/);
+		assert.match(reasons, /public API baseline must include search and products/);
+	});
+
+	it("fails closed when VTEX budgets are not tightly bounded", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				vtexBudgets: {
+					...completeEvidence.vtexBudgets,
+					requestCap: 10_000,
+					concurrency: 10,
+					timeoutMs: 60_000,
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /VTEX request cap must be <= 20/);
+		assert.match(reasons, /VTEX concurrency must be serial/);
+		assert.match(reasons, /VTEX timeout must be <= 10000ms/);
+	});
+
+	it("fails closed when VTEX safety policies are too vague", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				vtexBudgets: {
+					...completeEvidence.vtexBudgets,
+					backoffPolicy: "retry later",
+					stopRule: "stop if bad",
+					headerPolicy: "custom headers",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /VTEX backoff policy must include timeout, 403, 429, HTML, and captcha/);
+		assert.match(reasons, /VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry/);
+		assert.match(reasons, /VTEX header policy must be documented and non-evasive/);
+	});
+
+	it("fails closed when performance guard evidence is too vague", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				performanceGuard: {
+					prismaPoolPosture: "ok",
+					transactionTimeoutPosture: "ok",
+					priceHistoryBaseline: "ok",
+					publicApiBaseline: "ok",
+					cacheTtlBaseline: "ok",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/Prisma pool posture must include pgbouncer, connection_limit, and pool_timeout/,
+		);
+		assert.match(
+			reasons,
+			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout/,
+		);
+		assert.match(reasons, /PriceHistory baseline must include insert and read/);
+		assert.match(reasons, /public API baseline must include search and products/);
+		assert.match(reasons, /cache TTL baseline must include TTL/);
 	});
 
 	it("parses a read-only CLI boundary and rejects write-like flags", () => {
@@ -383,6 +477,6 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.doesNotMatch(reasons, /alert channel is required/);
 		assert.match(reasons, /rollback drill must be executed/);
 		assert.match(reasons, /migration status must be PASS/);
-		assert.match(reasons, /public API baseline is required/);
+		assert.match(reasons, /public API baseline must include search and products/);
 	});
 });
