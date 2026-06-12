@@ -161,6 +161,12 @@ export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 	};
 }
 
+export function parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
+	raw: string,
+): DirectRefreshDiscoveryPrewriteFoundationEvidence {
+	return JSON.parse(raw.replace(/^\uFEFF/, "")) as DirectRefreshDiscoveryPrewriteFoundationEvidence;
+}
+
 function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence) {
 	const schema = evidence.schemaConstraints;
 	const control = evidence.controlPlane;
