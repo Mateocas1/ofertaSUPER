@@ -2,6 +2,72 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
+import {
+	evaluateDirectRefreshDiscoveryPrewriteFoundation,
+	parseDirectRefreshDiscoveryPrewriteFoundationCliOptions,
+	type DirectRefreshDiscoveryPrewriteFoundationEvidence,
+} from "../scripts/pipeline/direct-refresh-discovery-prewrite-foundation";
+
+const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
+	schemaConstraints: {
+		productEanPrimaryKey: true,
+		productSourceUnique: true,
+		sourceSkuUniqueNonnull: true,
+		priceHistoryIndex: true,
+		stagingProductIndex: true,
+		ledgerUniqueness: true,
+		migrationStatus: "PASS",
+	},
+	controlPlane: {
+		sourceLock: true,
+		ledgerAttemptIdentity: true,
+		ttlPolicy: true,
+		owner: "Direct-refresh operator",
+		stopResumeStates: true,
+		idempotencyPolicy: true,
+	},
+	artifactLineage: {
+		gitCommit: "ccc7535",
+		toolVersion: "direct-refresh-discovery-create@1",
+		schemaVersion: "1",
+		dbEnvironmentIdentity: "local-test-db",
+		sourceConfigSnapshot: "config-hash",
+		vtexProbeTimestamp: "2026-06-06T12:00:00.000Z",
+	},
+	rollbackDrill: {
+		executed: true,
+		mode: "controlled-disposable-row",
+		rollbackIds: ["supermarket_products:901", "price_history:1001"],
+		postRollbackVerification: true,
+	},
+	vtexBudgets: {
+		requestCap: 20,
+		concurrency: 1,
+		timeoutMs: 10_000,
+		backoffPolicy: "stop-on-429",
+		stopRule: "source STOPPED on blocked/rate-limit/hash_invalid",
+		headerPolicy: "documented non-evasive headers",
+	},
+	compliance: {
+		allowedUseReviewed: true,
+		posture: "approved",
+	},
+	alertChannel: {
+		channel: "Issue comment + #direct-refresh-alerts",
+		owner: "Direct-refresh operator",
+		writeFailure: true,
+		postwriteFailure: true,
+		rollbackRequired: true,
+	},
+	performanceGuard: {
+		prismaPoolPosture: "bounded",
+		transactionTimeoutPosture: "bounded",
+		priceHistoryBaseline: "insert/read baseline captured",
+		publicApiBaseline: "search/product baseline captured",
+		cacheTtlBaseline: "TTL baseline captured",
+	},
+};
+
 describe("direct-refresh discovery prewrite foundation", () => {
 	it("keeps the schema constraints required before discovery writes", async () => {
 		const schema = await readFile("prisma/schema.prisma", "utf8");
@@ -42,5 +108,86 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(migration, /ON\s+"supermarket_products"\s*\("supermarket_id",\s*"sku_id"\)/i);
 		assert.match(migration, /WHERE\s+"sku_id"\s+IS\s+NOT\s+NULL/i);
 		assert.doesNotMatch(migration, /DELETE\s+FROM\s+"supermarket_products"/i);
+	});
+
+	it("passes only when all Phase 1 pre-write foundation evidence is present", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: completeEvidence,
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.equal(report.dryRun, true);
+		assert.match(report.writeBoundary, /no discovery apply/);
+		assert.equal(report.summary.passCount, report.checks.length);
+		assert.deepEqual(report.summary.failClosedReasons, []);
+	});
+
+	it("fails closed when rollback proof is read-only instead of executed", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					executed: false,
+					mode: "read-only-review",
+				},
+			},
+			evidencePath: "foundation.json",
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/rollback drill must be executed before discovery apply/,
+		);
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/read-only rollback review is preparatory only/,
+		);
+	});
+
+	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				vtexBudgets: { ...completeEvidence.vtexBudgets, requestCap: 0 },
+				compliance: { ...completeEvidence.compliance, allowedUseReviewed: false },
+				performanceGuard: {
+					...completeEvidence.performanceGuard,
+					publicApiBaseline: "",
+				},
+			},
+			evidencePath: "foundation.json",
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /VTEX request cap must be positive/);
+		assert.match(reasons, /compliance allowed-use review is required/);
+		assert.match(reasons, /public API baseline is required/);
+	});
+
+	it("parses a read-only CLI boundary and rejects write-like flags", () => {
+		const options = parseDirectRefreshDiscoveryPrewriteFoundationCliOptions([
+			"tsx",
+			"script",
+			"--evidence=foundation.json",
+			"--output=report.json",
+		]);
+
+		assert.equal(options.evidence, "foundation.json");
+		assert.equal(options.output, "report.json");
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoveryPrewriteFoundationCliOptions([
+					"tsx",
+					"script",
+					"--evidence=foundation.json",
+					"--apply=true",
+				]),
+			/rejects --apply/,
+		);
 	});
 });
