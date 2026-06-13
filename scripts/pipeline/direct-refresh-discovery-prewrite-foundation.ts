@@ -525,6 +525,10 @@ function buildChecks(
 				hasTestAlertProof(alert.testAlertProof),
 				"test-alert proof requires issue/comment plus concrete reference",
 			],
+			[
+				hasScenarioTestAlertProofReferences(alert.testAlertProof),
+				"test-alert proof must reference write-failure, postwrite-failure, and rollback-required scenarios",
+			],
 			...buildTestAlertProofTimestampRules(alert.testAlertProof, now),
 			[alert.writeFailure, "write failure alert is required"],
 			[alert.postwriteFailure, "postwrite failure alert is required"],
@@ -1012,6 +1016,14 @@ function hasTestAlertProof(value: string | undefined) {
 		hasAllTerms(value, ["test-alert", "proof", "issue", "comment"]) &&
 		hasConcreteTestAlertProofReference(value)
 	);
+}
+
+function hasScenarioTestAlertProofReferences(value: string | undefined) {
+	return hasAllTerms(value, [
+		"write-failure",
+		"postwrite-failure",
+		"rollback-required",
+	]);
 }
 
 function buildTestAlertProofTimestampRules(
