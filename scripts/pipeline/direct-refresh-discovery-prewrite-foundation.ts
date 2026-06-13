@@ -39,7 +39,11 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		mode: "non-prod-prod-like" | "controlled-disposable-row" | "read-only-review";
 		rollbackIds: string[];
 		postRollbackVerification: boolean;
+		postRollbackVerificationArtifact: string;
+		postRollbackVerificationSha256: string;
 		preimageCaptured: boolean;
+		preimageArtifact: string;
+		preimageSha256: string;
 		pitrBackupPosture: string;
 		cacheHandling: string;
 	};
@@ -58,6 +62,13 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	alertChannel: {
 		channel: string;
 		owner: string;
+		severity: string;
+		ackSla: string;
+		resolutionSla: string;
+		escalationPath: string;
+		suppressionPolicy: string;
+		retryPolicy: string;
+		testAlertProof: string;
 		writeFailure: boolean;
 		postwriteFailure: boolean;
 		rollbackRequired: boolean;
@@ -205,7 +216,7 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[control.sourceLock, "source lock is required"],
 			[control.ledgerAttemptIdentity, "ledger attempt identity is required"],
 			[control.ttlPolicy, "TTL policy is required"],
-			[hasText(control.owner), "owner is required"],
+			[hasExplicitOwner(control.owner), "control-plane owner must be explicit and non-placeholder"],
 			[control.stopResumeStates, "stop/resume states are required"],
 			[control.idempotencyPolicy, "idempotency policy is required"],
 		]),
@@ -227,10 +238,14 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[rollback.executed, "rollback drill must be executed before discovery apply"],
 			[rollback.mode !== "read-only-review", "read-only rollback review is preparatory only"],
 			[rollback.preimageCaptured === true, "rollback preimage capture is required"],
-			[hasText(rollback.pitrBackupPosture), "PITR/backup posture is required"],
+			[hasRollbackVerificationArtifact(rollback.preimageArtifact), "preimage artifact must be rollback verification audit json"],
+			[hasSha256Lineage(rollback.preimageSha256), "preimage sha256 is required"],
+			[hasPitrBackupPosture(rollback.pitrBackupPosture), "PITR/backup posture must include PITR or backup and reviewed or available"],
 			[rollback.rollbackIds.length > 0, "rollback IDs are required"],
 			[hasExactRollbackIds(rollback.rollbackIds), "rollback IDs must be exact table:id entries"],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
+			[hasRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
+			[hasSha256Lineage(rollback.postRollbackVerificationSha256), "post-rollback verification sha256 is required"],
 			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
 		]),
 		check("vtex-budgets", [
@@ -249,8 +264,15 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[compliance.posture === "approved" || compliance.posture === "risk-accepted", "compliance posture must be approved or risk-accepted"],
 		]),
 		check("alert-channel", [
-			[hasText(alert.channel), "alert channel is required"],
-			[hasText(alert.owner), "alert owner is required"],
+			[hasActionableAlertChannel(alert.channel), "alert channel must include issue evidence comment and concrete alert destination"],
+			[hasExplicitAlertOwner(alert.owner), "alert owner must be explicit and non-placeholder"],
+			[hasAlertSeverity(alert.severity), "alert severity must include write, postwrite, and rollback-required"],
+			[hasAlertAckSla(alert.ackSla), "alert ack SLA is required"],
+			[hasAlertResolutionSla(alert.resolutionSla), "alert resolution SLA is required"],
+			[hasAlertEscalationPath(alert.escalationPath), "alert escalation path must be explicit"],
+			[hasAlertSuppressionPolicy(alert.suppressionPolicy), "alert suppression policy must describe suppression/noise handling"],
+			[hasAlertRetryPolicy(alert.retryPolicy), "alert retry policy must be explicit"],
+			[hasTestAlertProof(alert.testAlertProof), "test-alert proof is required"],
 			[alert.writeFailure, "write failure alert is required"],
 			[alert.postwriteFailure, "postwrite failure alert is required"],
 			[alert.rollbackRequired, "rollback-required alert is required"],
@@ -352,6 +374,21 @@ function hasExactRollbackIds(values: string[] | undefined) {
 	);
 }
 
+function hasRollbackVerificationArtifact(value: string | undefined) {
+	return (
+		typeof value === "string" &&
+		/^audit\/direct-refresh-discovery-rollback-verification\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
+		!value.includes("..")
+	);
+}
+
+function hasPitrBackupPosture(value: string | undefined) {
+	return (
+		hasAnyTerm(value, ["pitr", "backup"]) &&
+		hasAnyTerm(value, ["reviewed", "available"])
+	);
+}
+
 function hasVtexStopRule(value: string | undefined) {
 	return (
 		hasAllTerms(value, ["blocked", "rate-limit", "hash_invalid"]) &&
@@ -361,6 +398,55 @@ function hasVtexStopRule(value: string | undefined) {
 
 function hasVtexHeaderPolicy(value: string | undefined) {
 	return hasAllTerms(value, ["documented", "non-evasive"]);
+}
+
+function hasActionableAlertChannel(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return (
+		hasAllTerms(normalized, ["issue"]) &&
+		hasAnyTerm(normalized, ["#", "slack", "email", "pagerduty"]) &&
+		!normalized.includes("placeholder")
+	);
+}
+
+function hasExplicitAlertOwner(value: string | undefined) {
+	return hasExplicitOwner(value);
+}
+
+function hasAlertSeverity(value: string | undefined) {
+	return hasAllTerms(value, ["write", "postwrite", "rollback-required"]);
+}
+
+function hasAlertAckSla(value: string | undefined) {
+	return hasAllTerms(value, ["ack", "sla"]);
+}
+
+function hasAlertResolutionSla(value: string | undefined) {
+	return hasAllTerms(value, ["resolution", "sla"]);
+}
+
+function hasAlertEscalationPath(value: string | undefined) {
+	return hasAnyTerm(value, ["escalate", "escalation"]) && hasAnyTerm(value, ["oncall", "owner"]);
+}
+
+function hasAlertSuppressionPolicy(value: string | undefined) {
+	return hasAllTerms(value, ["suppression", "noise"]);
+}
+
+function hasAlertRetryPolicy(value: string | undefined) {
+	return hasAllTerms(value, ["retry", "policy"]) && hasAnyTerm(value, ["no automatic", "manual", "rollback-required"]);
+}
+
+function hasTestAlertProof(value: string | undefined) {
+	return hasAllTerms(value, ["test-alert", "proof"]);
+}
+
+function hasExplicitOwner(value: string | undefined) {
+	const normalized = value?.toLowerCase().trim() ?? "";
+	return (
+		normalized.length > 0 &&
+		!["owner", "operator", "direct-refresh operator", "placeholder"].includes(normalized)
+	);
 }
 
 function hasPrismaPoolPosture(value: string | undefined) {

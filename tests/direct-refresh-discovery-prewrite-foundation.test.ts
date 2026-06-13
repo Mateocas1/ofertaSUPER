@@ -24,7 +24,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		sourceLock: true,
 		ledgerAttemptIdentity: true,
 		ttlPolicy: true,
-		owner: "Direct-refresh operator",
+		owner: "direct-refresh-oncall",
 		stopResumeStates: true,
 		idempotencyPolicy: true,
 	},
@@ -48,7 +48,15 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		mode: "controlled-disposable-row",
 		rollbackIds: ["supermarket_products:901", "price_history:1001"],
 		postRollbackVerification: true,
+		postRollbackVerificationArtifact:
+			"audit/direct-refresh-discovery-rollback-verification/post-rollback-verification.json",
+		postRollbackVerificationSha256:
+			"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 		preimageCaptured: true,
+		preimageArtifact:
+			"audit/direct-refresh-discovery-rollback-verification/preimage.json",
+		preimageSha256:
+			"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		pitrBackupPosture: "Supabase PITR/backup posture reviewed before write",
 		cacheHandling: "No cache purge needed for disposable-row drill; public cache TTL reviewed",
 	},
@@ -66,7 +74,14 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	},
 	alertChannel: {
 		channel: "Issue comment + #direct-refresh-alerts",
-		owner: "Direct-refresh operator",
+		owner: "direct-refresh-oncall",
+		severity: "critical write/postwrite/rollback-required",
+		ackSla: "ack SLA <= 30m",
+		resolutionSla: "resolution SLA <= 4h",
+		escalationPath: "escalate to direct-refresh-oncall then data-platform-oncall",
+		suppressionPolicy: "suppression/noise policy: no suppression for rollback-required",
+		retryPolicy: "retry policy: no automatic retry after rollback-required",
+		testAlertProof: "test-alert proof captured in issue evidence comment",
 		writeFailure: true,
 		postwriteFailure: true,
 		rollbackRequired: true,
@@ -286,6 +301,24 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when control-plane owner is generic", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				controlPlane: {
+					...completeEvidence.controlPlane,
+					owner: "Direct-refresh operator",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /control-plane owner must be explicit and non-placeholder/);
+	});
+
 	it("fails closed when rollback DR proof omits preimage, PITR, or cache handling", () => {
 		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
 			evidence: {
@@ -303,8 +336,78 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /rollback preimage capture is required/);
-		assert.match(reasons, /PITR\/backup posture is required/);
+		assert.match(
+			reasons,
+			/PITR\/backup posture must include PITR or backup and reviewed or available/,
+		);
 		assert.match(reasons, /rollback cache handling is required/);
+	});
+
+	it("fails closed when PITR/backup posture evidence is vague", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					pitrBackupPosture: "looks ok",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/PITR\/backup posture must include PITR or backup and reviewed or available/,
+		);
+	});
+
+	it("fails closed when preimage artifact evidence is missing or malformed", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					preimageArtifact: "../preimage.json",
+					preimageSha256: "not-a-sha",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/preimage artifact must be rollback verification audit json/,
+		);
+		assert.match(reasons, /preimage sha256 is required/);
+	});
+
+	it("fails closed when post-rollback verification artifact evidence is missing or malformed", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					postRollbackVerificationArtifact: "../rollback.json",
+					postRollbackVerificationSha256: "not-a-sha",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/post-rollback verification artifact must be rollback verification audit json/,
+		);
+		assert.match(reasons, /post-rollback verification sha256 is required/);
 	});
 
 	it("fails closed when rollback IDs are broad selectors instead of exact table IDs", () => {
@@ -323,6 +426,59 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /rollback IDs must be exact table:id entries/);
+	});
+
+	it("fails closed when alert channel or owner are placeholders", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				alertChannel: {
+					...completeEvidence.alertChannel,
+					channel: "alert placeholder",
+					owner: "Direct-refresh operator",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/alert channel must include issue evidence comment and concrete alert destination/,
+		);
+		assert.match(reasons, /alert owner must be explicit and non-placeholder/);
+	});
+
+	it("fails closed when alert policy omits severity, SLA, escalation, suppression, retry, or test proof", () => {
+		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+			evidence: {
+				...completeEvidence,
+				alertChannel: {
+					...completeEvidence.alertChannel,
+					severity: "high",
+					ackSla: "",
+					resolutionSla: "",
+					escalationPath: "ask someone",
+					suppressionPolicy: "quiet",
+					retryPolicy: "retry",
+					testAlertProof: "",
+				},
+			},
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /alert severity must include write, postwrite, and rollback-required/);
+		assert.match(reasons, /alert ack SLA is required/);
+		assert.match(reasons, /alert resolution SLA is required/);
+		assert.match(reasons, /alert escalation path must be explicit/);
+		assert.match(reasons, /alert suppression policy must describe suppression\/noise handling/);
+		assert.match(reasons, /alert retry policy must be explicit/);
+		assert.match(reasons, /test-alert proof is required/);
 	});
 
 	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {
