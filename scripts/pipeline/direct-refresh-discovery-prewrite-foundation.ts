@@ -402,7 +402,7 @@ function buildChecks(
 				),
 				"preimage sha256 must match runtime preimage artifact",
 			],
-			[hasPitrBackupPosture(rollback.pitrBackupPosture), "PITR/backup posture must include PITR or backup and reviewed or available"],
+			[hasPitrBackupPosture(rollback.pitrBackupPosture), "PITR/backup posture requires reviewed availability plus environment/timestamp/retention/artifact detail"],
 			[
 				Array.isArray(rollback.rollbackIds) && rollback.rollbackIds.length > 0,
 				"rollback IDs are required",
@@ -426,7 +426,10 @@ function buildChecks(
 				),
 				"post-rollback verification sha256 must match runtime artifact",
 			],
-			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
+			[
+				hasRollbackCacheHandling(rollback.cacheHandling),
+				"rollback cache handling requires cache plus TTL/invalidation/no-purge/post-rollback cache proof",
+			],
 		]),
 		check("vtex-budgets", [
 			[hasPositiveInteger(budget.requestCap), "VTEX request cap must be a positive integer"],
@@ -460,7 +463,10 @@ function buildChecks(
 			[hasAlertEscalationPath(alert.escalationPath), "alert escalation path must include a concrete route"],
 			[hasAlertSuppressionPolicy(alert.suppressionPolicy), "alert suppression/noise policy must protect rollback-required or write/postwrite failures"],
 			[hasAlertRetryPolicy(alert.retryPolicy), "alert retry policy must prohibit automatic retry or bind to rollback-required"],
-			[hasTestAlertProof(alert.testAlertProof), "test-alert proof is required"],
+			[
+				hasTestAlertProof(alert.testAlertProof),
+				"test-alert proof requires issue/comment plus concrete reference",
+			],
 			[alert.writeFailure, "write failure alert is required"],
 			[alert.postwriteFailure, "postwrite failure alert is required"],
 			[alert.rollbackRequired, "rollback-required alert is required"],
@@ -734,7 +740,49 @@ function hasRollbackVerificationArtifact(
 function hasPitrBackupPosture(value: string | undefined) {
 	return (
 		hasAnyTerm(value, ["pitr", "backup"]) &&
-		hasAnyTerm(value, ["reviewed", "available"])
+		hasAnyTerm(value, ["reviewed", "reviewedat", "verified", "available"]) &&
+		hasConcretePitrBackupDetail(value)
+	);
+}
+
+function hasConcretePitrBackupDetail(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return (
+		/\b(?:environment|env|db(?:\s+environment)?(?:\s+identity)?)\s*[:=]?\s*[a-z0-9][a-z0-9._-]{2,}\b/.test(
+			normalized,
+		) ||
+		/\b(?:supabase|postgres|postgresql)\b/.test(normalized) ||
+		/\b\d{4}-\d{2}-\d{2}(?:t\d{2}:\d{2}:\d{2}(?:\.\d{3})?z)?\b/.test(
+			normalized,
+		) ||
+		/\b(?:retention|window)\s*[:=]?\s*\d+\s*(?:h|hr|hrs|hour|hours|d|day|days|w|week|weeks)\b/.test(
+			normalized,
+		) ||
+		/\brestore[-\s_]?point\s*[:=]?\s*[a-z0-9][a-z0-9._:-]{2,}\b/.test(
+			normalized,
+		) ||
+		/\b(?:backup|snapshot)[-\s_]?id\s*[:=]?\s*[a-z0-9][a-z0-9._:-]{2,}\b/.test(
+			normalized,
+		) ||
+		/\b(?:artifact|evidence)\s*[:=]?\s*[a-z0-9][a-z0-9._/-]*\.(?:json|md|txt|sql)\b/.test(
+			normalized,
+		)
+	);
+}
+
+function hasRollbackCacheHandling(value: string | undefined) {
+	return (
+		hasAnyTerm(value, ["cache"]) &&
+		hasAnyTerm(value, [
+			"ttl",
+			"invalidation policy",
+			"manual purge forbidden",
+			"no cache purge",
+			"no purge",
+			"cache key",
+			"cache version",
+			"post-rollback cache verification",
+		])
 	);
 }
 
@@ -768,9 +816,22 @@ function hasComplianceForSource(
 function hasActionableAlertChannel(value: string | undefined) {
 	const normalized = value?.toLowerCase() ?? "";
 	return (
-		hasAllTerms(normalized, ["issue"]) &&
+		hasAllTerms(normalized, ["issue", "comment"]) &&
+		hasConcreteAlertIssueOrCommentReference(normalized) &&
 		hasAnyTerm(normalized, ["#", "slack", "email", "pagerduty"]) &&
 		!normalized.includes("placeholder")
+	);
+}
+
+function hasConcreteAlertIssueOrCommentReference(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return (
+		/\bissue\s*#\s*[1-9]\d*\b/.test(normalized) ||
+		/https?:\/\/\S+\/issues\/[1-9]\d*\b/.test(normalized) ||
+		/\bcomment[-_\s]?(?:id)?\s*[:#=]?\s*[1-9]\d*\b/.test(normalized) ||
+		/https?:\/\/\S+\/(?:issues\/[1-9]\d*#issuecomment-[1-9]\d*|pull\/[1-9]\d*#discussion_r[1-9]\d*)\b/.test(
+			normalized,
+		)
 	);
 }
 
@@ -844,7 +905,32 @@ function hasAlertRetryPolicy(value: string | undefined) {
 }
 
 function hasTestAlertProof(value: string | undefined) {
-	return hasAllTerms(value, ["test-alert", "proof", "issue", "comment"]);
+	return (
+		hasAllTerms(value, ["test-alert", "proof", "issue", "comment"]) &&
+		hasConcreteTestAlertProofReference(value)
+	);
+}
+
+function hasConcreteTestAlertProofReference(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return (
+		/\bissue\s*#\s*[1-9]\d*\b/.test(normalized) ||
+		/https?:\/\/\S+\/issues\/[1-9]\d*\b/.test(normalized) ||
+		/\bcomment[-_\s]?(?:id)?\s*[:#=]?\s*[1-9]\d*\b/.test(normalized) ||
+		/https?:\/\/\S+\/(?:issues\/[1-9]\d*#issuecomment-[1-9]\d*|pull\/[1-9]\d*#discussion_r[1-9]\d*)\b/.test(
+			normalized,
+		) ||
+		/\b(?:artifact|evidence)\s*[:=]?\s*[a-z0-9][a-z0-9._/-]*\.(?:json|md|txt|log)\b/.test(
+			normalized,
+		) ||
+		/\b\d{4}-\d{2}-\d{2}t\d{2}:\d{2}:\d{2}(?:\.\d{3})?z\b/.test(
+			normalized,
+		) ||
+		/\b(?:evidence[-_\s]?id|evidence[-_\s]?hash)\s*[:#=]\s*[a-z0-9][a-z0-9._:-]{5,}\b/.test(
+			normalized,
+		) ||
+		hasSha256Lineage(value)
+	);
 }
 
 function hasExplicitOwner(value: string | undefined) {

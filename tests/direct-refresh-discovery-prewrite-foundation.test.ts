@@ -63,7 +63,8 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 			"audit/direct-refresh-discovery-rollback-verification/preimage.json",
 		preimageSha256:
 			"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-		pitrBackupPosture: "Supabase PITR/backup posture reviewed before write",
+		pitrBackupPosture:
+			"Supabase PITR/backup posture reviewed for local-test-db at 2026-06-06T12:00:00Z; retention=7d",
 		cacheHandling: "No cache purge needed for disposable-row drill; public cache TTL reviewed",
 	},
 	vtexBudgets: {
@@ -80,7 +81,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		reviewedSources: ["vea"],
 	},
 	alertChannel: {
-		channel: "Issue comment + #direct-refresh-alerts",
+		channel: "Issue #109 comment + #direct-refresh-alerts",
 		owner: "direct-refresh-oncall",
 		severity: "critical write/postwrite/rollback-required",
 		ackSla: "ack SLA <= 30m",
@@ -88,7 +89,8 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		escalationPath: "escalate to direct-refresh-oncall then data-platform-oncall",
 		suppressionPolicy: "suppression/noise policy: no suppression for rollback-required",
 		retryPolicy: "retry policy: no automatic retry after rollback-required",
-		testAlertProof: "test-alert proof captured in issue evidence comment",
+		testAlertProof:
+			"test-alert proof captured in issue #109 evidence comment at 2026-06-06T12:10:00Z",
 		writeFailure: true,
 		postwriteFailure: true,
 		rollbackRequired: true,
@@ -914,9 +916,45 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /rollback preimage capture is required/);
 		assert.match(
 			reasons,
-			/PITR\/backup posture must include PITR or backup and reviewed or available/,
+			/PITR\/backup posture requires reviewed availability plus environment\/timestamp\/retention\/artifact detail/,
 		);
-		assert.match(reasons, /rollback cache handling is required/);
+		assert.match(
+			reasons,
+			/rollback cache handling requires cache plus TTL\/invalidation\/no-purge\/post-rollback cache proof/,
+		);
+	});
+
+	it("fails closed when rollback cache handling proof is generic", () => {
+		for (const cacheHandling of ["cache reviewed", "cache handled", "cache ok"]) {
+			const evidenceWithGenericRollbackCacheHandling = {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+				},
+				rollbackDrill: {
+					...completeEvidence.rollbackDrill,
+					cacheHandling,
+				},
+			};
+			evidenceWithGenericRollbackCacheHandling.artifactLineage.artifactSha256 =
+				calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+					evidenceWithGenericRollbackCacheHandling,
+				);
+
+			const report = evaluateFoundation({
+				evidence: evidenceWithGenericRollbackCacheHandling,
+				evidencePath: completeEvidence.artifactLineage.artifactPath,
+				now: new Date("2026-06-06T12:30:00.000Z"),
+			});
+
+			const reasons = report.summary.failClosedReasons.join("\n");
+			assert.equal(report.status, "FAIL", cacheHandling);
+			assert.match(
+				reasons,
+				/rollback cache handling requires cache plus TTL\/invalidation\/no-purge\/post-rollback cache proof/,
+				cacheHandling,
+			);
+		}
 	});
 
 	it("fails closed when PITR/backup posture evidence is vague", () => {
@@ -936,7 +974,35 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			reasons,
-			/PITR\/backup posture must include PITR or backup and reviewed or available/,
+			/PITR\/backup posture requires reviewed availability plus environment\/timestamp\/retention\/artifact detail/,
+		);
+	});
+
+	it("fails closed when PITR/backup posture has only generic backup availability", () => {
+		const evidenceWithGenericBackupAvailability = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+			},
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				pitrBackupPosture: "backup available",
+			},
+		};
+		evidenceWithGenericBackupAvailability.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericBackupAvailability,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericBackupAvailability,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/PITR\/backup posture requires reviewed availability plus environment\/timestamp\/retention\/artifact detail/,
 		);
 	});
 
@@ -1172,6 +1238,55 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /alert owner must be explicit and non-placeholder/);
 	});
 
+	it("fails closed when alert channel has issue but no explicit comment", () => {
+		const evidenceWithIssueOnlyChannel = {
+			...completeEvidence,
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				channel: "Issue #109 + #direct-refresh-alerts",
+			},
+		};
+		evidenceWithIssueOnlyChannel.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithIssueOnlyChannel,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithIssueOnlyChannel,
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(report.summary.failClosedReasons.join("\n"), /alert channel must include issue evidence comment and concrete alert destination/);
+	});
+
+	it("fails closed when alert channel has issue/comment text but no concrete reference", () => {
+		const evidenceWithWeakChannel = {
+			...completeEvidence,
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				channel: "Issue comment + #direct-refresh-alerts",
+			},
+		};
+		evidenceWithWeakChannel.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWeakChannel,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithWeakChannel,
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/alert channel must include issue evidence comment and concrete alert destination/,
+		);
+	});
+
 	it("fails closed when owners contain placeholder text", () => {
 		const evidenceWithEmbeddedPlaceholderOwners = {
 			...completeEvidence,
@@ -1233,7 +1348,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			/alert suppression\/noise policy must protect rollback-required or write\/postwrite failures/,
 		);
 		assert.match(reasons, /alert retry policy must prohibit automatic retry or bind to rollback-required/);
-		assert.match(reasons, /test-alert proof is required/);
+		assert.match(reasons, /test-alert proof requires issue\/comment plus concrete reference/);
 	});
 
 	it("fails closed when alert escalation path is generic instead of a concrete route", () => {
@@ -1361,7 +1476,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/test-alert proof is required/,
+			/test-alert proof requires issue\/comment plus concrete reference/,
+		);
+	});
+
+	it("fails closed when test-alert proof is nominal but has no concrete evidence reference", () => {
+		const evidenceWithNominalTestAlertProof = {
+			...completeEvidence,
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				testAlertProof: "test-alert proof captured in issue evidence comment",
+			},
+		};
+		evidenceWithNominalTestAlertProof.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithNominalTestAlertProof,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithNominalTestAlertProof,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/test-alert proof requires issue\/comment plus concrete reference/,
 		);
 	});
 
