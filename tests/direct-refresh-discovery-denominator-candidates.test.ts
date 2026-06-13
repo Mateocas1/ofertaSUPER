@@ -9,6 +9,7 @@ import { writeDirectRefreshDiscoveryDenominatorCandidateJson } from "../scripts/
 import {
 	buildDirectRefreshDiscoveryDenominatorCandidateSnapshot,
 	defaultDirectRefreshDiscoveryDenominatorCandidateOutputPath,
+	fetchDirectRefreshDiscoveryDenominatorCandidatesByKnownIdentity,
 	parseDirectRefreshDiscoveryDenominatorCandidateCliOptions,
 } from "../scripts/pipeline/direct-refresh-discovery-denominator-candidates";
 import { parseDirectRefreshDiscoveryDenominatorCandidatesJson } from "../scripts/pipeline/direct-refresh-discovery-denominator";
@@ -53,7 +54,8 @@ describe("direct-refresh discovery denominator candidate generator", () => {
 		assert.equal(snapshot.schemaVersion, 1);
 		assert.equal(snapshot.artifact, "direct-refresh-discovery-denominator-candidates");
 		assert.deepEqual(snapshot.sources, ["vea"]);
-		assert.equal(snapshot.coverage.mode, "bounded");
+		assert.equal(snapshot.coverage.mode, "input-artifact");
+		assert.equal(snapshot.coverage.surface, "input-artifact");
 		assert.equal(snapshot.coverage.exhaustive, false);
 		assert.deepEqual(snapshot.counts, {
 			fetchedRows: 2,
@@ -71,6 +73,43 @@ describe("direct-refresh discovery denominator candidate generator", () => {
 			JSON.stringify(snapshot),
 		);
 		assert.deepEqual(parsed, snapshot.candidates);
+	});
+
+	it("collects direct catalog lookup products by known EAN/SKU identity without productSuggestions", async () => {
+		const calls: Array<{ source: string; kind: string; value: string }> = [];
+		const products = await fetchDirectRefreshDiscoveryDenominatorCandidatesByKnownIdentity({
+			lookups: [
+				{ kind: "ean", value: "779111" },
+				{ kind: "sku-id", value: "sku-222" },
+			],
+			fetchDirectProducts: async (source, lookup) => {
+				calls.push({ source, kind: lookup.kind, value: lookup.value });
+				return [
+					product(lookup.kind === "ean" ? lookup.value : "779222", {
+						skuId: lookup.kind === "sku-id" ? lookup.value : `sku-${lookup.value}`,
+					}),
+				];
+			},
+		});
+
+		assert.deepEqual(calls, [
+			{ source: "vea", kind: "ean", value: "779111" },
+			{ source: "vea", kind: "sku-id", value: "sku-222" },
+		]);
+
+		const snapshot = buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
+			products,
+			fetchedAt,
+			requestBudget: 5,
+			sourceBudget: 5,
+			surface: "direct-catalog-lookup",
+		});
+
+		assert.equal(snapshot.coverage.mode, "direct-identity");
+		assert.equal(snapshot.coverage.surface, "direct-catalog-lookup");
+		assert.equal(snapshot.coverage.exhaustive, false);
+		assert.match(snapshot.coverage.description, /direct catalog lookup/);
+		assert.equal(snapshot.counts.fetchedRows, 2);
 	});
 
 	it("dedupes by source+EAN/SKU and tracks exclusions with explicit reasons", () => {
@@ -120,6 +159,7 @@ describe("direct-refresh discovery denominator candidate generator", () => {
 		assert.deepEqual(options, {
 			source: "vea",
 			terms: ["leche", "yogur"],
+			lookups: [],
 			input: null,
 			requestBudget: 10,
 			sourceBudget: 5,
@@ -161,6 +201,26 @@ describe("direct-refresh discovery denominator candidate generator", () => {
 				new RegExp(`rejects ${flag}`),
 			);
 		}
+	});
+
+	it("parses direct lookup identity flags as Vea-scoped non-all-source mode", () => {
+		const options = parseDirectRefreshDiscoveryDenominatorCandidateCliOptions([
+			"node",
+			"script",
+			"--source=vea",
+			"--ean=779111",
+			"--eans=779222,779111",
+			"--sku-id=sku-a",
+			"--sku-ids=sku-b,sku-a",
+		]);
+
+		assert.deepEqual(options.terms, []);
+		assert.deepEqual(options.lookups, [
+			{ kind: "ean", value: "779111" },
+			{ kind: "ean", value: "779222" },
+			{ kind: "sku-id", value: "sku-a" },
+			{ kind: "sku-id", value: "sku-b" },
+		]);
 	});
 
 	it("writes timestamped candidate JSON and wires the package script without writer calls", async () => {

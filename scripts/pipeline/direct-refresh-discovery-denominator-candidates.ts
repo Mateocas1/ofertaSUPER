@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { NormalizedProduct } from "@/lib/vtex/normalize";
+import type { DirectLookup } from "@/lib/ingestion/adapters/types";
 
 import { getOptionalSingleFlag, parsePositiveIntegerFlag, uniqueSorted } from "./audit-utils";
 import type { DirectRefreshDiscoveryDenominatorCandidate } from "./direct-refresh-discovery-denominator";
@@ -8,12 +9,23 @@ import type { DirectRefreshDiscoveryDenominatorCandidate } from "./direct-refres
 export type DirectRefreshDiscoveryDenominatorCandidateGeneratorOptions = {
 	source: "vea";
 	terms: string[];
+	lookups: DirectLookup[];
 	input: string | null;
 	requestBudget: number;
 	sourceBudget: number;
 	issue: number;
 	output: string | null;
 };
+
+export type DirectRefreshDiscoveryDenominatorCandidateSurface =
+	| "input-artifact"
+	| "product-suggestions"
+	| "direct-catalog-lookup";
+
+export type DirectRefreshDiscoveryDenominatorCandidateFetchDirectProducts = (
+	source: "vea",
+	lookup: DirectLookup,
+) => Promise<NormalizedProduct[]>;
 
 export type DiscoveryDenominatorCandidateExclusion = {
 	source: string;
@@ -29,7 +41,8 @@ export type DirectRefreshDiscoveryDenominatorCandidateSnapshot = {
 	issue: number;
 	sources: ["vea"];
 	coverage: {
-		mode: "bounded";
+		mode: "input-artifact" | "bounded-search" | "direct-identity";
+		surface: DirectRefreshDiscoveryDenominatorCandidateSurface;
 		exhaustive: false;
 		description: string;
 	};
@@ -73,6 +86,10 @@ const ALLOWED_FLAGS = new Set([
 	"--source",
 	"--terms",
 	"--term",
+	"--ean",
+	"--eans",
+	"--sku-id",
+	"--sku-ids",
 	"--input",
 	"--request-budget",
 	"--source-budget",
@@ -122,16 +139,29 @@ export function parseDirectRefreshDiscoveryDenominatorCandidateCliOptions(
 		...parseList(getOptionalSingleFlag(argv, "--terms")),
 		...parseList(getOptionalSingleFlag(argv, "--term")),
 	]);
+	const eans = uniqueSorted([
+		...parseList(getOptionalSingleFlag(argv, "--eans")),
+		...parseList(getOptionalSingleFlag(argv, "--ean")),
+	]);
+	const skuIds = uniqueSorted([
+		...parseList(getOptionalSingleFlag(argv, "--sku-ids")),
+		...parseList(getOptionalSingleFlag(argv, "--sku-id")),
+	]);
+	const lookups: DirectLookup[] = [
+		...eans.map((value) => ({ kind: "ean" as const, value })),
+		...skuIds.map((value) => ({ kind: "sku-id" as const, value })),
+	];
 	const input = getOptionalSingleFlag(argv, "--input");
-	if (!input && terms.length === 0) {
+	if (!input && terms.length === 0 && lookups.length === 0) {
 		throw new Error(
-			"direct-refresh discovery denominator candidate generator requires --input=... or explicit --terms=... for bounded read-only generation",
+			"direct-refresh discovery denominator candidate generator requires --input=..., explicit --terms=..., or known --ean/--sku-id identities for bounded read-only generation",
 		);
 	}
 
 	return {
 		source,
 		terms,
+		lookups,
 		input,
 		requestBudget: parsePositiveIntegerFlag(argv, "--request-budget", 20),
 		sourceBudget: parsePositiveIntegerFlag(argv, "--source-budget", 20),
@@ -148,6 +178,7 @@ export function buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
 	sourceBudget,
 	issue = 223,
 	artifactRaw,
+	surface = "input-artifact",
 }: {
 	products: NormalizedProduct[];
 	source?: "vea";
@@ -156,6 +187,7 @@ export function buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
 	sourceBudget: number;
 	issue?: number;
 	artifactRaw?: string;
+	surface?: DirectRefreshDiscoveryDenominatorCandidateSurface;
 }): DirectRefreshDiscoveryDenominatorCandidateSnapshot {
 	const fetchedAtIso = fetchedAt.toISOString();
 	const artifactSha256 = sha256Lineage(artifactRaw ?? stableJson(products));
@@ -224,10 +256,10 @@ export function buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
 		issue,
 		sources: [source],
 		coverage: {
-			mode: "bounded",
+			mode: coverageMode(surface),
+			surface,
 			exhaustive: false,
-			description:
-				"Bounded Vea-first candidate snapshot from explicit input/terms; not an exhaustive all-source denominator.",
+			description: coverageDescription(surface),
 		},
 		counts: {
 			fetchedRows: products.length,
@@ -259,6 +291,21 @@ export function buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
 	};
 }
 
+export async function fetchDirectRefreshDiscoveryDenominatorCandidatesByKnownIdentity({
+	source = "vea",
+	lookups,
+	fetchDirectProducts,
+}: {
+	source?: "vea";
+	lookups: DirectLookup[];
+	fetchDirectProducts: DirectRefreshDiscoveryDenominatorCandidateFetchDirectProducts;
+}): Promise<NormalizedProduct[]> {
+	const products = await Promise.all(
+		lookups.map((lookup) => fetchDirectProducts(source, lookup)),
+	);
+	return products.flat();
+}
+
 export function defaultDirectRefreshDiscoveryDenominatorCandidateOutputPath(
 	now = new Date(),
 ) {
@@ -273,6 +320,22 @@ function parseList(value: string | null) {
 
 function candidateIdentity(source: string, ean: string, skuId: string | null) {
 	return `${source}:${ean}:${skuId || "no-sku"}`;
+}
+
+function coverageMode(surface: DirectRefreshDiscoveryDenominatorCandidateSurface) {
+	if (surface === "direct-catalog-lookup") return "direct-identity" as const;
+	if (surface === "product-suggestions") return "bounded-search" as const;
+	return "input-artifact" as const;
+}
+
+function coverageDescription(surface: DirectRefreshDiscoveryDenominatorCandidateSurface) {
+	if (surface === "direct-catalog-lookup") {
+		return "Vea-first direct catalog lookup from explicit known EAN/SKU identities; not an exhaustive all-source denominator.";
+	}
+	if (surface === "product-suggestions") {
+		return "Bounded Vea-first productSuggestions search from explicit terms; not an exhaustive all-source denominator.";
+	}
+	return "Bounded Vea-first candidate snapshot from an explicit input artifact; not an exhaustive all-source denominator.";
 }
 
 function sha256Lineage(value: string) {
