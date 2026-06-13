@@ -35,7 +35,8 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		source: "vea",
 		count: 1,
 		attemptId: "foundation-attempt-001",
-		artifactPath: "audit/direct-refresh-discovery-prewrite-foundation/foundation-evidence.json",
+		artifactPath:
+			"audit/direct-refresh-discovery-prewrite-foundation/issue-185/vea/count1/foundation-attempt-001/foundation-evidence.json",
 		artifactSha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		gitCommit: "ccc7535",
 		toolVersion: "direct-refresh-discovery-create@1",
@@ -255,6 +256,87 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when artifact path does not include attempt lineage", () => {
+		const evidenceWithUnboundAttemptPath = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				artifactPath:
+					"audit/direct-refresh-discovery-prewrite-foundation/foundation-evidence.json",
+			},
+		};
+		evidenceWithUnboundAttemptPath.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithUnboundAttemptPath,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithUnboundAttemptPath,
+			evidencePath: evidenceWithUnboundAttemptPath.artifactLineage.artifactPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/artifact path lineage must include attempt ID/,
+		);
+	});
+
+	it("fails closed when artifact path does not include source and count lineage", () => {
+		const evidenceWithUnboundSourceCountPath = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				artifactPath:
+					"audit/direct-refresh-discovery-prewrite-foundation/foundation-attempt-001/foundation-evidence.json",
+			},
+		};
+		evidenceWithUnboundSourceCountPath.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithUnboundSourceCountPath,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithUnboundSourceCountPath,
+			evidencePath: evidenceWithUnboundSourceCountPath.artifactLineage.artifactPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/artifact path lineage must include source and count/,
+		);
+	});
+
+	it("fails closed when artifact path does not include issue lineage", () => {
+		const evidenceWithUnboundIssuePath = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				artifactPath:
+					"audit/direct-refresh-discovery-prewrite-foundation/vea/count1/foundation-attempt-001/foundation-evidence.json",
+			},
+		};
+		evidenceWithUnboundIssuePath.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithUnboundIssuePath,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithUnboundIssuePath,
+			evidencePath: evidenceWithUnboundIssuePath.artifactLineage.artifactPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/artifact path lineage must include issue/,
+		);
+	});
+
 	it("fails closed when artifact sha256 lineage does not match the evidence file hash", () => {
 		const report = evaluateFoundation({
 			evidence: completeEvidence,
@@ -351,12 +433,37 @@ describe("direct-refresh discovery prewrite foundation", () => {
 
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
-		assert.match(reasons, /issue lineage is required/);
+		assert.match(reasons, /issue lineage must be a positive integer/);
 		assert.match(reasons, /source lineage must be writer-supported/);
 		assert.match(reasons, /count lineage must be a positive integer/);
-		assert.match(reasons, /attempt lineage is required/);
+		assert.match(reasons, /attempt lineage must be a safe attempt ID/);
 		assert.match(reasons, /artifact path lineage must be foundation audit json/);
 		assert.match(reasons, /artifact sha256 lineage is required/);
+	});
+
+	it("fails closed when attempt lineage is not a safe attempt ID", () => {
+		const evidenceWithUnsafeAttemptId = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				attemptId: " other attempt ",
+			},
+		};
+		evidenceWithUnsafeAttemptId.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithUnsafeAttemptId,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithUnsafeAttemptId,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/attempt lineage must be a safe attempt ID/,
+		);
 	});
 
 	it("fails closed when count lineage is fractional", () => {
@@ -390,6 +497,34 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
 			/count lineage must be a positive integer/,
+		);
+	});
+
+	it("fails closed when issue lineage is fractional", () => {
+		const evidenceWithFractionalIssue = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				issue: 185.5,
+				artifactPath:
+					"audit/direct-refresh-discovery-prewrite-foundation/issue-185.5/vea/count1/foundation-attempt-001/foundation-evidence.json",
+			},
+		};
+		evidenceWithFractionalIssue.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithFractionalIssue,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithFractionalIssue,
+			evidencePath: evidenceWithFractionalIssue.artifactLineage.artifactPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/issue lineage must be a positive integer/,
 		);
 	});
 

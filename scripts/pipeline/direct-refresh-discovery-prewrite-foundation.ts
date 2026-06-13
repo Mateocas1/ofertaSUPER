@@ -316,10 +316,10 @@ function buildChecks(
 			[control.idempotencyPolicy, "idempotency policy is required"],
 		]),
 		check("artifact-lineage", [
-			[lineage.issue > 0, "issue lineage is required"],
+			[hasPositiveInteger(lineage.issue), "issue lineage must be a positive integer"],
 			[hasWriterSupportedSource(lineage.source), "source lineage must be writer-supported"],
 			[hasPositiveInteger(lineage.count), "count lineage must be a positive integer"],
-			[hasText(lineage.attemptId), "attempt lineage is required"],
+			[hasSafeAttemptId(lineage.attemptId), "attempt lineage must be a safe attempt ID"],
 			[
 				hasFoundationArtifactPath(lineage.artifactPath),
 				"artifact path lineage must be foundation audit json",
@@ -327,6 +327,22 @@ function buildChecks(
 			[
 				hasMatchingArtifactPath(lineage.artifactPath, evidencePath),
 				"artifact path lineage must match evidence path",
+			],
+			[
+				hasArtifactPathAttemptLineage(lineage.artifactPath, lineage.attemptId),
+				"artifact path lineage must include attempt ID",
+			],
+			[
+				hasArtifactPathSourceCountLineage(
+					lineage.artifactPath,
+					lineage.source,
+					lineage.count,
+				),
+				"artifact path lineage must include source and count",
+			],
+			[
+				hasArtifactPathIssueLineage(lineage.artifactPath, lineage.issue),
+				"artifact path lineage must include issue",
 			],
 			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
 			[
@@ -477,6 +493,13 @@ function hasPositiveInteger(value: number | undefined) {
 	return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
+function hasSafeAttemptId(value: string | undefined) {
+	return (
+		typeof value === "string" &&
+		/^[a-z0-9][a-z0-9._-]{2,63}$/.test(value)
+	);
+}
+
 function hasWriterSupportedSource(value: string | undefined) {
 	return typeof value === "string" && WRITER_SUPPORTED_SOURCES.has(value);
 }
@@ -494,6 +517,36 @@ function hasMatchingArtifactPath(
 	evidencePath: string,
 ) {
 	return normalizeAuditPath(lineagePath) === normalizeAuditPath(evidencePath);
+}
+
+function hasArtifactPathAttemptLineage(
+	lineagePath: string | undefined,
+	attemptId: string | undefined,
+) {
+	if (!hasSafeAttemptId(attemptId)) return false;
+	return normalizeAuditPath(lineagePath).split("/").includes(attemptId ?? "");
+}
+
+function hasArtifactPathSourceCountLineage(
+	lineagePath: string | undefined,
+	source: string | undefined,
+	count: number | undefined,
+) {
+	if (!hasWriterSupportedSource(source) || !hasPositiveInteger(count)) {
+		return false;
+	}
+	const segments = normalizeAuditPath(lineagePath).split("/");
+	return segments.includes(source ?? "") && segments.includes(`count${count}`);
+}
+
+function hasArtifactPathIssueLineage(
+	lineagePath: string | undefined,
+	issue: number | undefined,
+) {
+	if (!hasPositiveInteger(issue)) {
+		return false;
+	}
+	return normalizeAuditPath(lineagePath).split("/").includes(`issue-${issue}`);
 }
 
 function hasMatchingArtifactSha256(
