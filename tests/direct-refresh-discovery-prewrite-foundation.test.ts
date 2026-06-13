@@ -463,7 +463,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 		assert.match(
 			reasons,
-			/Prisma pool posture must include pgbouncer, connection_limit, and pool_timeout/,
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
 		);
 	});
 
@@ -1171,6 +1171,37 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /alert owner must be explicit and non-placeholder/);
 	});
 
+	it("fails closed when owners contain placeholder text", () => {
+		const evidenceWithEmbeddedPlaceholderOwners = {
+			...completeEvidence,
+			controlPlane: {
+				...completeEvidence.controlPlane,
+				owner: "placeholder-oncall",
+			},
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				owner: "direct-refresh-placeholder-oncall",
+			},
+		};
+		evidenceWithEmbeddedPlaceholderOwners.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithEmbeddedPlaceholderOwners,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithEmbeddedPlaceholderOwners,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/control-plane owner must be explicit and non-placeholder/,
+		);
+		assert.match(reasons, /alert owner must be explicit and non-placeholder/);
+	});
+
 	it("fails closed when alert policy omits severity, SLA, escalation, suppression, retry, or test proof", () => {
 		const report = evaluateFoundation({
 			evidence: {
@@ -1199,6 +1230,31 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /alert suppression policy must describe suppression\/noise handling/);
 		assert.match(reasons, /alert retry policy must be explicit/);
 		assert.match(reasons, /test-alert proof is required/);
+	});
+
+	it("fails closed when test-alert proof is not tied to an issue evidence comment", () => {
+		const evidenceWithGenericTestAlertProof = {
+			...completeEvidence,
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				testAlertProof: "test-alert proof captured",
+			},
+		};
+		evidenceWithGenericTestAlertProof.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericTestAlertProof,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericTestAlertProof,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/test-alert proof is required/,
+		);
 	});
 
 	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {
@@ -1366,7 +1422,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			reasons,
-			/Prisma pool posture must include pgbouncer, connection_limit, and pool_timeout/,
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
 		);
 		assert.match(
 			reasons,
@@ -1375,6 +1431,134 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /PriceHistory baseline must include insert and read/);
 		assert.match(reasons, /public API baseline must include search and products/);
 		assert.match(reasons, /cache TTL baseline must include TTL/);
+	});
+
+	it("fails closed when Prisma pool posture lists required terms without values", () => {
+		const evidenceWithGenericPrismaPoolPosture = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				prismaPoolPosture: "pgbouncer connection_limit pool_timeout",
+			},
+		};
+		evidenceWithGenericPrismaPoolPosture.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericPrismaPoolPosture,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericPrismaPoolPosture,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
+		);
+	});
+
+	it("fails closed when transaction timeout posture lists required terms without values", () => {
+		const evidenceWithGenericTransactionTimeoutPosture = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				transactionTimeoutPosture:
+					"statement_timeout idle_in_transaction_session_timeout",
+			},
+		};
+		evidenceWithGenericTransactionTimeoutPosture.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericTransactionTimeoutPosture,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericTransactionTimeoutPosture,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with explicit values/,
+		);
+	});
+
+	it("fails closed when PriceHistory insert/read evidence omits baseline", () => {
+		const evidenceWithGenericPriceHistoryBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				priceHistoryBaseline: "PriceHistory insert/read",
+			},
+		};
+		evidenceWithGenericPriceHistoryBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericPriceHistoryBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericPriceHistoryBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/PriceHistory baseline must include insert and read/,
+		);
+	});
+
+	it("fails closed when cache TTL baseline evidence is generic", () => {
+		const evidenceWithGenericCacheTtlBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				cacheTtlBaseline: "TTL",
+			},
+		};
+		evidenceWithGenericCacheTtlBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericCacheTtlBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericCacheTtlBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/cache TTL baseline must include TTL/,
+		);
+	});
+
+	it("fails closed when public API baseline evidence is generic", () => {
+		const evidenceWithGenericPublicApiBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				publicApiBaseline: "search products",
+			},
+		};
+		evidenceWithGenericPublicApiBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericPublicApiBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericPublicApiBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/public API baseline must include search and products/,
+		);
 	});
 
 	it("parses a read-only CLI boundary and rejects write-like flags", () => {
