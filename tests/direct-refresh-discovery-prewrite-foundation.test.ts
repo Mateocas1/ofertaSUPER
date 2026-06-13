@@ -2683,13 +2683,17 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(typeof policy.artifactLineage.vtexProbeHash, "string");
 		assert.equal(policy.vtexBudgets.concurrency, 1);
 		assert.equal(policy.alertChannel.rollbackRequired, true);
+		assert.match(policy.generatedAt, /^<ISO timestamp captured within 15 minutes/);
+		assert.match(policy.alertChannel.testAlertProof, /timestamp=<ISO timestamp/);
+		assert.match(policy.rollbackDrill.pitrBackupPosture, /rollback verification tooling/);
 		assert.doesNotMatch(reasons, /TTL policy is required/);
 		assert.doesNotMatch(reasons, /idempotency policy is required/);
 		assert.doesNotMatch(reasons, /source config snapshot is required/);
 		assert.doesNotMatch(reasons, /VTEX request cap must be positive/);
 		assert.doesNotMatch(reasons, /alert channel is required/);
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /foundation evidence generatedAt is required/);
 		assert.match(reasons, /rollback drill must be executed/);
 		assert.match(reasons, /migration status must be PASS/);
-		assert.match(reasons, /public API baseline requires search\/products and an explicit performance metric/);
 	});
 });
