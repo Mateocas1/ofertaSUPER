@@ -13,6 +13,7 @@ import {
 	parseDirectRefreshDiscoveryDenominatorCandidateCliOptions,
 } from "../scripts/pipeline/direct-refresh-discovery-denominator-candidates";
 import { parseDirectRefreshDiscoveryDenominatorCandidatesJson } from "../scripts/pipeline/direct-refresh-discovery-denominator";
+import { listVtexSupermarkets } from "../src/lib/supermarkets";
 import type { NormalizedProduct } from "../src/lib/vtex/normalize";
 
 const fetchedAt = new Date("2026-06-12T12:00:00.000Z");
@@ -151,6 +152,34 @@ describe("direct-refresh discovery denominator candidate generator", () => {
 		assert.match(snapshot.coverage.description, /Source-scoped direct catalog lookup/);
 	});
 
+	it("routes direct catalog lookup products through a newly supported registered VTEX source", async () => {
+		const calls: Array<{ source: string; kind: string; value: string }> = [];
+		const products = await fetchDirectRefreshDiscoveryDenominatorCandidatesByKnownIdentity({
+			source: "disco",
+			lookups: [{ kind: "ean", value: "779333" }],
+			fetchDirectProducts: async (source, lookup) => {
+				calls.push({ source, kind: lookup.kind, value: lookup.value });
+				return [product(lookup.value, { brand: "Disco" })];
+			},
+		});
+
+		assert.deepEqual(calls, [{ source: "disco", kind: "ean", value: "779333" }]);
+
+		const snapshot = buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
+			products,
+			source: "disco",
+			fetchedAt,
+			requestBudget: 5,
+			sourceBudget: 5,
+			surface: "direct-catalog-lookup",
+		});
+
+		assert.deepEqual(snapshot.sources, ["disco"]);
+		assert.equal(snapshot.candidates[0].source, "disco");
+		assert.equal(snapshot.coverage.exhaustive, false);
+		assert.match(snapshot.coverage.description, /not an exhaustive all-source denominator/);
+	});
+
 	it("dedupes by source+EAN/SKU and tracks exclusions with explicit reasons", () => {
 		const snapshot = buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
 			products: [
@@ -184,7 +213,29 @@ describe("direct-refresh discovery denominator candidate generator", () => {
 		assert.match(snapshot.failClosedReasons.join("\n"), /source budget exceeded for vea/);
 	});
 
-	it("rejects dangerous flags and unsupported/all-source generation", () => {
+	it("accepts registered VTEX sources and rejects dangerous flags plus unsupported/all-source generation", () => {
+		const registeredVtexSlugs = listVtexSupermarkets().map(
+			(supermarket) => supermarket.slug,
+		);
+		assert.deepEqual(registeredVtexSlugs, [
+			"disco",
+			"jumbo",
+			"vea",
+			"carrefour",
+			"dia",
+			"mas",
+		]);
+
+		for (const source of registeredVtexSlugs) {
+			const options = parseDirectRefreshDiscoveryDenominatorCandidateCliOptions([
+				"node",
+				"script",
+				`--source=${source}`,
+				"--terms=leche",
+			]);
+			assert.equal(options.source, source);
+		}
+
 		const options = parseDirectRefreshDiscoveryDenominatorCandidateCliOptions([
 			"node",
 			"script",
@@ -211,10 +262,10 @@ describe("direct-refresh discovery denominator candidate generator", () => {
 				parseDirectRefreshDiscoveryDenominatorCandidateCliOptions([
 					"node",
 					"script",
-					"--source=disco",
+					"--source=coto",
 					"--terms=leche",
 				]),
-			/unsupported .* source disco; supported sources: vea, carrefour/,
+			/unsupported .* source coto; supported sources: disco, jumbo, vea, carrefour, dia, mas/,
 		);
 		for (const flag of [
 			"--apply",

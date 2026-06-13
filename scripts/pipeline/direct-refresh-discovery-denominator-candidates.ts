@@ -2,11 +2,18 @@ import { createHash } from "node:crypto";
 
 import type { NormalizedProduct } from "@/lib/vtex/normalize";
 import type { DirectLookup } from "@/lib/ingestion/adapters/types";
+import { listVtexSupermarkets } from "@/lib/supermarkets";
 
 import { getOptionalSingleFlag, parsePositiveIntegerFlag, uniqueSorted } from "./audit-utils";
 import type { DirectRefreshDiscoveryDenominatorCandidate } from "./direct-refresh-discovery-denominator";
 
-export type DirectRefreshDiscoveryDenominatorCandidateSource = "vea" | "carrefour";
+export type DirectRefreshDiscoveryDenominatorCandidateSource =
+	| "disco"
+	| "jumbo"
+	| "vea"
+	| "carrefour"
+	| "dia"
+	| "mas";
 
 export type DirectRefreshDiscoveryDenominatorCandidateGeneratorOptions = {
 	source: DirectRefreshDiscoveryDenominatorCandidateSource;
@@ -71,7 +78,9 @@ export type DirectRefreshDiscoveryDenominatorCandidateSnapshot = {
 
 const WRITE_BOUNDARY =
 	"read-only source-scoped denominator candidate generation; no DB writes, no discovery apply, no scheduler/all-source execution, no deploy, no migrations, no cache purge" as const;
-const SUPPORTED_SOURCES = ["vea", "carrefour"] as const;
+const SUPPORTED_SOURCES = listVtexSupermarkets().map(
+	(supermarket) => supermarket.slug,
+) as DirectRefreshDiscoveryDenominatorCandidateSource[];
 const FORBIDDEN_FLAGS = [
 	"--apply",
 	"--write",
