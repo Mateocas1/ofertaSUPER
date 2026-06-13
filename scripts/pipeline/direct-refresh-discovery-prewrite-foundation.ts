@@ -439,9 +439,9 @@ function buildChecks(
 			[budget.concurrency === 1, "VTEX concurrency must be serial"],
 			[hasPositiveInteger(budget.timeoutMs), "VTEX timeout must be a positive integer in milliseconds"],
 			[budget.timeoutMs <= MAX_VTEX_FOUNDATION_TIMEOUT_MS, "VTEX timeout must be <= 10000ms"],
-			[hasVtexBackoffPolicy(budget.backoffPolicy), "VTEX backoff policy must include timeout, 403, 429, HTML, and captcha"],
-			[hasVtexStopRule(budget.stopRule), "VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry"],
-			[hasVtexHeaderPolicy(budget.headerPolicy), "VTEX header policy must be documented and non-evasive"],
+			[hasVtexBackoffPolicy(budget.backoffPolicy), "VTEX backoff policy must include backoff plus timeout, 403, 429, HTML, and captcha"],
+			[hasVtexStopRule(budget.stopRule), "VTEX stop rule must set source STOPPED on blocked/rate-limit/hash_invalid and no automatic retry"],
+			[hasVtexHeaderPolicy(budget.headerPolicy), "VTEX header policy must be documented, non-evasive, and include user-agent or headers"],
 		]),
 		check("compliance", [
 			[compliance.allowedUseReviewed, "compliance allowed-use review is required"],
@@ -455,11 +455,11 @@ function buildChecks(
 			[hasActionableAlertChannel(alert.channel), "alert channel must include issue evidence comment and concrete alert destination"],
 			[hasExplicitAlertOwner(alert.owner), "alert owner must be explicit and non-placeholder"],
 			[hasAlertSeverity(alert.severity), "alert severity must include write, postwrite, and rollback-required"],
-			[hasAlertAckSla(alert.ackSla), "alert ack SLA is required"],
-			[hasAlertResolutionSla(alert.resolutionSla), "alert resolution SLA is required"],
-			[hasAlertEscalationPath(alert.escalationPath), "alert escalation path must be explicit"],
-			[hasAlertSuppressionPolicy(alert.suppressionPolicy), "alert suppression policy must describe suppression/noise handling"],
-			[hasAlertRetryPolicy(alert.retryPolicy), "alert retry policy must be explicit"],
+			[hasAlertAckSla(alert.ackSla), "alert ack SLA must include an explicit time bound"],
+			[hasAlertResolutionSla(alert.resolutionSla), "alert resolution SLA must include an explicit time bound"],
+			[hasAlertEscalationPath(alert.escalationPath), "alert escalation path must include a concrete route"],
+			[hasAlertSuppressionPolicy(alert.suppressionPolicy), "alert suppression/noise policy must protect rollback-required or write/postwrite failures"],
+			[hasAlertRetryPolicy(alert.retryPolicy), "alert retry policy must prohibit automatic retry or bind to rollback-required"],
 			[hasTestAlertProof(alert.testAlertProof), "test-alert proof is required"],
 			[alert.writeFailure, "write failure alert is required"],
 			[alert.postwriteFailure, "postwrite failure alert is required"],
@@ -674,7 +674,7 @@ function hasMatchingVtexProbeSource(
 }
 
 function hasVtexBackoffPolicy(value: string | undefined) {
-	return hasAllTerms(value, ["timeout", "403", "429", "html", "captcha"]);
+	return hasAllTerms(value, ["backoff", "timeout", "403", "429", "html", "captcha"]);
 }
 
 function hasExactRollbackIds(values: string[] | undefined) {
@@ -741,12 +741,16 @@ function hasPitrBackupPosture(value: string | undefined) {
 function hasVtexStopRule(value: string | undefined) {
 	return (
 		hasAllTerms(value, ["blocked", "rate-limit", "hash_invalid"]) &&
-		hasAnyTerm(value, ["no automatic retry", "no retry automatico", "no automatic retries"])
+		hasAnyTerm(value, ["no automatic retry", "no retry automatico", "no automatic retries"]) &&
+		hasAnyTerm(value, ["stopped", "stop source", "source stopped"])
 	);
 }
 
 function hasVtexHeaderPolicy(value: string | undefined) {
-	return hasAllTerms(value, ["documented", "non-evasive"]);
+	return (
+		hasAllTerms(value, ["documented", "non-evasive"]) &&
+		hasAnyTerm(value, ["user-agent", "headers"])
+	);
 }
 
 function hasComplianceForSource(
@@ -779,23 +783,64 @@ function hasAlertSeverity(value: string | undefined) {
 }
 
 function hasAlertAckSla(value: string | undefined) {
-	return hasAllTerms(value, ["ack", "sla"]);
+	return hasAllTerms(value, ["ack", "sla"]) && hasExplicitTimeBound(value);
 }
 
 function hasAlertResolutionSla(value: string | undefined) {
-	return hasAllTerms(value, ["resolution", "sla"]);
+	return hasAllTerms(value, ["resolution", "sla"]) && hasExplicitTimeBound(value);
+}
+
+function hasExplicitTimeBound(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return /(?:<=|>=|<|>|=)?\s*\b\d+\s*(?:ms|s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours)\b/.test(
+		normalized,
+	);
 }
 
 function hasAlertEscalationPath(value: string | undefined) {
-	return hasAnyTerm(value, ["escalate", "escalation"]) && hasAnyTerm(value, ["oncall", "owner"]);
+	return (
+		hasAnyTerm(value, ["escalate", "escalation"]) &&
+		hasAnyTerm(value, ["oncall", "owner"]) &&
+		hasConcreteAlertEscalationRoute(value)
+	);
+}
+
+function hasConcreteAlertEscalationRoute(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	const routeParts = normalized
+		.split(/\s*(?:->|=>|\bthen\b|\bto\b)\s*/)
+		.map((part) => part.trim())
+		.filter((part) => part.length > 0);
+	return routeParts.slice(1).some(hasConcreteEscalationDestination);
+}
+
+function hasConcreteEscalationDestination(value: string) {
+	const destination = value.split(/[\s,;]+/, 1)[0] ?? "";
+	return (
+		/^[a-z0-9][a-z0-9._#/@-]{2,}$/.test(destination) &&
+		!["owner", "oncall", "operator", "someone"].includes(destination)
+	);
 }
 
 function hasAlertSuppressionPolicy(value: string | undefined) {
-	return hasAllTerms(value, ["suppression", "noise"]);
+	return (
+		hasAllTerms(value, ["suppression", "noise"]) &&
+		hasAnyTerm(value, [
+			"no suppression",
+			"never suppress",
+			"not suppress",
+			"rollback-required",
+			"write",
+			"postwrite",
+		])
+	);
 }
 
 function hasAlertRetryPolicy(value: string | undefined) {
-	return hasAllTerms(value, ["retry", "policy"]) && hasAnyTerm(value, ["no automatic", "manual", "rollback-required"]);
+	return (
+		hasAllTerms(value, ["retry", "policy"]) &&
+		hasAnyTerm(value, ["no automatic retry", "no automatic retries", "rollback-required"])
+	);
 }
 
 function hasTestAlertProof(value: string | undefined) {

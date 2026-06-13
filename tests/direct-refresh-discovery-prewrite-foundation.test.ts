@@ -1224,12 +1224,119 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /alert severity must include write, postwrite, and rollback-required/);
-		assert.match(reasons, /alert ack SLA is required/);
-		assert.match(reasons, /alert resolution SLA is required/);
-		assert.match(reasons, /alert escalation path must be explicit/);
-		assert.match(reasons, /alert suppression policy must describe suppression\/noise handling/);
-		assert.match(reasons, /alert retry policy must be explicit/);
+		assert.match(reasons, /alert ack SLA must include an explicit time bound/);
+		assert.match(reasons, /alert resolution SLA must include an explicit time bound/);
+		assert.match(reasons, /alert escalation path must include a concrete route/);
+		assert.match(
+			reasons,
+			/alert suppression\/noise policy must protect rollback-required or write\/postwrite failures/,
+		);
+		assert.match(reasons, /alert retry policy must prohibit automatic retry or bind to rollback-required/);
 		assert.match(reasons, /test-alert proof is required/);
+	});
+
+	it("fails closed when alert escalation path is generic instead of a concrete route", () => {
+		const evidenceWithGenericEscalationPath = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				escalationPath: "escalate owner",
+			},
+		};
+		evidenceWithGenericEscalationPath.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericEscalationPath,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericEscalationPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/alert escalation path must include a concrete route/,
+		);
+	});
+
+	it("fails closed when alert SLA evidence omits explicit time bounds", () => {
+		const evidenceWithGenericAlertSla = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				ackSla: "ack SLA",
+				resolutionSla: "resolution SLA",
+			},
+		};
+		evidenceWithGenericAlertSla.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericAlertSla,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericAlertSla,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /alert ack SLA must include an explicit time bound/);
+		assert.match(reasons, /alert resolution SLA must include an explicit time bound/);
+	});
+
+	it("fails closed when alert suppression policy is generic noise handling", () => {
+		const evidenceWithGenericSuppressionPolicy = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				suppressionPolicy: "suppression noise",
+			},
+		};
+		evidenceWithGenericSuppressionPolicy.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericSuppressionPolicy,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericSuppressionPolicy,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/suppression\/noise policy must protect rollback-required or write\/postwrite failures/,
+		);
+	});
+
+	it("fails closed when alert retry policy is generic manual retry", () => {
+		const evidenceWithGenericRetryPolicy = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				retryPolicy: "retry policy manual",
+			},
+		};
+		evidenceWithGenericRetryPolicy.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericRetryPolicy,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericRetryPolicy,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/retry policy must prohibit automatic retry or bind to rollback-required/,
+		);
 	});
 
 	it("fails closed when test-alert proof is not tied to an issue evidence comment", () => {
@@ -1380,6 +1487,84 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when VTEX header policy is documented and non-evasive but omits headers and user-agent", () => {
+		const evidenceWithGenericHeaderPolicy = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			vtexBudgets: {
+				...completeEvidence.vtexBudgets,
+				headerPolicy: "documented non-evasive",
+			},
+		};
+		evidenceWithGenericHeaderPolicy.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericHeaderPolicy,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericHeaderPolicy,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/VTEX header policy must be documented, non-evasive, and include user-agent or headers/,
+		);
+	});
+
+	it("fails closed when VTEX backoff policy lists errors but omits backoff", () => {
+		const evidenceWithErrorListOnlyBackoffPolicy = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			vtexBudgets: {
+				...completeEvidence.vtexBudgets,
+				backoffPolicy: "timeout 403 429 HTML captcha",
+			},
+		};
+		evidenceWithErrorListOnlyBackoffPolicy.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithErrorListOnlyBackoffPolicy,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithErrorListOnlyBackoffPolicy,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/VTEX backoff policy must include backoff plus timeout, 403, 429, HTML, and captcha/,
+		);
+	});
+
+	it("fails closed when VTEX stop rule lists blockers without source STOPPED state", () => {
+		const evidenceWithConditionListOnlyStopRule = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			vtexBudgets: {
+				...completeEvidence.vtexBudgets,
+				stopRule: "blocked rate-limit hash_invalid no automatic retry",
+			},
+		};
+		evidenceWithConditionListOnlyStopRule.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithConditionListOnlyStopRule,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithConditionListOnlyStopRule,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/VTEX stop rule must set source STOPPED on blocked\/rate-limit\/hash_invalid and no automatic retry/,
+		);
+	});
+
 	it("fails closed when VTEX safety policies are too vague", () => {
 		const report = evaluateFoundation({
 			evidence: {
@@ -1397,9 +1582,9 @@ describe("direct-refresh discovery prewrite foundation", () => {
 
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
-		assert.match(reasons, /VTEX backoff policy must include timeout, 403, 429, HTML, and captcha/);
-		assert.match(reasons, /VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry/);
-		assert.match(reasons, /VTEX header policy must be documented and non-evasive/);
+		assert.match(reasons, /VTEX backoff policy must include backoff plus timeout, 403, 429, HTML, and captcha/);
+		assert.match(reasons, /VTEX stop rule must set source STOPPED on blocked\/rate-limit\/hash_invalid and no automatic retry/);
+		assert.match(reasons, /VTEX header policy must be documented, non-evasive, and include user-agent or headers/);
 	});
 
 	it("fails closed when performance guard evidence is too vague", () => {
