@@ -42,6 +42,7 @@
     "audit:direct-refresh-scheduler-planner": "tsx scripts/audit-direct-refresh-scheduler-planner.ts",
     "audit:direct-refresh-dry-run-orchestrator": "tsx scripts/audit-direct-refresh-dry-run-orchestrator.ts",
     "audit:direct-refresh-discovery": "tsx scripts/audit-direct-refresh-discovery.ts",
+    "audit:direct-refresh-discovery-prewrite-foundation": "tsx scripts/audit-direct-refresh-discovery-prewrite-foundation.ts",
     "audit:direct-refresh-freshness-debt-planner": "tsx scripts/audit-direct-refresh-freshness-debt-planner.ts",
     "audit:direct-refresh-cadence-controller": "tsx scripts/audit-direct-refresh-cadence-controller.ts",
     "direct-refresh:carrefour-write": "tsx scripts/direct-refresh-carrefour-write.ts",
@@ -50,7 +51,10 @@
     "direct-refresh:jumbo-write": "tsx scripts/direct-refresh-jumbo-write.ts",
     "direct-refresh:mas-write": "tsx scripts/direct-refresh-mas-write.ts",
     "metrics:ingestion": "tsx scripts/pipeline/metrics.ts",
-    "direct-refresh:discovery-create": "tsx scripts/direct-refresh-discovery-create.ts"
+    "direct-refresh:discovery-create": "tsx scripts/direct-refresh-discovery-create.ts",
+    "audit:direct-refresh-discovery-rollback-verification": "tsx scripts/audit-direct-refresh-discovery-rollback-verification.ts",
+    "audit:direct-refresh-discovery-rollback-drill": "tsx scripts/audit-direct-refresh-discovery-rollback-drill.ts",
+    "direct-refresh:discovery-rollback-drill": "tsx scripts/direct-refresh-discovery-rollback-drill.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

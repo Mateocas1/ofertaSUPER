@@ -1,6 +1,8 @@
 # Direct-refresh Discovery Controlled Pilot PRD
 
-This PRD defines the next production-safe step after the direct-refresh discovery audit and create gate. The goal is one source-scoped discovery pilot that proves catalog row creation, postwrite verification, rollback boundaries, and operator workflow before any controlled batch or cadence expansion.
+> Status: historical/superseded for active planning. This document remains useful for prior controlled-pilot context, but the active roadmap is `docs/direct-refresh-discovery-prod-final-prd.md` and the executable prompt is `docs/direct-refresh-discovery-prod-final-goal-prompt.md`. Do not use this document to skip prod-final Phase 1 pre-write foundation.
+
+This historical PRD defined an earlier production-safe controlled-pilot step after the direct-refresh discovery audit and create gate. It can still explain prior pilot intent, but active execution must follow the prod-final PRD phase order before any controlled pilot, batch, or cadence expansion.
 
 ## Executive decision
 
