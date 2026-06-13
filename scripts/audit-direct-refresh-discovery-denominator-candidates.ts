@@ -1,0 +1,90 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { getSupermarketBySlug } from "@/lib/supermarkets";
+import type { NormalizedProduct } from "@/lib/vtex/normalize";
+
+import {
+	buildDirectRefreshDiscoveryDenominatorCandidateSnapshot,
+	defaultDirectRefreshDiscoveryDenominatorCandidateOutputPath,
+	parseDirectRefreshDiscoveryDenominatorCandidateCliOptions,
+	type DirectRefreshDiscoveryDenominatorCandidateSnapshot,
+} from "./pipeline/direct-refresh-discovery-denominator-candidates";
+
+export { parseDirectRefreshDiscoveryDenominatorCandidateCliOptions } from "./pipeline/direct-refresh-discovery-denominator-candidates";
+
+export async function writeDirectRefreshDiscoveryDenominatorCandidateJson(
+	output: string | null,
+	snapshot: DirectRefreshDiscoveryDenominatorCandidateSnapshot,
+) {
+	const target = output ?? defaultDirectRefreshDiscoveryDenominatorCandidateOutputPath();
+	const serialized = `${JSON.stringify(snapshot, null, 2)}\n`;
+	await mkdir(dirname(target), { recursive: true });
+	await writeFile(target, serialized, "utf8");
+	process.stdout.write(
+		`Wrote bounded direct-refresh discovery denominator candidates to ${target}\n`,
+	);
+	return target;
+}
+
+async function readInputProducts(input: string) {
+	const raw = await readFile(input, "utf8");
+	const parsed = JSON.parse(raw.replace(/^\uFEFF/, "")) as unknown;
+	const products = Array.isArray(parsed)
+		? parsed
+		: (parsed as { products?: unknown[] }).products ?? [];
+	return { raw, products: products as NormalizedProduct[] };
+}
+
+async function main() {
+	const options = parseDirectRefreshDiscoveryDenominatorCandidateCliOptions();
+	const fetchedAt = new Date();
+	const supermarket = getSupermarketBySlug(options.source);
+	const input = options.input
+		? await readInputProducts(options.input)
+		: {
+				raw: undefined,
+				products: (
+					await Promise.all(
+						options.terms.map((term) =>
+							fetchVeaProducts({
+								baseUrl: supermarket.baseUrl,
+								query: term,
+								count: options.sourceBudget,
+							}),
+						),
+					)
+				).flat(),
+			};
+	const snapshot = buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
+		products: input.products,
+		source: options.source,
+		fetchedAt,
+		requestBudget: options.requestBudget,
+		sourceBudget: options.sourceBudget,
+		issue: options.issue,
+		artifactRaw: input.raw,
+	});
+	await writeDirectRefreshDiscoveryDenominatorCandidateJson(options.output, snapshot);
+	if (snapshot.failClosedReasons.length > 0) process.exitCode = 1;
+}
+
+async function fetchVeaProducts(options: {
+	baseUrl: string;
+	query: string;
+	count: number;
+}) {
+	const { fetchVtexProducts } = await import("@/lib/vtex/client");
+	return fetchVtexProducts(options);
+}
+
+if (
+	process.argv[1] &&
+	import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+) {
+	void main().catch((error) => {
+		console.error(error instanceof Error ? error.message : error);
+		process.exitCode = 1;
+	});
+}
