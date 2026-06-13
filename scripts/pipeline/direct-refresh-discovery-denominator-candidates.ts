@@ -6,8 +6,10 @@ import type { DirectLookup } from "@/lib/ingestion/adapters/types";
 import { getOptionalSingleFlag, parsePositiveIntegerFlag, uniqueSorted } from "./audit-utils";
 import type { DirectRefreshDiscoveryDenominatorCandidate } from "./direct-refresh-discovery-denominator";
 
+export type DirectRefreshDiscoveryDenominatorCandidateSource = "vea" | "carrefour";
+
 export type DirectRefreshDiscoveryDenominatorCandidateGeneratorOptions = {
-	source: "vea";
+	source: DirectRefreshDiscoveryDenominatorCandidateSource;
 	terms: string[];
 	lookups: DirectLookup[];
 	input: string | null;
@@ -23,7 +25,7 @@ export type DirectRefreshDiscoveryDenominatorCandidateSurface =
 	| "direct-catalog-lookup";
 
 export type DirectRefreshDiscoveryDenominatorCandidateFetchDirectProducts = (
-	source: "vea",
+	source: DirectRefreshDiscoveryDenominatorCandidateSource,
 	lookup: DirectLookup,
 ) => Promise<NormalizedProduct[]>;
 
@@ -39,7 +41,7 @@ export type DirectRefreshDiscoveryDenominatorCandidateSnapshot = {
 	artifact: "direct-refresh-discovery-denominator-candidates";
 	generatedAt: string;
 	issue: number;
-	sources: ["vea"];
+	sources: [DirectRefreshDiscoveryDenominatorCandidateSource];
 	coverage: {
 		mode: "input-artifact" | "bounded-search" | "direct-identity";
 		surface: DirectRefreshDiscoveryDenominatorCandidateSurface;
@@ -68,7 +70,8 @@ export type DirectRefreshDiscoveryDenominatorCandidateSnapshot = {
 };
 
 const WRITE_BOUNDARY =
-	"read-only Vea denominator candidate generation; no DB writes, no discovery apply, no scheduler/all-source execution, no deploy, no migrations, no cache purge" as const;
+	"read-only source-scoped denominator candidate generation; no DB writes, no discovery apply, no scheduler/all-source execution, no deploy, no migrations, no cache purge" as const;
+const SUPPORTED_SOURCES = ["vea", "carrefour"] as const;
 const FORBIDDEN_FLAGS = [
 	"--apply",
 	"--write",
@@ -128,10 +131,10 @@ export function parseDirectRefreshDiscoveryDenominatorCandidateCliOptions(
 		);
 	}
 
-	const source = getOptionalSingleFlag(argv, "--source") ?? "vea";
-	if (source !== "vea") {
+	const source = parseSupportedSource(getOptionalSingleFlag(argv, "--source") ?? "vea");
+	if (!source) {
 		throw new Error(
-			"direct-refresh discovery denominator candidate generator is Vea-only for this issue",
+			`unsupported direct-refresh discovery denominator candidate generator source ${getOptionalSingleFlag(argv, "--source")}; supported sources: ${SUPPORTED_SOURCES.join(", ")}`,
 		);
 	}
 
@@ -181,7 +184,7 @@ export function buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
 	surface = "input-artifact",
 }: {
 	products: NormalizedProduct[];
-	source?: "vea";
+	source?: DirectRefreshDiscoveryDenominatorCandidateSource;
 	fetchedAt?: Date;
 	requestBudget: number;
 	sourceBudget: number;
@@ -296,7 +299,7 @@ export async function fetchDirectRefreshDiscoveryDenominatorCandidatesByKnownIde
 	lookups,
 	fetchDirectProducts,
 }: {
-	source?: "vea";
+	source?: DirectRefreshDiscoveryDenominatorCandidateSource;
 	lookups: DirectLookup[];
 	fetchDirectProducts: DirectRefreshDiscoveryDenominatorCandidateFetchDirectProducts;
 }): Promise<NormalizedProduct[]> {
@@ -330,12 +333,22 @@ function coverageMode(surface: DirectRefreshDiscoveryDenominatorCandidateSurface
 
 function coverageDescription(surface: DirectRefreshDiscoveryDenominatorCandidateSurface) {
 	if (surface === "direct-catalog-lookup") {
-		return "Vea-first direct catalog lookup from explicit known EAN/SKU identities; not an exhaustive all-source denominator.";
+		return "Source-scoped direct catalog lookup from explicit known EAN/SKU identities; not an exhaustive all-source denominator.";
 	}
 	if (surface === "product-suggestions") {
-		return "Bounded Vea-first productSuggestions search from explicit terms; not an exhaustive all-source denominator.";
+		return "Bounded source-scoped productSuggestions search from explicit terms; not an exhaustive all-source denominator.";
 	}
-	return "Bounded Vea-first candidate snapshot from an explicit input artifact; not an exhaustive all-source denominator.";
+	return "Bounded source-scoped candidate snapshot from an explicit input artifact; not an exhaustive all-source denominator.";
+}
+
+function parseSupportedSource(
+	source: string,
+): DirectRefreshDiscoveryDenominatorCandidateSource | null {
+	return SUPPORTED_SOURCES.includes(
+		source as DirectRefreshDiscoveryDenominatorCandidateSource,
+	)
+		? (source as DirectRefreshDiscoveryDenominatorCandidateSource)
+		: null;
 }
 
 function sha256Lineage(value: string) {
