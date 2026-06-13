@@ -279,7 +279,7 @@ function sha256Lineage(value: string) {
 	return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
-function stableJson(value: unknown) {
+function stableJson(value: unknown): string {
 	if (Array.isArray(value)) {
 		return `[${value.map((entry) => stableJson(entry)).join(",")}]`;
 	}
