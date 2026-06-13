@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
 import {
+	calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256,
 	evaluateDirectRefreshDiscoveryPrewriteFoundation,
 	parseDirectRefreshDiscoveryPrewriteFoundationCliOptions,
 	parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson,
@@ -96,6 +97,33 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	},
 };
 
+completeEvidence.artifactLineage.artifactSha256 =
+	calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+		completeEvidence,
+	);
+
+function evaluateFoundation(input: {
+	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
+	evidencePath?: string;
+	evidenceSha256?: string;
+	now?: Date;
+}) {
+	return evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		evidence: input.evidence,
+		evidencePath:
+			input.evidencePath ??
+			input.evidence.artifactLineage?.artifactPath ??
+			"foundation.json",
+		evidenceSha256:
+			input.evidenceSha256 ??
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				input.evidence,
+			) ??
+			"sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		now: input.now,
+	});
+}
+
 describe("direct-refresh discovery prewrite foundation", () => {
 	it("keeps the schema constraints required before discovery writes", async () => {
 		const schema = await readFile("prisma/schema.prisma", "utf8");
@@ -139,9 +167,9 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("passes only when all Phase 1 pre-write foundation evidence is present", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: completeEvidence,
-			evidencePath: "foundation.json",
+			evidencePath: completeEvidence.artifactLineage.artifactPath,
 			now: new Date("2026-06-06T12:30:00.000Z"),
 		});
 
@@ -152,8 +180,82 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.deepEqual(report.summary.failClosedReasons, []);
 	});
 
+	it("calculates artifact sha256 canonically without self-referential artifactSha256", () => {
+		const withDifferentSelfHash = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				artifactSha256:
+					"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			},
+		};
+
+		assert.equal(
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				completeEvidence,
+			),
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				withDifferentSelfHash,
+			),
+		);
+	});
+
+	it("calculates artifact sha256 independently of object key insertion order", () => {
+		const reorderedEvidence = {
+			performanceGuard: completeEvidence.performanceGuard,
+			alertChannel: completeEvidence.alertChannel,
+			compliance: completeEvidence.compliance,
+			vtexBudgets: completeEvidence.vtexBudgets,
+			rollbackDrill: completeEvidence.rollbackDrill,
+			artifactLineage: completeEvidence.artifactLineage,
+			controlPlane: completeEvidence.controlPlane,
+			schemaConstraints: completeEvidence.schemaConstraints,
+			generatedAt: completeEvidence.generatedAt,
+		} as DirectRefreshDiscoveryPrewriteFoundationEvidence;
+
+		assert.equal(
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				completeEvidence,
+			),
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				reorderedEvidence,
+			),
+		);
+	});
+
+	it("fails closed when artifact path lineage does not match the evidence path", () => {
+		const report = evaluateFoundation({
+			evidence: completeEvidence,
+			evidencePath:
+				"audit/direct-refresh-discovery-prewrite-foundation/other-foundation-evidence.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/artifact path lineage must match evidence path/,
+		);
+	});
+
+	it("fails closed when artifact sha256 lineage does not match the evidence file hash", () => {
+		const report = evaluateFoundation({
+			evidence: completeEvidence,
+			evidencePath: completeEvidence.artifactLineage.artifactPath,
+			evidenceSha256:
+				"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/artifact sha256 lineage must match evidence file hash/,
+		);
+	});
+
 	it("fails closed when Phase 1 foundation evidence is stale", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				generatedAt: "2026-06-06T11:44:59.000Z",
@@ -172,7 +274,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	it("reports missing foundation evidence timestamp without stale-noise duplication", () => {
 		const { generatedAt: _generatedAt, ...evidenceWithoutTimestamp } =
 			completeEvidence;
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence:
 				evidenceWithoutTimestamp as DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			evidencePath: "foundation.json",
@@ -185,8 +287,35 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		]);
 	});
 
+	it("fails closed instead of crashing when foundation evidence sections are malformed", () => {
+		const report = evaluateFoundation({
+			evidence: {
+				generatedAt: "2026-06-06T12:25:00.000Z",
+			} as DirectRefreshDiscoveryPrewriteFoundationEvidence,
+			evidencePath: "foundation.json",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /Product\.ean primary key is required/);
+		assert.match(reasons, /source lock is required/);
+		assert.match(reasons, /artifact path lineage must be foundation audit json/);
+		assert.match(reasons, /rollback drill must be executed before discovery apply/);
+		assert.match(reasons, /VTEX request cap must be positive/);
+		assert.match(reasons, /compliance allowed-use review is required/);
+		assert.match(
+			reasons,
+			/alert channel must include issue evidence comment and concrete alert destination/,
+		);
+		assert.match(
+			reasons,
+			/Prisma pool posture must include pgbouncer, connection_limit, and pool_timeout/,
+		);
+	});
+
 	it("fails closed when artifact lineage omits issue, source, count, attempt, path, or hash", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				artifactLineage: {
@@ -214,7 +343,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when source config snapshot or VTEX probe timestamp are malformed", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				artifactLineage: {
@@ -234,7 +363,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when commit, tool version, or schema version lineage are malformed", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				artifactLineage: {
@@ -256,7 +385,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when source, artifact path, or DB environment lineage are invalid", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				artifactLineage: {
@@ -278,7 +407,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when rollback proof is read-only instead of executed", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				rollbackDrill: {
@@ -302,7 +431,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when control-plane owner is generic", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				controlPlane: {
@@ -320,7 +449,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when rollback DR proof omits preimage, PITR, or cache handling", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				rollbackDrill: {
@@ -344,7 +473,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when PITR/backup posture evidence is vague", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				rollbackDrill: {
@@ -365,7 +494,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when preimage artifact evidence is missing or malformed", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				rollbackDrill: {
@@ -388,7 +517,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when post-rollback verification artifact evidence is missing or malformed", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				rollbackDrill: {
@@ -411,7 +540,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when rollback IDs are broad selectors instead of exact table IDs", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				rollbackDrill: {
@@ -429,7 +558,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when alert channel or owner are placeholders", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				alertChannel: {
@@ -452,7 +581,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when alert policy omits severity, SLA, escalation, suppression, retry, or test proof", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				alertChannel: {
@@ -482,7 +611,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				vtexBudgets: { ...completeEvidence.vtexBudgets, requestCap: 0 },
@@ -503,7 +632,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when VTEX budgets are not tightly bounded", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				vtexBudgets: {
@@ -525,7 +654,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when VTEX safety policies are too vague", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				vtexBudgets: {
@@ -547,7 +676,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("fails closed when performance guard evidence is too vague", () => {
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: {
 				...completeEvidence,
 				performanceGuard: {
@@ -615,7 +744,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 				"utf8",
 			),
 		);
-		const report = evaluateDirectRefreshDiscoveryPrewriteFoundation({
+		const report = evaluateFoundation({
 			evidence: policy,
 			evidencePath: "docs/direct-refresh-discovery-prewrite-foundation-policy.json",
 		});

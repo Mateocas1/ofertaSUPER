@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { getOptionalSingleFlag, uniqueSorted } from "./audit-utils";
 
 export type DirectRefreshDiscoveryPrewriteFoundationStatus = "PASS" | "FAIL";
@@ -158,13 +160,15 @@ export function parseDirectRefreshDiscoveryPrewriteFoundationCliOptions(
 export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 	evidence,
 	evidencePath,
+	evidenceSha256,
 	now = new Date(),
 }: {
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
 	evidencePath: string;
+	evidenceSha256: string;
 	now?: Date;
 }) {
-	const checks = buildChecks(evidence, now);
+	const checks = buildChecks(evidence, evidencePath, evidenceSha256, now);
 	const failClosedReasons = uniqueSorted(checks.flatMap((check) => check.reasons));
 	const failCount = checks.filter((check) => check.status === "FAIL").length;
 	return {
@@ -192,15 +196,49 @@ export function parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson(
 	return JSON.parse(raw.replace(/^\uFEFF/, "")) as DirectRefreshDiscoveryPrewriteFoundationEvidence;
 }
 
-function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence, now: Date) {
-	const schema = evidence.schemaConstraints;
-	const control = evidence.controlPlane;
-	const lineage = evidence.artifactLineage;
-	const rollback = evidence.rollbackDrill;
-	const budget = evidence.vtexBudgets;
-	const compliance = evidence.compliance;
-	const alert = evidence.alertChannel;
-	const perf = evidence.performanceGuard;
+export function calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
+) {
+	const canonicalEvidence = {
+		...evidence,
+		artifactLineage: {
+			...(evidence.artifactLineage ?? {}),
+			artifactSha256: "",
+		},
+	};
+	return `sha256:${createHash("sha256")
+		.update(stableStringify(canonicalEvidence))
+		.digest("hex")}`;
+}
+
+function stableStringify(value: unknown): string {
+	if (Array.isArray(value)) {
+		return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+	}
+	if (value && typeof value === "object") {
+		const record = value as Record<string, unknown>;
+		return `{${Object.keys(record)
+			.sort()
+			.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+			.join(",")}}`;
+	}
+	return JSON.stringify(value);
+}
+
+function buildChecks(
+	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
+	evidencePath: string,
+	evidenceSha256: string,
+	now: Date,
+) {
+	const schema = evidence.schemaConstraints ?? {};
+	const control = evidence.controlPlane ?? {};
+	const lineage = evidence.artifactLineage ?? {};
+	const rollback = evidence.rollbackDrill ?? {};
+	const budget = evidence.vtexBudgets ?? {};
+	const compliance = evidence.compliance ?? {};
+	const alert = evidence.alertChannel ?? {};
+	const perf = evidence.performanceGuard ?? {};
 	return [
 		check("evidence-freshness", buildEvidenceFreshnessRules(evidence, now)),
 		check("schema-constraints", [
@@ -225,8 +263,19 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[hasWriterSupportedSource(lineage.source), "source lineage must be writer-supported"],
 			[lineage.count > 0, "count lineage is required"],
 			[hasText(lineage.attemptId), "attempt lineage is required"],
-			[hasFoundationArtifactPath(lineage.artifactPath), "artifact path lineage must be foundation audit json"],
+			[
+				hasFoundationArtifactPath(lineage.artifactPath),
+				"artifact path lineage must be foundation audit json",
+			],
+			[
+				hasMatchingArtifactPath(lineage.artifactPath, evidencePath),
+				"artifact path lineage must match evidence path",
+			],
 			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
+			[
+				hasMatchingArtifactSha256(lineage.artifactSha256, evidenceSha256),
+				"artifact sha256 lineage must match evidence file hash",
+			],
 			[hasGitCommitLineage(lineage.gitCommit), "git commit lineage must be hex"],
 			[hasToolVersionLineage(lineage.toolVersion), "tool version lineage must include @version"],
 			[hasNumericSchemaVersion(lineage.schemaVersion), "schema version lineage must be numeric"],
@@ -241,7 +290,10 @@ function buildChecks(evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 			[hasRollbackVerificationArtifact(rollback.preimageArtifact), "preimage artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.preimageSha256), "preimage sha256 is required"],
 			[hasPitrBackupPosture(rollback.pitrBackupPosture), "PITR/backup posture must include PITR or backup and reviewed or available"],
-			[rollback.rollbackIds.length > 0, "rollback IDs are required"],
+			[
+				Array.isArray(rollback.rollbackIds) && rollback.rollbackIds.length > 0,
+				"rollback IDs are required",
+			],
 			[hasExactRollbackIds(rollback.rollbackIds), "rollback IDs must be exact table:id entries"],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
 			[hasRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
@@ -324,6 +376,24 @@ function hasFoundationArtifactPath(value: string | undefined) {
 		/^audit\/direct-refresh-discovery-prewrite-foundation\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
 		!value.includes("..")
 	);
+}
+
+function hasMatchingArtifactPath(
+	lineagePath: string | undefined,
+	evidencePath: string,
+) {
+	return normalizeAuditPath(lineagePath) === normalizeAuditPath(evidencePath);
+}
+
+function hasMatchingArtifactSha256(
+	lineageSha256: string | undefined,
+	evidenceSha256: string,
+) {
+	return lineageSha256 === evidenceSha256;
+}
+
+function normalizeAuditPath(value: string | undefined) {
+	return typeof value === "string" ? value.replaceAll("\\", "/") : "";
 }
 
 function hasExplicitEnvironmentIdentity(value: string | undefined) {
