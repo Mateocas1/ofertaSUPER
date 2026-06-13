@@ -34,6 +34,8 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		schemaVersion: string;
 		dbEnvironmentIdentity: string;
 		sourceConfigSnapshot: string;
+		vtexProbeSource: string;
+		vtexProbeHash: string;
 		vtexProbeTimestamp: string;
 	};
 	rollbackDrill: {
@@ -60,6 +62,7 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	compliance: {
 		allowedUseReviewed: boolean;
 		posture: "approved" | "risk-accepted" | "blocked" | "unknown";
+		reviewedSources: string[];
 	};
 	alertChannel: {
 		channel: string;
@@ -315,7 +318,7 @@ function buildChecks(
 		check("artifact-lineage", [
 			[lineage.issue > 0, "issue lineage is required"],
 			[hasWriterSupportedSource(lineage.source), "source lineage must be writer-supported"],
-			[lineage.count > 0, "count lineage is required"],
+			[hasPositiveInteger(lineage.count), "count lineage must be a positive integer"],
 			[hasText(lineage.attemptId), "attempt lineage is required"],
 			[
 				hasFoundationArtifactPath(lineage.artifactPath),
@@ -347,6 +350,15 @@ function buildChecks(
 				"source config snapshot sha256 must match runtime files",
 			],
 			[hasIsoDatetime(lineage.vtexProbeTimestamp), "VTEX probe timestamp must be ISO datetime"],
+			[
+				hasFreshTimestamp(lineage.vtexProbeTimestamp, now),
+				"VTEX probe timestamp must be fresh within 15 minutes",
+			],
+			[
+				hasMatchingVtexProbeSource(lineage.vtexProbeSource, lineage.source),
+				"VTEX probe source must match lineage source",
+			],
+			[hasSha256Lineage(lineage.vtexProbeHash), "VTEX probe hash lineage is required"],
 		]),
 		check("rollback-drill", [
 			[rollback.executed, "rollback drill must be executed before discovery apply"],
@@ -367,6 +379,14 @@ function buildChecks(
 				"rollback IDs are required",
 			],
 			[hasExactRollbackIds(rollback.rollbackIds), "rollback IDs must be exact table:id entries"],
+			[
+				hasMinimumRollbackTableCoverage(rollback.rollbackIds),
+				"rollback IDs must include supermarket_products and price_history entries",
+			],
+			[
+				hasRollbackTableCoverageForCount(rollback.rollbackIds, lineage.count),
+				"rollback ID coverage must be at least count lineage per affected table",
+			],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
 			[hasRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.postRollbackVerificationSha256), "post-rollback verification sha256 is required"],
@@ -380,11 +400,15 @@ function buildChecks(
 			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
 		]),
 		check("vtex-budgets", [
-			[budget.requestCap > 0, "VTEX request cap must be positive"],
+			[hasPositiveInteger(budget.requestCap), "VTEX request cap must be a positive integer"],
 			[budget.requestCap <= MAX_VTEX_FOUNDATION_REQUEST_CAP, "VTEX request cap must be <= 20"],
+			[
+				hasPositiveInteger(lineage.count) && lineage.count <= budget.requestCap,
+				"count lineage must not exceed VTEX request cap",
+			],
 			[budget.concurrency > 0, "VTEX concurrency must be positive"],
 			[budget.concurrency === 1, "VTEX concurrency must be serial"],
-			[budget.timeoutMs > 0, "VTEX timeout must be positive"],
+			[hasPositiveInteger(budget.timeoutMs), "VTEX timeout must be a positive integer in milliseconds"],
 			[budget.timeoutMs <= MAX_VTEX_FOUNDATION_TIMEOUT_MS, "VTEX timeout must be <= 10000ms"],
 			[hasVtexBackoffPolicy(budget.backoffPolicy), "VTEX backoff policy must include timeout, 403, 429, HTML, and captcha"],
 			[hasVtexStopRule(budget.stopRule), "VTEX stop rule must stop source on blocked, rate-limit, hash_invalid, and no automatic retry"],
@@ -393,6 +417,10 @@ function buildChecks(
 		check("compliance", [
 			[compliance.allowedUseReviewed, "compliance allowed-use review is required"],
 			[compliance.posture === "approved" || compliance.posture === "risk-accepted", "compliance posture must be approved or risk-accepted"],
+			[
+				hasComplianceForSource(compliance.reviewedSources, lineage.source),
+				"compliance reviewed sources must include lineage source",
+			],
 		]),
 		check("alert-channel", [
 			[hasActionableAlertChannel(alert.channel), "alert channel must include issue evidence comment and concrete alert destination"],
@@ -443,6 +471,10 @@ function check(name: string, rules: Rule[]) {
 
 function hasText(value: string | undefined) {
 	return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasPositiveInteger(value: number | undefined) {
+	return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
 function hasWriterSupportedSource(value: string | undefined) {
@@ -535,6 +567,22 @@ function hasIsoDatetime(value: string | undefined) {
 	return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
 }
 
+function hasFreshTimestamp(value: string | undefined, now: Date) {
+	if (!hasIsoDatetime(value)) return false;
+	const timestamp = Date.parse(value ?? "");
+	const nowMs = now.getTime();
+	return (
+		timestamp <= nowMs && nowMs - timestamp <= FOUNDATION_EVIDENCE_MAX_AGE_MS
+	);
+}
+
+function hasMatchingVtexProbeSource(
+	probeSource: string | undefined,
+	lineageSource: string | undefined,
+) {
+	return hasWriterSupportedSource(probeSource) && probeSource === lineageSource;
+}
+
 function hasVtexBackoffPolicy(value: string | undefined) {
 	return hasAllTerms(value, ["timeout", "403", "429", "html", "captcha"]);
 }
@@ -546,6 +594,29 @@ function hasExactRollbackIds(values: string[] | undefined) {
 		values.every((value) =>
 			/^(products|supermarket_products|price_history|staging_products|direct_refresh_run_ledger):[1-9]\d*$/.test(value),
 		)
+	);
+}
+
+function hasMinimumRollbackTableCoverage(values: string[] | undefined) {
+	return (
+		Array.isArray(values) &&
+		values.some((value) => value.startsWith("supermarket_products:")) &&
+		values.some((value) => value.startsWith("price_history:"))
+	);
+}
+
+function hasRollbackTableCoverageForCount(
+	values: string[] | undefined,
+	count: number | undefined,
+) {
+	if (!Array.isArray(values) || typeof count !== "number" || count <= 0) {
+		return false;
+	}
+
+	return (
+		values.filter((value) => value.startsWith("supermarket_products:")).length >=
+			count &&
+		values.filter((value) => value.startsWith("price_history:")).length >= count
 	);
 }
 
@@ -573,6 +644,18 @@ function hasVtexStopRule(value: string | undefined) {
 
 function hasVtexHeaderPolicy(value: string | undefined) {
 	return hasAllTerms(value, ["documented", "non-evasive"]);
+}
+
+function hasComplianceForSource(
+	reviewedSources: string[] | undefined,
+	lineageSource: string | undefined,
+) {
+	return (
+		typeof lineageSource === "string" &&
+		hasWriterSupportedSource(lineageSource) &&
+		Array.isArray(reviewedSources) &&
+		reviewedSources.includes(lineageSource)
+	);
 }
 
 function hasActionableAlertChannel(value: string | undefined) {

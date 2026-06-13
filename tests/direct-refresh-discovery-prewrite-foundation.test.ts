@@ -43,7 +43,10 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		dbEnvironmentIdentity: "local-test-db",
 		sourceConfigSnapshot:
 			"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; files:src/lib/supermarkets.ts",
-		vtexProbeTimestamp: "2026-06-06T12:00:00.000Z",
+		vtexProbeSource: "vea",
+		vtexProbeHash:
+			"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		vtexProbeTimestamp: "2026-06-06T12:25:00.000Z",
 	},
 	rollbackDrill: {
 		executed: true,
@@ -73,6 +76,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	compliance: {
 		allowedUseReviewed: true,
 		posture: "approved",
+		reviewedSources: ["vea"],
 	},
 	alertChannel: {
 		channel: "Issue comment + #direct-refresh-alerts",
@@ -315,7 +319,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /source lock is required/);
 		assert.match(reasons, /artifact path lineage must be foundation audit json/);
 		assert.match(reasons, /rollback drill must be executed before discovery apply/);
-		assert.match(reasons, /VTEX request cap must be positive/);
+		assert.match(reasons, /VTEX request cap must be a positive integer/);
 		assert.match(reasons, /compliance allowed-use review is required/);
 		assert.match(
 			reasons,
@@ -349,10 +353,44 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /issue lineage is required/);
 		assert.match(reasons, /source lineage must be writer-supported/);
-		assert.match(reasons, /count lineage is required/);
+		assert.match(reasons, /count lineage must be a positive integer/);
 		assert.match(reasons, /attempt lineage is required/);
 		assert.match(reasons, /artifact path lineage must be foundation audit json/);
 		assert.match(reasons, /artifact sha256 lineage is required/);
+	});
+
+	it("fails closed when count lineage is fractional", () => {
+		const evidenceWithFractionalCount = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				count: 1.5,
+			},
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				rollbackIds: [
+					"supermarket_products:901",
+					"supermarket_products:902",
+					"price_history:1001",
+					"price_history:1002",
+				],
+			},
+		};
+		evidenceWithFractionalCount.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithFractionalCount,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithFractionalCount,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/count lineage must be a positive integer/,
+		);
 	});
 
 	it("fails closed when source config snapshot or VTEX probe timestamp are malformed", () => {
@@ -373,6 +411,94 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /source config snapshot sha256 is required/);
 		assert.match(reasons, /VTEX probe timestamp must be ISO datetime/);
+	});
+
+	it("fails closed when VTEX probe hash lineage is missing", () => {
+		const report = evaluateFoundation({
+			evidence: {
+				...completeEvidence,
+				artifactLineage: {
+					...completeEvidence.artifactLineage,
+					vtexProbeHash: "",
+				},
+			},
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/VTEX probe hash lineage is required/,
+		);
+	});
+
+	it("fails closed when VTEX probe source does not match lineage source", () => {
+		const evidenceWithWrongProbeSource = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				vtexProbeSource: "carrefour",
+			},
+		};
+		evidenceWithWrongProbeSource.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWrongProbeSource,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithWrongProbeSource,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/VTEX probe source must match lineage source/,
+		);
+	});
+
+	it("fails closed when VTEX probe timestamp is stale or future-dated", () => {
+		const staleEvidence = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				vtexProbeTimestamp: "2026-06-06T12:00:00.000Z",
+			},
+		};
+		staleEvidence.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				staleEvidence,
+			);
+		const futureEvidence = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				vtexProbeTimestamp: "2026-06-06T12:31:00.000Z",
+			},
+		};
+		futureEvidence.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				futureEvidence,
+			);
+		const staleReport = evaluateFoundation({
+			evidence: staleEvidence,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+		const futureReport = evaluateFoundation({
+			evidence: futureEvidence,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(staleReport.status, "FAIL");
+		assert.equal(futureReport.status, "FAIL");
+		assert.match(
+			staleReport.summary.failClosedReasons.join("\n"),
+			/VTEX probe timestamp must be fresh within 15 minutes/,
+		);
+		assert.match(
+			futureReport.summary.failClosedReasons.join("\n"),
+			/VTEX probe timestamp must be fresh within 15 minutes/,
+		);
 	});
 
 	it("fails closed when source config snapshot has no real files", () => {
@@ -685,6 +811,63 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /rollback IDs must be exact table:id entries/);
 	});
 
+	it("fails closed when rollback IDs omit source row or price history coverage", () => {
+		const evidenceWithPartialRollbackIds = {
+			...completeEvidence,
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				rollbackIds: ["price_history:1001"],
+			},
+		};
+		evidenceWithPartialRollbackIds.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithPartialRollbackIds,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithPartialRollbackIds,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/rollback IDs must include supermarket_products and price_history entries/,
+		);
+	});
+
+	it("fails closed when rollback ID coverage is lower than count lineage", () => {
+		const evidenceWithInsufficientRollbackCount = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				count: 2,
+			},
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				rollbackIds: [
+					"supermarket_products:901",
+					"price_history:1001",
+				],
+			},
+		};
+		evidenceWithInsufficientRollbackCount.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithInsufficientRollbackCount,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithInsufficientRollbackCount,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/rollback ID coverage must be at least count lineage per affected table/,
+		);
+	});
+
 	it("fails closed when alert channel or owner are placeholders", () => {
 		const report = evaluateFoundation({
 			evidence: {
@@ -754,9 +937,33 @@ describe("direct-refresh discovery prewrite foundation", () => {
 
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
-		assert.match(reasons, /VTEX request cap must be positive/);
+		assert.match(reasons, /VTEX request cap must be a positive integer/);
 		assert.match(reasons, /compliance allowed-use review is required/);
 		assert.match(reasons, /public API baseline must include search and products/);
+	});
+
+	it("fails closed when compliance does not cover the lineage source", () => {
+		const evidenceWithWrongComplianceSource = {
+			...completeEvidence,
+			compliance: {
+				...completeEvidence.compliance,
+				reviewedSources: ["carrefour"],
+			},
+		};
+		evidenceWithWrongComplianceSource.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWrongComplianceSource,
+			);
+		const report = evaluateFoundation({
+			evidence: evidenceWithWrongComplianceSource,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/compliance reviewed sources must include lineage source/,
+		);
 	});
 
 	it("fails closed when VTEX budgets are not tightly bounded", () => {
@@ -779,6 +986,60 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /VTEX request cap must be <= 20/);
 		assert.match(reasons, /VTEX concurrency must be serial/);
 		assert.match(reasons, /VTEX timeout must be <= 10000ms/);
+	});
+
+	it("fails closed when VTEX request cap or timeout are fractional", () => {
+		const evidenceWithFractionalBudgets = {
+			...completeEvidence,
+			vtexBudgets: {
+				...completeEvidence.vtexBudgets,
+				requestCap: 1.5,
+				timeoutMs: 999.5,
+			},
+		};
+		evidenceWithFractionalBudgets.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithFractionalBudgets,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithFractionalBudgets,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /VTEX request cap must be a positive integer/);
+		assert.match(reasons, /VTEX timeout must be a positive integer in milliseconds/);
+	});
+
+	it("fails closed when count lineage exceeds the VTEX request cap", () => {
+		const evidenceWithCountAboveBudget = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				count: 25,
+			},
+			vtexBudgets: {
+				...completeEvidence.vtexBudgets,
+				requestCap: 20,
+			},
+		};
+		evidenceWithCountAboveBudget.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithCountAboveBudget,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithCountAboveBudget,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/count lineage must not exceed VTEX request cap/,
+		);
 	});
 
 	it("fails closed when VTEX safety policies are too vague", () => {
@@ -881,6 +1142,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(policy.controlPlane.ttlPolicy, true);
 		assert.equal(policy.controlPlane.idempotencyPolicy, true);
 		assert.match(policy.artifactLineage.sourceConfigSnapshot, /^sha256:[a-f0-9]{64}; files:/);
+		assert.equal(typeof policy.artifactLineage.vtexProbeHash, "string");
 		assert.equal(policy.vtexBudgets.concurrency, 1);
 		assert.equal(policy.alertChannel.rollbackRequired, true);
 		assert.doesNotMatch(reasons, /TTL policy is required/);
