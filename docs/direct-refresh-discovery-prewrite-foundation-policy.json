@@ -59,10 +59,10 @@
   },
   "compliance": {
     "reviewedAt": "<ISO timestamp captured within 15 minutes of audit>",
-    "allowedUseReviewed": false,
-    "posture": "unknown",
+    "allowedUseReviewed": true,
+    "posture": "approved",
     "reviewedSources": [
-      "<source reviewed for allowed use before audit>"
+      "<artifactLineage.source reviewed for allowed use before audit>"
     ]
   },
   "alertChannel": {
