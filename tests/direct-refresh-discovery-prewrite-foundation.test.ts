@@ -22,6 +22,15 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		stagingProductIndex: true,
 		ledgerUniqueness: true,
 		migrationStatus: "PASS",
+		migrationEvidence: {
+			scope: "direct-refresh-discovery-prewrite-foundation",
+			verificationMode: "read-only-source-controlled-review",
+			migrationPaths: [
+				"prisma/migrations/20260606_discovery_prewrite_foundation/migration.sql",
+			],
+			noMigrationExecution: true,
+			issue: 235,
+		},
 	},
 	controlPlane: {
 		verifiedAt: "2026-06-06T12:20:00.000Z",
@@ -229,6 +238,116 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(report.writeBoundary, /no discovery apply/);
 		assert.equal(report.summary.passCount, report.checks.length);
 		assert.deepEqual(report.summary.failClosedReasons, []);
+	});
+
+	it("requires bounded read-only migration evidence before accepting migration PASS", () => {
+		const evidence = withCalculatedFoundationSha({
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			schemaConstraints: {
+				...completeEvidence.schemaConstraints,
+				migrationEvidence: undefined,
+			},
+		});
+		const report = evaluateFoundation({
+			evidence,
+			evidencePath: evidence.artifactLineage.artifactPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/migration evidence must prove bounded direct-refresh prewrite scope without migration execution/,
+		);
+	});
+
+	it("fails closed for malformed bounded migration evidence", () => {
+		const approvedMigrationEvidence =
+			completeEvidence.schemaConstraints.migrationEvidence;
+		assert.ok(approvedMigrationEvidence);
+
+		const malformedEvidenceCases: Array<{
+			name: string;
+			migrationEvidence: unknown;
+		}> = [
+			{
+				name: "wrong scope",
+				migrationEvidence: {
+					...approvedMigrationEvidence,
+					scope: "direct-refresh-discovery-postwrite-foundation",
+				},
+			},
+			{
+				name: "wrong verification mode",
+				migrationEvidence: {
+					...approvedMigrationEvidence,
+					verificationMode: "migration-executed",
+				},
+			},
+			{
+				name: "missing migration path",
+				migrationEvidence: {
+					...approvedMigrationEvidence,
+					migrationPaths: [],
+				},
+			},
+			{
+				name: "extra migration path",
+				migrationEvidence: {
+					...approvedMigrationEvidence,
+					migrationPaths: [
+						...approvedMigrationEvidence.migrationPaths,
+						"src/lib/supermarkets.ts",
+					],
+				},
+			},
+			{
+				name: "migration execution allowed",
+				migrationEvidence: {
+					...approvedMigrationEvidence,
+					noMigrationExecution: false,
+				},
+			},
+			{
+				name: "wrong issue",
+				migrationEvidence: {
+					...approvedMigrationEvidence,
+					issue: 234,
+				},
+			},
+			{
+				name: "non-numeric issue",
+				migrationEvidence: {
+					...approvedMigrationEvidence,
+					issue: "235",
+				},
+			},
+		];
+
+		for (const { name, migrationEvidence } of malformedEvidenceCases) {
+			const evidence = withCalculatedFoundationSha({
+				...completeEvidence,
+				artifactLineage: { ...completeEvidence.artifactLineage },
+				schemaConstraints: {
+					...completeEvidence.schemaConstraints,
+					migrationEvidence:
+						migrationEvidence as DirectRefreshDiscoveryPrewriteFoundationEvidence["schemaConstraints"]["migrationEvidence"],
+				},
+			});
+			const report = evaluateFoundation({
+				evidence,
+				evidencePath: evidence.artifactLineage.artifactPath,
+				now: new Date("2026-06-06T12:30:00.000Z"),
+			});
+
+			assert.equal(report.status, "FAIL", name);
+			assert.match(
+				report.summary.failClosedReasons.join("\n"),
+				/migration evidence must prove bounded direct-refresh prewrite scope without migration execution/,
+				name,
+			);
+		}
 	});
 
 	it("calculates artifact sha256 canonically without self-referential artifactSha256", () => {
@@ -2710,6 +2829,15 @@ describe("direct-refresh discovery prewrite foundation", () => {
 
 		assert.equal(policy.controlPlane.ttlPolicy, true);
 		assert.equal(policy.controlPlane.idempotencyPolicy, true);
+		assert.equal(policy.schemaConstraints.migrationStatus, "PASS");
+		assert.equal(
+			policy.schemaConstraints.migrationEvidence?.scope,
+			"direct-refresh-discovery-prewrite-foundation",
+		);
+		assert.equal(
+			policy.schemaConstraints.migrationEvidence?.noMigrationExecution,
+			true,
+		);
 		assert.match(policy.artifactLineage.sourceConfigSnapshot, /^sha256:[a-f0-9]{64}; files:/);
 		assert.equal(typeof policy.artifactLineage.vtexProbeHash, "string");
 		assert.equal(policy.vtexBudgets.concurrency, 1);
@@ -2725,6 +2853,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /foundation evidence generatedAt is required/);
 		assert.match(reasons, /rollback drill must be executed/);
-		assert.match(reasons, /migration status must be PASS/);
+		assert.doesNotMatch(reasons, /migration status must be PASS/);
+		assert.doesNotMatch(reasons, /migration evidence must prove bounded/);
 	});
 });

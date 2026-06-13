@@ -14,6 +14,13 @@ export type DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		stagingProductIndex: boolean;
 		ledgerUniqueness: boolean;
 		migrationStatus: "PASS" | "FAIL" | "UNKNOWN";
+		migrationEvidence?: {
+			scope: string;
+			verificationMode: string;
+			migrationPaths: string[];
+			noMigrationExecution: boolean;
+			issue?: number;
+		};
 	};
 	controlPlane: {
 		verifiedAt: string;
@@ -100,6 +107,8 @@ type Rule = [boolean, string];
 const FOUNDATION_EVIDENCE_MAX_AGE_MS = 15 * 60 * 1000;
 const MAX_VTEX_FOUNDATION_REQUEST_CAP = 20;
 const MAX_VTEX_FOUNDATION_TIMEOUT_MS = 10_000;
+const APPROVED_MIGRATION_FOUNDATION_PATH =
+	"prisma/migrations/20260606_discovery_prewrite_foundation/migration.sql" as const;
 const WRITER_SUPPORTED_SOURCES = new Set(["carrefour", "vea", "disco", "jumbo", "mas"]);
 
 const WRITE_BOUNDARY =
@@ -324,6 +333,10 @@ function buildChecks(
 			[schema.stagingProductIndex, "StagingProduct(ean, source_slug) index is required"],
 			[schema.ledgerUniqueness, "DirectRefreshRunLedger uniqueness is required"],
 			[schema.migrationStatus === "PASS", "migration status must be PASS"],
+			[
+				hasBoundedMigrationFoundationEvidence(schema.migrationEvidence),
+				"migration evidence must prove bounded direct-refresh prewrite scope without migration execution",
+			],
 		]),
 		check("control-plane", [
 			...buildExplicitTimestampRules(
@@ -617,6 +630,22 @@ function hasText(value: string | undefined) {
 
 function hasPositiveInteger(value: number | undefined) {
 	return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+function hasBoundedMigrationFoundationEvidence(
+	value:
+		| DirectRefreshDiscoveryPrewriteFoundationEvidence["schemaConstraints"]["migrationEvidence"]
+		| undefined,
+) {
+	return (
+		value?.scope === "direct-refresh-discovery-prewrite-foundation" &&
+		value.verificationMode === "read-only-source-controlled-review" &&
+		Array.isArray(value.migrationPaths) &&
+		value.migrationPaths.length === 1 &&
+		value.migrationPaths[0] === APPROVED_MIGRATION_FOUNDATION_PATH &&
+		value.noMigrationExecution === true &&
+		(value.issue === undefined || value.issue === 235)
+	);
 }
 
 function hasSafeAttemptId(value: string | undefined) {

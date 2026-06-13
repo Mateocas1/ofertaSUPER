@@ -8,7 +8,16 @@
     "priceHistoryIndex": true,
     "stagingProductIndex": true,
     "ledgerUniqueness": true,
-    "migrationStatus": "FAIL"
+    "migrationStatus": "PASS",
+    "migrationEvidence": {
+      "scope": "direct-refresh-discovery-prewrite-foundation",
+      "verificationMode": "read-only-source-controlled-review",
+      "migrationPaths": [
+        "prisma/migrations/20260606_discovery_prewrite_foundation/migration.sql"
+      ],
+      "noMigrationExecution": true,
+      "issue": 235
+    }
   },
   "controlPlane": {
     "verifiedAt": "<ISO timestamp captured within 15 minutes of audit>",
