@@ -161,14 +161,28 @@ export function evaluateDirectRefreshDiscoveryPrewriteFoundation({
 	evidence,
 	evidencePath,
 	evidenceSha256,
+	sourceConfigSnapshotSha256,
+	rollbackPreimageSha256,
+	postRollbackVerificationSha256,
 	now = new Date(),
 }: {
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
 	evidencePath: string;
 	evidenceSha256: string;
+	sourceConfigSnapshotSha256: string;
+	rollbackPreimageSha256: string | undefined;
+	postRollbackVerificationSha256: string | undefined;
 	now?: Date;
 }) {
-	const checks = buildChecks(evidence, evidencePath, evidenceSha256, now);
+	const checks = buildChecks(
+		evidence,
+		evidencePath,
+		evidenceSha256,
+		sourceConfigSnapshotSha256,
+		rollbackPreimageSha256,
+		postRollbackVerificationSha256,
+		now,
+	);
 	const failClosedReasons = uniqueSorted(checks.flatMap((check) => check.reasons));
 	const failCount = checks.filter((check) => check.status === "FAIL").length;
 	return {
@@ -211,6 +225,43 @@ export function calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
 		.digest("hex")}`;
 }
 
+export function calculateDirectRefreshDiscoverySourceConfigSnapshotSha256(
+	files: Array<{ path: string; content: string }>,
+) {
+	const canonicalFiles = files
+		.map((file) => ({ path: normalizeAuditPath(file.path), content: file.content }))
+		.sort((left, right) => left.path.localeCompare(right.path));
+	return `sha256:${createHash("sha256")
+		.update(stableStringify(canonicalFiles))
+		.digest("hex")}`;
+}
+
+export function parseDirectRefreshDiscoverySourceConfigSnapshotFiles(
+	value: string | undefined,
+) {
+	const match = value?.match(/^sha256:[a-f0-9]{64}; files:(\S+)$/);
+	const files = match ? match[1].split(",").filter((file) => file.length > 0) : [];
+	if (files.length === 0) {
+		throw new Error("source config snapshot files must include at least one file");
+	}
+	if (!files.every(isSafeSourceConfigSnapshotPath)) {
+		throw new Error(
+			"source config snapshot files must be workspace-relative safe paths",
+		);
+	}
+	return files;
+}
+
+function isSafeSourceConfigSnapshotPath(value: string) {
+	return (
+		/^[A-Za-z0-9._/-]+$/.test(value) &&
+		!value.startsWith("/") &&
+		!value.includes("\\") &&
+		!value.split("/").includes("..") &&
+		!value.includes(":")
+	);
+}
+
 function stableStringify(value: unknown): string {
 	if (Array.isArray(value)) {
 		return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
@@ -229,6 +280,9 @@ function buildChecks(
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
 	evidencePath: string,
 	evidenceSha256: string,
+	sourceConfigSnapshotSha256: string,
+	rollbackPreimageSha256: string | undefined,
+	postRollbackVerificationSha256: string | undefined,
 	now: Date,
 ) {
 	const schema = evidence.schemaConstraints ?? {};
@@ -281,6 +335,17 @@ function buildChecks(
 			[hasNumericSchemaVersion(lineage.schemaVersion), "schema version lineage must be numeric"],
 			[hasExplicitEnvironmentIdentity(lineage.dbEnvironmentIdentity), "DB/environment identity must be explicit"],
 			[hasSourceConfigSnapshot(lineage.sourceConfigSnapshot), "source config snapshot sha256 is required"],
+			[
+				hasSafeSourceConfigSnapshotFiles(lineage.sourceConfigSnapshot),
+				"source config snapshot files must be workspace-relative safe paths",
+			],
+			[
+				hasMatchingSourceConfigSnapshot(
+					lineage.sourceConfigSnapshot,
+					sourceConfigSnapshotSha256,
+				),
+				"source config snapshot sha256 must match runtime files",
+			],
 			[hasIsoDatetime(lineage.vtexProbeTimestamp), "VTEX probe timestamp must be ISO datetime"],
 		]),
 		check("rollback-drill", [
@@ -289,6 +354,13 @@ function buildChecks(
 			[rollback.preimageCaptured === true, "rollback preimage capture is required"],
 			[hasRollbackVerificationArtifact(rollback.preimageArtifact), "preimage artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.preimageSha256), "preimage sha256 is required"],
+			[
+				hasMatchingArtifactSha256(
+					rollback.preimageSha256,
+					rollbackPreimageSha256 ?? "",
+				),
+				"preimage sha256 must match runtime preimage artifact",
+			],
 			[hasPitrBackupPosture(rollback.pitrBackupPosture), "PITR/backup posture must include PITR or backup and reviewed or available"],
 			[
 				Array.isArray(rollback.rollbackIds) && rollback.rollbackIds.length > 0,
@@ -298,6 +370,13 @@ function buildChecks(
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
 			[hasRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.postRollbackVerificationSha256), "post-rollback verification sha256 is required"],
+			[
+				hasMatchingArtifactSha256(
+					rollback.postRollbackVerificationSha256,
+					postRollbackVerificationSha256 ?? "",
+				),
+				"post-rollback verification sha256 must match runtime artifact",
+			],
 			[hasText(rollback.cacheHandling), "rollback cache handling is required"],
 		]),
 		check("vtex-budgets", [
@@ -421,7 +500,33 @@ function hasNumericSchemaVersion(value: string | undefined) {
 }
 
 function hasSourceConfigSnapshot(value: string | undefined) {
-	return typeof value === "string" && /^sha256:[a-f0-9]{64}; files:\S+/.test(value);
+	return (
+		typeof value === "string" &&
+		/^sha256:[a-f0-9]{64}; files:\S+/.test(value) &&
+		hasSourceConfigSnapshotFiles(value)
+	);
+}
+
+function hasMatchingSourceConfigSnapshot(
+	lineageSnapshot: string | undefined,
+	runtimeSha256: string,
+) {
+	const lineageSha256 = lineageSnapshot?.split(";")[0];
+	return lineageSha256 === runtimeSha256;
+}
+
+function hasSourceConfigSnapshotFiles(value: string) {
+	const files = value.split("; files:")[1]?.split(",").filter((file) => file.length > 0);
+	return Array.isArray(files) && files.length > 0;
+}
+
+function hasSafeSourceConfigSnapshotFiles(value: string | undefined) {
+	const files = value?.split("; files:")[1]?.split(",").filter((file) => file.length > 0);
+	return (
+		Array.isArray(files) &&
+		files.length > 0 &&
+		files.every(isSafeSourceConfigSnapshotPath)
+	);
 }
 
 function hasIsoDatetime(value: string | undefined) {

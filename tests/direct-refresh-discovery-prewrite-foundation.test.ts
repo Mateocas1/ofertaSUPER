@@ -7,6 +7,7 @@ import {
 	evaluateDirectRefreshDiscoveryPrewriteFoundation,
 	parseDirectRefreshDiscoveryPrewriteFoundationCliOptions,
 	parseDirectRefreshDiscoveryPrewriteFoundationEvidenceJson,
+	parseDirectRefreshDiscoverySourceConfigSnapshotFiles,
 	type DirectRefreshDiscoveryPrewriteFoundationEvidence,
 } from "../scripts/pipeline/direct-refresh-discovery-prewrite-foundation";
 
@@ -106,6 +107,9 @@ function evaluateFoundation(input: {
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
 	evidencePath?: string;
 	evidenceSha256?: string;
+	sourceConfigSnapshotSha256?: string;
+	rollbackPreimageSha256?: string;
+	postRollbackVerificationSha256?: string;
 	now?: Date;
 }) {
 	return evaluateDirectRefreshDiscoveryPrewriteFoundation({
@@ -120,6 +124,15 @@ function evaluateFoundation(input: {
 				input.evidence,
 			) ??
 			"sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		sourceConfigSnapshotSha256:
+			input.sourceConfigSnapshotSha256 ??
+			input.evidence.artifactLineage?.sourceConfigSnapshot.split(";")[0] ??
+			"sha256:0000000000000000000000000000000000000000000000000000000000000000",
+		rollbackPreimageSha256:
+			input.rollbackPreimageSha256 ?? input.evidence.rollbackDrill?.preimageSha256,
+		postRollbackVerificationSha256:
+			input.postRollbackVerificationSha256 ??
+			input.evidence.rollbackDrill?.postRollbackVerificationSha256,
 		now: input.now,
 	});
 }
@@ -362,6 +375,99 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /VTEX probe timestamp must be ISO datetime/);
 	});
 
+	it("fails closed when source config snapshot has no real files", () => {
+		const evidenceWithNoSnapshotFiles = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				sourceConfigSnapshot:
+					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; files:,",
+			},
+		};
+		evidenceWithNoSnapshotFiles.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithNoSnapshotFiles,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithNoSnapshotFiles,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/source config snapshot sha256 is required/,
+		);
+	});
+
+	it("fails closed when source config snapshot hash does not match runtime files", () => {
+		const report = evaluateFoundation({
+			evidence: completeEvidence,
+			sourceConfigSnapshotSha256:
+				"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/source config snapshot sha256 must match runtime files/,
+		);
+	});
+
+	it("rejects unsafe source config snapshot file paths before runtime reads", () => {
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoverySourceConfigSnapshotFiles(
+					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; files:,",
+				),
+			/source config snapshot files must include at least one file/,
+		);
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoverySourceConfigSnapshotFiles(
+					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; files:../secrets.env",
+				),
+			/source config snapshot files must be workspace-relative safe paths/,
+		);
+		assert.throws(
+			() =>
+				parseDirectRefreshDiscoverySourceConfigSnapshotFiles(
+					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; files:C:/Users/picala/.env",
+				),
+			/source config snapshot files must be workspace-relative safe paths/,
+		);
+	});
+
+	it("fails closed when evaluator receives unsafe source config snapshot paths", () => {
+		const evidenceWithUnsafeSnapshotPath = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				sourceConfigSnapshot:
+					"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; files:../secrets.env",
+			},
+		};
+		evidenceWithUnsafeSnapshotPath.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithUnsafeSnapshotPath,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithUnsafeSnapshotPath,
+			sourceConfigSnapshotSha256:
+				"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/source config snapshot files must be workspace-relative safe paths/,
+		);
+	});
+
 	it("fails closed when commit, tool version, or schema version lineage are malformed", () => {
 		const report = evaluateFoundation({
 			evidence: {
@@ -537,6 +643,28 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			/post-rollback verification artifact must be rollback verification audit json/,
 		);
 		assert.match(reasons, /post-rollback verification sha256 is required/);
+	});
+
+	it("fails closed when rollback artifact hashes do not match runtime files", () => {
+		const report = evaluateFoundation({
+			evidence: completeEvidence,
+			rollbackPreimageSha256:
+				"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			postRollbackVerificationSha256:
+				"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/preimage sha256 must match runtime preimage artifact/,
+		);
+		assert.match(
+			reasons,
+			/post-rollback verification sha256 must match runtime artifact/,
+		);
 	});
 
 	it("fails closed when rollback IDs are broad selectors instead of exact table IDs", () => {
