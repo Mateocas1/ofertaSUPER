@@ -22,6 +22,7 @@ export type HealthResult = {
 export type FetchOptions = {
   count?: number;
   queryLimit?: number;
+	retries?: number;
 };
 
 export type DirectLookup = {

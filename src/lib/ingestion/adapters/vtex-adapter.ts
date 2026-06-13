@@ -62,10 +62,12 @@ export class VtexSourceAdapter implements SourceAdapter {
 
 	async fetchDirectProducts(
 		lookup: DirectLookup,
+		options: FetchOptions = {},
 	): Promise<NormalizedProduct[]> {
 		return fetchVtexDirectProducts({
 			baseUrl: this.supermarket.baseUrl,
 			lookup,
+			retries: options.retries,
 		});
 	}
 
