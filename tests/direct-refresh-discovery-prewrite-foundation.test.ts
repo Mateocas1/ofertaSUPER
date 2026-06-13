@@ -96,7 +96,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		suppressionPolicy: "suppression/noise policy: no suppression for rollback-required",
 		retryPolicy: "retry policy: no automatic retry after rollback-required",
 		testAlertProof:
-			"test-alert proof captured in issue #109 evidence comment timestamp=2026-06-06T12:20:00.000Z",
+			"test-alert proof captured in issue #231 evidence comment comment-id=231001 for scenarios write-failure, postwrite-failure, rollback-required timestamp=2026-06-06T12:20:00.000Z",
 		writeFailure: true,
 		postwriteFailure: true,
 		rollbackRequired: true,
@@ -1653,6 +1653,37 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 		assert.match(reasons, /alert retry policy must prohibit automatic retry or bind to rollback-required/);
 		assert.match(reasons, /test-alert proof requires issue\/comment plus concrete reference/);
+		assert.match(
+			reasons,
+			/test-alert proof must reference write-failure, postwrite-failure, and rollback-required scenarios/,
+		);
+	});
+
+	it("fails closed when test-alert proof omits explicit alert scenarios", () => {
+		const evidenceWithoutScenarioProof = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				testAlertProof:
+					"test-alert proof captured in issue #231 evidence comment comment-id=231001 timestamp=2026-06-06T12:20:00.000Z",
+			},
+		};
+		evidenceWithoutScenarioProof.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithoutScenarioProof,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithoutScenarioProof,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/test-alert proof must reference write-failure, postwrite-failure, and rollback-required scenarios/,
+		);
 	});
 
 	it("fails closed when alert escalation path is generic instead of a concrete route", () => {
