@@ -337,6 +337,60 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when artifact path filename is not canonical", () => {
+		const evidenceWithWrongArtifactFilename = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				artifactPath:
+					"audit/direct-refresh-discovery-prewrite-foundation/issue-185/vea/count1/foundation-attempt-001/other.json",
+			},
+		};
+		evidenceWithWrongArtifactFilename.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWrongArtifactFilename,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithWrongArtifactFilename,
+			evidencePath: evidenceWithWrongArtifactFilename.artifactLineage.artifactPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/artifact path lineage must be foundation audit json/,
+		);
+	});
+
+	it("fails closed when artifact path lineage segments are out of canonical order", () => {
+		const evidenceWithWrongArtifactPathOrder = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				artifactPath:
+					"audit/direct-refresh-discovery-prewrite-foundation/vea/issue-185/count1/foundation-attempt-001/foundation-evidence.json",
+			},
+		};
+		evidenceWithWrongArtifactPathOrder.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWrongArtifactPathOrder,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithWrongArtifactPathOrder,
+			evidencePath: evidenceWithWrongArtifactPathOrder.artifactLineage.artifactPath,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/artifact path lineage must follow issue\/source\/count\/attempt order/,
+		);
+	});
+
 	it("fails closed when artifact sha256 lineage does not match the evidence file hash", () => {
 		const report = evaluateFoundation({
 			evidence: completeEvidence,
@@ -747,8 +801,33 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /git commit lineage must be hex/);
-		assert.match(reasons, /tool version lineage must include @version/);
+		assert.match(reasons, /tool version lineage must include positive @version/);
 		assert.match(reasons, /schema version lineage must be numeric/);
+	});
+
+	it("fails closed when tool version lineage is zero", () => {
+		const evidenceWithZeroToolVersion = {
+			...completeEvidence,
+			artifactLineage: {
+				...completeEvidence.artifactLineage,
+				toolVersion: "direct-refresh-discovery-create@0",
+			},
+		};
+		evidenceWithZeroToolVersion.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithZeroToolVersion,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithZeroToolVersion,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/tool version lineage must include positive @version/,
+		);
 	});
 
 	it("fails closed when source, artifact path, or DB environment lineage are invalid", () => {
@@ -904,6 +983,72 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			/post-rollback verification artifact must be rollback verification audit json/,
 		);
 		assert.match(reasons, /post-rollback verification sha256 is required/);
+	});
+
+	it("fails closed when rollback artifact filenames are not canonical", () => {
+		const evidenceWithWrongRollbackArtifactFilenames = {
+			...completeEvidence,
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				preimageArtifact:
+					"audit/direct-refresh-discovery-rollback-verification/other-preimage.json",
+				postRollbackVerificationArtifact:
+					"audit/direct-refresh-discovery-rollback-verification/other-post-rollback.json",
+			},
+		};
+		evidenceWithWrongRollbackArtifactFilenames.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithWrongRollbackArtifactFilenames,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithWrongRollbackArtifactFilenames,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/preimage artifact must be rollback verification audit json/,
+		);
+		assert.match(
+			reasons,
+			/post-rollback verification artifact must be rollback verification audit json/,
+		);
+	});
+
+	it("fails closed when rollback artifact roles are swapped", () => {
+		const evidenceWithSwappedRollbackArtifacts = {
+			...completeEvidence,
+			rollbackDrill: {
+				...completeEvidence.rollbackDrill,
+				preimageArtifact:
+					"audit/direct-refresh-discovery-rollback-verification/post-rollback-verification.json",
+				postRollbackVerificationArtifact:
+					"audit/direct-refresh-discovery-rollback-verification/preimage.json",
+			},
+		};
+		evidenceWithSwappedRollbackArtifacts.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithSwappedRollbackArtifacts,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithSwappedRollbackArtifacts,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			reasons,
+			/preimage artifact must be rollback verification audit json/,
+		);
+		assert.match(
+			reasons,
+			/post-rollback verification artifact must be rollback verification audit json/,
+		);
 	});
 
 	it("fails closed when rollback artifact hashes do not match runtime files", () => {
@@ -1123,12 +1268,13 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.match(reasons, /VTEX timeout must be <= 10000ms/);
 	});
 
-	it("fails closed when VTEX request cap or timeout are fractional", () => {
+	it("fails closed when VTEX request cap, concurrency, or timeout are fractional", () => {
 		const evidenceWithFractionalBudgets = {
 			...completeEvidence,
 			vtexBudgets: {
 				...completeEvidence.vtexBudgets,
 				requestCap: 1.5,
+				concurrency: 1.5,
 				timeoutMs: 999.5,
 			},
 		};
@@ -1145,6 +1291,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		const reasons = report.summary.failClosedReasons.join("\n");
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /VTEX request cap must be a positive integer/);
+		assert.match(reasons, /VTEX concurrency must be a positive integer/);
 		assert.match(reasons, /VTEX timeout must be a positive integer in milliseconds/);
 	});
 

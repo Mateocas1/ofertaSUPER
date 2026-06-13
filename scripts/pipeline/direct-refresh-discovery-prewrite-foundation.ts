@@ -344,13 +344,26 @@ function buildChecks(
 				hasArtifactPathIssueLineage(lineage.artifactPath, lineage.issue),
 				"artifact path lineage must include issue",
 			],
+			[
+				hasCanonicalArtifactPathLineage(
+					lineage.artifactPath,
+					lineage.issue,
+					lineage.source,
+					lineage.count,
+					lineage.attemptId,
+				),
+				"artifact path lineage must follow issue/source/count/attempt order",
+			],
 			[hasSha256Lineage(lineage.artifactSha256), "artifact sha256 lineage is required"],
 			[
 				hasMatchingArtifactSha256(lineage.artifactSha256, evidenceSha256),
 				"artifact sha256 lineage must match evidence file hash",
 			],
 			[hasGitCommitLineage(lineage.gitCommit), "git commit lineage must be hex"],
-			[hasToolVersionLineage(lineage.toolVersion), "tool version lineage must include @version"],
+			[
+				hasToolVersionLineage(lineage.toolVersion),
+				"tool version lineage must include positive @version",
+			],
 			[hasNumericSchemaVersion(lineage.schemaVersion), "schema version lineage must be numeric"],
 			[hasExplicitEnvironmentIdentity(lineage.dbEnvironmentIdentity), "DB/environment identity must be explicit"],
 			[hasSourceConfigSnapshot(lineage.sourceConfigSnapshot), "source config snapshot sha256 is required"],
@@ -380,7 +393,7 @@ function buildChecks(
 			[rollback.executed, "rollback drill must be executed before discovery apply"],
 			[rollback.mode !== "read-only-review", "read-only rollback review is preparatory only"],
 			[rollback.preimageCaptured === true, "rollback preimage capture is required"],
-			[hasRollbackVerificationArtifact(rollback.preimageArtifact), "preimage artifact must be rollback verification audit json"],
+			[hasRollbackPreimageArtifact(rollback.preimageArtifact), "preimage artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.preimageSha256), "preimage sha256 is required"],
 			[
 				hasMatchingArtifactSha256(
@@ -404,7 +417,7 @@ function buildChecks(
 				"rollback ID coverage must be at least count lineage per affected table",
 			],
 			[rollback.postRollbackVerification, "post-rollback verification is required"],
-			[hasRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
+			[hasPostRollbackVerificationArtifact(rollback.postRollbackVerificationArtifact), "post-rollback verification artifact must be rollback verification audit json"],
 			[hasSha256Lineage(rollback.postRollbackVerificationSha256), "post-rollback verification sha256 is required"],
 			[
 				hasMatchingArtifactSha256(
@@ -422,7 +435,7 @@ function buildChecks(
 				hasPositiveInteger(lineage.count) && lineage.count <= budget.requestCap,
 				"count lineage must not exceed VTEX request cap",
 			],
-			[budget.concurrency > 0, "VTEX concurrency must be positive"],
+			[hasPositiveInteger(budget.concurrency), "VTEX concurrency must be a positive integer"],
 			[budget.concurrency === 1, "VTEX concurrency must be serial"],
 			[hasPositiveInteger(budget.timeoutMs), "VTEX timeout must be a positive integer in milliseconds"],
 			[budget.timeoutMs <= MAX_VTEX_FOUNDATION_TIMEOUT_MS, "VTEX timeout must be <= 10000ms"],
@@ -507,7 +520,7 @@ function hasWriterSupportedSource(value: string | undefined) {
 function hasFoundationArtifactPath(value: string | undefined) {
 	return (
 		typeof value === "string" &&
-		/^audit\/direct-refresh-discovery-prewrite-foundation\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
+		/^audit\/direct-refresh-discovery-prewrite-foundation\/[A-Za-z0-9._/-]+\/foundation-evidence\.json$/.test(value) &&
 		!value.includes("..")
 	);
 }
@@ -549,6 +562,27 @@ function hasArtifactPathIssueLineage(
 	return normalizeAuditPath(lineagePath).split("/").includes(`issue-${issue}`);
 }
 
+function hasCanonicalArtifactPathLineage(
+	lineagePath: string | undefined,
+	issue: number | undefined,
+	source: string | undefined,
+	count: number | undefined,
+	attemptId: string | undefined,
+) {
+	if (
+		!hasPositiveInteger(issue) ||
+		!hasWriterSupportedSource(source) ||
+		!hasPositiveInteger(count) ||
+		!hasSafeAttemptId(attemptId)
+	) {
+		return false;
+	}
+	return (
+		normalizeAuditPath(lineagePath) ===
+		`audit/direct-refresh-discovery-prewrite-foundation/issue-${issue}/${source}/count${count}/${attemptId}/foundation-evidence.json`
+	);
+}
+
 function hasMatchingArtifactSha256(
 	lineageSha256: string | undefined,
 	evidenceSha256: string,
@@ -577,7 +611,10 @@ function hasGitCommitLineage(value: string | undefined) {
 }
 
 function hasToolVersionLineage(value: string | undefined) {
-	return typeof value === "string" && /^[a-z0-9][a-z0-9-]*@\d+(?:\.\d+)*$/.test(value);
+	return (
+		typeof value === "string" &&
+		/^[a-z0-9][a-z0-9-]*@[1-9]\d*(?:\.\d+)*$/.test(value)
+	);
 }
 
 function hasNumericSchemaVersion(value: string | undefined) {
@@ -673,10 +710,23 @@ function hasRollbackTableCoverageForCount(
 	);
 }
 
-function hasRollbackVerificationArtifact(value: string | undefined) {
+function hasRollbackPreimageArtifact(value: string | undefined) {
+	return hasRollbackVerificationArtifact(value, "preimage");
+}
+
+function hasPostRollbackVerificationArtifact(value: string | undefined) {
+	return hasRollbackVerificationArtifact(value, "post-rollback-verification");
+}
+
+function hasRollbackVerificationArtifact(
+	value: string | undefined,
+	filename: "preimage" | "post-rollback-verification",
+) {
 	return (
 		typeof value === "string" &&
-		/^audit\/direct-refresh-discovery-rollback-verification\/[A-Za-z0-9._/-]+\.json$/.test(value) &&
+		new RegExp(
+			`^audit/direct-refresh-discovery-rollback-verification/(?:[A-Za-z0-9._-]+/)*${filename}\\.json$`,
+		).test(value) &&
 		!value.includes("..")
 	);
 }
