@@ -14,6 +14,7 @@ import {
 const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	generatedAt: "2026-06-06T12:25:00.000Z",
 	schemaConstraints: {
+		verifiedAt: "2026-06-06T12:20:00.000Z",
 		productEanPrimaryKey: true,
 		productSourceUnique: true,
 		sourceSkuUniqueNonnull: true,
@@ -23,6 +24,7 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		migrationStatus: "PASS",
 	},
 	controlPlane: {
+		verifiedAt: "2026-06-06T12:20:00.000Z",
 		sourceLock: true,
 		ledgerAttemptIdentity: true,
 		ttlPolicy: true,
@@ -64,10 +66,12 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		preimageSha256:
 			"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		pitrBackupPosture:
-			"Supabase PITR/backup posture reviewed for local-test-db at 2026-06-06T12:00:00Z; retention=7d",
-		cacheHandling: "No cache purge needed for disposable-row drill; public cache TTL reviewed",
+			"Supabase PITR/backup posture reviewed for env=local-test-db; retention=7d; artifact=audit/direct-refresh-discovery-rollback-verification/preimage.json; timestamp=2026-06-06T12:20:00.000Z",
+		cacheHandling:
+			"No cache purge needed for disposable-row drill; public cache TTL reviewed; post-rollback cache verification artifact=audit/direct-refresh-discovery-rollback-verification/post-rollback-verification.json; timestamp=2026-06-06T12:20:00.000Z",
 	},
 	vtexBudgets: {
+		verifiedAt: "2026-06-06T12:20:00.000Z",
 		requestCap: 20,
 		concurrency: 1,
 		timeoutMs: 10_000,
@@ -76,11 +80,13 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		headerPolicy: "documented non-evasive headers",
 	},
 	compliance: {
+		reviewedAt: "2026-06-06T12:20:00.000Z",
 		allowedUseReviewed: true,
 		posture: "approved",
 		reviewedSources: ["vea"],
 	},
 	alertChannel: {
+		policyVerifiedAt: "2026-06-06T12:20:00.000Z",
 		channel: "Issue #109 comment + #direct-refresh-alerts",
 		owner: "direct-refresh-oncall",
 		severity: "critical write/postwrite/rollback-required",
@@ -90,19 +96,22 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 		suppressionPolicy: "suppression/noise policy: no suppression for rollback-required",
 		retryPolicy: "retry policy: no automatic retry after rollback-required",
 		testAlertProof:
-			"test-alert proof captured in issue #109 evidence comment at 2026-06-06T12:10:00Z",
+			"test-alert proof captured in issue #109 evidence comment timestamp=2026-06-06T12:20:00.000Z",
 		writeFailure: true,
 		postwriteFailure: true,
 		rollbackRequired: true,
 	},
 	performanceGuard: {
-		prismaPoolPosture: "pgbouncer=true; connection_limit=3; pool_timeout=10",
+		prismaPoolPosture:
+			"pgbouncer=true; connection_limit=3; pool_timeout=10; verifiedAt=2026-06-06T12:20:00.000Z",
 		transactionTimeoutPosture:
-			"statement_timeout=2min; idle_in_transaction_session_timeout=30s",
+			"statement_timeout=2min; idle_in_transaction_session_timeout=30s; verifiedAt=2026-06-06T12:20:00.000Z",
 		priceHistoryBaseline:
-			"PriceHistory insert/read baseline captured; insert_p95=50ms; read_p95=30ms",
-		publicApiBaseline: "public API search/products baseline captured; p95=120ms",
-		cacheTtlBaseline: "cache TTL baseline captured; ttl=300s",
+			"PriceHistory insert/read baseline captured; insert_p95=50ms; read_p95=30ms; measuredAt=2026-06-06T12:20:00.000Z",
+		publicApiBaseline:
+			"public API search/products baseline captured; p95=120ms; measuredAt=2026-06-06T12:20:00.000Z",
+		cacheTtlBaseline:
+			"cache TTL baseline captured; ttl=300s; measuredAt=2026-06-06T12:20:00.000Z",
 	},
 };
 
@@ -111,13 +120,23 @@ completeEvidence.artifactLineage.artifactSha256 =
 		completeEvidence,
 	);
 
+function withCalculatedFoundationSha(
+	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence,
+) {
+	evidence.artifactLineage.artifactSha256 =
+		calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(evidence);
+	return evidence;
+}
+
 function evaluateFoundation(input: {
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
 	evidencePath?: string;
 	evidenceSha256?: string;
 	sourceConfigSnapshotSha256?: string;
 	rollbackPreimageSha256?: string;
+	rollbackPreimageGeneratedAt?: string;
 	postRollbackVerificationSha256?: string;
+	postRollbackVerificationGeneratedAt?: string;
 	now?: Date;
 }) {
 	return evaluateDirectRefreshDiscoveryPrewriteFoundation({
@@ -138,10 +157,21 @@ function evaluateFoundation(input: {
 			"sha256:0000000000000000000000000000000000000000000000000000000000000000",
 		rollbackPreimageSha256:
 			input.rollbackPreimageSha256 ?? input.evidence.rollbackDrill?.preimageSha256,
+		rollbackPreimageGeneratedAt:
+			"rollbackPreimageGeneratedAt" in input
+				? input.rollbackPreimageGeneratedAt
+				: input.evidence.generatedAt,
 		postRollbackVerificationSha256:
 			input.postRollbackVerificationSha256 ??
 			input.evidence.rollbackDrill?.postRollbackVerificationSha256,
+		postRollbackVerificationGeneratedAt:
+			"postRollbackVerificationGeneratedAt" in input
+				? input.postRollbackVerificationGeneratedAt
+				: input.evidence.generatedAt,
 		now: input.now,
+	} as Parameters<typeof evaluateDirectRefreshDiscoveryPrewriteFoundation>[0] & {
+		rollbackPreimageGeneratedAt?: string;
+		postRollbackVerificationGeneratedAt?: string;
 	});
 }
 
@@ -441,6 +471,129 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.deepEqual(report.checks[0].reasons, [
 			"foundation evidence generatedAt is required",
 		]);
+	});
+
+	it("fails closed when group-level freshness timestamps are missing", () => {
+		const cases = [
+			{
+				group: "schemaConstraints",
+				field: "verifiedAt",
+				reason: "schema constraints verifiedAt is required",
+			},
+			{
+				group: "controlPlane",
+				field: "verifiedAt",
+				reason: "control-plane verifiedAt is required",
+			},
+			{
+				group: "vtexBudgets",
+				field: "verifiedAt",
+				reason: "VTEX budgets verifiedAt is required",
+			},
+			{
+				group: "compliance",
+				field: "reviewedAt",
+				reason: "compliance reviewedAt is required",
+			},
+			{
+				group: "alertChannel",
+				field: "policyVerifiedAt",
+				reason: "alert policy verifiedAt is required",
+			},
+		] as const;
+
+		for (const { group, field, reason } of cases) {
+			const evidence = structuredClone(completeEvidence) as Record<string, Record<string, unknown>>;
+			delete evidence[group][field];
+
+			const report = evaluateFoundation({
+				evidence: withCalculatedFoundationSha(
+					evidence as DirectRefreshDiscoveryPrewriteFoundationEvidence,
+				),
+				now: new Date("2026-06-06T12:30:00.000Z"),
+			});
+
+			assert.equal(report.status, "FAIL", `${group}.${field}`);
+			assert.match(report.summary.failClosedReasons.join("\n"), new RegExp(reason));
+		}
+	});
+
+	it("fails closed when group-level freshness timestamps are malformed, stale, or future-dated", () => {
+		const groups = [
+			{
+				group: "schemaConstraints",
+				field: "verifiedAt",
+				malformedReason: "schema constraints verifiedAt must be ISO datetime",
+				freshReason: "schema constraints verifiedAt must be fresh within 15 minutes",
+			},
+			{
+				group: "controlPlane",
+				field: "verifiedAt",
+				malformedReason: "control-plane verifiedAt must be ISO datetime",
+				freshReason: "control-plane verifiedAt must be fresh within 15 minutes",
+			},
+			{
+				group: "vtexBudgets",
+				field: "verifiedAt",
+				malformedReason: "VTEX budgets verifiedAt must be ISO datetime",
+				freshReason: "VTEX budgets verifiedAt must be fresh within 15 minutes",
+			},
+			{
+				group: "compliance",
+				field: "reviewedAt",
+				malformedReason: "compliance reviewedAt must be ISO datetime",
+				freshReason: "compliance reviewedAt must be fresh within 15 minutes",
+			},
+			{
+				group: "alertChannel",
+				field: "policyVerifiedAt",
+				malformedReason: "alert policy verifiedAt must be ISO datetime",
+				freshReason: "alert policy verifiedAt must be fresh within 15 minutes",
+			},
+		] as const;
+		const timestampCases = [
+			{ value: "not-a-date", reasonKey: "malformedReason" },
+			{ value: "2026-06-06T12:00:00.000Z", reasonKey: "freshReason" },
+			{ value: "2026-06-06T12:31:00.000Z", reasonKey: "freshReason" },
+		] as const;
+
+		for (const { group, field, ...reasons } of groups) {
+			for (const { value, reasonKey } of timestampCases) {
+				const evidence = structuredClone(completeEvidence) as Record<string, Record<string, unknown>>;
+				evidence[group][field] = value;
+
+				const report = evaluateFoundation({
+					evidence: withCalculatedFoundationSha(
+						evidence as DirectRefreshDiscoveryPrewriteFoundationEvidence,
+					),
+					now: new Date("2026-06-06T12:30:00.000Z"),
+				});
+
+				assert.equal(report.status, "FAIL", `${group}.${field} ${value}`);
+				assert.match(
+					report.summary.failClosedReasons.join("\n"),
+					new RegExp(reasons[reasonKey]),
+					`${group}.${field} ${value}`,
+				);
+			}
+		}
+	});
+
+	it("keeps alert policy freshness separate from test-alert proof freshness", () => {
+		const evidence = structuredClone(completeEvidence) as Record<string, Record<string, unknown>>;
+		delete evidence.alertChannel.policyVerifiedAt;
+
+		const report = evaluateFoundation({
+			evidence: withCalculatedFoundationSha(
+				evidence as DirectRefreshDiscoveryPrewriteFoundationEvidence,
+			),
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /alert policy verifiedAt is required/);
+		assert.doesNotMatch(reasons, /test-alert proof timestamp is required/);
 	});
 
 	it("fails closed instead of crashing when foundation evidence sections are malformed", () => {
@@ -924,6 +1077,94 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when PITR/backup posture timestamp is missing, malformed, stale, or future-dated", () => {
+		const cases = [
+			{
+				posture:
+					"Supabase PITR/backup posture reviewed for env=local-test-db; retention=7d; artifact=audit/direct-refresh-discovery-rollback-verification/preimage.json",
+				reason: "PITR/backup posture timestamp is required",
+			},
+			{
+				posture:
+					"Supabase PITR/backup posture reviewed for env=local-test-db; retention=7d; artifact=audit/direct-refresh-discovery-rollback-verification/preimage.json; timestamp=not-a-date",
+				reason: "PITR/backup posture timestamp must be ISO datetime",
+			},
+			{
+				posture:
+					"Supabase PITR/backup posture reviewed for env=local-test-db; retention=7d; artifact=audit/direct-refresh-discovery-rollback-verification/preimage.json; verifiedAt=2026-06-06T12:00:00.000Z",
+				reason:
+					"PITR/backup posture timestamp must be fresh within 15 minutes",
+			},
+			{
+				posture:
+					"Supabase PITR/backup posture reviewed for env=local-test-db; retention=7d; artifact=audit/direct-refresh-discovery-rollback-verification/preimage.json; timestamp=2026-06-06T12:31:00.000Z",
+				reason:
+					"PITR/backup posture timestamp must be fresh within 15 minutes",
+			},
+		];
+
+		for (const { posture, reason } of cases) {
+			const report = evaluateFoundation({
+				evidence: withCalculatedFoundationSha({
+					...completeEvidence,
+					artifactLineage: { ...completeEvidence.artifactLineage },
+					rollbackDrill: {
+						...completeEvidence.rollbackDrill,
+						pitrBackupPosture: posture,
+					},
+				}),
+				now: new Date("2026-06-06T12:30:00.000Z"),
+			});
+
+			assert.equal(report.status, "FAIL", posture);
+			assert.match(report.summary.failClosedReasons.join("\n"), new RegExp(reason));
+		}
+	});
+
+	it("fails closed when rollback cache handling timestamp is missing, malformed, stale, or future-dated", () => {
+		const cases = [
+			{
+				cacheHandling:
+					"No cache purge needed for disposable-row drill; public cache TTL reviewed; post-rollback cache verification artifact=audit/direct-refresh-discovery-rollback-verification/post-rollback-verification.json",
+				reason: "rollback cache handling timestamp is required",
+			},
+			{
+				cacheHandling:
+					"No cache purge needed for disposable-row drill; public cache TTL reviewed; post-rollback cache verification artifact=audit/direct-refresh-discovery-rollback-verification/post-rollback-verification.json; timestamp=not-a-date",
+				reason: "rollback cache handling timestamp must be ISO datetime",
+			},
+			{
+				cacheHandling:
+					"No cache purge needed for disposable-row drill; public cache TTL reviewed; post-rollback cache verification artifact=audit/direct-refresh-discovery-rollback-verification/post-rollback-verification.json; verifiedAt=2026-06-06T12:00:00.000Z",
+				reason:
+					"rollback cache handling timestamp must be fresh within 15 minutes",
+			},
+			{
+				cacheHandling:
+					"No cache purge needed for disposable-row drill; public cache TTL reviewed; post-rollback cache verification artifact=audit/direct-refresh-discovery-rollback-verification/post-rollback-verification.json; timestamp=2026-06-06T12:31:00.000Z",
+				reason:
+					"rollback cache handling timestamp must be fresh within 15 minutes",
+			},
+		];
+
+		for (const { cacheHandling, reason } of cases) {
+			const report = evaluateFoundation({
+				evidence: withCalculatedFoundationSha({
+					...completeEvidence,
+					artifactLineage: { ...completeEvidence.artifactLineage },
+					rollbackDrill: {
+						...completeEvidence.rollbackDrill,
+						cacheHandling,
+					},
+				}),
+				now: new Date("2026-06-06T12:30:00.000Z"),
+			});
+
+			assert.equal(report.status, "FAIL", cacheHandling);
+			assert.match(report.summary.failClosedReasons.join("\n"), new RegExp(reason));
+		}
+	});
+
 	it("fails closed when rollback cache handling proof is generic", () => {
 		for (const cacheHandling of ["cache reviewed", "cache handled", "cache ok"]) {
 			const evidenceWithGenericRollbackCacheHandling = {
@@ -1287,6 +1528,69 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when runtime rollback artifacts omit generatedAt", () => {
+		const report = evaluateFoundation({
+			evidence: completeEvidence,
+			rollbackPreimageGeneratedAt: undefined,
+			postRollbackVerificationGeneratedAt: undefined,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /preimage artifact generatedAt is required/);
+		assert.match(
+			reasons,
+			/post-rollback verification artifact generatedAt is required/,
+		);
+	});
+
+	it("fails closed when runtime rollback artifact generatedAt values are malformed", () => {
+		const report = evaluateFoundation({
+			evidence: completeEvidence,
+			rollbackPreimageGeneratedAt: "not-a-date",
+			postRollbackVerificationGeneratedAt: "also-not-a-date",
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		const reasons = report.summary.failClosedReasons.join("\n");
+		assert.equal(report.status, "FAIL");
+		assert.match(reasons, /preimage artifact generatedAt must be ISO datetime/);
+		assert.match(
+			reasons,
+			/post-rollback verification artifact generatedAt must be ISO datetime/,
+		);
+	});
+
+	it("fails closed when runtime rollback artifact generatedAt values are stale or future-dated", () => {
+		const cases = [
+			{
+				rollbackPreimageGeneratedAt: "2026-06-06T12:00:00.000Z",
+				postRollbackVerificationGeneratedAt: "2026-06-06T12:25:00.000Z",
+				reason: /preimage artifact generatedAt must be fresh within 15 minutes/,
+			},
+			{
+				rollbackPreimageGeneratedAt: "2026-06-06T12:25:00.000Z",
+				postRollbackVerificationGeneratedAt: "2026-06-06T12:31:00.000Z",
+				reason:
+					/post-rollback verification artifact generatedAt must be fresh within 15 minutes/,
+			},
+		];
+
+		for (const testCase of cases) {
+			const report = evaluateFoundation({
+				evidence: completeEvidence,
+				rollbackPreimageGeneratedAt: testCase.rollbackPreimageGeneratedAt,
+				postRollbackVerificationGeneratedAt:
+					testCase.postRollbackVerificationGeneratedAt,
+				now: new Date("2026-06-06T12:30:00.000Z"),
+			});
+
+			assert.equal(report.status, "FAIL");
+			assert.match(report.summary.failClosedReasons.join("\n"), testCase.reason);
+		}
+	});
+
 	it("fails closed when owners contain placeholder text", () => {
 		const evidenceWithEmbeddedPlaceholderOwners = {
 			...completeEvidence,
@@ -1503,6 +1807,76 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			report.summary.failClosedReasons.join("\n"),
 			/test-alert proof requires issue\/comment plus concrete reference/,
 		);
+	});
+
+	it("fails closed when test-alert proof omits a fresh explicit timestamp", () => {
+		const evidenceWithoutTestAlertTimestamp = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			alertChannel: {
+				...completeEvidence.alertChannel,
+				testAlertProof:
+					"test-alert proof captured in issue #109 evidence comment comment-id=987654",
+			},
+		};
+		evidenceWithoutTestAlertTimestamp.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithoutTestAlertTimestamp,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithoutTestAlertTimestamp,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/test-alert proof timestamp is required/,
+		);
+	});
+
+	it("fails closed when test-alert proof timestamp is malformed, stale, or future-dated", () => {
+		const cases = [
+			{
+				proof:
+					"test-alert proof captured in issue #109 evidence comment comment-id=987654 timestamp=not-a-date",
+				reason: /test-alert proof timestamp must be ISO datetime/,
+			},
+			{
+				proof:
+					"test-alert proof captured in issue #109 evidence comment comment-id=987654 timestamp=2026-06-06T12:00:00.000Z",
+				reason: /test-alert proof timestamp must be fresh within 15 minutes/,
+			},
+			{
+				proof:
+					"test-alert proof captured in issue #109 evidence comment comment-id=987654 testedAt=2026-06-06T12:31:00.000Z",
+				reason: /test-alert proof timestamp must be fresh within 15 minutes/,
+			},
+		];
+
+		for (const { proof, reason } of cases) {
+			const evidenceWithInvalidTestAlertTimestamp = {
+				...completeEvidence,
+				artifactLineage: { ...completeEvidence.artifactLineage },
+				alertChannel: {
+					...completeEvidence.alertChannel,
+					testAlertProof: proof,
+				},
+			};
+			evidenceWithInvalidTestAlertTimestamp.artifactLineage.artifactSha256 =
+				calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+					evidenceWithInvalidTestAlertTimestamp,
+				);
+
+			const report = evaluateFoundation({
+				evidence: evidenceWithInvalidTestAlertTimestamp,
+				now: new Date("2026-06-06T12:30:00.000Z"),
+			});
+
+			assert.equal(report.status, "FAIL", proof);
+			assert.match(report.summary.failClosedReasons.join("\n"), reason, proof);
+		}
 	});
 
 	it("fails closed when performance, VTEX budget, or compliance gates are incomplete", () => {
@@ -1896,6 +2270,105 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 	});
 
+	it("fails closed when performance posture strings omit explicit fresh timestamps", () => {
+		const cases = [
+			{
+				field: "prismaPoolPosture",
+				value: "pgbouncer=true; connection_limit=3; pool_timeout=10",
+				reason: /Prisma pool posture timestamp is required/,
+			},
+			{
+				field: "transactionTimeoutPosture",
+				value: "statement_timeout=2min; idle_in_transaction_session_timeout=30s",
+				reason: /transaction timeout posture timestamp is required/,
+			},
+		] as const;
+
+		for (const { field, value, reason } of cases) {
+			const evidenceWithoutPerformancePostureTimestamp = {
+				...completeEvidence,
+				artifactLineage: { ...completeEvidence.artifactLineage },
+				performanceGuard: {
+					...completeEvidence.performanceGuard,
+					[field]: value,
+				},
+			};
+			evidenceWithoutPerformancePostureTimestamp.artifactLineage.artifactSha256 =
+				calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+					evidenceWithoutPerformancePostureTimestamp,
+				);
+
+			const report = evaluateFoundation({
+				evidence: evidenceWithoutPerformancePostureTimestamp,
+				now: new Date("2026-06-06T12:30:00.000Z"),
+			});
+
+			assert.equal(report.status, "FAIL", field);
+			assert.match(report.summary.failClosedReasons.join("\n"), reason, field);
+		}
+	});
+
+	it("fails closed when performance posture timestamps are malformed, stale, or future-dated", () => {
+		const cases = [
+			{
+				field: "prismaPoolPosture",
+				label: "Prisma pool posture",
+				base: "pgbouncer=true; connection_limit=3; pool_timeout=10",
+			},
+			{
+				field: "transactionTimeoutPosture",
+				label: "transaction timeout posture",
+				base: "statement_timeout=2min; idle_in_transaction_session_timeout=30s",
+			},
+		] as const;
+		const timestampCases = [
+			{
+				suffix: "timestamp=not-a-date",
+				reason: (label: string) =>
+					new RegExp(`${label} timestamp must be ISO datetime`),
+			},
+			{
+				suffix: "timestamp=2026-06-06T12:00:00.000Z",
+				reason: (label: string) =>
+					new RegExp(`${label} timestamp must be fresh within 15 minutes`),
+			},
+			{
+				suffix: "verifiedAt=2026-06-06T12:31:00.000Z",
+				reason: (label: string) =>
+					new RegExp(`${label} timestamp must be fresh within 15 minutes`),
+			},
+		];
+
+		for (const { field, label, base } of cases) {
+			for (const { suffix, reason } of timestampCases) {
+				const evidenceWithInvalidPerformancePostureTimestamp = {
+					...completeEvidence,
+					artifactLineage: { ...completeEvidence.artifactLineage },
+					performanceGuard: {
+						...completeEvidence.performanceGuard,
+						[field]: `${base}; ${suffix}`,
+					},
+				};
+				evidenceWithInvalidPerformancePostureTimestamp.artifactLineage.artifactSha256 =
+					calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+						evidenceWithInvalidPerformancePostureTimestamp,
+					);
+
+				const report = evaluateFoundation({
+					evidence: evidenceWithInvalidPerformancePostureTimestamp,
+					now: new Date("2026-06-06T12:30:00.000Z"),
+				});
+
+				assert.equal(report.status, "FAIL", `${field} ${suffix}`);
+				assert.match(
+					report.summary.failClosedReasons.join("\n"),
+					reason(label),
+					`${field} ${suffix}`,
+				);
+			}
+		}
+	});
+
 	it("fails closed when PriceHistory insert/read evidence omits baseline", () => {
 		const evidenceWithGenericPriceHistoryBaseline = {
 			...completeEvidence,
@@ -2044,6 +2517,120 @@ describe("direct-refresh discovery prewrite foundation", () => {
 			report.summary.failClosedReasons.join("\n"),
 			/public API baseline requires search\/products and an explicit performance metric/,
 		);
+	});
+
+	it("fails closed when performance baselines omit explicit fresh timestamps", () => {
+		const cases = [
+			{
+				field: "priceHistoryBaseline",
+				value:
+					"PriceHistory insert/read baseline captured; insert_p95=50ms; read_p95=30ms",
+				reason: /PriceHistory baseline timestamp is required/,
+			},
+			{
+				field: "publicApiBaseline",
+				value: "public API search/products baseline captured; p95=120ms",
+				reason: /public API baseline timestamp is required/,
+			},
+			{
+				field: "cacheTtlBaseline",
+				value: "cache TTL baseline captured; ttl=300s",
+				reason: /cache TTL baseline timestamp is required/,
+			},
+		] as const;
+
+		for (const { field, value, reason } of cases) {
+			const evidenceWithoutPerformanceTimestamp = {
+				...completeEvidence,
+				artifactLineage: { ...completeEvidence.artifactLineage },
+				performanceGuard: {
+					...completeEvidence.performanceGuard,
+					[field]: value,
+				},
+			};
+			evidenceWithoutPerformanceTimestamp.artifactLineage.artifactSha256 =
+				calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+					evidenceWithoutPerformanceTimestamp,
+				);
+
+			const report = evaluateFoundation({
+				evidence: evidenceWithoutPerformanceTimestamp,
+				now: new Date("2026-06-06T12:30:00.000Z"),
+			});
+
+			assert.equal(report.status, "FAIL", field);
+			assert.match(report.summary.failClosedReasons.join("\n"), reason, field);
+		}
+	});
+
+	it("fails closed when performance baseline timestamps are malformed, stale, or future-dated", () => {
+		const cases = [
+			{
+				field: "priceHistoryBaseline",
+				label: "PriceHistory",
+				base: "PriceHistory insert/read baseline captured; insert_p95=50ms; read_p95=30ms",
+			},
+			{
+				field: "publicApiBaseline",
+				label: "public API",
+				base: "public API search/products baseline captured; p95=120ms",
+			},
+			{
+				field: "cacheTtlBaseline",
+				label: "cache TTL",
+				base: "cache TTL baseline captured; ttl=300s",
+			},
+		] as const;
+		const timestampCases = [
+			{
+				suffix: "timestamp=not-a-date",
+				reason: (label: string) =>
+					new RegExp(`${label} baseline timestamp must be ISO datetime`),
+			},
+			{
+				suffix: "timestamp=2026-06-06T12:00:00.000Z",
+				reason: (label: string) =>
+					new RegExp(
+						`${label} baseline timestamp must be fresh within 15 minutes`,
+					),
+			},
+			{
+				suffix: "measuredAt=2026-06-06T12:31:00.000Z",
+				reason: (label: string) =>
+					new RegExp(
+						`${label} baseline timestamp must be fresh within 15 minutes`,
+					),
+			},
+		];
+
+		for (const { field, label, base } of cases) {
+			for (const { suffix, reason } of timestampCases) {
+				const evidenceWithInvalidPerformanceTimestamp = {
+					...completeEvidence,
+					artifactLineage: { ...completeEvidence.artifactLineage },
+					performanceGuard: {
+						...completeEvidence.performanceGuard,
+						[field]: `${base}; ${suffix}`,
+					},
+				};
+				evidenceWithInvalidPerformanceTimestamp.artifactLineage.artifactSha256 =
+					calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+						evidenceWithInvalidPerformanceTimestamp,
+					);
+
+				const report = evaluateFoundation({
+					evidence: evidenceWithInvalidPerformanceTimestamp,
+					now: new Date("2026-06-06T12:30:00.000Z"),
+				});
+
+				assert.equal(report.status, "FAIL", `${field} ${suffix}`);
+				assert.match(
+					report.summary.failClosedReasons.join("\n"),
+					reason(label),
+					`${field} ${suffix}`,
+				);
+			}
+		}
 	});
 
 	it("parses a read-only CLI boundary and rejects write-like flags", () => {
