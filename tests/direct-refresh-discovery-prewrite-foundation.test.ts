@@ -96,10 +96,11 @@ const completeEvidence: DirectRefreshDiscoveryPrewriteFoundationEvidence = {
 	performanceGuard: {
 		prismaPoolPosture: "pgbouncer=true; connection_limit=3; pool_timeout=10",
 		transactionTimeoutPosture:
-			"statement_timeout=2min; idle_in_transaction_session_timeout=0",
-		priceHistoryBaseline: "PriceHistory insert/read baseline captured",
-		publicApiBaseline: "public API search/products baseline captured",
-		cacheTtlBaseline: "TTL baseline captured",
+			"statement_timeout=2min; idle_in_transaction_session_timeout=30s",
+		priceHistoryBaseline:
+			"PriceHistory insert/read baseline captured; insert_p95=50ms; read_p95=30ms",
+		publicApiBaseline: "public API search/products baseline captured; p95=120ms",
+		cacheTtlBaseline: "cache TTL baseline captured; ttl=300s",
 	},
 };
 
@@ -463,7 +464,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		);
 		assert.match(
 			reasons,
-			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values/,
 		);
 	});
 
@@ -1382,7 +1383,7 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(reasons, /VTEX request cap must be a positive integer/);
 		assert.match(reasons, /compliance allowed-use review is required/);
-		assert.match(reasons, /public API baseline must include search and products/);
+		assert.match(reasons, /public API baseline requires search\/products and an explicit performance metric/);
 	});
 
 	it("fails closed when compliance does not cover the lineage source", () => {
@@ -1607,15 +1608,18 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			reasons,
-			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values/,
 		);
 		assert.match(
 			reasons,
 			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout/,
 		);
-		assert.match(reasons, /PriceHistory baseline must include insert and read/);
-		assert.match(reasons, /public API baseline must include search and products/);
-		assert.match(reasons, /cache TTL baseline must include TTL/);
+		assert.match(reasons, /PriceHistory baseline requires insert\/read and an explicit metric/);
+		assert.match(reasons, /public API baseline requires search\/products and an explicit performance metric/);
+		assert.match(
+			reasons,
+			/cache TTL baseline requires TTL and an explicit temporal value/,
+		);
 	});
 
 	it("fails closed when Prisma pool posture lists required terms without values", () => {
@@ -1640,7 +1644,61 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values/,
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values/,
+		);
+	});
+
+	it("fails closed when Prisma pool posture uses non-positive pool values", () => {
+		const evidenceWithNonPositivePrismaPoolPosture = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				prismaPoolPosture:
+					"pgbouncer=true; connection_limit=0; pool_timeout=0",
+			},
+		};
+		evidenceWithNonPositivePrismaPoolPosture.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithNonPositivePrismaPoolPosture,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithNonPositivePrismaPoolPosture,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values/,
+		);
+	});
+
+	it("fails closed when Prisma pool posture disables pgbouncer", () => {
+		const evidenceWithDisabledPgbouncer = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				prismaPoolPosture:
+					"pgbouncer=false; connection_limit=3; pool_timeout=10",
+			},
+		};
+		evidenceWithDisabledPgbouncer.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithDisabledPgbouncer,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithDisabledPgbouncer,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values/,
 		);
 	});
 
@@ -1667,7 +1725,34 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with explicit values/,
+			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with positive temporal values/,
+		);
+	});
+
+	it("fails closed when transaction timeout posture disables idle transaction timeout", () => {
+		const evidenceWithDisabledIdleTransactionTimeout = {
+			...completeEvidence,
+			artifactLineage: { ...completeEvidence.artifactLineage },
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				transactionTimeoutPosture:
+					"statement_timeout=2min; idle_in_transaction_session_timeout=0",
+			},
+		};
+		evidenceWithDisabledIdleTransactionTimeout.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithDisabledIdleTransactionTimeout,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithDisabledIdleTransactionTimeout,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with positive temporal values/,
 		);
 	});
 
@@ -1692,7 +1777,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/PriceHistory baseline must include insert and read/,
+			/PriceHistory baseline requires insert\/read and an explicit metric/,
+		);
+	});
+
+	it("fails closed when PriceHistory insert/read baseline evidence omits explicit metrics", () => {
+		const evidenceWithNominalPriceHistoryBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				priceHistoryBaseline: "PriceHistory insert/read baseline captured",
+			},
+		};
+		evidenceWithNominalPriceHistoryBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithNominalPriceHistoryBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithNominalPriceHistoryBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/PriceHistory baseline requires insert\/read and an explicit metric/,
 		);
 	});
 
@@ -1717,7 +1827,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/cache TTL baseline must include TTL/,
+			/cache TTL baseline requires TTL and an explicit temporal value/,
+		);
+	});
+
+	it("fails closed when cache TTL baseline omits an explicit temporal value", () => {
+		const evidenceWithGenericCacheTtlBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				cacheTtlBaseline: "TTL baseline captured",
+			},
+		};
+		evidenceWithGenericCacheTtlBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithGenericCacheTtlBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithGenericCacheTtlBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/cache TTL baseline requires TTL and an explicit temporal value/,
 		);
 	});
 
@@ -1742,7 +1877,32 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.equal(report.status, "FAIL");
 		assert.match(
 			report.summary.failClosedReasons.join("\n"),
-			/public API baseline must include search and products/,
+			/public API baseline requires search\/products and an explicit performance metric/,
+		);
+	});
+
+	it("fails closed when public API baseline omits an explicit performance metric", () => {
+		const evidenceWithNominalPublicApiBaseline = {
+			...completeEvidence,
+			performanceGuard: {
+				...completeEvidence.performanceGuard,
+				publicApiBaseline: "public API search/products baseline captured",
+			},
+		};
+		evidenceWithNominalPublicApiBaseline.artifactLineage.artifactSha256 =
+			calculateDirectRefreshDiscoveryPrewriteFoundationEvidenceSha256(
+				evidenceWithNominalPublicApiBaseline,
+			);
+
+		const report = evaluateFoundation({
+			evidence: evidenceWithNominalPublicApiBaseline,
+			now: new Date("2026-06-06T12:30:00.000Z"),
+		});
+
+		assert.equal(report.status, "FAIL");
+		assert.match(
+			report.summary.failClosedReasons.join("\n"),
+			/public API baseline requires search\/products and an explicit performance metric/,
 		);
 	});
 
@@ -1803,6 +1963,6 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		assert.doesNotMatch(reasons, /alert channel is required/);
 		assert.match(reasons, /rollback drill must be executed/);
 		assert.match(reasons, /migration status must be PASS/);
-		assert.match(reasons, /public API baseline must include search and products/);
+		assert.match(reasons, /public API baseline requires search\/products and an explicit performance metric/);
 	});
 });

@@ -466,11 +466,11 @@ function buildChecks(
 			[alert.rollbackRequired, "rollback-required alert is required"],
 		]),
 		check("performance-guard", [
-			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit values"],
-			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with explicit values"],
-			[hasPriceHistoryBaseline(perf.priceHistoryBaseline), "PriceHistory baseline must include insert and read"],
-			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline must include search and products"],
-			[hasCacheTtlBaseline(perf.cacheTtlBaseline), "cache TTL baseline must include TTL"],
+			[hasPrismaPoolPosture(perf.prismaPoolPosture), "Prisma pool posture must include pgbouncer, connection_limit, pool_timeout, and explicit positive values"],
+			[hasTransactionTimeoutPosture(perf.transactionTimeoutPosture), "transaction timeout posture must include statement_timeout and idle_in_transaction_session_timeout with positive temporal values"],
+			[hasPriceHistoryBaseline(perf.priceHistoryBaseline), "PriceHistory baseline requires insert/read and an explicit metric"],
+			[hasPublicApiBaseline(perf.publicApiBaseline), "public API baseline requires search/products and an explicit performance metric"],
+			[hasCacheTtlBaseline(perf.cacheTtlBaseline), "cache TTL baseline requires TTL and an explicit temporal value"],
 		]),
 	];
 }
@@ -859,37 +859,75 @@ function hasExplicitOwner(value: string | undefined) {
 function hasPrismaPoolPosture(value: string | undefined) {
 	const normalized = value?.toLowerCase() ?? "";
 	return (
-		hasAllTerms(normalized, ["pgbouncer", "connection_limit", "pool_timeout"]) &&
-		/\bconnection_limit\s*=\s*\d+\b/.test(normalized) &&
-		/\bpool_timeout\s*=\s*\d+\b/.test(normalized)
+		hasEnabledPgbouncer(normalized) &&
+		hasPositivePoolPostureValue(normalized, "connection_limit") &&
+		hasPositivePoolPostureValue(normalized, "pool_timeout")
 	);
+}
+
+function hasEnabledPgbouncer(value: string) {
+	return /\bpgbouncer\s*=\s*(?:true|on|enabled|1)\b/.test(value);
+}
+
+function hasPositivePoolPostureValue(value: string, key: string) {
+	const postureValue = value.match(new RegExp(`\\b${key}\\s*=\\s*(\\d+)\\b`))?.[1];
+	if (!postureValue) return false;
+	return Number.parseInt(postureValue, 10) > 0;
 }
 
 function hasTransactionTimeoutPosture(value: string | undefined) {
 	const normalized = value?.toLowerCase() ?? "";
 	return (
-		hasExplicitPostureValue(normalized, "statement_timeout") &&
-		hasExplicitPostureValue(
+		hasPositiveTemporalPostureValue(normalized, "statement_timeout") &&
+		hasPositiveTemporalPostureValue(
 			normalized,
 			"idle_in_transaction_session_timeout",
 		)
 	);
 }
 
-function hasExplicitPostureValue(value: string, key: string) {
-	return new RegExp(`\\b${key}\\s*=\\s*[^=\\s;]+\\b`).test(value);
+function hasPositiveTemporalPostureValue(value: string, key: string) {
+	const postureValue = value.match(new RegExp(`\\b${key}\\s*=\\s*([^;\\s]+)`))?.[1];
+	if (!postureValue || /^(?:0(?:ms|s)?|off|disabled|none)$/i.test(postureValue)) {
+		return false;
+	}
+	return /^[1-9]\d*(?:\.\d+)?(?:ms|s|sec|secs|second|seconds|m|min|mins|minute|minutes|h|hr|hrs|hour|hours)$/.test(
+		postureValue,
+	);
 }
 
 function hasPriceHistoryBaseline(value: string | undefined) {
-	return hasAllTerms(value, ["pricehistory", "insert", "read", "baseline"]);
+	return (
+		hasAllTerms(value, ["pricehistory", "insert", "read", "baseline"]) &&
+		hasExplicitPriceHistoryBaselineMetric(value)
+	);
+}
+
+function hasExplicitPriceHistoryBaselineMetric(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return (
+		/\b(?:insert|read)[_-]?(?:p\d{2}|rate|latency|duration|time|elapsed)\s*=\s*\d+(?:\.\d+)?\s*(?:ms|s|sec|secs|second|seconds|\/s|rps|rows\/s|row\/s)?\b/.test(
+			normalized,
+		) || /\b(?:rows|row_count|count)\s*=\s*\d+\b/.test(normalized)
+	);
 }
 
 function hasPublicApiBaseline(value: string | undefined) {
-	return hasAllTerms(value, ["search", "products", "baseline"]);
+	return (
+		hasAllTerms(value, ["search", "products", "baseline"]) &&
+		hasExplicitPerformanceMetric(value)
+	);
 }
 
 function hasCacheTtlBaseline(value: string | undefined) {
-	return hasAllTerms(value, ["ttl", "baseline"]);
+	return hasAllTerms(value, ["ttl", "baseline"]) && hasExplicitTimeBound(value);
+}
+
+function hasExplicitPerformanceMetric(value: string | undefined) {
+	const normalized = value?.toLowerCase() ?? "";
+	return /\b(?:p\d{2}|latency|response_time|response-time|duration|time|elapsed)\s*=\s*\d+(?:\.\d+)?\s*(?:ms|s|sec|secs|second|seconds)\b/.test(
+		normalized,
+	);
 }
 
 function hasAllTerms(value: string | undefined, terms: string[]) {
