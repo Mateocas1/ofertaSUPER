@@ -10,6 +10,7 @@ import {
 	defaultDirectRefreshDiscoveryDenominatorCandidateOutputPath,
 	fetchDirectRefreshDiscoveryDenominatorCandidatesByKnownIdentity,
 	parseDirectRefreshDiscoveryDenominatorCandidateCliOptions,
+	type DirectRefreshDiscoveryDenominatorCandidateSource,
 	type DirectRefreshDiscoveryDenominatorCandidateSnapshot,
 } from "./pipeline/direct-refresh-discovery-denominator-candidates";
 import type { DirectLookup } from "@/lib/ingestion/adapters/types";
@@ -80,7 +81,7 @@ async function readCandidateInput({
 			products: await fetchDirectRefreshDiscoveryDenominatorCandidatesByKnownIdentity({
 				source: options.source,
 				lookups: options.lookups,
-				fetchDirectProducts: fetchVeaDirectProducts,
+				fetchDirectProducts: fetchSourceDirectProducts,
 			}),
 			surface: "direct-catalog-lookup" as const,
 		};
@@ -90,7 +91,7 @@ async function readCandidateInput({
 		products: (
 			await Promise.all(
 				options.terms.map((term) =>
-					fetchVeaProducts({
+					fetchSourceProducts({
 						baseUrl,
 						query: term,
 						count: options.sourceBudget,
@@ -102,7 +103,7 @@ async function readCandidateInput({
 	};
 }
 
-async function fetchVeaProducts(options: {
+async function fetchSourceProducts(options: {
 	baseUrl: string;
 	query: string;
 	count: number;
@@ -111,9 +112,12 @@ async function fetchVeaProducts(options: {
 	return fetchVtexProducts(options);
 }
 
-async function fetchVeaDirectProducts(_source: "vea", lookup: DirectLookup) {
+async function fetchSourceDirectProducts(
+	source: DirectRefreshDiscoveryDenominatorCandidateSource,
+	lookup: DirectLookup,
+) {
 	const { getSourceAdapter } = await import("../src/lib/ingestion/adapters/registry");
-	return getSourceAdapter("vea").fetchDirectProducts(lookup, { retries: 1 });
+	return getSourceAdapter(source).fetchDirectProducts(lookup, { retries: 1 });
 }
 
 if (

@@ -42,7 +42,7 @@ function product(
 }
 
 describe("direct-refresh discovery denominator candidate generator", () => {
-	it("builds a bounded Vea-first candidate snapshot compatible with denominator audit parsing", () => {
+	it("builds a bounded Vea candidate snapshot compatible with denominator audit parsing", () => {
 		const snapshot = buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
 			products: [product("111"), product("222")],
 			fetchedAt,
@@ -112,6 +112,45 @@ describe("direct-refresh discovery denominator candidate generator", () => {
 		assert.equal(snapshot.counts.fetchedRows, 2);
 	});
 
+	it("routes direct catalog lookup products through the selected Carrefour source", async () => {
+		const calls: Array<{ source: string; kind: string; value: string }> = [];
+		const products = await fetchDirectRefreshDiscoveryDenominatorCandidatesByKnownIdentity({
+			source: "carrefour",
+			lookups: [
+				{ kind: "ean", value: "779111" },
+				{ kind: "sku-id", value: "sku-222" },
+			],
+			fetchDirectProducts: async (source, lookup) => {
+				calls.push({ source, kind: lookup.kind, value: lookup.value });
+				return [
+					product(lookup.kind === "ean" ? lookup.value : "779222", {
+						brand: "Carrefour",
+						skuId: lookup.kind === "sku-id" ? lookup.value : `sku-${lookup.value}`,
+					}),
+				];
+			},
+		});
+
+		assert.deepEqual(calls, [
+			{ source: "carrefour", kind: "ean", value: "779111" },
+			{ source: "carrefour", kind: "sku-id", value: "sku-222" },
+		]);
+
+		const snapshot = buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
+			products,
+			source: "carrefour",
+			fetchedAt,
+			requestBudget: 5,
+			sourceBudget: 5,
+			surface: "direct-catalog-lookup",
+		});
+
+		assert.deepEqual(snapshot.sources, ["carrefour"]);
+		assert.equal(snapshot.candidates[0].source, "carrefour");
+		assert.deepEqual(snapshot.budgets.source.usedBySource, { carrefour: 2 });
+		assert.match(snapshot.coverage.description, /Source-scoped direct catalog lookup/);
+	});
+
 	it("dedupes by source+EAN/SKU and tracks exclusions with explicit reasons", () => {
 		const snapshot = buildDirectRefreshDiscoveryDenominatorCandidateSnapshot({
 			products: [
@@ -145,7 +184,7 @@ describe("direct-refresh discovery denominator candidate generator", () => {
 		assert.match(snapshot.failClosedReasons.join("\n"), /source budget exceeded for vea/);
 	});
 
-	it("rejects dangerous flags and non-Vea/all-source generation", () => {
+	it("rejects dangerous flags and unsupported/all-source generation", () => {
 		const options = parseDirectRefreshDiscoveryDenominatorCandidateCliOptions([
 			"node",
 			"script",
@@ -175,7 +214,7 @@ describe("direct-refresh discovery denominator candidate generator", () => {
 					"--source=disco",
 					"--terms=leche",
 				]),
-			/Vea-only/,
+			/unsupported .* source disco; supported sources: vea, carrefour/,
 		);
 		for (const flag of [
 			"--apply",
@@ -203,17 +242,18 @@ describe("direct-refresh discovery denominator candidate generator", () => {
 		}
 	});
 
-	it("parses direct lookup identity flags as Vea-scoped non-all-source mode", () => {
+	it("parses direct lookup identity flags as source-scoped non-all-source mode", () => {
 		const options = parseDirectRefreshDiscoveryDenominatorCandidateCliOptions([
 			"node",
 			"script",
-			"--source=vea",
+			"--source=carrefour",
 			"--ean=779111",
 			"--eans=779222,779111",
 			"--sku-id=sku-a",
 			"--sku-ids=sku-b,sku-a",
 		]);
 
+		assert.equal(options.source, "carrefour");
 		assert.deepEqual(options.terms, []);
 		assert.deepEqual(options.lookups, [
 			{ kind: "ean", value: "779111" },
