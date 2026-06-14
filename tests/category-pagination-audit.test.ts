@@ -20,7 +20,7 @@ const category: CategoryPaginationCategory = {
 	url: "https://www.vea.com.ar/almacen",
 };
 
-describe("Vea category pagination audit", () => {
+describe("category pagination audit", () => {
 	it("builds a bounded read-only category pagination artifact", () => {
 		const report = buildCategoryPaginationAuditReport({
 			generatedAt,
@@ -54,6 +54,7 @@ describe("Vea category pagination audit", () => {
 		assert.equal(report.exhaustive, false);
 		assert.equal(report.posture.dbWrites, false);
 		assert.equal(report.posture.artifactWrites, "issue-258-category-pagination-audit-only");
+		assert.equal(report.lineage.tool, "scripts/audit-category-pagination.ts");
 		assert.equal(report.surface.pagination.style, "_from/_to");
 		assert.equal(report.counts.denominatorCandidates, 1);
 		assert.equal(report.counts.duplicateRows, 1);

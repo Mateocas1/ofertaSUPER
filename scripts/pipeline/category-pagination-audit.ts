@@ -90,7 +90,7 @@ export type CategoryPaginationAuditReport = {
 	lineage: {
 		issue: number;
 		outputPath: string;
-		tool: "scripts/audit-vea-category-pagination.ts";
+		tool: "scripts/audit-category-pagination.ts";
 		requestSha256: string;
 		writeBoundary: string;
 	};
@@ -332,7 +332,7 @@ export function buildCategoryPaginationAuditReport({
 		lineage: {
 			issue,
 			outputPath: safeOutputPath,
-			tool: "scripts/audit-vea-category-pagination.ts",
+			tool: "scripts/audit-category-pagination.ts",
 			requestSha256: sha256(stableJson({ source: sourceConfig.slug, issue, requestBudget, categoryBudget, pageBudget, pageSize, timeoutMs })),
 			writeBoundary,
 		},
