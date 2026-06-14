@@ -13,6 +13,7 @@ const generatedAt = new Date("2026-06-14T12:00:00.000Z");
 const output = "audit/coverage/issue-258/vea/category-pagination/category-pagination-audit.json";
 const discoOutput = "audit/coverage/issue-263/disco/category-pagination/category-pagination-audit.json";
 const jumboOutput = "audit/coverage/issue-268/jumbo/category-pagination/category-pagination-audit.json";
+const masOutput = "audit/coverage/issue-271/mas/category-pagination/category-pagination-audit.json";
 const issue260Output = "audit/coverage/issue-260/vea/category-pagination/category-pagination-audit.json";
 const category: CategoryPaginationCategory = {
 	id: "1",
@@ -217,6 +218,52 @@ describe("category pagination audit", () => {
 		assert.match(report.lineage.writeBoundary, /audit\/coverage\/issue-268\/jumbo\/category-pagination\//);
 	});
 
+	it("accepts and configures the approved MAS source", () => {
+		const options = parseCategoryPaginationCliOptions([
+			"node",
+			"script",
+			"--source=mas",
+			`--output=${masOutput}`,
+			"--issue-number=271",
+		]);
+		const report = buildCategoryPaginationAuditReport({
+			generatedAt,
+			source: options.source,
+			issue: options.issue,
+			outputPath: options.output,
+			requestBudget: 5,
+			categoryBudget: 1,
+			pageBudget: 2,
+			pageSize: 2,
+			timeoutMs: 1000,
+			categoryTreeStatus: 200,
+			categories: [{ ...category, url: "https://www.masonline.com.ar/almacen" }],
+			pages: [{
+				category,
+				page: 0,
+				from: 0,
+				to: 1,
+				endpoint: "https://www.masonline.com.ar/api/catalog_system/pub/products/search/almacen?_from=0&_to=1",
+				status: 206,
+				contentRange: null,
+				products: [{ ean: "7794444444444", productUrl: "https://www.masonline.com.ar/a/p", name: "A" }],
+			}],
+			errors: [],
+		});
+
+		assert.equal(options.source, "mas");
+		assert.equal(options.output, masOutput);
+		assert.deepEqual(getCategoryPaginationSourceConfig("mas"), {
+			slug: "mas",
+			baseUrl: "https://www.masonline.com.ar",
+		});
+		assert.equal(report.audit, "mas-category-pagination-discovery-surface");
+		assert.equal(report.source.slug, "mas");
+		assert.equal(report.source.baseUrl, "https://www.masonline.com.ar");
+		assert.equal(report.candidates[0]?.source, "mas");
+		assert.match(report.lineage.writeBoundary, /audit\/coverage\/issue-271\/mas\/category-pagination\//);
+	});
+
 	it("rejects unsupported category pagination sources", () => {
 		assert.throws(() => parseCategoryPaginationCliOptions(["node", "script", "--source=unknown"]), /approved only/);
 	});
@@ -264,5 +311,17 @@ describe("category pagination audit", () => {
 			source: "jumbo",
 			surface: "category-pagination",
 		}), jumboOutput);
+	});
+
+	it("rejects writes outside the selected MAS source output boundary", () => {
+		assert.throws(
+			() => parseCategoryPaginationCliOptions(["node", "script", "--source=mas", `--output=${output}`, "--issue-number=271"]),
+			/must be under audit\/coverage\/issue-271\/mas\/category-pagination\//,
+		);
+		assert.equal(normalizeCategoryPaginationOutputPath(masOutput, {
+			issue: 271,
+			source: "mas",
+			surface: "category-pagination",
+		}), masOutput);
 	});
 });
