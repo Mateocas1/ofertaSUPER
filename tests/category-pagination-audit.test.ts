@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
 	buildCategoryPaginationAuditReport,
+	filterCategoryPaginationAuditCategories,
 	getCategoryPaginationSourceConfig,
 	normalizeCategoryPaginationOutputPath,
 	parseCategoryPaginationCliOptions,
@@ -122,6 +123,7 @@ describe("category pagination audit", () => {
 			timeoutMs: 5000,
 			issue: 258,
 			generatedAt: "2026-06-14T12:00:00.000Z",
+			excludeCategoryPathPattern: null,
 		});
 		assert.throws(() => parseCategoryPaginationCliOptions(["node", "script", "--write"]), /rejects --write/);
 		assert.throws(() => normalizeCategoryPaginationOutputPath("audit/coverage/issue-258/vea/other.json"), /must be under/);
@@ -334,6 +336,89 @@ describe("category pagination audit", () => {
 		], 2);
 
 		assert.deepEqual(selected.map((entry) => entry.path), ["-old-", "-old-/botella-de-tinta"]);
+	});
+
+	it("preserves default category selection when no exclusion pattern is supplied", () => {
+		const candidates = [
+			{ ...category, id: "old-1", path: "-old-" },
+			{ ...category, id: "old-2", path: "-old-" },
+			{ ...category, id: "ink", path: "-old-/botella-de-tinta" },
+		];
+
+		const filtered = filterCategoryPaginationAuditCategories(candidates, null);
+		const selected = selectCategoryPaginationAuditCategories(filtered.categories, 2);
+
+		assert.equal(filtered.excludedCount, 0);
+		assert.deepEqual(selected.map((entry) => entry.path), ["-old-", "-old-/botella-de-tinta"]);
+	});
+
+	it("excludes MAS stale -old- category paths before applying the category budget", () => {
+		const candidates = [
+			{ ...category, id: "old", path: "-old-", url: "https://www.masonline.com.ar/-old-" },
+			{ ...category, id: "fresh-1", path: "almacen", url: "https://www.masonline.com.ar/almacen" },
+			{ ...category, id: "fresh-2", path: "bebidas", url: "https://www.masonline.com.ar/bebidas" },
+		];
+
+		const filtered = filterCategoryPaginationAuditCategories(candidates, "-old-");
+		const selected = selectCategoryPaginationAuditCategories(filtered.categories, 1);
+
+		assert.equal(filtered.excludedCount, 1);
+		assert.deepEqual(selected.map((entry) => entry.path), ["almacen"]);
+	});
+
+	it("records category path exclusion metadata and post-filter budget accounting", () => {
+		const oldCategory = { ...category, id: "old", path: "-old-", url: "https://www.masonline.com.ar/-old-" };
+		const freshCategory = { ...category, id: "fresh", path: "almacen", url: "https://www.masonline.com.ar/almacen" };
+		const report = buildCategoryPaginationAuditReport({
+			generatedAt,
+			source: "mas",
+			issue: 276,
+			outputPath: "audit/coverage/issue-276/mas/category-pagination/category-pagination-audit.json",
+			requestBudget: 40,
+			categoryBudget: 1,
+			pageBudget: 3,
+			pageSize: 10,
+			timeoutMs: 10000,
+			categoryTreeStatus: 200,
+			categories: [oldCategory, freshCategory],
+			pages: [{
+				category: freshCategory,
+				page: 0,
+				from: 0,
+				to: 9,
+				endpoint: "https://www.masonline.com.ar/api/catalog_system/pub/products/search/almacen?_from=0&_to=9",
+				status: 200,
+				contentRange: null,
+				products: [{ ean: "7795555555555", productUrl: "https://www.masonline.com.ar/a/p", name: "A" }],
+			}],
+			errors: [],
+			excludeCategoryPathPattern: "-old-",
+			excludedCategoryPathCount: 1,
+		});
+
+		assert.deepEqual(report.categoryPathExclusion, { pattern: "-old-", excludedCount: 1 });
+		assert.equal(report.counts.categoryRows, 2);
+		assert.equal(report.counts.categoryRowsExcluded, 1);
+		assert.equal(report.counts.categoryRowsEligible, 1);
+		assert.equal(report.counts.categoryRowsAudited, 1);
+		assert.equal(report.budgets.category.used, 1);
+		assert.doesNotMatch(report.budgets.stopCondition.reasons.join("\n"), /category budget reached/);
+	});
+
+	it("accepts the category path exclusion CLI option", () => {
+		const options = parseCategoryPaginationCliOptions([
+			"node",
+			"script",
+			"--source=mas",
+			"--issue-number=276",
+			"--exclude-category-path-pattern=-old-",
+		]);
+
+		assert.equal(options.excludeCategoryPathPattern, "-old-");
+		assert.throws(
+			() => parseCategoryPaginationCliOptions(["node", "script", "--exclude-category-path-pattern=("]),
+			/requires valid regex/,
+		);
 	});
 
 	it("reports a zero-row short page as one fetched page", () => {
