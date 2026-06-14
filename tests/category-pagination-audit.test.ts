@@ -6,6 +6,7 @@ import {
 	getCategoryPaginationSourceConfig,
 	normalizeCategoryPaginationOutputPath,
 	parseCategoryPaginationCliOptions,
+	selectCategoryPaginationAuditCategories,
 	type CategoryPaginationCategory,
 } from "../scripts/pipeline/category-pagination-audit";
 
@@ -323,5 +324,50 @@ describe("category pagination audit", () => {
 			source: "mas",
 			surface: "category-pagination",
 		}), masOutput);
+	});
+
+	it("selects unique category paths before applying the category budget", () => {
+		const selected = selectCategoryPaginationAuditCategories([
+			{ ...category, id: "old-1", path: "-old-" },
+			{ ...category, id: "old-2", path: "-old-" },
+			{ ...category, id: "ink", path: "-old-/botella-de-tinta" },
+		], 2);
+
+		assert.deepEqual(selected.map((entry) => entry.path), ["-old-", "-old-/botella-de-tinta"]);
+	});
+
+	it("reports a zero-row short page as one fetched page", () => {
+		const oldCategory = { ...category, id: "old", path: "-old-", url: "https://www.masonline.com.ar/-old-" };
+		const report = buildCategoryPaginationAuditReport({
+			generatedAt,
+			source: "mas",
+			issue: 273,
+			outputPath: "audit/coverage/issue-273/mas/category-pagination/category-pagination-audit.json",
+			requestBudget: 40,
+			categoryBudget: 10,
+			pageBudget: 3,
+			pageSize: 10,
+			timeoutMs: 10000,
+			categoryTreeStatus: 200,
+			categories: [oldCategory],
+			pages: [{
+				category: oldCategory,
+				page: 0,
+				from: 0,
+				to: 9,
+				endpoint: "https://www.masonline.com.ar/api/catalog_system/pub/products/search/-old-?_from=0&_to=9",
+				status: 200,
+				contentRange: null,
+				products: [],
+			}],
+			errors: [],
+		});
+
+		assert.equal(report.counts.pageRequests, 1);
+		assert.equal(report.counts.fetchedRows, 0);
+		assert.equal(report.endpointBehavior.productSearch[0]?.categoryPath, "-old-");
+		assert.equal(report.endpointBehavior.productSearch[0]?.pagesFetched, 1);
+		assert.equal(report.endpointBehavior.productSearch[0]?.stopReason, "returned 0 < page size 10");
+		assert.equal(report.budgets.page.maxUsedForCategory, 1);
 	});
 });

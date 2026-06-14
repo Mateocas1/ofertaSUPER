@@ -10,6 +10,7 @@ import {
 	getCategoryPaginationSourceConfig,
 	normalizeCategoryPaginationOutputPath,
 	parseCategoryPaginationCliOptions,
+	selectCategoryPaginationAuditCategories,
 	type CategoryPaginationCategory,
 	type CategoryPaginationFetchError,
 	type CategoryPaginationPageResult,
@@ -48,7 +49,7 @@ async function main() {
 	const sourceConfig = getCategoryPaginationSourceConfig(options.source);
 	const generatedAt = new Date(options.generatedAt ?? Date.now());
 	const { categories, status: categoryTreeStatus, errors } = await fetchCategories(sourceConfig.baseUrl, options.timeoutMs);
-	const selectedCategories = categories.slice(0, options.categoryBudget);
+	const selectedCategories = selectCategoryPaginationAuditCategories(categories, options.categoryBudget);
 	const pages: CategoryPaginationPageResult[] = [];
 
 	for (const category of selectedCategories) {
