@@ -17,6 +17,7 @@ export type CategoryPaginationCliOptions = {
 	timeoutMs: number;
 	issue: number;
 	generatedAt: string | null;
+	excludeCategoryPathPattern: string | null;
 };
 
 export type CategoryPaginationOutputBoundary = {
@@ -103,6 +104,8 @@ export type CategoryPaginationAuditReport = {
 	};
 	counts: {
 		categoryRows: number;
+		categoryRowsEligible: number;
+		categoryRowsExcluded: number;
 		categoryRowsAudited: number;
 		pageRequests: number;
 		fetchedRows: number;
@@ -120,6 +123,10 @@ export type CategoryPaginationAuditReport = {
 			lastContentRange: string | null;
 			stopReason: string;
 		}>;
+	};
+	categoryPathExclusion: {
+		pattern: string | null;
+		excludedCount: number;
 	};
 	candidates: Array<{
 		source: CategoryPaginationSource;
@@ -167,6 +174,7 @@ const ALLOWED_FLAGS = new Set([
 	"--timeout-ms",
 	"--issue-number",
 	"--generated-at",
+	"--exclude-category-path-pattern",
 ]);
 const APPROVED_CATEGORY_PAGINATION_SOURCES = ["vea", "disco", "jumbo", "mas"] as const;
 const DEFAULT_ISSUE = 263;
@@ -196,6 +204,8 @@ export function parseCategoryPaginationCliOptions(argv = process.argv): Category
 
 	const generatedAt = getOptionalSingleFlag(argv, "--generated-at")?.trim() ?? null;
 	if (generatedAt) requireValidIsoTimestamp(generatedAt, "--generated-at");
+	const excludeCategoryPathPattern = getOptionalSingleFlag(argv, "--exclude-category-path-pattern")?.trim() || null;
+	if (excludeCategoryPathPattern) requireValidRegex(excludeCategoryPathPattern, "--exclude-category-path-pattern");
 
 	return {
 		source,
@@ -210,6 +220,7 @@ export function parseCategoryPaginationCliOptions(argv = process.argv): Category
 		timeoutMs: parsePositiveIntegerFlag(argv, "--timeout-ms", 10_000),
 		issue: boundary.issue,
 		generatedAt,
+		excludeCategoryPathPattern,
 	};
 }
 
@@ -243,6 +254,8 @@ export function buildCategoryPaginationAuditReport({
 	categoryTreeStatus,
 	pages,
 	errors,
+	excludeCategoryPathPattern = null,
+	excludedCategoryPathCount = 0,
 }: {
 	generatedAt: Date;
 	source?: CategoryPaginationSource;
@@ -257,6 +270,8 @@ export function buildCategoryPaginationAuditReport({
 	categoryTreeStatus: number | null;
 	pages: CategoryPaginationPageResult[];
 	errors: CategoryPaginationFetchError[];
+	excludeCategoryPathPattern?: string | null;
+	excludedCategoryPathCount?: number;
 }): CategoryPaginationAuditReport {
 	const sourceConfig = getCategoryPaginationSourceConfig(source);
 	const boundary = categoryPaginationOutputBoundary({ issue, source: sourceConfig.slug, surface: "category-pagination" });
@@ -303,9 +318,10 @@ export function buildCategoryPaginationAuditReport({
 
 	const requestUsed = 1 + pages.length + errors.length;
 	const maxPagesForCategory = endpointBehavior.reduce((max, entry) => Math.max(max, entry.pagesFetched), 0);
+	const eligibleCategoryRows = Math.max(0, categories.length - excludedCategoryPathCount);
 	const stopReasons = uniqueSorted([
 		...(requestUsed > requestBudget ? [`request budget exceeded: used ${requestUsed} > limit ${requestBudget}`] : []),
-		...(auditedCategories.length >= categoryBudget && categories.length > categoryBudget ? [`category budget reached: audited ${auditedCategories.length} of ${categories.length}`] : []),
+		...(auditedCategories.length >= categoryBudget && eligibleCategoryRows > categoryBudget ? [`category budget reached: audited ${auditedCategories.length} of ${eligibleCategoryRows}`] : []),
 		...(maxPagesForCategory >= pageBudget ? [`page budget reached for at least one category: limit ${pageBudget}`] : []),
 		...errors.map((error) => error.reason),
 	]);
@@ -333,7 +349,7 @@ export function buildCategoryPaginationAuditReport({
 			issue,
 			outputPath: safeOutputPath,
 			tool: "scripts/audit-category-pagination.ts",
-			requestSha256: sha256(stableJson({ source: sourceConfig.slug, issue, requestBudget, categoryBudget, pageBudget, pageSize, timeoutMs })),
+			requestSha256: sha256(stableJson({ source: sourceConfig.slug, issue, requestBudget, categoryBudget, pageBudget, pageSize, timeoutMs, excludeCategoryPathPattern })),
 			writeBoundary,
 		},
 		budgets: {
@@ -345,6 +361,8 @@ export function buildCategoryPaginationAuditReport({
 		},
 		counts: {
 			categoryRows: categories.length,
+			categoryRowsEligible: eligibleCategoryRows,
+			categoryRowsExcluded: excludedCategoryPathCount,
 			categoryRowsAudited: auditedCategories.length,
 			pageRequests: pages.length,
 			fetchedRows: pages.reduce((sum, page) => sum + page.products.length, 0),
@@ -356,6 +374,10 @@ export function buildCategoryPaginationAuditReport({
 		endpointBehavior: {
 			categoryTree: { endpoint: CATEGORY_TREE_ENDPOINT, status: categoryTreeStatus, categoriesDiscovered: categories.length },
 			productSearch: endpointBehavior,
+		},
+		categoryPathExclusion: {
+			pattern: excludeCategoryPathPattern,
+			excludedCount: excludedCategoryPathCount,
 		},
 		candidates: Array.from(rowsByIdentity.values())
 			.map(({ rows: _rows, ...candidate }) => candidate)
@@ -426,6 +448,16 @@ export function selectCategoryPaginationAuditCategories(
 	return selected;
 }
 
+export function filterCategoryPaginationAuditCategories(
+	categories: CategoryPaginationCategory[],
+	excludeCategoryPathPattern: string | null,
+) {
+	if (!excludeCategoryPathPattern) return { categories, excludedCount: 0 };
+	const matcher = new RegExp(excludeCategoryPathPattern);
+	const filtered = categories.filter((category) => !matcher.test(category.path));
+	return { categories: filtered, excludedCount: categories.length - filtered.length };
+}
+
 function pickIdentity(product: CategoryPaginationProduct) {
 	for (const kind of ["ean", "skuId", "productId", "productUrl", "name"] as const) {
 		const value = normalizedText(product[kind]);
@@ -459,6 +491,15 @@ function normalizedText(value: unknown) {
 function requireValidIsoTimestamp(value: string, label: string) {
 	const parsed = new Date(value);
 	if (!isValidDate(parsed) || parsed.toISOString() !== value) throw new Error(`category pagination audit requires valid ISO timestamp for ${label}`);
+	return value;
+}
+
+function requireValidRegex(value: string, label: string) {
+	try {
+		new RegExp(value);
+	} catch {
+		throw new Error(`category pagination audit requires valid regex for ${label}`);
+	}
 	return value;
 }
 

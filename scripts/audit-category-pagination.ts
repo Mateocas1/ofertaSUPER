@@ -7,6 +7,7 @@ import { normalizeProduct } from "@/lib/vtex/normalize";
 import {
 	buildCategoryPaginationAuditReport,
 	categoryPaginationOutputBoundary,
+	filterCategoryPaginationAuditCategories,
 	getCategoryPaginationSourceConfig,
 	normalizeCategoryPaginationOutputPath,
 	parseCategoryPaginationCliOptions,
@@ -49,7 +50,8 @@ async function main() {
 	const sourceConfig = getCategoryPaginationSourceConfig(options.source);
 	const generatedAt = new Date(options.generatedAt ?? Date.now());
 	const { categories, status: categoryTreeStatus, errors } = await fetchCategories(sourceConfig.baseUrl, options.timeoutMs);
-	const selectedCategories = selectCategoryPaginationAuditCategories(categories, options.categoryBudget);
+	const categoryFilter = filterCategoryPaginationAuditCategories(categories, options.excludeCategoryPathPattern);
+	const selectedCategories = selectCategoryPaginationAuditCategories(categoryFilter.categories, options.categoryBudget);
 	const pages: CategoryPaginationPageResult[] = [];
 
 	for (const category of selectedCategories) {
@@ -82,6 +84,8 @@ async function main() {
 		categoryTreeStatus,
 		pages,
 		errors,
+		excludeCategoryPathPattern: options.excludeCategoryPathPattern,
+		excludedCategoryPathCount: categoryFilter.excludedCount,
 	});
 	await writeCategoryPaginationAuditJson(options.output, report, options.issue, options.source);
 	if (report.confidence.status === "FAIL") process.exitCode = 1;
