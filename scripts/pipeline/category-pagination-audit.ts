@@ -411,6 +411,21 @@ export function getCategoryPaginationSourceConfig(source: CategoryPaginationSour
 	return { slug, baseUrl: supermarket.baseUrl };
 }
 
+export function selectCategoryPaginationAuditCategories(
+	categories: CategoryPaginationCategory[],
+	categoryBudget: number,
+) {
+	const selected: CategoryPaginationCategory[] = [];
+	const seenPaths = new Set<string>();
+	for (const category of categories) {
+		if (seenPaths.has(category.path)) continue;
+		seenPaths.add(category.path);
+		selected.push(category);
+		if (selected.length >= categoryBudget) break;
+	}
+	return selected;
+}
+
 function pickIdentity(product: CategoryPaginationProduct) {
 	for (const kind of ["ean", "skuId", "productId", "productUrl", "name"] as const) {
 		const value = normalizedText(product[kind]);
