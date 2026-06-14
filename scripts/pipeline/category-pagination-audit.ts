@@ -1,10 +1,14 @@
 import { createHash } from "node:crypto";
 import { posix, win32 } from "node:path";
 
+import { getSupermarketBySlug } from "@/lib/supermarkets";
+
 import { getOptionalSingleFlag, parsePositiveIntegerFlag, uniqueSorted } from "./audit-utils";
 
+export type CategoryPaginationSource = "vea" | "disco";
+
 export type CategoryPaginationCliOptions = {
-	source: "vea";
+	source: CategoryPaginationSource;
 	output: string;
 	requestBudget: number;
 	categoryBudget: number;
@@ -17,8 +21,13 @@ export type CategoryPaginationCliOptions = {
 
 export type CategoryPaginationOutputBoundary = {
 	issue: number;
-	source: "vea";
+	source: CategoryPaginationSource;
 	surface: "category-pagination";
+};
+
+export type CategoryPaginationSourceConfig = {
+	slug: CategoryPaginationSource;
+	baseUrl: string;
 };
 
 export type CategoryPaginationCategory = {
@@ -57,14 +66,14 @@ export type CategoryPaginationFetchError = {
 
 export type CategoryPaginationAuditReport = {
 	schemaVersion: 1;
-	audit: "vea-category-pagination-discovery-surface";
+	audit: `${CategoryPaginationSource}-category-pagination-discovery-surface`;
 	bounded: true;
 	exhaustive: false;
 	readOnly: true;
 	generatedAt: string;
 	issue: number;
 	source: {
-		slug: "vea";
+		slug: CategoryPaginationSource;
 		baseUrl: string;
 	};
 	surface: {
@@ -113,7 +122,7 @@ export type CategoryPaginationAuditReport = {
 		}>;
 	};
 	candidates: Array<{
-		source: "vea";
+		source: CategoryPaginationSource;
 		surface: "category-pagination";
 		identityKind: "ean" | "skuId" | "productId" | "url" | "name";
 		identity: string;
@@ -159,7 +168,8 @@ const ALLOWED_FLAGS = new Set([
 	"--issue-number",
 	"--generated-at",
 ]);
-const VEA_BASE_URL = "https://www.vea.com.ar";
+const APPROVED_CATEGORY_PAGINATION_SOURCES = ["vea", "disco"] as const;
+const DEFAULT_ISSUE = 263;
 const CATEGORY_TREE_ENDPOINT = "/api/catalog_system/pub/category/tree/3";
 const PRODUCT_ENDPOINT_PATTERN = "/api/catalog_system/pub/products/search/{categoryPath}?_from={from}&_to={to}";
 
@@ -177,11 +187,10 @@ export function parseCategoryPaginationCliOptions(argv = process.argv): Category
 	const bareAllowedFlag = argv.slice(2).find((entry) => ALLOWED_FLAGS.has(entry));
 	if (bareAllowedFlag) throw new Error(`category pagination audit requires ${bareAllowedFlag}=...`);
 
-	const source = (getOptionalSingleFlag(argv, "--source") ?? "vea").trim().toLowerCase();
-	if (source !== "vea") throw new Error("category pagination audit is approved only for --source=vea");
+	const source = resolveCategoryPaginationSource(getOptionalSingleFlag(argv, "--source") ?? "vea");
 	const boundary = categoryPaginationOutputBoundary({
-		issue: parsePositiveIntegerFlag(argv, "--issue-number", 258),
-		source: "vea",
+		issue: parsePositiveIntegerFlag(argv, "--issue-number", DEFAULT_ISSUE),
+		source,
 		surface: "category-pagination",
 	});
 
@@ -189,7 +198,7 @@ export function parseCategoryPaginationCliOptions(argv = process.argv): Category
 	if (generatedAt) requireValidIsoTimestamp(generatedAt, "--generated-at");
 
 	return {
-		source: "vea",
+		source,
 		output: normalizeCategoryPaginationOutputPath(
 			getOptionalSingleFlag(argv, "--output")?.trim() ?? defaultCategoryPaginationOutputPath(boundary),
 			boundary,
@@ -206,7 +215,7 @@ export function parseCategoryPaginationCliOptions(argv = process.argv): Category
 
 export function normalizeCategoryPaginationOutputPath(
 	output: string,
-	boundary: CategoryPaginationOutputBoundary = categoryPaginationOutputBoundary({ issue: 258, source: "vea", surface: "category-pagination" }),
+	boundary: CategoryPaginationOutputBoundary = categoryPaginationOutputBoundary({ issue: DEFAULT_ISSUE, source: "vea", surface: "category-pagination" }),
 ) {
 	const allowedOutputPrefix = categoryPaginationOutputPrefix(boundary);
 	if (!output) throw new Error(`category pagination output must be under ${allowedOutputPrefix}`);
@@ -222,6 +231,7 @@ export function normalizeCategoryPaginationOutputPath(
 
 export function buildCategoryPaginationAuditReport({
 	generatedAt,
+	source = "vea",
 	issue,
 	outputPath,
 	requestBudget,
@@ -235,6 +245,7 @@ export function buildCategoryPaginationAuditReport({
 	errors,
 }: {
 	generatedAt: Date;
+	source?: CategoryPaginationSource;
 	issue: number;
 	outputPath: string;
 	requestBudget: number;
@@ -247,7 +258,8 @@ export function buildCategoryPaginationAuditReport({
 	pages: CategoryPaginationPageResult[];
 	errors: CategoryPaginationFetchError[];
 }): CategoryPaginationAuditReport {
-	const boundary = categoryPaginationOutputBoundary({ issue, source: "vea", surface: "category-pagination" });
+	const sourceConfig = getCategoryPaginationSourceConfig(source);
+	const boundary = categoryPaginationOutputBoundary({ issue, source: sourceConfig.slug, surface: "category-pagination" });
 	const safeOutputPath = normalizeCategoryPaginationOutputPath(outputPath, boundary);
 	const writeBoundary = categoryPaginationWriteBoundary(boundary);
 	const generatedAtIso = requireValidDate(generatedAt, "generatedAt").toISOString();
@@ -266,7 +278,7 @@ export function buildCategoryPaginationAuditReport({
 			const existing = rowsByIdentity.get(key);
 			if (existing) existing.rows += 1;
 			else rowsByIdentity.set(key, {
-				source: "vea",
+				source: sourceConfig.slug,
 				surface: "category-pagination",
 				identityKind: identity.kind,
 				identity: identity.value,
@@ -304,13 +316,13 @@ export function buildCategoryPaginationAuditReport({
 
 	return {
 		schemaVersion: 1,
-		audit: "vea-category-pagination-discovery-surface",
+		audit: `${sourceConfig.slug}-category-pagination-discovery-surface`,
 		bounded: true,
 		exhaustive: false,
 		readOnly: true,
 		generatedAt: generatedAtIso,
 		issue,
-		source: { slug: "vea", baseUrl: VEA_BASE_URL },
+		source: { slug: sourceConfig.slug, baseUrl: sourceConfig.baseUrl },
 		surface: {
 			kind: "category-pagination",
 			endpointPattern: PRODUCT_ENDPOINT_PATTERN,
@@ -321,7 +333,7 @@ export function buildCategoryPaginationAuditReport({
 			issue,
 			outputPath: safeOutputPath,
 			tool: "scripts/audit-vea-category-pagination.ts",
-			requestSha256: sha256(stableJson({ issue, requestBudget, categoryBudget, pageBudget, pageSize, timeoutMs })),
+			requestSha256: sha256(stableJson({ source: sourceConfig.slug, issue, requestBudget, categoryBudget, pageBudget, pageSize, timeoutMs })),
 			writeBoundary,
 		},
 		budgets: {
@@ -365,7 +377,7 @@ export function buildCategoryPaginationAuditReport({
 
 export function categoryPaginationOutputBoundary(boundary: CategoryPaginationOutputBoundary): CategoryPaginationOutputBoundary {
 	if (!Number.isInteger(boundary.issue) || boundary.issue <= 0) throw new Error("category pagination output requires a positive issue number");
-	if (boundary.source !== "vea") throw new Error("category pagination output boundary is approved only for source vea");
+	resolveCategoryPaginationSource(boundary.source);
 	if (boundary.surface !== "category-pagination") throw new Error("category pagination output boundary is approved only for category-pagination");
 	return boundary;
 }
@@ -380,7 +392,23 @@ export function defaultCategoryPaginationOutputPath(boundary: CategoryPagination
 }
 
 function categoryPaginationWriteBoundary(boundary: CategoryPaginationOutputBoundary) {
-	return `bounded read-only Vea category pagination audit; artifact-only write under ${categoryPaginationOutputPrefix(boundary)}; no DB writes, no discovery apply, no scheduler/all-source execution, no deploy, no migrations, no cache purge, no production writes`;
+	return `bounded read-only ${boundary.source} category pagination audit; artifact-only write under ${categoryPaginationOutputPrefix(boundary)}; no DB writes, no discovery apply, no scheduler/all-source execution, no deploy, no migrations, no cache purge, no production writes`;
+}
+
+export function resolveCategoryPaginationSource(source: string): CategoryPaginationSource {
+	const normalized = source.trim().toLowerCase();
+	if (!APPROVED_CATEGORY_PAGINATION_SOURCES.includes(normalized as CategoryPaginationSource)) {
+		throw new Error(`category pagination audit is approved only for --source=${APPROVED_CATEGORY_PAGINATION_SOURCES.join(" or --source=")}`);
+	}
+	const supermarket = getSupermarketBySlug(normalized);
+	if (supermarket.adapter !== "vtex") throw new Error(`category pagination audit requires a VTEX source: ${normalized}`);
+	return normalized as CategoryPaginationSource;
+}
+
+export function getCategoryPaginationSourceConfig(source: CategoryPaginationSource): CategoryPaginationSourceConfig {
+	const slug = resolveCategoryPaginationSource(source);
+	const supermarket = getSupermarketBySlug(slug);
+	return { slug, baseUrl: supermarket.baseUrl };
 }
 
 function pickIdentity(product: CategoryPaginationProduct) {

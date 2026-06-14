@@ -7,12 +7,14 @@ import { normalizeProduct } from "@/lib/vtex/normalize";
 import {
 	buildCategoryPaginationAuditReport,
 	categoryPaginationOutputBoundary,
+	getCategoryPaginationSourceConfig,
 	normalizeCategoryPaginationOutputPath,
 	parseCategoryPaginationCliOptions,
 	type CategoryPaginationCategory,
 	type CategoryPaginationFetchError,
 	type CategoryPaginationPageResult,
 	type CategoryPaginationProduct,
+	type CategoryPaginationSource,
 } from "./pipeline/category-pagination-audit";
 
 export { parseCategoryPaginationCliOptions } from "./pipeline/category-pagination-audit";
@@ -28,34 +30,34 @@ type RawCategory = {
 	Children?: unknown;
 };
 
-const BASE_URL = "https://www.vea.com.ar";
 const CATEGORY_TREE_PATH = "/api/catalog_system/pub/category/tree/3";
 
-export async function writeCategoryPaginationAuditJson(output: string, report: unknown, issue = 258) {
+export async function writeCategoryPaginationAuditJson(output: string, report: unknown, issue = 263, source: CategoryPaginationSource = "vea") {
 	const safeOutput = normalizeCategoryPaginationOutputPath(output, categoryPaginationOutputBoundary({
 		issue,
-		source: "vea",
+		source,
 		surface: "category-pagination",
 	}));
 	await mkdir(dirname(safeOutput), { recursive: true });
 	await writeFile(safeOutput, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-	process.stdout.write(`Wrote Vea category pagination audit artifact to ${safeOutput}\n`);
+	process.stdout.write(`Wrote ${source} category pagination audit artifact to ${safeOutput}\n`);
 }
 
 async function main() {
 	const options = parseCategoryPaginationCliOptions();
+	const sourceConfig = getCategoryPaginationSourceConfig(options.source);
 	const generatedAt = new Date(options.generatedAt ?? Date.now());
-	const { categories, status: categoryTreeStatus, errors } = await fetchCategories(options.timeoutMs);
+	const { categories, status: categoryTreeStatus, errors } = await fetchCategories(sourceConfig.baseUrl, options.timeoutMs);
 	const selectedCategories = categories.slice(0, options.categoryBudget);
 	const pages: CategoryPaginationPageResult[] = [];
 
 	for (const category of selectedCategories) {
 		for (let page = 0; page < options.pageBudget; page += 1) {
 			if (1 + pages.length + errors.length >= options.requestBudget) {
-				errors.push({ category, page, endpoint: productEndpoint(category, page, options.pageSize), reason: `request budget reached before page fetch: limit ${options.requestBudget}` });
+				errors.push({ category, page, endpoint: productEndpoint(sourceConfig.baseUrl, category, page, options.pageSize), reason: `request budget reached before page fetch: limit ${options.requestBudget}` });
 				break;
 			}
-			const result = await fetchCategoryPage(category, page, options.pageSize, options.timeoutMs);
+			const result = await fetchCategoryPage(sourceConfig.baseUrl, category, page, options.pageSize, options.timeoutMs);
 			if ("reason" in result) {
 				errors.push(result);
 				break;
@@ -67,6 +69,7 @@ async function main() {
 
 	const report = buildCategoryPaginationAuditReport({
 		generatedAt,
+		source: options.source,
 		issue: options.issue,
 		outputPath: options.output,
 		requestBudget: options.requestBudget,
@@ -79,27 +82,28 @@ async function main() {
 		pages,
 		errors,
 	});
-	await writeCategoryPaginationAuditJson(options.output, report, options.issue);
+	await writeCategoryPaginationAuditJson(options.output, report, options.issue, options.source);
 	if (report.confidence.status === "FAIL") process.exitCode = 1;
 }
 
-async function fetchCategories(timeoutMs: number) {
-	const endpoint = new URL(CATEGORY_TREE_PATH, BASE_URL).toString();
+async function fetchCategories(baseUrl: string, timeoutMs: number) {
+	const endpoint = new URL(CATEGORY_TREE_PATH, baseUrl).toString();
 	try {
 		const { payload, status } = await getJson(endpoint, timeoutMs);
-		return { categories: flattenCategories(payload), status, errors: [] as CategoryPaginationFetchError[] };
+		return { categories: flattenCategories(payload, baseUrl), status, errors: [] as CategoryPaginationFetchError[] };
 	} catch (error) {
 		return { categories: [], status: null, errors: [{ endpoint, reason: errorMessage(error) }] };
 	}
 }
 
 async function fetchCategoryPage(
+	baseUrl: string,
 	category: CategoryPaginationCategory,
 	page: number,
 	pageSize: number,
 	timeoutMs: number,
 ): Promise<CategoryPaginationPageResult | CategoryPaginationFetchError> {
-	const endpoint = productEndpoint(category, page, pageSize);
+	const endpoint = productEndpoint(baseUrl, category, page, pageSize);
 	try {
 		const { payload, status, contentRange } = await getJson(endpoint, timeoutMs);
 		const rows = Array.isArray(payload) ? payload : [];
@@ -111,17 +115,17 @@ async function fetchCategoryPage(
 			endpoint,
 			status,
 			contentRange,
-			products: rows.map(toAuditProduct).filter((product): product is CategoryPaginationProduct => Boolean(product)),
+			products: rows.map((row) => toAuditProduct(row, baseUrl)).filter((product): product is CategoryPaginationProduct => Boolean(product)),
 		};
 	} catch (error) {
 		return { category, page, endpoint, reason: errorMessage(error) };
 	}
 }
 
-function productEndpoint(category: CategoryPaginationCategory, page: number, pageSize: number) {
+function productEndpoint(baseUrl: string, category: CategoryPaginationCategory, page: number, pageSize: number) {
 	const from = page * pageSize;
 	const to = from + pageSize - 1;
-	const url = new URL(`/api/catalog_system/pub/products/search/${category.path}`, BASE_URL);
+	const url = new URL(`/api/catalog_system/pub/products/search/${category.path}`, baseUrl);
 	url.searchParams.set("_from", String(from));
 	url.searchParams.set("_to", String(to));
 	return url.toString();
@@ -137,7 +141,7 @@ async function getJson(endpoint: string, timeoutMs: number) {
 				accept: "application/json",
 				"accept-language": "es-AR,es;q=0.9,en;q=0.7",
 				"user-agent": "ofertasSUPER bounded read-only category pagination audit",
-				referer: `${BASE_URL}/`,
+				referer: new URL("/", endpoint).toString(),
 			},
 		});
 		const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
@@ -152,14 +156,14 @@ async function getJson(endpoint: string, timeoutMs: number) {
 	}
 }
 
-function flattenCategories(payload: unknown) {
+function flattenCategories(payload: unknown, baseUrl: string) {
 	const roots = Array.isArray(payload) ? payload : [];
 	const categories: CategoryPaginationCategory[] = [];
 	const visit = (raw: RawCategory) => {
 		const name = text(raw.name ?? raw.Name);
 		const id = text(raw.id ?? raw.Id) ?? name;
 		const url = text(raw.url ?? raw.Url);
-		const path = categoryPath(url, name);
+		const path = categoryPath(url, name, baseUrl);
 		if (id && name && path) categories.push({ id, name, path, url });
 		const children = raw.children ?? raw.Children;
 		if (Array.isArray(children)) children.forEach((child) => visit(child as RawCategory));
@@ -168,18 +172,18 @@ function flattenCategories(payload: unknown) {
 	return categories.sort((left, right) => left.path.localeCompare(right.path));
 }
 
-function categoryPath(url: string | null, name: string | null) {
+function categoryPath(url: string | null, name: string | null, baseUrl: string) {
 	if (url) {
-		const pathname = new URL(url, BASE_URL).pathname.replace(/^\/+|\/+$/g, "");
+		const pathname = new URL(url, baseUrl).pathname.replace(/^\/+|\/+$/g, "");
 		if (pathname) return pathname;
 	}
 	return name?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") ?? null;
 }
 
-function toAuditProduct(raw: unknown): CategoryPaginationProduct | null {
+function toAuditProduct(raw: unknown, baseUrl: string): CategoryPaginationProduct | null {
 	if (!raw || typeof raw !== "object") return null;
 	const record = raw as Record<string, unknown>;
-	const normalized = normalizeProduct(record, BASE_URL);
+	const normalized = normalizeProduct(record, baseUrl);
 	return {
 		ean: normalized?.ean ?? text(record.ean ?? record.EAN),
 		skuId: normalized?.skuId ?? null,
