@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
 	buildCategoryPaginationAuditReport,
+	getCategoryPaginationSourceConfig,
 	normalizeCategoryPaginationOutputPath,
 	parseCategoryPaginationCliOptions,
 	type CategoryPaginationCategory,
@@ -10,6 +11,7 @@ import {
 
 const generatedAt = new Date("2026-06-14T12:00:00.000Z");
 const output = "audit/coverage/issue-258/vea/category-pagination/category-pagination-audit.json";
+const discoOutput = "audit/coverage/issue-263/disco/category-pagination/category-pagination-audit.json";
 const issue260Output = "audit/coverage/issue-260/vea/category-pagination/category-pagination-audit.json";
 const category: CategoryPaginationCategory = {
 	id: "1",
@@ -91,7 +93,7 @@ describe("Vea category pagination audit", () => {
 		assert.match(report.confidence.reasons.join("\n"), /ambiguous products/);
 	});
 
-	it("parses only the approved Vea source and issue-scoped output path", () => {
+	it("accepts the approved Vea source and issue-scoped output path", () => {
 		const options = parseCategoryPaginationCliOptions([
 			"node",
 			"script",
@@ -117,9 +119,59 @@ describe("Vea category pagination audit", () => {
 			issue: 258,
 			generatedAt: "2026-06-14T12:00:00.000Z",
 		});
-		assert.throws(() => parseCategoryPaginationCliOptions(["node", "script", "--source=jumbo"]), /approved only/);
 		assert.throws(() => parseCategoryPaginationCliOptions(["node", "script", "--write"]), /rejects --write/);
 		assert.throws(() => normalizeCategoryPaginationOutputPath("audit/coverage/issue-258/vea/other.json"), /must be under/);
+	});
+
+	it("accepts and configures the approved Disco source", () => {
+		const options = parseCategoryPaginationCliOptions([
+			"node",
+			"script",
+			"--source=disco",
+			`--output=${discoOutput}`,
+			"--issue-number=263",
+		]);
+		const report = buildCategoryPaginationAuditReport({
+			generatedAt,
+			source: options.source,
+			issue: options.issue,
+			outputPath: options.output,
+			requestBudget: 5,
+			categoryBudget: 1,
+			pageBudget: 2,
+			pageSize: 2,
+			timeoutMs: 1000,
+			categoryTreeStatus: 200,
+			categories: [{ ...category, url: "https://www.disco.com.ar/almacen" }],
+			pages: [{
+				category,
+				page: 0,
+				from: 0,
+				to: 1,
+				endpoint: "https://www.disco.com.ar/api/catalog_system/pub/products/search/almacen?_from=0&_to=1",
+				status: 206,
+				contentRange: null,
+				products: [{ ean: "7792222222222", productUrl: "https://www.disco.com.ar/a/p", name: "A" }],
+			}],
+			errors: [],
+		});
+
+		assert.equal(options.source, "disco");
+		assert.equal(options.output, discoOutput);
+		assert.deepEqual(getCategoryPaginationSourceConfig("disco"), {
+			slug: "disco",
+			baseUrl: "https://www.disco.com.ar",
+		});
+		assert.equal(report.audit, "disco-category-pagination-discovery-surface");
+		assert.equal(report.source.slug, "disco");
+		assert.equal(report.source.baseUrl, "https://www.disco.com.ar");
+		assert.equal(report.candidates[0]?.source, "disco");
+		assert.match(report.lineage.writeBoundary, /audit\/coverage\/issue-263\/disco\/category-pagination\//);
+	});
+
+	it("rejects unsupported category pagination sources", () => {
+		assert.throws(() => parseCategoryPaginationCliOptions(["node", "script", "--source=jumbo"]), /approved only/);
+		assert.throws(() => parseCategoryPaginationCliOptions(["node", "script", "--source=unknown"]), /approved only/);
 	});
 
 	it("accepts the supplied issue-numbered output boundary", () => {
