@@ -65,7 +65,14 @@ export type DirectRefreshDiscoveryDenominatorReport = {
 
 const WRITE_BOUNDARY =
 	"read-only denominator audit; no DB writes, no discovery apply, no scheduler/all-source execution, no deploy, no migrations, no cache purge" as const;
-const WRITER_SUPPORTED_SOURCES = new Set(["carrefour", "vea", "disco", "jumbo", "mas"]);
+const READ_ONLY_AUDIT_SUPPORTED_SOURCES = new Set([
+	"carrefour",
+	"vea",
+	"disco",
+	"jumbo",
+	"mas",
+	"dia",
+]);
 const FORBIDDEN_FLAGS = [
 	"--apply",
 	"--write",
@@ -166,7 +173,7 @@ export function buildDirectRefreshDiscoveryDenominatorReport({
 	const failClosedReasons: string[] = [];
 	const requestedSourceSet = new Set(normalizedSources);
 	const unsupportedSources = normalizedSources.filter(
-		(source) => !WRITER_SUPPORTED_SOURCES.has(source),
+		(source) => !READ_ONLY_AUDIT_SUPPORTED_SOURCES.has(source),
 	);
 	for (const source of unsupportedSources) {
 		failClosedReasons.push(`unsupported source: ${source}`);
@@ -235,7 +242,7 @@ export function buildDirectRefreshDiscoveryDenominatorReport({
 		issue,
 		sources: normalizedSources,
 		denominatorFormula:
-			"distinct source+EAN candidate rows from requested writer-supported sources minus explicit exclusions with lineage; numerator must be a subset of that denominator",
+			"distinct source+EAN candidate rows from requested read-only audit-supported sources minus explicit exclusions with lineage; numerator must be a subset of that denominator",
 		counts: {
 			candidateRows: candidates.length,
 			denominatorCandidates: denominatorKeys.size,
