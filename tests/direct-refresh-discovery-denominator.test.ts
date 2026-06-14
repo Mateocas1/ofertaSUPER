@@ -72,17 +72,43 @@ describe("direct-refresh discovery denominator audit", () => {
 		assert.match(report.posture.writeBoundary, /no DB writes/);
 	});
 
+	it("passes for DIA and preserves existing supported sources in read-only audit mode", () => {
+		const sources = ["carrefour", "vea", "disco", "jumbo", "mas", "dia"];
+		const report = buildDirectRefreshDiscoveryDenominatorReport({
+			sources,
+			candidates: sources.map((source, index) =>
+				candidate(`${index + 1}`, {
+					source,
+					lineage: {
+						source,
+						fetchedAt: "2026-06-12T11:59:00.000Z",
+						artifactSha256: hash,
+					},
+				}),
+			),
+			requestBudget: 10,
+			sourceBudget: 1,
+			now,
+		});
+
+		assert.equal(report.status, "PASS");
+		assert.deepEqual(report.sources, ["carrefour", "dia", "disco", "jumbo", "mas", "vea"]);
+		assert.deepEqual(report.failClosedReasons, []);
+		assert.equal(report.posture.readOnly, true);
+		assert.equal(report.posture.noWrites, true);
+	});
+
 	it("fails closed for unsupported sources", () => {
 		const report = buildDirectRefreshDiscoveryDenominatorReport({
-			sources: ["dia"],
-			candidates: [candidate("111", { source: "dia", lineage: { source: "dia", fetchedAt: "2026-06-12T11:59:00.000Z", artifactSha256: hash } })],
+			sources: ["unsupported-source"],
+			candidates: [candidate("111", { source: "unsupported-source", lineage: { source: "unsupported-source", fetchedAt: "2026-06-12T11:59:00.000Z", artifactSha256: hash } })],
 			requestBudget: 5,
 			sourceBudget: 5,
 			now,
 		});
 
 		assert.equal(report.status, "FAIL");
-		assert.match(report.failClosedReasons.join("\n"), /unsupported source: dia/);
+		assert.match(report.failClosedReasons.join("\n"), /unsupported source: unsupported-source/);
 	});
 
 	it("fails closed for budget overflow and missing lineage", () => {
