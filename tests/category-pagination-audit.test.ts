@@ -6,6 +6,7 @@ import {
 	filterCategoryPaginationAuditCategories,
 	getCategoryPaginationSourceConfig,
 	normalizeCategoryPaginationOutputPath,
+	offsetCategoryPaginationAuditCategories,
 	parseCategoryPaginationCliOptions,
 	selectCategoryPaginationAuditCategories,
 	type CategoryPaginationCategory,
@@ -126,6 +127,7 @@ describe("category pagination audit", () => {
 			issue: 258,
 			generatedAt: "2026-06-14T12:00:00.000Z",
 			excludeCategoryPathPattern: null,
+			categoryOffset: 0,
 		});
 		assert.throws(() => parseCategoryPaginationCliOptions(["node", "script", "--write"]), /rejects --write/);
 		assert.throws(() => normalizeCategoryPaginationOutputPath("audit/coverage/issue-258/vea/other.json"), /must be under/);
@@ -464,10 +466,29 @@ describe("category pagination audit", () => {
 		];
 
 		const filtered = filterCategoryPaginationAuditCategories(candidates, null);
-		const selected = selectCategoryPaginationAuditCategories(filtered.categories, 2);
+		const sampled = offsetCategoryPaginationAuditCategories(filtered.categories, 0);
+		const selected = selectCategoryPaginationAuditCategories(sampled.categories, 2);
 
 		assert.equal(filtered.excludedCount, 0);
+		assert.equal(sampled.skippedCount, 0);
 		assert.deepEqual(selected.map((entry) => entry.path), ["-old-", "-old-/botella-de-tinta"]);
+	});
+
+	it("applies category offset after exclusion and before budget selection", () => {
+		const candidates = [
+			{ ...category, id: "old", path: "-old-", url: "https://diaonline.supermercadosdia.com.ar/-old-" },
+			{ ...category, id: "fresh-1", path: "almacen", url: "https://diaonline.supermercadosdia.com.ar/almacen" },
+			{ ...category, id: "fresh-2", path: "bebidas", url: "https://diaonline.supermercadosdia.com.ar/bebidas" },
+			{ ...category, id: "fresh-3", path: "limpieza", url: "https://diaonline.supermercadosdia.com.ar/limpieza" },
+		];
+
+		const filtered = filterCategoryPaginationAuditCategories(candidates, "-old-");
+		const sampled = offsetCategoryPaginationAuditCategories(filtered.categories, 1);
+		const selected = selectCategoryPaginationAuditCategories(sampled.categories, 1);
+
+		assert.equal(filtered.excludedCount, 1);
+		assert.equal(sampled.skippedCount, 1);
+		assert.deepEqual(selected.map((entry) => entry.path), ["bebidas"]);
 	});
 
 	it("excludes MAS stale -old- category paths before applying the category budget", () => {
@@ -515,9 +536,12 @@ describe("category pagination audit", () => {
 		});
 
 		assert.deepEqual(report.categoryPathExclusion, { pattern: "-old-", excludedCount: 1 });
+		assert.deepEqual(report.categoryPathSampling, { offset: 0, skippedEligibleCount: 0 });
 		assert.equal(report.counts.categoryRows, 2);
 		assert.equal(report.counts.categoryRowsExcluded, 1);
 		assert.equal(report.counts.categoryRowsEligible, 1);
+		assert.equal(report.counts.categoryRowsSkippedByOffset, 0);
+		assert.equal(report.counts.categoryRowsSelectable, 1);
 		assert.equal(report.counts.categoryRowsAudited, 1);
 		assert.equal(report.budgets.category.used, 1);
 		assert.doesNotMatch(report.budgets.stopCondition.reasons.join("\n"), /category budget reached/);
@@ -537,6 +561,70 @@ describe("category pagination audit", () => {
 			() => parseCategoryPaginationCliOptions(["node", "script", "--exclude-category-path-pattern=("]),
 			/requires valid regex/,
 		);
+	});
+
+	it("accepts category offset CLI option and rejects invalid offsets", () => {
+		const options = parseCategoryPaginationCliOptions([
+			"node",
+			"script",
+			"--source=dia",
+			"--issue-number=285",
+			"--category-offset=2",
+		]);
+
+		assert.equal(options.categoryOffset, 2);
+		assert.equal(parseCategoryPaginationCliOptions(["node", "script"]).categoryOffset, 0);
+		assert.throws(
+			() => parseCategoryPaginationCliOptions(["node", "script", "--category-offset=-1"]),
+			/non-negative integer/,
+		);
+		assert.throws(
+			() => parseCategoryPaginationCliOptions(["node", "script", "--category-offset=1.5"]),
+			/non-negative integer/,
+		);
+		assert.throws(
+			() => parseCategoryPaginationCliOptions(["node", "script", "--category-offset=abc"]),
+			/non-negative integer/,
+		);
+	});
+
+	it("records category offset metadata and post-offset category budget accounting", () => {
+		const skippedCategory = { ...category, id: "fresh-1", path: "almacen", url: "https://diaonline.supermercadosdia.com.ar/almacen" };
+		const auditedCategory = { ...category, id: "fresh-2", path: "bebidas", url: "https://diaonline.supermercadosdia.com.ar/bebidas" };
+		const remainingCategory = { ...category, id: "fresh-3", path: "limpieza", url: "https://diaonline.supermercadosdia.com.ar/limpieza" };
+		const report = buildCategoryPaginationAuditReport({
+			generatedAt,
+			source: "dia",
+			issue: 285,
+			outputPath: "audit/coverage/issue-285/dia/category-pagination/category-pagination-audit.json",
+			requestBudget: 40,
+			categoryBudget: 1,
+			pageBudget: 3,
+			pageSize: 10,
+			timeoutMs: 10000,
+			categoryTreeStatus: 200,
+			categories: [skippedCategory, auditedCategory, remainingCategory],
+			pages: [{
+				category: auditedCategory,
+				page: 0,
+				from: 0,
+				to: 9,
+				endpoint: "https://diaonline.supermercadosdia.com.ar/api/catalog_system/pub/products/search/bebidas?_from=0&_to=9",
+				status: 200,
+				contentRange: null,
+				products: [{ ean: "7796666666666", productUrl: "https://diaonline.supermercadosdia.com.ar/a/p", name: "A" }],
+			}],
+			errors: [],
+			categoryOffset: 1,
+			skippedEligibleCategoryPathCount: 1,
+		});
+
+		assert.deepEqual(report.categoryPathSampling, { offset: 1, skippedEligibleCount: 1 });
+		assert.equal(report.counts.categoryRowsEligible, 3);
+		assert.equal(report.counts.categoryRowsSkippedByOffset, 1);
+		assert.equal(report.counts.categoryRowsSelectable, 2);
+		assert.equal(report.budgets.category.used, 1);
+		assert.match(report.budgets.stopCondition.reasons.join("\n"), /category budget reached: audited 1 of 2/);
 	});
 
 	it("reports a zero-row short page as one fetched page", () => {
