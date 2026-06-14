@@ -15,6 +15,17 @@ export type CoverageAuditInputCandidate = {
 	name?: unknown;
 };
 
+type CoverageAuditInputCandidateWithMetadata = CoverageAuditInputCandidate & {
+	__coverageAuditMetadataErrors?: string[];
+};
+
+type CoverageAuditWrapperDefaults = {
+	source: string | null;
+	sourceReason: string | null;
+	surface: string | null;
+	surfaceReason: string | null;
+};
+
 export type CoverageAuditCliOptions = {
 	input: string;
 	output: string;
@@ -227,7 +238,10 @@ export function parseCoverageAuditCandidatesJson(raw: string): CoverageAuditInpu
 	const parsed = JSON.parse(raw.replace(/^\uFEFF/, "")) as unknown;
 	if (Array.isArray(parsed)) return parsed as CoverageAuditInputCandidate[];
 	if (parsed && typeof parsed === "object" && Array.isArray((parsed as { candidates?: unknown }).candidates)) {
-		return (parsed as { candidates: CoverageAuditInputCandidate[] }).candidates;
+		const defaults = getCoverageAuditWrapperDefaults(parsed as Record<string, unknown>);
+		return (parsed as { candidates: CoverageAuditInputCandidate[] }).candidates.map((candidate) =>
+			applyCoverageAuditWrapperDefaults(candidate, defaults),
+		);
 	}
 	throw new Error("coverage audit input must be an array or object with candidates[]");
 }
@@ -276,7 +290,7 @@ export function buildCoverageAuditReport({
 		const source = normalizeRequiredText(candidate.source);
 		const surface = normalizeRequiredText(candidate.surface);
 		if (!source || !surface) {
-			errors.push({ row, reason: "candidate row requires source and surface" });
+			errors.push({ row, reason: getCoverageAuditMetadataError(candidate, source, surface) });
 			return;
 		}
 
@@ -401,6 +415,95 @@ export function buildCoverageAuditReport({
 			rejectedOperations: [...FORBIDDEN_FLAGS],
 		},
 	};
+}
+
+function getCoverageAuditWrapperDefaults(wrapper: Record<string, unknown>): CoverageAuditWrapperDefaults {
+	const sourceResult = getWrapperSourceDefault(wrapper.sources);
+	const surfaceResult = getWrapperSurfaceDefault(wrapper.coverage);
+	return {
+		source: sourceResult.value,
+		sourceReason: sourceResult.reason,
+		surface: surfaceResult.value,
+		surfaceReason: surfaceResult.reason,
+	};
+}
+
+function applyCoverageAuditWrapperDefaults(
+	candidate: CoverageAuditInputCandidate,
+	defaults: CoverageAuditWrapperDefaults,
+): CoverageAuditInputCandidate {
+	if (!candidate || typeof candidate !== "object") return candidate;
+
+	const normalizedSource = normalizeRequiredText(candidate.source);
+	const normalizedSurface = normalizeRequiredText(candidate.surface);
+	const metadataErrors: string[] = [];
+	const withDefaults: CoverageAuditInputCandidateWithMetadata = { ...candidate };
+
+	if (!normalizedSource) {
+		if (defaults.source) withDefaults.source = defaults.source;
+		else if (defaults.sourceReason) metadataErrors.push(defaults.sourceReason);
+	}
+	if (!normalizedSurface) {
+		if (defaults.surface) withDefaults.surface = defaults.surface;
+		else if (defaults.surfaceReason) metadataErrors.push(defaults.surfaceReason);
+	}
+
+	if (metadataErrors.length > 0) {
+		Object.defineProperty(withDefaults, "__coverageAuditMetadataErrors", {
+			value: metadataErrors,
+			enumerable: false,
+		});
+	}
+
+	return withDefaults;
+}
+
+function getWrapperSourceDefault(value: unknown): { value: string | null; reason: string | null } {
+	if (!Array.isArray(value)) {
+		return { value: null, reason: "wrapper source metadata is missing or ambiguous; expected exactly one sources[] value" };
+	}
+	const sources = uniqueSorted(value.map(normalizeRequiredText).filter((source): source is string => Boolean(source)));
+	if (sources.length !== 1 || sources.length !== value.length) {
+		return { value: null, reason: "wrapper source metadata is missing or ambiguous; expected exactly one sources[] value" };
+	}
+	return { value: sources[0], reason: null };
+}
+
+function getWrapperSurfaceDefault(value: unknown): { value: string | null; reason: string | null } {
+	if (!value || typeof value !== "object") {
+		return { value: null, reason: "wrapper coverage metadata is missing or ambiguous; expected coverage.mode and coverage.surface" };
+	}
+	const coverage = value as Record<string, unknown>;
+	const mode = normalizeRequiredText(coverage.mode);
+	const surface = normalizeRequiredText(coverage.surface);
+	const modeConflict = hasConflictingSingularAndList(mode, coverage.modes);
+	const surfaceConflict = hasConflictingSingularAndList(surface, coverage.surfaces);
+	if (modeConflict || surfaceConflict) {
+		return { value: null, reason: "wrapper coverage metadata is conflicting; coverage singular values disagree with list values" };
+	}
+	if (!mode || !surface) {
+		return { value: null, reason: "wrapper coverage metadata is missing or ambiguous; expected coverage.mode and coverage.surface" };
+	}
+	return { value: surface, reason: null };
+}
+
+function hasConflictingSingularAndList(singular: string | null, list: unknown) {
+	if (!Array.isArray(list)) return false;
+	const values = uniqueSorted(list.map(normalizeRequiredText).filter((entry): entry is string => Boolean(entry)));
+	if (values.length !== 1 || values.length !== list.length) return true;
+	return Boolean(singular && values[0] !== singular);
+}
+
+function getCoverageAuditMetadataError(
+	candidate: CoverageAuditInputCandidate,
+	source: string | null,
+	surface: string | null,
+) {
+	const metadataErrors = (candidate as CoverageAuditInputCandidateWithMetadata).__coverageAuditMetadataErrors ?? [];
+	if (metadataErrors.length > 0) return metadataErrors.join("; ");
+	if (!source && !surface) return "candidate row requires source and surface";
+	if (!source) return "candidate row requires source";
+	return "candidate row requires surface";
 }
 
 function getSourceSurfaceBucket(

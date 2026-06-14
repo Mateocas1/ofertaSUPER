@@ -95,6 +95,84 @@ describe("coverage audit by source and surface", () => {
 		);
 	});
 
+	it("inherits source and surface from unambiguous #227-style wrapper metadata", () => {
+		const inputRaw = JSON.stringify({
+			schemaVersion: 1,
+			artifact: "direct-refresh-discovery-denominator-candidates",
+			sources: ["vea"],
+			coverage: { mode: "direct-identity", surface: "direct-catalog-lookup" },
+			candidates: [
+				{ source: "vea", ean: "779111" },
+				{ ean: "779222" },
+				{ source: "jumbo", surface: "explicit-surface", ean: "779333" },
+			],
+		});
+		const report = buildCoverageAuditReport({
+			candidates: parseCoverageAuditCandidatesJson(inputRaw),
+			requestBudget: 5,
+			sourceBudget: 5,
+			generatedAt,
+			windowStart,
+			windowEnd,
+			inputPath: "issue-227/candidates.json",
+			inputRaw,
+			outputPath: "audit/out.json",
+		});
+
+		assert.equal(report.confidence.status, "PASS");
+		assert.equal(report.counts.errorRows, 0);
+		assert.deepEqual(report.bySourceSurface.map(({ source, surface, denominatorCandidates }) => ({ source, surface, denominatorCandidates })), [
+			{ source: "jumbo", surface: "explicit-surface", denominatorCandidates: 1 },
+			{ source: "vea", surface: "direct-catalog-lookup", denominatorCandidates: 2 },
+		]);
+	});
+
+	it("fails closed when wrapper metadata cannot unambiguously supply missing source or surface", () => {
+		const cases = [
+			{
+				name: "missing coverage metadata",
+				inputRaw: JSON.stringify({ sources: ["vea"], candidates: [{ source: "vea", ean: "779111" }] }),
+				reason: /wrapper coverage metadata is missing or ambiguous/,
+			},
+			{
+				name: "ambiguous sources metadata",
+				inputRaw: JSON.stringify({
+					sources: ["vea", "jumbo"],
+					coverage: { mode: "direct-identity", surface: "direct-catalog-lookup" },
+					candidates: [{ ean: "779111" }],
+				}),
+				reason: /wrapper source metadata is missing or ambiguous/,
+			},
+			{
+				name: "conflicting coverage metadata",
+				inputRaw: JSON.stringify({
+					sources: ["vea"],
+					coverage: { mode: "direct-identity", surface: "direct-catalog-lookup", surfaces: ["search"] },
+					candidates: [{ source: "vea", ean: "779111" }],
+				}),
+				reason: /wrapper coverage metadata is conflicting/,
+			},
+		];
+
+		for (const testCase of cases) {
+			const report = buildCoverageAuditReport({
+				candidates: parseCoverageAuditCandidatesJson(testCase.inputRaw),
+				requestBudget: 5,
+				sourceBudget: 5,
+				generatedAt,
+				windowStart,
+				windowEnd,
+				inputPath: `${testCase.name}.json`,
+				inputRaw: testCase.inputRaw,
+				outputPath: "audit/out.json",
+			});
+
+			assert.equal(report.confidence.status, "FAIL", testCase.name);
+			assert.equal(report.counts.errorRows, 1, testCase.name);
+			assert.match(report.errors.map((error) => error.reason).join("\n"), testCase.reason, testCase.name);
+		}
+	});
+
 	it("detects duplicate rows and overlapping identities across surfaces", () => {
 		const inputRaw = JSON.stringify([
 			{ source: "vea", surface: "search", ean: "779111" },
