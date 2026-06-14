@@ -10,6 +10,7 @@ import {
 	filterCategoryPaginationAuditCategories,
 	getCategoryPaginationSourceConfig,
 	normalizeCategoryPaginationOutputPath,
+	offsetCategoryPaginationAuditCategories,
 	parseCategoryPaginationCliOptions,
 	selectCategoryPaginationAuditCategories,
 	type CategoryPaginationCategory,
@@ -51,7 +52,8 @@ async function main() {
 	const generatedAt = new Date(options.generatedAt ?? Date.now());
 	const { categories, status: categoryTreeStatus, errors } = await fetchCategories(sourceConfig.baseUrl, options.timeoutMs);
 	const categoryFilter = filterCategoryPaginationAuditCategories(categories, options.excludeCategoryPathPattern);
-	const selectedCategories = selectCategoryPaginationAuditCategories(categoryFilter.categories, options.categoryBudget);
+	const categorySampling = offsetCategoryPaginationAuditCategories(categoryFilter.categories, options.categoryOffset);
+	const selectedCategories = selectCategoryPaginationAuditCategories(categorySampling.categories, options.categoryBudget);
 	const pages: CategoryPaginationPageResult[] = [];
 
 	for (const category of selectedCategories) {
@@ -86,6 +88,8 @@ async function main() {
 		errors,
 		excludeCategoryPathPattern: options.excludeCategoryPathPattern,
 		excludedCategoryPathCount: categoryFilter.excludedCount,
+		categoryOffset: options.categoryOffset,
+		skippedEligibleCategoryPathCount: categorySampling.skippedCount,
 	});
 	await writeCategoryPaginationAuditJson(options.output, report, options.issue, options.source);
 	if (report.confidence.status === "FAIL") process.exitCode = 1;

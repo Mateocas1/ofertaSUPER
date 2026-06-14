@@ -18,6 +18,7 @@ export type CategoryPaginationCliOptions = {
 	issue: number;
 	generatedAt: string | null;
 	excludeCategoryPathPattern: string | null;
+	categoryOffset: number;
 };
 
 export type CategoryPaginationOutputBoundary = {
@@ -106,6 +107,8 @@ export type CategoryPaginationAuditReport = {
 		categoryRows: number;
 		categoryRowsEligible: number;
 		categoryRowsExcluded: number;
+		categoryRowsSkippedByOffset: number;
+		categoryRowsSelectable: number;
 		categoryRowsAudited: number;
 		pageRequests: number;
 		fetchedRows: number;
@@ -127,6 +130,10 @@ export type CategoryPaginationAuditReport = {
 	categoryPathExclusion: {
 		pattern: string | null;
 		excludedCount: number;
+	};
+	categoryPathSampling: {
+		offset: number;
+		skippedEligibleCount: number;
 	};
 	candidates: Array<{
 		source: CategoryPaginationSource;
@@ -175,6 +182,7 @@ const ALLOWED_FLAGS = new Set([
 	"--issue-number",
 	"--generated-at",
 	"--exclude-category-path-pattern",
+	"--category-offset",
 ]);
 const APPROVED_CATEGORY_PAGINATION_SOURCES = ["vea", "disco", "jumbo", "mas", "carrefour", "dia"] as const;
 const DEFAULT_ISSUE = 263;
@@ -206,6 +214,7 @@ export function parseCategoryPaginationCliOptions(argv = process.argv): Category
 	if (generatedAt) requireValidIsoTimestamp(generatedAt, "--generated-at");
 	const excludeCategoryPathPattern = getOptionalSingleFlag(argv, "--exclude-category-path-pattern")?.trim() || null;
 	if (excludeCategoryPathPattern) requireValidRegex(excludeCategoryPathPattern, "--exclude-category-path-pattern");
+	const categoryOffset = parseNonNegativeIntegerFlag(argv, "--category-offset", 0);
 
 	return {
 		source,
@@ -221,6 +230,7 @@ export function parseCategoryPaginationCliOptions(argv = process.argv): Category
 		issue: boundary.issue,
 		generatedAt,
 		excludeCategoryPathPattern,
+		categoryOffset,
 	};
 }
 
@@ -256,6 +266,8 @@ export function buildCategoryPaginationAuditReport({
 	errors,
 	excludeCategoryPathPattern = null,
 	excludedCategoryPathCount = 0,
+	categoryOffset = 0,
+	skippedEligibleCategoryPathCount = 0,
 }: {
 	generatedAt: Date;
 	source?: CategoryPaginationSource;
@@ -272,6 +284,8 @@ export function buildCategoryPaginationAuditReport({
 	errors: CategoryPaginationFetchError[];
 	excludeCategoryPathPattern?: string | null;
 	excludedCategoryPathCount?: number;
+	categoryOffset?: number;
+	skippedEligibleCategoryPathCount?: number;
 }): CategoryPaginationAuditReport {
 	const sourceConfig = getCategoryPaginationSourceConfig(source);
 	const boundary = categoryPaginationOutputBoundary({ issue, source: sourceConfig.slug, surface: "category-pagination" });
@@ -319,9 +333,10 @@ export function buildCategoryPaginationAuditReport({
 	const requestUsed = 1 + pages.length + errors.length;
 	const maxPagesForCategory = endpointBehavior.reduce((max, entry) => Math.max(max, entry.pagesFetched), 0);
 	const eligibleCategoryRows = Math.max(0, categories.length - excludedCategoryPathCount);
+	const selectableCategoryRows = Math.max(0, eligibleCategoryRows - skippedEligibleCategoryPathCount);
 	const stopReasons = uniqueSorted([
 		...(requestUsed > requestBudget ? [`request budget exceeded: used ${requestUsed} > limit ${requestBudget}`] : []),
-		...(auditedCategories.length >= categoryBudget && eligibleCategoryRows > categoryBudget ? [`category budget reached: audited ${auditedCategories.length} of ${eligibleCategoryRows}`] : []),
+		...(auditedCategories.length >= categoryBudget && selectableCategoryRows > categoryBudget ? [`category budget reached: audited ${auditedCategories.length} of ${selectableCategoryRows}`] : []),
 		...(maxPagesForCategory >= pageBudget ? [`page budget reached for at least one category: limit ${pageBudget}`] : []),
 		...errors.map((error) => error.reason),
 	]);
@@ -349,7 +364,7 @@ export function buildCategoryPaginationAuditReport({
 			issue,
 			outputPath: safeOutputPath,
 			tool: "scripts/audit-category-pagination.ts",
-			requestSha256: sha256(stableJson({ source: sourceConfig.slug, issue, requestBudget, categoryBudget, pageBudget, pageSize, timeoutMs, excludeCategoryPathPattern })),
+			requestSha256: sha256(stableJson({ source: sourceConfig.slug, issue, requestBudget, categoryBudget, pageBudget, pageSize, timeoutMs, excludeCategoryPathPattern, categoryOffset })),
 			writeBoundary,
 		},
 		budgets: {
@@ -363,6 +378,8 @@ export function buildCategoryPaginationAuditReport({
 			categoryRows: categories.length,
 			categoryRowsEligible: eligibleCategoryRows,
 			categoryRowsExcluded: excludedCategoryPathCount,
+			categoryRowsSkippedByOffset: skippedEligibleCategoryPathCount,
+			categoryRowsSelectable: selectableCategoryRows,
 			categoryRowsAudited: auditedCategories.length,
 			pageRequests: pages.length,
 			fetchedRows: pages.reduce((sum, page) => sum + page.products.length, 0),
@@ -378,6 +395,10 @@ export function buildCategoryPaginationAuditReport({
 		categoryPathExclusion: {
 			pattern: excludeCategoryPathPattern,
 			excludedCount: excludedCategoryPathCount,
+		},
+		categoryPathSampling: {
+			offset: categoryOffset,
+			skippedEligibleCount: skippedEligibleCategoryPathCount,
 		},
 		candidates: Array.from(rowsByIdentity.values())
 			.map(({ rows: _rows, ...candidate }) => candidate)
@@ -448,6 +469,15 @@ export function selectCategoryPaginationAuditCategories(
 	return selected;
 }
 
+export function offsetCategoryPaginationAuditCategories(
+	categories: CategoryPaginationCategory[],
+	categoryOffset: number,
+) {
+	if (!Number.isInteger(categoryOffset) || categoryOffset < 0) throw new Error("category pagination audit requires --category-offset=... to be a non-negative integer");
+	const skippedCount = Math.min(categoryOffset, categories.length);
+	return { categories: categories.slice(categoryOffset), skippedCount };
+}
+
 export function filterCategoryPaginationAuditCategories(
 	categories: CategoryPaginationCategory[],
 	excludeCategoryPathPattern: string | null,
@@ -501,6 +531,29 @@ function requireValidRegex(value: string, label: string) {
 		throw new Error(`category pagination audit requires valid regex for ${label}`);
 	}
 	return value;
+}
+
+function parseNonNegativeIntegerFlag(
+	argv: string[],
+	flagName: string,
+	fallback: number,
+) {
+	const raw = getOptionalSingleFlag(argv, flagName);
+
+	if (raw === null) {
+		return fallback;
+	}
+
+	if (!/^\d+$/.test(raw)) {
+		throw new Error(`requires ${flagName}=... to be a non-negative integer`);
+	}
+
+	const parsed = Number(raw);
+	if (!Number.isSafeInteger(parsed)) {
+		throw new Error(`requires ${flagName}=... to be a non-negative integer`);
+	}
+
+	return parsed;
 }
 
 function requireValidDate(value: Date, label: string) {
