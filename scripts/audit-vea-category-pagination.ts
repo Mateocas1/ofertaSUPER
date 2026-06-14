@@ -6,6 +6,7 @@ import { normalizeProduct } from "@/lib/vtex/normalize";
 
 import {
 	buildCategoryPaginationAuditReport,
+	categoryPaginationOutputBoundary,
 	normalizeCategoryPaginationOutputPath,
 	parseCategoryPaginationCliOptions,
 	type CategoryPaginationCategory,
@@ -30,8 +31,12 @@ type RawCategory = {
 const BASE_URL = "https://www.vea.com.ar";
 const CATEGORY_TREE_PATH = "/api/catalog_system/pub/category/tree/3";
 
-export async function writeCategoryPaginationAuditJson(output: string, report: unknown) {
-	const safeOutput = normalizeCategoryPaginationOutputPath(output);
+export async function writeCategoryPaginationAuditJson(output: string, report: unknown, issue = 258) {
+	const safeOutput = normalizeCategoryPaginationOutputPath(output, categoryPaginationOutputBoundary({
+		issue,
+		source: "vea",
+		surface: "category-pagination",
+	}));
 	await mkdir(dirname(safeOutput), { recursive: true });
 	await writeFile(safeOutput, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 	process.stdout.write(`Wrote Vea category pagination audit artifact to ${safeOutput}\n`);
@@ -74,7 +79,7 @@ async function main() {
 		pages,
 		errors,
 	});
-	await writeCategoryPaginationAuditJson(options.output, report);
+	await writeCategoryPaginationAuditJson(options.output, report, options.issue);
 	if (report.confidence.status === "FAIL") process.exitCode = 1;
 }
 
@@ -131,7 +136,7 @@ async function getJson(endpoint: string, timeoutMs: number) {
 			headers: {
 				accept: "application/json",
 				"accept-language": "es-AR,es;q=0.9,en;q=0.7",
-				"user-agent": "ofertasSUPER issue-258 bounded read-only audit",
+				"user-agent": "ofertasSUPER bounded read-only category pagination audit",
 				referer: `${BASE_URL}/`,
 			},
 		});

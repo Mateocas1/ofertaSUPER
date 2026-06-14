@@ -10,6 +10,7 @@ import {
 
 const generatedAt = new Date("2026-06-14T12:00:00.000Z");
 const output = "audit/coverage/issue-258/vea/category-pagination/category-pagination-audit.json";
+const issue260Output = "audit/coverage/issue-260/vea/category-pagination/category-pagination-audit.json";
 const category: CategoryPaginationCategory = {
 	id: "1",
 	name: "Almacen",
@@ -119,5 +120,38 @@ describe("Vea category pagination audit", () => {
 		assert.throws(() => parseCategoryPaginationCliOptions(["node", "script", "--source=jumbo"]), /approved only/);
 		assert.throws(() => parseCategoryPaginationCliOptions(["node", "script", "--write"]), /rejects --write/);
 		assert.throws(() => normalizeCategoryPaginationOutputPath("audit/coverage/issue-258/vea/other.json"), /must be under/);
+	});
+
+	it("accepts the supplied issue-numbered output boundary", () => {
+		const options = parseCategoryPaginationCliOptions([
+			"node",
+			"script",
+			"--source=vea",
+			`--output=${issue260Output}`,
+			"--issue-number=260",
+		]);
+
+		assert.equal(options.issue, 260);
+		assert.equal(options.output, issue260Output);
+		assert.equal(normalizeCategoryPaginationOutputPath(issue260Output, {
+			issue: 260,
+			source: "vea",
+			surface: "category-pagination",
+		}), issue260Output);
+	});
+
+	it("rejects writes outside the supplied issue-numbered output boundary", () => {
+		assert.throws(
+			() => parseCategoryPaginationCliOptions(["node", "script", `--output=${output}`, "--issue-number=260"]),
+			/must be under audit\/coverage\/issue-260\/vea\/category-pagination\//,
+		);
+		assert.throws(
+			() => normalizeCategoryPaginationOutputPath("audit/coverage/issue-260/vea/other.json", {
+				issue: 260,
+				source: "vea",
+				surface: "category-pagination",
+			}),
+			/must be under audit\/coverage\/issue-260\/vea\/category-pagination\//,
+		);
 	});
 });
