@@ -5,7 +5,7 @@ import { getSupermarketBySlug } from "@/lib/supermarkets";
 
 import { getOptionalSingleFlag, parsePositiveIntegerFlag, uniqueSorted } from "./audit-utils";
 
-export type CategoryPaginationSource = "vea" | "disco" | "jumbo" | "mas" | "carrefour";
+export type CategoryPaginationSource = "vea" | "disco" | "jumbo" | "mas" | "carrefour" | "dia";
 
 export type CategoryPaginationCliOptions = {
 	source: CategoryPaginationSource;
@@ -176,7 +176,7 @@ const ALLOWED_FLAGS = new Set([
 	"--generated-at",
 	"--exclude-category-path-pattern",
 ]);
-const APPROVED_CATEGORY_PAGINATION_SOURCES = ["vea", "disco", "jumbo", "mas", "carrefour"] as const;
+const APPROVED_CATEGORY_PAGINATION_SOURCES = ["vea", "disco", "jumbo", "mas", "carrefour", "dia"] as const;
 const DEFAULT_ISSUE = 263;
 const CATEGORY_TREE_ENDPOINT = "/api/catalog_system/pub/category/tree/3";
 const PRODUCT_ENDPOINT_PATTERN = "/api/catalog_system/pub/products/search/{categoryPath}?_from={from}&_to={to}";
