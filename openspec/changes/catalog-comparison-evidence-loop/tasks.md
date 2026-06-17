@@ -75,6 +75,16 @@ Strict TDD note: this improvement slice changes planning artifacts only. No exec
 
 ## Phase 4: Finalize and Handoff
 
-- [ ] 4.1 Finalize the PRD/plan doc with bounded claims, provenance checklist, and restore/reuse decision outcome.
-- [ ] 4.2 If still warranted, draft the minimal first-slice Vea issue(s)/tasks with explicit acceptance criteria and disallowed actions.
-- [ ] 4.3 Update `openspec/changes/catalog-comparison-evidence-loop/tasks.md` only; do not touch application code or run live audit scripts.
+- [x] 4.1 Finalize the PRD/plan doc with bounded claims, provenance checklist, and restore/reuse decision outcome.
+- [x] 4.2 If still warranted, draft the minimal first-slice Vea issue(s)/tasks with explicit acceptance criteria and disallowed actions.
+- [x] 4.3 Update `openspec/changes/catalog-comparison-evidence-loop/tasks.md` only; do not touch application code or run live audit scripts.
+
+### Slice/PR 3 Final Handoff Status
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 4.1 | Complete as final handoff draft; execution still blocked | `plan.md` now states final handoff readiness without authorizing comparison execution, issue creation, artifact generation, or writes. It preserves bounded claims, restore/reuse-first handling, provenance gates, concrete issue-number output gating, and the investigation-only meaning of `likely missing`. |
+| 4.2 | Complete as warranted non-executable stub | `plan.md` now includes the minimal future Vea execution issue/task stub with purpose, prerequisites/gates, required inputs and provenance, allowed/disallowed actions, concrete approved issue-number output boundary, acceptance criteria, stop conditions, and regenerated-evidence caveats. No GitHub issue was created. |
+| 4.3 | Complete for this slice | Only OpenSpec planning artifacts were edited. No application code, live audit script, actual Vea comparison, broad build/typecheck, DB/production write, commit, push, or PR action was performed. |
+
+Strict TDD note: this finalization slice changes planning artifacts only. No executable code changed, so no runtime RED/GREEN cycle or runtime test execution was necessary. Validation is artifact consistency against proposal/spec/design/tasks/plan plus whitespace-safe diff validation.

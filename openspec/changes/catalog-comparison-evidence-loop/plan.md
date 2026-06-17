@@ -1,6 +1,6 @@
 # Catalog Comparison Evidence Loop Plan
 
-Status: revised after fresh audit #1; ready for fresh audit #2 review
+Status: final handoff draft; execution remains blocked until every gate below is approved
 Change: `catalog-comparison-evidence-loop`
 Scope: planning and evidence gates only
 
@@ -8,7 +8,20 @@ Scope: planning and evidence gates only
 
 Create a reviewable evidence loop for comparing bounded category-pagination candidates against an approved, source-scoped catalog identity snapshot. The real objective is not to prove full catalog coverage; it is to decide whether a future Vea-only comparison slice is safe, well-provenanced, and narrow enough to review.
 
-This plan is the revised input for fresh audit #2. It does not authorize comparison execution.
+This plan is the handoff-ready planning artifact for a future minimal Vea execution issue. It does not authorize comparison execution, issue creation, artifact generation, or any production/data write.
+
+## Handoff readiness summary
+
+The future Vea execution issue remains warranted because the evidence loop still needs one narrow, reviewable place to collect the approved inputs, run the bounded comparison only after gates pass, and store artifact-only output under a concrete issue-number boundary.
+
+The issue is not executable from this change. A maintainer or orchestrator must create or approve the concrete execution issue later, then record the issue number and complete provenance before any comparison output is written.
+
+Current blocking gates:
+
+- The Vea #295 candidate artifact must be present or restored from approved evidence and validated.
+- The Vea catalog identity snapshot path and approval record are still unknown in this plan.
+- The future output path must use the concrete approved execution issue number, not the `<issue>` placeholder.
+- `likely missing` remains an investigation candidate label only.
 
 ## Scope and non-goals
 
@@ -169,23 +182,52 @@ Audit checklist:
 
 Audit outputs should contain only concrete findings. The improvement pass may apply only those findings and must not add new scope.
 
-## Gated future Vea issue/task stub
+## Minimal future Vea execution issue/task stub
 
-Do not open an issue from this stub yet. This is a non-actionable gated draft for reviewer visibility only. It becomes eligible only after audit #1, the improvement pass, audit #2, and complete provenance approval.
+Do not open an issue from this stub in this change. This is a non-actionable gated draft for reviewer visibility only. It becomes eligible only after the concrete execution issue is approved and every prerequisite gate has real provenance evidence.
 
 ```markdown
 Title: Run bounded Vea category-pagination catalog comparison
 
-Scope:
-- Use the approved/restored Vea #295 candidate artifact.
-- Use the approved Vea catalog identity snapshot fixture.
-- Write only artifact comparison output under `audit/catalog-comparison/issue-<issue>/vea/category-pagination/`.
-- Replace `<issue>` with the concrete approved issue number before any comparison output is written.
+Purpose:
+- Produce one bounded, artifact-only Vea comparison report that helps reviewers investigate category-pagination candidates against an approved Vea catalog identity snapshot.
+- Do not treat the result as full coverage, confirmed absence, ingestion input, or production action.
+
+Prerequisites / gates:
+- Vea #295 candidate artifact is present locally or restored from an approved source.
+- Candidate artifact provenance is documented: path, source, issue/reference, approval reference, restoration source if restored, validation timestamp, and `sha256` when available.
+- Vea catalog identity snapshot provenance is complete: repo-relative fixture path, source `vea`, issue/PR/comment/reference, artifact role `catalog_snapshot`, origin, approver, approval timestamp, generation/restoration method, freshness notes, and `sha256`.
+- The concrete approved execution issue number is recorded before any output path is used.
+- Reviewers explicitly accept any regenerated read-only evidence as new bounded evidence; regenerated evidence is not equivalent to restored approved evidence.
+
+Required inputs and provenance:
+- Candidate input: `audit/coverage/issue-295/vea/category-pagination/category-pagination-audit.json`.
+- Catalog snapshot input: the approved repo-relative Vea catalog identity JSON fixture path, supplied by the provenance record.
+- Provenance record must include exact approved bytes via `sha256` when files are available.
+- Missing, ambiguous, stale, mixed-source, or unapproved inputs block execution.
+
+Allowed actions:
+- Inspect approved local/restored artifact metadata.
+- Compute hashes for approved local/restored files.
+- Run only the source-scoped comparison after all gates pass.
+- Write only artifact comparison output under the approved output boundary.
+
+Disallowed actions:
+- Do not run live audits, all-source discovery, ingestion, discovery apply, DB writes, production writes, migrations, deploys, cache purges, broad builds/typechecks, or broad source expansion.
+- Do not generate or regenerate inputs unless a reviewer explicitly approves bounded read-only regenerated evidence.
+- Do not create outputs with the unresolved `<issue>` placeholder.
+- Do not convert `likely missing` candidates into confirmed missing-product claims.
+
+Output path gate:
+- Output boundary: `audit/catalog-comparison/issue-<approved-issue-number>/vea/category-pagination/`.
+- Replace `<approved-issue-number>` with the concrete approved execution issue number before any output is written.
+- Any output outside this boundary is out of scope.
 
 Acceptance criteria:
-- Candidate artifact provenance is documented and validated.
-- Catalog snapshot provenance record is complete, including path, source, issue/reference, approver, approval timestamp, and `sha256`.
-- Comparison output preserves `likely missing` as investigation-only.
+- Candidate artifact provenance is documented and validated against the approved/restored Vea #295 artifact.
+- Catalog snapshot provenance record is complete, including path, source, issue/reference, approver, approval timestamp, origin, generation/restoration method, and `sha256`.
+- Comparison output uses the concrete approved issue-number path and remains artifact-only.
+- Comparison output preserves `likely missing` as investigation candidate only.
 - Conflicts, duplicates, ambiguous matches, and insufficient identity rows are reported separately.
 - No DB writes, production writes, ingestion, discovery apply, live audits, all-source runs, broad builds/typechecks, deploys, migrations, or cache purges occur.
 
@@ -195,4 +237,5 @@ Stop conditions:
 - The requested command attempts writes or output outside the approved boundary.
 - The output path still contains the `<issue>` placeholder.
 - Reviewers cannot distinguish restored approved evidence from regenerated evidence.
+- The comparison would require broad source expansion or any action beyond the minimal Vea slice.
 ```
