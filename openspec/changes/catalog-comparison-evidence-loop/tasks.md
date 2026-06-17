@@ -4,17 +4,17 @@
 
 | Field | Value |
 |-------|-------|
-| Estimated changed lines | 220-360 |
-| 400-line budget risk | Medium |
-| Chained PRs recommended | Yes |
-| Suggested split | PR 1 plan+provenance gates → PR 2 audits+improvements → PR 3 final Vea slice |
+| Estimated changed lines | Current PR/slice: ~205-230; whole chain remains split across PRs |
+| 400-line budget risk | Low for the current PR/slice |
+| Chained PRs recommended | Yes for the whole change chain; current PR/slice remains reviewable |
+| Suggested split | PR 1 plan+provenance gates → PR 2 audited plan improvements → PR 3 final Vea slice |
 | Delivery strategy | force-chained for apply |
 | Chain strategy | feature-branch-chain |
 
 Decision needed before apply: No — user approved chained PRs for this apply decision.
 Chained PRs recommended: Yes
 Chain strategy: feature-branch-chain
-400-line budget risk: Medium
+400-line budget risk: Low
 
 ### Suggested Work Units
 
@@ -42,16 +42,36 @@ Strict TDD note: this slice changes planning artifacts only. No executable code 
 
 ## Phase 2: Draft Plan and Gates
 
-- [ ] 2.1 Draft `openspec/changes/catalog-comparison-evidence-loop/design.md` into a final PRD/plan section set with scope, non-goals, output boundary, and restore-first Vea #295 decision.
-- [ ] 2.2 Add the exact first-slice evidence path, source order, matching policy, and stop conditions for `audit/catalog-comparison/issue-<issue>/vea/category-pagination/`.
-- [ ] 2.3 Gate future expansion as deferred only; do not create tasks for Disco/Jumbo/Carrefour, MAS, or DIA beyond a caveat.
-- [ ] 2.4 Prepare a minimal Vea issue/task stub only if provenance and audit results still justify it.
+- [x] 2.1 Draft `openspec/changes/catalog-comparison-evidence-loop/design.md` into a final PRD/plan section set with scope, non-goals, output boundary, and restore-first Vea #295 decision.
+- [x] 2.2 Add the exact first-slice evidence path, source order, matching policy, and stop conditions for `audit/catalog-comparison/issue-<issue>/vea/category-pagination/`.
+- [x] 2.3 Gate future expansion as deferred only; do not create tasks for Disco/Jumbo/Carrefour, MAS, or DIA beyond a caveat.
+- [x] 2.4 Document a non-actionable gated draft Vea issue/task stub only if provenance and audit results still justify it; do not open or execute it from this change.
+
+### Slice/PR 2 Draft Status: Plan Ready for Fresh Audit #1
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 2.1 | Complete as draft plan | `plan.md` defines purpose, real objective, scope/non-goals, phase path, Vea #295 restore-first decision, allowed/disallowed actions, success conditions, and stop conditions. |
+| 2.2 | Complete as gated boundaries | `plan.md` records the Vea candidate input path, intentionally-gated catalog snapshot input path, future comparison output boundary, source-scoped conservative matching policy, and execution stop conditions. Actual comparison remains blocked. |
+| 2.3 | Complete as deferred expansion guidance | `plan.md` keeps later sources out of task scope and only records expansion order plus MAS and DIA caveats for future maintainer-approved work. |
+| 2.4 | Complete as gated stub only | `plan.md` includes a non-actionable future Vea issue/task stub that must not be opened until audit #1, improvements, audit #2, and complete provenance approval pass. No issue was created. |
+
+Strict TDD note: this slice changes planning artifacts only. No executable code changed, so no runtime RED/GREEN cycle or runtime test execution was necessary. Validation is artifact consistency against proposal/spec/design/tasks/plan plus whitespace-safe diff validation.
 
 ## Phase 3: Fresh Audits and Improvements
 
-- [ ] 3.1 Run a fresh objective audit #1 against the draft plan for invented claims, vague tasks, unsafe writes, missing provenance, and overreach; capture only concrete findings.
-- [ ] 3.2 Apply approved improvements from audit #1 only; do not add new scope, sources, or implementation work.
+- [x] 3.1 Run a fresh objective audit #1 against the draft plan for invented claims, vague tasks, unsafe writes, missing provenance, and overreach; capture only concrete findings.
+- [x] 3.2 Apply approved improvements from audit #1 only; do not add new scope, sources, or implementation work.
 - [ ] 3.3 Run a fresh objective audit #2 on the revised plan; stop if it finds scope drift or unresolved provenance gaps.
+
+### Slice/PR 2 Audit #1 Improvement Status
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 3.1 | Complete via supplied audit verdict | Audit #1 was supplied to this improvement slice as PASS with three concrete improvements. This slice did not run audits or scripts. |
+| 3.2 | Complete as approved improvement pass | Applied the audit #1 PASS-with-improvements findings only: added the concrete issue-number stop condition for comparison outputs, clarified task 2.4 as a non-actionable gated draft stub, and updated the review workload forecast to show the current PR/slice estimate as ~205-230 changed lines with Low risk while preserving the approved feature-branch-chain. |
+
+Strict TDD note: this improvement slice changes planning artifacts only. No executable code changed, and the user explicitly constrained this slice to avoid audits, scripts, tests, builds, and typechecks. Validation is artifact consistency by re-reading changed sections plus `git diff --check`.
 
 ## Phase 4: Finalize and Handoff
 

@@ -135,7 +135,7 @@ Allowed after gates: file inspection, artifact restore, hashing, and source-scop
 
 Disallowed: `--apply`, `--write`, `--confirm`, `--execute`, `--delete`, scheduler/all-source runs, production writes, DB writes, migrations, deploys, cache purge, ingestion, broad builds/typechecks, and live audits during design/tasks.
 
-Inputs: candidates only from `audit/coverage/issue-<issue>/<source>/category-pagination/*.json`; catalog fixtures only reviewed repo-relative JSON snapshots. Outputs: only `audit/catalog-comparison/issue-<issue>/<source>/category-pagination/*.json`.
+Inputs: candidates only from `audit/coverage/issue-<issue>/<source>/category-pagination/*.json`; catalog fixtures only reviewed repo-relative JSON snapshots. Outputs: only `audit/catalog-comparison/issue-<issue>/<source>/category-pagination/*.json`, and `<issue>` must be replaced with the concrete approved issue number before any comparison output is written.
 
 ## Testing Strategy
 
@@ -147,7 +147,7 @@ Inputs: candidates only from `audit/coverage/issue-<issue>/<source>/category-pag
 
 ## Migration / Rollout
 
-No migration required. Roll out as a reviewable Vea-first PRD/task slice, then expand in order: Vea, Disco/Jumbo/Carrefour, MAS, DIA. Stop on missing provenance, unsafe command, ambiguous artifact identity, stale snapshot window, conflicting matches, or any pressure to treat bounded evidence as exhaustive.
+No migration required. Roll out as a reviewable Vea-first PRD/task slice, then expand in order: Vea, Disco/Jumbo/Carrefour, MAS, DIA. Stop on missing provenance, unsafe command, ambiguous artifact identity, stale snapshot window, unresolved `<issue>` output placeholder, conflicting matches, or any pressure to treat bounded evidence as exhaustive.
 
 ## Open Questions
 
