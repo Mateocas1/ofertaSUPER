@@ -349,7 +349,7 @@ function normalizeCandidateIdentity(row: CandidateIdentityRow): Partial<Record<M
 	const identityKind = normalizedText(row.identityKind);
 	const identityValue = normalizedText(row.identity);
 	if (identityKind === "skuid" && identityValue) direct.skuId = identityValue;
-	if (identityKind === "url" && identityValue) direct.productUrl = normalizeProductUrl(identityValue);
+	if (identityKind === "url" && identityValue) direct.productUrl = normalizeProductUrl(identityValue) ?? undefined;
 	if (identityKind === "ean" && identityValue) direct.ean = identityValue;
 	return direct;
 }
