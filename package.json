@@ -58,6 +58,7 @@
     "audit:direct-refresh-discovery-rollback-drill": "tsx scripts/audit-direct-refresh-discovery-rollback-drill.ts",
     "audit:coverage": "tsx scripts/audit-coverage.ts",
     "audit:category-pagination": "tsx scripts/audit-category-pagination.ts",
+    "audit:category-pagination-catalog-comparison": "tsx scripts/audit-category-pagination-catalog-comparison.ts",
     "direct-refresh:discovery-rollback-drill": "tsx scripts/direct-refresh-discovery-rollback-drill.ts"
   },
   "prisma": {
