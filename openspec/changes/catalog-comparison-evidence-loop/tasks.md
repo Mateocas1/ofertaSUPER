@@ -27,7 +27,7 @@ Chain strategy: feature-branch-chain
 ## Phase 1: Foundation / Provenance Gates
 
 - [x] 1.1 Document the restore-first decision for `audit/coverage/issue-295/vea/category-pagination/category-pagination-audit.json`, including controlled read-only regeneration fallback criteria when the prior approved artifact cannot be located or validated.
-- [ ] 1.2 Gate the approved Vea catalog identity snapshot fixture/path and required provenance fields (`source`, `issue`, `approved_by`, `approved_at`, `sha256`) until the concrete path and approval record are available.
+- [x] 1.2 Gate the approved Vea catalog identity snapshot fixture/path and required provenance fields (`source`, `issue`, `approved_by`, `approved_at`, `sha256`) until the concrete path and approval record are available.
 - [x] 1.3 Record hard stop rules: no live audits, no writes, no broad builds/typechecks, no source expansion beyond Vea.
 
 ### Slice/PR 1 Status: Provenance Gates
@@ -35,10 +35,10 @@ Chain strategy: feature-branch-chain
 | Task | Status | Evidence |
 |------|--------|----------|
 | 1.1 | Complete | `proposal.md`, `spec.md`, and `design.md` now require restore/reuse first, documented restore provenance, and explicitly approved read-only regeneration only after restore cannot locate or validate the prior artifact. |
-| 1.2 | Gated | The required Vea catalog identity snapshot fields are documented, but the concrete fixture path and approval record are still unknown. Leave unchecked until evidence exists. |
+| 1.2 | Complete as gate-defined; execution still blocked | `design.md` now defines allowed snapshot source categories, required provenance fields, checksum/immutability expectations, approval evidence, reject conditions, and disallowed actions. The concrete fixture path and approval record remain unknown, so comparison execution stays blocked until evidence exists. |
 | 1.3 | Complete | `design.md` and this task file preserve the hard stops: no live audits, writes, broad builds/typechecks, runtime comparison execution, later-source expansion, final handoff, or full-coverage claims in this slice. |
 
-Strict TDD note: this slice changes planning artifacts only. No executable code changed, so no runtime TDD test was necessary; validation is artifact consistency against proposal/spec/design/tasks.
+Strict TDD note: this slice changes planning artifacts only. No executable code changed, so no runtime TDD test was necessary; validation is artifact consistency against proposal/spec/design/tasks plus whitespace-safe diff validation.
 
 ## Phase 2: Draft Plan and Gates
 
