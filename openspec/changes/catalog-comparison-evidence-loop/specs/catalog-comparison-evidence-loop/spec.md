@@ -75,7 +75,7 @@ The system MUST treat `likely missing` as an investigation candidate only and MU
 
 ### Requirement: Output boundaries and first-slice order
 
-The system MUST write artifacts only under `audit/catalog-comparison/issue-<issue>/<source>/category-pagination/`, MUST start with Vea, and MUST follow the expansion order Vea, Disco/Jumbo/Carrefour, MAS, then DIA.
+The system MUST write artifacts only under `audit/catalog-comparison/issue-<issue>/<source>/category-pagination/`, MUST start with Vea, and MUST follow the expansion order Vea, Disco/Jumbo/Carrefour, MAS, then DIA. Before any comparison output is written, `<issue>` MUST be replaced with the concrete approved issue number for that execution slice.
 
 #### Scenario: Vea first slice
 - GIVEN the first execution slice is planned
@@ -87,6 +87,7 @@ The system MUST write artifacts only under `audit/catalog-comparison/issue-<issu
 - GIVEN an output file is created
 - WHEN it is written
 - THEN it MUST stay under the approved boundary path
+- AND the output path MUST include the concrete approved issue number rather than the `<issue>` placeholder
 
 ### Requirement: Double fresh-audit loop
 
