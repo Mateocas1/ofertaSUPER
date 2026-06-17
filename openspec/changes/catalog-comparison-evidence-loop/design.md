@@ -64,15 +64,52 @@ Regeneration is a fallback, not the default. It is available only when the resto
 
 ### Vea catalog identity snapshot gate
 
-The catalog identity snapshot remains blocked until its repo-relative fixture path and approval record are known. The first slice may document this gate, but it must not mark the snapshot usable without these fields:
+The catalog identity snapshot remains blocked until its repo-relative fixture path and approval record are known. This slice defines the gate only; it does not locate, approve, generate, or compare against a snapshot. The snapshot is usable only when it fits one of these allowed source categories:
+
+| Allowed source category | Conditions before use |
+|---|---|
+| Reviewed repo fixture | A repo-relative JSON fixture already committed or proposed for review, with an approval record that names the fixture path and source. |
+| Restored approved fixture | A previously reviewed fixture restored from issue, PR, release, CI artifact, or artifact storage, with the restoration source and validation result recorded. |
+| Newly generated bounded fixture | A read-only, source-scoped fixture generated only after explicit reviewer approval; it must be labeled as new evidence, not as a substitute for prior approved evidence. |
+
+Required provenance fields:
 
 - `artifact_path`: reviewed repo-relative JSON fixture path.
 - `source`: `vea`.
+- `issue`: issue, PR, or review reference that scoped the fixture.
 - `artifact_role`: `catalog_snapshot`.
 - `approved_by`: reviewer, issue, PR, or comment reference.
 - `approved_at`: approval timestamp or issue comment timestamp.
+- `generated_at`: fixture generation timestamp, if generated or present in metadata.
+- `origin`: `repo-reviewed`, `restored-approved`, or `generated-read-only-approved`.
+- `command_or_restore_method`: exact generation command or restoration source/method.
 - `sha256`: hash of the approved fixture when available.
 - `notes`: freshness window and bounded caveats.
+
+Checksum and immutability expectations:
+
+- Capture `sha256` from the exact bytes approved for comparison use.
+- If the fixture is restored or regenerated, compute the hash after the file is present locally and before any comparison execution.
+- If a fixture changes after approval, treat it as a new candidate that needs a new approval record and hash.
+- Do not edit an approved fixture in place to make it match expected comparison inputs.
+
+Required approval evidence:
+
+- Link or quote the issue, PR, comment, or reviewer note that approved this exact snapshot for the Vea catalog identity role.
+- Record who approved it and when they approved it.
+- State whether the evidence is restored approved evidence or newly generated bounded evidence.
+- Include the approved repo-relative path and hash in the planning record before running any comparison.
+
+Reject conditions:
+
+- Missing or ambiguous repo-relative fixture path.
+- Missing approval reference, approver, approval timestamp, or hash when the file is available.
+- Snapshot source is not `vea`, mixes sources, or comes from live all-source discovery.
+- Fixture was generated or modified without explicit approval for bounded read-only evidence.
+- Fixture identity cannot be tied to the exact bytes intended for comparison.
+- Any request to perform DB writes, production writes, ingestion, discovery apply, live all-source runs, broad builds/typechecks, cache purge, deploys, migrations, or actual comparison during this planning slice.
+
+Until every required field is documented and no reject condition applies, comparison execution remains blocked and the missing evidence must be recorded as a gate rather than filled with assumptions.
 
 ### Provenance record shape
 
@@ -81,7 +118,7 @@ source: vea
 issue: 295
 artifact_path: audit/coverage/issue-295/vea/category-pagination/category-pagination-audit.json
 artifact_role: candidate | catalog_snapshot | comparison_output
-origin: restored-approved | local-approved | regenerated-read-only
+origin: repo-reviewed | restored-approved | local-approved | generated-read-only-approved | comparison-output
 approved_by: <reviewer-or-issue-reference>
 approved_at: <ISO timestamp or issue comment timestamp>
 generated_at: <artifact timestamp>
