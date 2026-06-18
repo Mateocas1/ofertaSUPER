@@ -18,10 +18,13 @@ The issue is not executable from this change. A maintainer or orchestrator must 
 
 Current blocking gates:
 
-- The Vea #295 candidate artifact must be present or restored from approved evidence and validated.
+- The Vea #295 candidate artifact has an approved summary for issue #295, but the local artifact and hash are unavailable; restore-first is blocked until another approved artifact source is found.
 - The Vea catalog identity snapshot path and approval record are still unknown in this plan.
-- The future output path must use the concrete approved execution issue number, not the `<issue>` placeholder.
+- Issue #320 is not suitable as the concrete execution/output issue because it is closed and scoped to comparison tooling implementation, not future Vea comparison execution.
+- The future output path must use a new concrete approved execution issue number, not #320 and not the `<issue>` placeholder.
 - `likely missing` remains an investigation candidate label only.
+
+See `provenance-discovery.md` for the read-only evidence-versus-inference summary. That summary does not authorize comparison execution, live audits, GitHub issue creation, or artifact output.
 
 ## Scope and non-goals
 
@@ -56,6 +59,8 @@ The first execution slice remains blocked until every required gate below has ap
 
 The Vea #295 candidate artifact MUST be restored or reused before regeneration is considered.
 
+Current discovery status: issue #295 is closed and approved, and the approved comment summarizes a bounded read-only artifact at `audit/coverage/issue-295/vea/category-pagination/category-pagination-audit.json`. The local artifact was not found in the checked worktrees, no tracked copy was found in git history for that path, and no hash is available. Restore-first therefore remains blocked unless another approved artifact source is found.
+
 Decision path:
 
 1. Check for `audit/coverage/issue-295/vea/category-pagination/category-pagination-audit.json`.
@@ -67,9 +72,13 @@ Decision path:
 
 Regenerated evidence, if ever approved later, MUST be labeled as regenerated evidence. It is not equivalent to the prior approved artifact.
 
+The approved #295 summary values are category offset `100`, skipped eligible `100`, selectable after offset `459`, audited categories `20`, requests `87/110`, fetched rows `832`, denominator candidates `732`, duplicates `100`, and errors `0`. The confidence failure was due bounded category/page budgets, not runtime or source errors; no full-catalog coverage is claimed.
+
 ## Vea catalog snapshot provenance gate
 
 The catalog identity snapshot is not currently available as approved evidence in this plan. Future comparison execution remains blocked until this record can be completed from real evidence:
+
+Current discovery found no approved local Vea catalog fixture/snapshot, path, hash, timestamp, or approval evidence. This is a hard block, not a placeholder to infer.
 
 ```yaml
 source: vea
@@ -132,6 +141,8 @@ audit/catalog-comparison/issue-<issue>/vea/category-pagination/
 Future outputs under this directory may include only artifact reports for the approved Vea slice. No files outside this boundary are approved by this plan.
 
 Before any comparison output is written, `<issue>` MUST be replaced with the concrete approved issue number for the Vea execution slice. If the issue number has not been approved and recorded, output writing remains blocked.
+
+Issue #320 MUST NOT be used for this boundary: it is approved but closed and scoped to comparison tooling implementation, not the actual future Vea comparison execution/output. A new approved execution issue is required before any output path is concrete.
 
 ## Success conditions
 
