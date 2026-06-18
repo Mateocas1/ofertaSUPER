@@ -14,14 +14,15 @@ This plan is the handoff-ready planning artifact for a future minimal Vea execut
 
 The future Vea execution issue remains warranted because the evidence loop still needs one narrow, reviewable place to collect the approved inputs, run the bounded comparison only after gates pass, and store artifact-only output under a concrete issue-number boundary.
 
-The issue is not executable from this change. A maintainer or orchestrator must create or approve the concrete execution issue later, then record the issue number and complete provenance before any comparison output is written.
+The issue is not executable from this change. Issue #334 is now the approved concrete execution/output issue for this Vea evidence slice, but complete candidate and snapshot provenance are still required before any comparison output is written.
 
-Current blocking gates:
+Current gate state:
 
 - The Vea #295 candidate artifact has an approved summary for issue #295, but the local artifact and hash are unavailable; restore-first is blocked until another approved artifact source is found.
 - The Vea catalog identity snapshot path and approval record are still unknown in this plan.
 - Issue #320 is not suitable as the concrete execution/output issue because it is closed and scoped to comparison tooling implementation, not future Vea comparison execution.
-- The future output path must use a new concrete approved execution issue number, not #320 and not the `<issue>` placeholder.
+- Issue #334 is open and approved as `data: run Vea catalog comparison evidence slice`; it satisfies only the concrete approved output issue-number gate.
+- The future output path is concrete as `audit/catalog-comparison/issue-334/vea/category-pagination/`, but it must not be written until the candidate and snapshot gates pass.
 - `likely missing` remains an investigation candidate label only.
 
 See `provenance-discovery.md` for the read-only evidence-versus-inference summary. That summary does not authorize comparison execution, live audits, GitHub issue creation, or artifact output.
@@ -52,7 +53,7 @@ The first execution slice remains blocked until every required gate below has ap
 | Candidate artifact identity | `audit/coverage/issue-295/vea/category-pagination/category-pagination-audit.json` is present locally or restored from an approved source; provenance and validation are documented. | Missing path, missing approval reference, failed restore validation, or ambiguous source/issue identity. |
 | Catalog snapshot identity | A reviewed repo-relative JSON fixture for Vea catalog identities, with source, issue/reference, approver, approval timestamp, generation/restoration method, and `sha256`. | Missing concrete path, missing approval record, missing hash when the file is available, mixed-source fixture, or unapproved generated evidence. |
 | Interpretation discipline | Results keep `likely missing` as investigation-only and report conflicts/ambiguity separately. | Any wording that treats bounded evidence as confirmed absence or full coverage. |
-| Output boundary | Future comparison outputs stay under `audit/catalog-comparison/issue-<issue>/vea/category-pagination/`, with `<issue>` replaced by the concrete approved issue number before any output is written. | Any output outside the approved boundary, any unresolved `<issue>` placeholder at output time, or any write-oriented action. |
+| Output boundary | Future comparison outputs stay under the approved concrete path `audit/catalog-comparison/issue-334/vea/category-pagination/`. | Any output outside the approved boundary, any unresolved `<issue>` placeholder at output time, any use of #320 as the output boundary, or any write-oriented action before candidate and snapshot gates pass. |
 | Audit loop | Audit #1 and audit #2 are complete, and concrete findings are resolved without adding scope. | Unresolved invented claims, missing provenance, unsafe actions, vague tasks, or overreach. |
 
 ## Vea #295 restore-first decision
@@ -135,14 +136,14 @@ The concrete path is intentionally unknown in this draft. It must be supplied by
 ### Future comparison output
 
 ```text
-audit/catalog-comparison/issue-<issue>/vea/category-pagination/
+audit/catalog-comparison/issue-334/vea/category-pagination/
 ```
 
 Future outputs under this directory may include only artifact reports for the approved Vea slice. No files outside this boundary are approved by this plan.
 
-Before any comparison output is written, `<issue>` MUST be replaced with the concrete approved issue number for the Vea execution slice. If the issue number has not been approved and recorded, output writing remains blocked.
+Issue #334 is open and approved as `data: run Vea catalog comparison evidence slice`. This approval only satisfies the concrete output issue-number gate; output writing remains blocked until the Vea #295 candidate artifact gate and Vea catalog identity snapshot gate are also satisfied.
 
-Issue #320 MUST NOT be used for this boundary: it is approved but closed and scoped to comparison tooling implementation, not the actual future Vea comparison execution/output. A new approved execution issue is required before any output path is concrete.
+Issue #320 MUST NOT be used for this boundary: it is approved but closed and scoped to comparison tooling implementation, not the actual future Vea comparison execution/output.
 
 ## Success conditions
 
@@ -158,7 +159,7 @@ Stop before comparison execution if any of these are true:
 
 - The Vea #295 candidate artifact cannot be located, restored, or validated from approved evidence.
 - The Vea catalog identity snapshot path, approval reference, approver, approval timestamp, or hash is missing.
-- The future output path still contains the `<issue>` placeholder instead of the concrete approved issue number.
+- The future output path differs from `audit/catalog-comparison/issue-334/vea/category-pagination/` or uses an unresolved `<issue>` placeholder.
 - A requested action includes DB writes, production writes, ingestion, discovery apply, live all-source runs, migrations, deploys, cache purges, broad builds/typechecks, or actual comparison during this planning slice.
 - Audit #1 or audit #2 reports unresolved invented claims, unsafe actions, vague tasks, missing provenance, or overreach.
 - A result interpretation treats `likely missing` as confirmed absence or implies full public catalog coverage.
@@ -208,7 +209,7 @@ Prerequisites / gates:
 - Vea #295 candidate artifact is present locally or restored from an approved source.
 - Candidate artifact provenance is documented: path, source, issue/reference, approval reference, restoration source if restored, validation timestamp, and `sha256` when available.
 - Vea catalog identity snapshot provenance is complete: repo-relative fixture path, source `vea`, issue/PR/comment/reference, artifact role `catalog_snapshot`, origin, approver, approval timestamp, generation/restoration method, freshness notes, and `sha256`.
-- The concrete approved execution issue number is recorded before any output path is used.
+- The concrete approved execution issue number is recorded before any output path is used. For this Vea slice, the approved number is #334.
 - Reviewers explicitly accept any regenerated read-only evidence as new bounded evidence; regenerated evidence is not equivalent to restored approved evidence.
 
 Required inputs and provenance:
@@ -230,8 +231,8 @@ Disallowed actions:
 - Do not convert `likely missing` candidates into confirmed missing-product claims.
 
 Output path gate:
-- Output boundary: `audit/catalog-comparison/issue-<approved-issue-number>/vea/category-pagination/`.
-- Replace `<approved-issue-number>` with the concrete approved execution issue number before any output is written.
+- Output boundary: `audit/catalog-comparison/issue-334/vea/category-pagination/`.
+- Issue #334 satisfies only the output issue-number gate; it does not satisfy the candidate artifact or catalog snapshot provenance gates.
 - Any output outside this boundary is out of scope.
 
 Acceptance criteria:
