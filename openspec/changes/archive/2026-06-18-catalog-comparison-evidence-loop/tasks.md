@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Estimated changed lines | Current PR/slice: documentation-only #334 output issue gate recording, expected under 400 changed lines; whole chain remains split across PRs |
+| Estimated changed lines | Current remediation slice: documentation-only stale planning/provenance update, expected under 400 changed lines; whole chain remains split across PRs |
 | 400-line budget risk | Low for the current PR/slice |
 | Chained PRs recommended | Yes for the whole change chain; current PR/slice remains reviewable |
 | Suggested split | PR 1 plan+provenance gates → PR 2 audited plan improvements → PR 3 final Vea slice |
@@ -114,6 +114,18 @@ Strict TDD note: this provenance discovery slice changes planning artifacts only
 
 | Task | Status | Evidence |
 |------|--------|----------|
-| 6.1 | Complete as documentation-only gate recording; execution still blocked | `plan.md` and `provenance-discovery.md` record issue #334 (`data: run Vea catalog comparison evidence slice`) and the concrete output path. #334 satisfies only the output issue-number gate; it does not restore #295, regenerate evidence, approve a catalog identity snapshot, authorize comparison execution, or permit output writes while other gates remain pending. |
+| 6.1 | Complete as documentation-only gate recording; superseded by final #334 evidence completion | `plan.md` and `provenance-discovery.md` recorded issue #334 (`data: run Vea catalog comparison evidence slice`) and the concrete output path. At that time #334 satisfied only the output issue-number gate; Phase 7 records the later completed artifact chain. |
 
 Strict TDD note: this slice changes planning artifacts only. No executable code changed, no live audit/network script ran, no comparison ran, no GitHub issue was created, and no runtime test was necessary. Validation is artifact consistency by re-reading changed sections plus `git diff --check`.
+
+## Phase 7: Final #334 Evidence Chain Remediation
+
+- [x] 7.1 Update stale `plan.md` and `provenance-discovery.md` text so historical blockers remain history and the current state records closed issue #334, verified artifacts, hashes, counts, confidence, and bounded interpretation caveats.
+
+### Remediation Status: Verify Warning Cleanup
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 7.1 | Complete as documentation-only remediation | `plan.md` and `provenance-discovery.md` now record the final issue #334 candidate artifact, catalog identity snapshot, comparison report, SHA-256 hashes, counts `732/97/635/0/0/0`, confidence `PASS`, final bounded summary comment, closed issue state, and the continuing caveats: no full coverage, no confirmed missing products, no ingestion authorization, and no production/data writes. |
+
+Strict TDD note: this remediation changes documentation only. Per user constraint, no data scripts, comparison, DB commands, tests, builds, commits, pushes, issues, PRs, or app/source code changes were performed. Validation is `git diff --check` on changed files.
