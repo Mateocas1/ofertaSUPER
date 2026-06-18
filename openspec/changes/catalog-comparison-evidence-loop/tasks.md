@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Estimated changed lines | Current PR/slice: ~205-230; whole chain remains split across PRs |
+| Estimated changed lines | Current PR/slice: documentation-only provenance discovery, expected under 400 changed lines; whole chain remains split across PRs |
 | 400-line budget risk | Low for the current PR/slice |
 | Chained PRs recommended | Yes for the whole change chain; current PR/slice remains reviewable |
 | Suggested split | PR 1 plan+provenance gates → PR 2 audited plan improvements → PR 3 final Vea slice |
@@ -62,7 +62,7 @@ Strict TDD note: this slice changes planning artifacts only. No executable code 
 
 - [x] 3.1 Run a fresh objective audit #1 against the draft plan for invented claims, vague tasks, unsafe writes, missing provenance, and overreach; capture only concrete findings.
 - [x] 3.2 Apply approved improvements from audit #1 only; do not add new scope, sources, or implementation work.
-- [ ] 3.3 Run a fresh objective audit #2 on the revised plan; stop if it finds scope drift or unresolved provenance gaps.
+- [x] 3.3 Run a fresh objective audit #2 on the revised plan; stop if it finds scope drift or unresolved provenance gaps.
 
 ### Slice/PR 2 Audit #1 Improvement Status
 
@@ -70,6 +70,7 @@ Strict TDD note: this slice changes planning artifacts only. No executable code 
 |------|--------|----------|
 | 3.1 | Complete via supplied audit verdict | Audit #1 was supplied to this improvement slice as PASS with three concrete improvements. This slice did not run audits or scripts. |
 | 3.2 | Complete as approved improvement pass | Applied the audit #1 PASS-with-improvements findings only: added the concrete issue-number stop condition for comparison outputs, clarified task 2.4 as a non-actionable gated draft stub, and updated the review workload forecast to show the current PR/slice estimate as ~205-230 changed lines with Low risk while preserving the approved feature-branch-chain. |
+| 3.3 | Complete via prior merged audit evidence | Fresh audit #2 already occurred and was merged in PR #329 (`3528b92`). This slice only records that historical status; it did not run a new audit. |
 
 Strict TDD note: this improvement slice changes planning artifacts only. No executable code changed, and the user explicitly constrained this slice to avoid audits, scripts, tests, builds, and typechecks. Validation is artifact consistency by re-reading changed sections plus `git diff --check`.
 
@@ -88,3 +89,19 @@ Strict TDD note: this improvement slice changes planning artifacts only. No exec
 | 4.3 | Complete for this slice | Only OpenSpec planning artifacts were edited. No application code, live audit script, actual Vea comparison, broad build/typecheck, DB/production write, commit, push, or PR action was performed. |
 
 Strict TDD note: this finalization slice changes planning artifacts only. No executable code changed, so no runtime RED/GREEN cycle or runtime test execution was necessary. Validation is artifact consistency against proposal/spec/design/tasks/plan plus whitespace-safe diff validation.
+
+## Phase 5: Read-only Provenance Discovery Recording
+
+- [x] 5.1 Document Vea #295 as approved-summary-only: the approved bounded read-only path is known, but no local artifact, tracked copy, or hash is available; restore-first remains blocked pending another approved artifact source.
+- [x] 5.2 Document that the Vea catalog identity snapshot is still missing and hard-blocking because no approved local fixture, path, timestamp, hash, or approval evidence was found.
+- [x] 5.3 Document that issue #320 is not suitable as the concrete future Vea comparison execution/output issue; a new approved execution issue is required before output can be written.
+
+### Slice/PR 4 Provenance Discovery Status
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 5.1 | Complete as documentation-only discovery | `provenance-discovery.md` and `plan.md` record the approved #295 summary values, local absence, missing hash, restore-first blocker, and controlled read-only regeneration fallback only after approval. |
+| 5.2 | Complete as hard block | `provenance-discovery.md` and `plan.md` record that no approved Vea catalog identity snapshot fixture/path/hash/timestamp/approval evidence was found. |
+| 5.3 | Complete as output issue gate | `provenance-discovery.md` and `plan.md` record that #320 is closed/tooling-scoped and must not be used as the concrete execution/output issue. |
+
+Strict TDD note: this provenance discovery slice changes planning artifacts only. No executable code changed, no live audit/network script ran, no comparison ran, no GitHub issue was created, and no runtime test was necessary. Validation is artifact consistency by re-reading changed sections plus `git diff --check`.
