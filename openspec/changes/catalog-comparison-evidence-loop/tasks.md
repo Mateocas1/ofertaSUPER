@@ -4,7 +4,7 @@
 
 | Field | Value |
 |-------|-------|
-| Estimated changed lines | Current PR/slice: documentation-only provenance discovery, expected under 400 changed lines; whole chain remains split across PRs |
+| Estimated changed lines | Current PR/slice: documentation-only #334 output issue gate recording, expected under 400 changed lines; whole chain remains split across PRs |
 | 400-line budget risk | Low for the current PR/slice |
 | Chained PRs recommended | Yes for the whole change chain; current PR/slice remains reviewable |
 | Suggested split | PR 1 plan+provenance gates → PR 2 audited plan improvements → PR 3 final Vea slice |
@@ -94,7 +94,7 @@ Strict TDD note: this finalization slice changes planning artifacts only. No exe
 
 - [x] 5.1 Document Vea #295 as approved-summary-only: the approved bounded read-only path is known, but no local artifact, tracked copy, or hash is available; restore-first remains blocked pending another approved artifact source.
 - [x] 5.2 Document that the Vea catalog identity snapshot is still missing and hard-blocking because no approved local fixture, path, timestamp, hash, or approval evidence was found.
-- [x] 5.3 Document that issue #320 is not suitable as the concrete future Vea comparison execution/output issue; a new approved execution issue is required before output can be written.
+- [x] 5.3 Document that issue #320 is not suitable as the concrete future Vea comparison execution/output issue; at that point a new approved execution issue was still required before output could be written.
 
 ### Slice/PR 4 Provenance Discovery Status
 
@@ -105,3 +105,15 @@ Strict TDD note: this finalization slice changes planning artifacts only. No exe
 | 5.3 | Complete as output issue gate | `provenance-discovery.md` and `plan.md` record that #320 is closed/tooling-scoped and must not be used as the concrete execution/output issue. |
 
 Strict TDD note: this provenance discovery slice changes planning artifacts only. No executable code changed, no live audit/network script ran, no comparison ran, no GitHub issue was created, and no runtime test was necessary. Validation is artifact consistency by re-reading changed sections plus `git diff --check`.
+
+## Phase 6: Approved Output Issue Gate Recording
+
+- [x] 6.1 Record issue #334 as the open, approved concrete output issue for the Vea comparison evidence slice, with output path `audit/catalog-comparison/issue-334/vea/category-pagination/`, while preserving the pending #295 candidate artifact and Vea catalog identity snapshot gates.
+
+### Slice/PR 5 Output Issue Gate Status
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 6.1 | Complete as documentation-only gate recording; execution still blocked | `plan.md` and `provenance-discovery.md` record issue #334 (`data: run Vea catalog comparison evidence slice`) and the concrete output path. #334 satisfies only the output issue-number gate; it does not restore #295, regenerate evidence, approve a catalog identity snapshot, authorize comparison execution, or permit output writes while other gates remain pending. |
+
+Strict TDD note: this slice changes planning artifacts only. No executable code changed, no live audit/network script ran, no comparison ran, no GitHub issue was created, and no runtime test was necessary. Validation is artifact consistency by re-reading changed sections plus `git diff --check`.
