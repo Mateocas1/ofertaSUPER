@@ -33,17 +33,17 @@ Chain strategy: stacked-to-main
 
 - [x] 2.1 Implement deterministic `categoryPath`-stratified 50-candidate sampling with seed recording, omission handling, and shortfall reporting.
 - [x] 2.2 Implement classification validation with precedence: `already_present_alternate_identity`, `equivalent_variant_or_pack`, `source_or_candidate_artifact`, `valid_investigation_candidate`, `insufficient_evidence`.
-- [ ] 2.3 Keep `followUpReason` as a separate field and normalize item records for JSON + Markdown summary generation.
+- [x] 2.3 Keep `followUpReason` as a separate field and normalize item records for JSON + Markdown summary generation.
 - [x] 2.4 Add calibration-only wording guards so no output can claim confirmed missing products or full-catalog coverage.
 
 ## Phase 3: Testing / Verification
 
 - [x] 3.1 Add determinism tests for identical seed/input producing the same 50-item sample and stable stratum allocation.
-- [ ] 3.2 Add schema tests for JSON/Markdown contracts, aggregate counts, constraints, and `followUpReason` placement.
+- [x] 3.2 Add schema tests for JSON/Markdown contracts, aggregate counts, constraints, and `followUpReason` placement.
 - [x] 3.3 Add artifact-hash gate tests for exact issue #334 paths/SHA-256s and fail-closed behavior on mismatch/missing files.
 - [x] 3.4 Add path-safety and no-overclaiming tests covering forbidden writes, traversal, live-write flags, and banned claims.
 
 ## Phase 4: Cleanup / Integration
 
-- [ ] 4.1 Wire the approved output path into the CLI wrapper and document the required issue-number handoff.
-- [ ] 4.2 Review final wording for calibration-only, Vea-only, and read-only constraints before implementation starts.
+- [x] 4.1 Wire the approved output path into the CLI wrapper and document the required issue-number handoff.
+- [x] 4.2 Review final wording for calibration-only, Vea-only, and read-only constraints before implementation starts.

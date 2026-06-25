@@ -8,6 +8,10 @@ export type Issue334ArtifactManifestEntry = { role: Role; source: "vea"; issue: 
 export type TriageCandidate = { source?: string | null; surface?: string | null; identityKind?: string | null; identity?: string | number | null; skuId?: string | number | null; productUrl?: string | null; ean?: string | number | null; name?: string | null; categoryPath?: string | null };
 export type TriageClassification = "already_present_alternate_identity" | "equivalent_variant_or_pack" | "source_or_candidate_artifact" | "valid_investigation_candidate" | "insufficient_evidence";
 export type TriageClassificationSignals = { sourceOrCandidateArtifact?: boolean; alreadyPresentAlternateIdentity?: boolean; equivalentVariantOrPack?: boolean; validInvestigationCandidate?: boolean; insufficientEvidence?: boolean };
+export type TriageSamplingResult = ReturnType<typeof selectDeterministicCategoryPathSample>;
+export type TriageReviewRecord = { sampleIndex: number; candidateIdentity: string; classification: TriageClassification; followUpReason?: string | null; evidenceRefs?: string[] };
+export type NormalizedTriageItem = { sampleIndex: number; candidateIdentity: string; categoryPath: string; classification: TriageClassification; followUpReason: string | null; evidenceRefs: string[] };
+export type VeaTriageReport = { schemaVersion: 1; triage: "vea-likely-missing-candidate-calibration"; source: "vea"; issue: 334; approvedOutputIssue: number; surface: "category-pagination"; calibrationOnly: true; decisionGrade: false; sampling: Omit<TriageSamplingResult, "selected">; items: NormalizedTriageItem[]; aggregateCounts: Record<TriageClassification, number>; constraints: string[]; readOnlyPosture: string[] };
 
 export const EXPECTED_ISSUE_334_ARTIFACT_MANIFEST = [
 	{ role: "candidateAudit", source: "vea", issue: 334, path: "audit/coverage/issue-334/vea/category-pagination/category-pagination-audit.json", sha256: "7dee0acb4c151715c566e7ebaa15e358b5258ec9395e22fff2cedabb0ca9d359", expected: "comparison input; 732 total candidates" },
@@ -89,6 +93,71 @@ export function buildTriageOutputPath({ issue, fileName }: { issue: unknown; fil
 	return `audit/triage/issue-${validateApprovedTriageOutputIssue(issue)}/vea/category-pagination/${safeOutputFileName(fileName)}`;
 }
 
+export function buildVeaTriageReport({ approvedOutputIssue, sampling, reviews }: { approvedOutputIssue: unknown; sampling: TriageSamplingResult; reviews: TriageReviewRecord[] }): VeaTriageReport {
+	const items = normalizeTriageItems(sampling, reviews);
+	return {
+		schemaVersion: 1,
+		triage: "vea-likely-missing-candidate-calibration",
+		source: SOURCE,
+		issue: 334,
+		approvedOutputIssue: validateApprovedTriageOutputIssue(approvedOutputIssue),
+		surface: SURFACE,
+		calibrationOnly: true,
+		decisionGrade: false,
+		sampling: { seed: sampling.seed, requestedSize: sampling.requestedSize, selectedSize: sampling.selectedSize, strata: sampling.strata, constraints: sampling.constraints },
+		items,
+		aggregateCounts: buildTriageAggregateCounts(items),
+		constraints: sampling.constraints,
+		readOnlyPosture: ["calibration-only", "Vea-only", "read-only", "no product-missing conclusion", "no full catalog coverage", "no ingestion/write authorization"],
+	};
+}
+
+export function renderVeaTriageMarkdownSummary(report: VeaTriageReport) {
+	const lines = [
+		"# Vea likely-missing candidate triage summary",
+		"",
+		"This is a calibration-only, Vea-only, read-only summary. It keeps the sample investigation-only and does not claim products are missing, complete source coverage, or permission to ingest/write data.",
+		"",
+		"## Scope",
+		`- Source: ${report.source}`,
+		`- Issue: #${report.issue}`,
+		`- Approved output issue: #${report.approvedOutputIssue}`,
+		`- Surface: ${report.surface}`,
+		`- Decision-grade: ${report.decisionGrade}`,
+		"",
+		"## Sampling",
+		`- Seed: ${report.sampling.seed}`,
+		`- Requested size: ${report.sampling.requestedSize}`,
+		`- Selected size: ${report.sampling.selectedSize}`,
+		"",
+		"## Aggregate counts",
+		"| Classification | Count |",
+		"|---|---:|",
+		...TRIAGE_CLASSIFICATIONS.map((classification) => `| ${classification} | ${report.aggregateCounts[classification]} |`),
+		"",
+		"## Constraints",
+		...(report.constraints.length ? report.constraints.map((constraint) => `- ${constraint}`) : ["- None"]),
+		"",
+		"## Item notes",
+		"| Sample | Classification | Follow-up reason |",
+		"|---:|---|---|",
+		...report.items.map((item) => `| ${item.sampleIndex} | ${item.classification} | ${escapeMarkdownTableCell(item.followUpReason ?? "None")} |`),
+	];
+	const markdown = lines.join("\n");
+	assertCalibrationOnlyWording(markdown);
+	return markdown;
+}
+
+export function normalizeTriageItems(sampling: TriageSamplingResult, reviews: TriageReviewRecord[]) {
+	const reviewByIdentity = new Map(reviews.map((review) => [`${review.sampleIndex}:${review.candidateIdentity}`, review]));
+	return sampling.selected.map((selected): NormalizedTriageItem => {
+		const review = reviewByIdentity.get(`${selected.sampleIndex}:${selected.candidateIdentity}`);
+		if (!review) throw new Error(`missing review for sampled Vea triage item ${selected.sampleIndex}`);
+		const validated = validateTriageClassification(review);
+		return { sampleIndex: selected.sampleIndex, candidateIdentity: selected.candidateIdentity, categoryPath: selected.categoryPath, classification: validated.classification, followUpReason: validated.followUpReason, evidenceRefs: normalizeEvidenceRefs(review.evidenceRefs) };
+	});
+}
+
 export function assertReadOnlyTriageFlags(argv: string[]) {
 	const rejectedSourceFlag = findRejectedSourceFlag(argv);
 	if (rejectedSourceFlag) throw new Error("Vea likely-missing triage is Vea-only");
@@ -161,6 +230,18 @@ function findRejectedSourceFlag(argv: string[]) {
 	}
 	return null;
 }
+
+function buildTriageAggregateCounts(items: readonly NormalizedTriageItem[]) {
+	const counts = Object.fromEntries(TRIAGE_CLASSIFICATIONS.map((classification) => [classification, 0])) as Record<TriageClassification, number>;
+	for (const item of items) counts[item.classification] += 1;
+	return counts;
+}
+
+function normalizeEvidenceRefs(value: unknown) {
+	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0).map((entry) => entry.trim()) : [];
+}
+
+function escapeMarkdownTableCell(value: string) { return value.replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>"); }
 
 function text(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? String(value) : typeof value === "string" && value.trim() ? value.trim().toLowerCase() : null; }
 function normalizedUrl(value: unknown) { const raw = text(value); if (!raw) return null; try { const url = new URL(raw); return `${url.hostname.toLowerCase()}${url.pathname.replace(/\/+$/g, "").toLowerCase() || "/"}`; } catch { return raw.replace(/[?#].*$/, "").replace(/\/+$/g, "").toLowerCase(); } }

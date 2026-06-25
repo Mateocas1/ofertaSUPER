@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execSync } from "node:child_process";
 import { describe, it } from "node:test";
 
 import {
@@ -6,13 +7,16 @@ import {
 	TRIAGE_CLASSIFICATION_PRECEDENCE,
 	assertCalibrationOnlyWording,
 	assertReadOnlyTriageFlags,
+	buildVeaTriageReport,
 	buildTriageOutputPath,
+	renderVeaTriageMarkdownSummary,
 	resolveTriageClassification,
 	selectDeterministicCategoryPathSample,
 	validateApprovedTriageOutputIssue,
 	validateTriageClassification,
 	verifyIssue334ArtifactManifest,
 } from "../scripts/pipeline/vea-likely-missing-triage";
+import { parseVeaTriageCliArgs } from "../scripts/audit-vea-likely-missing-triage";
 
 describe("Vea likely-missing triage", () => {
 	it("fails closed on missing or hash-mismatched issue #334 artifacts", () => {
@@ -88,6 +92,75 @@ describe("Vea likely-missing triage", () => {
 		assert.throws(() => assertReadOnlyTriageFlags(["node", "script", "--source", "disco"]), /Vea-only/);
 		assert.throws(() => assertReadOnlyTriageFlags(["node", "script", "--source=vea", "--source", "disco"]), /Vea-only/);
 		assert.doesNotThrow(() => assertReadOnlyTriageFlags(["node", "script", "--source", "vea"]));
+	});
+
+	it("renders JSON and Markdown contracts with aggregate counts and separate followUpReason", () => {
+		const sample = selectDeterministicCategoryPathSample([candidate("sku-1", "almacen"), candidate("sku-2", "bebidas")], { seed: "issue-334-vea-triage-v1", requestedSize: 2 });
+		const report = buildVeaTriageReport({
+			approvedOutputIssue: 343,
+			sampling: sample,
+			reviews: [
+				{ sampleIndex: 1, candidateIdentity: sample.selected[0].candidateIdentity, classification: "valid_investigation_candidate", followUpReason: "Review with decision-grade evidence later", evidenceRefs: ["issue-334:candidateAudit"] },
+				{ sampleIndex: 2, candidateIdentity: sample.selected[1].candidateIdentity, classification: "insufficient_evidence", followUpReason: "", evidenceRefs: [] },
+			],
+		});
+
+		assert.equal(report.schemaVersion, 1);
+		assert.equal(report.triage, "vea-likely-missing-candidate-calibration");
+		assert.equal(report.issue, 334);
+		assert.equal(report.approvedOutputIssue, 343);
+		assert.equal(report.calibrationOnly, true);
+		assert.equal(report.decisionGrade, false);
+		assert.equal(report.items[0].classification, "valid_investigation_candidate");
+		assert.equal(report.items[0].followUpReason, "Review with decision-grade evidence later");
+		assert.deepEqual(report.aggregateCounts, { already_present_alternate_identity: 0, equivalent_variant_or_pack: 0, source_or_candidate_artifact: 0, valid_investigation_candidate: 1, insufficient_evidence: 1 });
+		assert.equal(JSON.stringify(report).includes("needs_follow_up"), false);
+
+		const markdown = renderVeaTriageMarkdownSummary(report);
+		assert.match(markdown, /calibration-only/i);
+		assert.match(markdown, /Vea-only/i);
+		assert.match(markdown, /read-only/i);
+		assert.match(markdown, /valid_investigation_candidate\s+\| 1/);
+		assert.match(markdown, /\| 1 \| valid_investigation_candidate \| Review with decision-grade evidence later \|/);
+		assert.doesNotThrow(() => assertCalibrationOnlyWording(markdown));
+	});
+
+	it("escapes Markdown table separators and newlines in followUpReason", () => {
+		const sample = selectDeterministicCategoryPathSample([candidate("sku-1", "almacen")], { seed: "issue-334-vea-triage-v1", requestedSize: 1 });
+		const report = buildVeaTriageReport({
+			approvedOutputIssue: 343,
+			sampling: sample,
+			reviews: [{ sampleIndex: 1, candidateIdentity: sample.selected[0].candidateIdentity, classification: "insufficient_evidence", followUpReason: "Check shelf | PDP\nNeeds later review", evidenceRefs: [] }],
+		});
+
+		const markdown = renderVeaTriageMarkdownSummary(report);
+
+		assert.match(markdown, /\| 1 \| insufficient_evidence \| Check shelf \\\| PDP<br>Needs later review \|/);
+	});
+
+	it("requires approved issue-number handoff and binds CLI outputs to the approved triage boundary", () => {
+		const parsed = parseVeaTriageCliArgs(["--output-issue", "343", "--source", "vea"]);
+		assert.deepEqual(parsed, {
+			approvedOutputIssue: 343,
+			reportPath: "audit/triage/issue-343/vea/category-pagination/report.json",
+			summaryPath: "audit/triage/issue-343/vea/category-pagination/summary.md",
+		});
+		assert.throws(() => parseVeaTriageCliArgs(["--source", "vea"]), /approved issue-number handoff/);
+		assert.throws(() => parseVeaTriageCliArgs(["--output-issue=343", "--source=disco"]), /Vea-only/);
+	});
+
+	it("executes the CLI entrypoint under tsx and emits bounded output paths", () => {
+		const output = execSync("npx tsx scripts/audit-vea-likely-missing-triage.ts --output-issue 343 --source vea", {
+			cwd: process.cwd(),
+			encoding: "utf8",
+		});
+		const parsed = JSON.parse(output);
+
+		assert.deepEqual(parsed, {
+			approvedOutputIssue: 343,
+			reportPath: "audit/triage/issue-343/vea/category-pagination/report.json",
+			summaryPath: "audit/triage/issue-343/vea/category-pagination/summary.md",
+		});
 	});
 });
 
