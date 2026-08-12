@@ -11,6 +11,10 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
+FROM dependencies AS migrator
+COPY prisma ./prisma
+CMD ["npx", "prisma", "migrate", "deploy"]
+
 FROM node:22.19.0-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production \

@@ -78,6 +78,14 @@ Copy `.env.example` to `.env.local` and fill only local/development values. Do n
 
 For role-scoped environment requirements and conventional PostgreSQL operation, see [`docs/portable-runtime-contract.md`](docs/portable-runtime-contract.md).
 
+To run the disposable PostgreSQL/Redis runtime proof (Docker Compose v2 required):
+
+```bash
+npm run smoke:compose
+```
+
+It builds locally, verifies database-backed search plus Redis cache/rate limiting, and removes its containers and volumes automatically. See the portable runtime contract for scope and recovery.
+
 Minimum keys for real-data work:
 
 ```env

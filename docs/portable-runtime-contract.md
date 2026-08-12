@@ -14,6 +14,16 @@ npm run db:migrate:deploy
 
 ## Standalone web image
 
+Run the disposable local proof with Docker Engine and Compose v2:
+
+```bash
+npm run smoke:compose
+```
+
+The command uses only explicit local credentials, publishes only the web service on `127.0.0.1:${COMPOSE_WEB_PORT:-3300}`, and automatically runs `down --volumes --remove-orphans`, including after assertion failures. If interrupted before cleanup, recover with `docker compose --project-name ofertasuper-compose-smoke --file compose.yml down --volumes --remove-orphans`.
+
+This proves fresh-database migrations as owner, generated app grants, fixture insertion through the least-privileged role, database provenance and freshness from `/api/search`, and conventional Redis cache/rate-limit writes. It does not prove production security, durability, backup/restore, external services, admin auth, ingestion, or orchestration readiness.
+
 The default Dockerfile packages only the Next.js web server. During development, its contract and build passed, and the non-root container served `/` in an isolated no-network, read-only smoke test without configured dependencies. This proves packaging and dependency-free degraded startup—not DB/Redis-backed behavior, durable storage, backup/restore, or production operations.
 
 Supply the `web` names below at runtime; no environment file or secret is copied into the image. `NEXT_PUBLIC_*` values referenced by client code are build-time inputs. The PWA plugin mutates only the isolated builder stage. The runner starts with `node server.js`, owns `.next` for runtime cache, and is not a job or migration image because standalone output omits repository scripts and development tooling.
@@ -59,4 +69,4 @@ Inspect the archive first, restore only into a disposable empty database, then r
 
 ## Parity and deferred work
 
-This contract does not make every external service portable: VTEX acquisition still calls VTEX and admin mode still uses Clerk. Compose, health routes, scheduling, job packaging, auth migration, DB/Redis-backed runtime validation, durable production operations, and Upstash-coupled alert deduplication remain deferred.
+This contract does not make every external service portable: VTEX acquisition still calls VTEX and admin mode still uses Clerk. Production Compose/orchestration, health routes, scheduling, job packaging, auth migration, durable production operations, and Upstash-coupled alert deduplication remain deferred.
