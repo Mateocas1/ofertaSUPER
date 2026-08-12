@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { CatalogProvenanceNotice } from "@/components/catalog-provenance-notice";
 import { ProductCard } from "@/components/product-card";
 import { SearchBar } from "@/components/search-bar";
 import { StaleResultsNotice } from "@/components/stale-results-notice";
@@ -7,7 +8,7 @@ import { isCatalogRuntimeAvailable } from "@/lib/catalog-availability";
 import { listProducts } from "@/lib/catalog";
 import { getDemoProductPage } from "@/lib/demo-data";
 import { getSingleParam } from "@/lib/page-params";
-import { withFallback } from "@/lib/safe-data";
+import { resolvePublicCatalogData } from "@/lib/public-catalog-api";
 import { createMetadata } from "@/lib/seo/metadata";
 import { SUPERMARKETS } from "@/lib/supermarkets";
 
@@ -45,9 +46,14 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const fallbackResult = getDemoProductPage(filters);
   const result = query
     ? (await isCatalogRuntimeAvailable())
-      ? await withFallback(listProducts(filters), fallbackResult)
-      : fallbackResult
-    : { items: [], total: 0 };
+      ? await resolvePublicCatalogData(() => listProducts(filters), fallbackResult)
+      : await resolvePublicCatalogData(
+          async () => {
+            throw new Error("catalog unavailable");
+          },
+          fallbackResult,
+        )
+    : await resolvePublicCatalogData(async () => ({ items: [], total: 0 }));
   const allResultsAreStale = result.items.length > 0 && result.items.every((product) => product.rankFreshnessStatus !== "fresh");
 
   return (
@@ -89,7 +95,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </div>
         </section>
 
-        {query && allResultsAreStale ? <StaleResultsNotice context="resultados" /> : null}
+        {query ? <CatalogProvenanceNotice {...result} /> : null}
+        {query && !result.degraded && allResultsAreStale ? <StaleResultsNotice context="resultados" /> : null}
 
         {query ? (
           <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">

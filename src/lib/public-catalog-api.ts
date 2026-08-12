@@ -30,6 +30,14 @@ type PublicApiResult<T> =
     };
 
 type ProductPage = ReturnType<typeof getDemoProductPage>;
+export type PublicCatalogProvenance = {
+  dataSource: "database" | "demo";
+  degraded: boolean;
+  latestCheckedAt: string | null;
+};
+
+export type PublicCatalogData<T> = T & PublicCatalogProvenance;
+
 type ProductListLoader = (filters: ProductListFilters) => Promise<ProductPage>;
 type CategoryLoader = () => Promise<CategorySummary[]>;
 type PromotionLoader = (filters: PromotionFilters) => Promise<PromotionSummary[]>;
@@ -90,22 +98,68 @@ export function getDemoPromotions(filters: PromotionFilters) {
   });
 }
 
+function getLatestCheckedAt(value: unknown): string | null {
+  if (!value || typeof value !== "object" || !("items" in value) || !Array.isArray(value.items)) {
+    return null;
+  }
+
+  return value.items
+    .map((item) =>
+      item && typeof item === "object" && "latestCheckedAt" in item && typeof item.latestCheckedAt === "string"
+        ? item.latestCheckedAt
+        : null,
+    )
+    .filter((checkedAt): checkedAt is string => checkedAt !== null)
+    .sort((left, right) => right.localeCompare(left))[0] ?? null;
+}
+
+export async function resolvePublicCatalogData<T extends object>(
+  loadData: () => Promise<T>,
+  demoData?: T,
+): Promise<PublicCatalogData<T>> {
+  try {
+    const data = await loadData();
+    return {
+      ...data,
+      dataSource: "database",
+      degraded: false,
+      latestCheckedAt: getLatestCheckedAt(data),
+    };
+  } catch (error) {
+    if (!demoData) {
+      throw error;
+    }
+
+    return {
+      ...demoData,
+      dataSource: "demo",
+      degraded: true,
+      latestCheckedAt: null,
+    };
+  }
+}
+
 export async function resolvePublicProductList(
   searchParams: Record<string, string>,
   loadProducts: ProductListLoader,
-): Promise<PublicApiResult<ProductPage>> {
+): Promise<PublicApiResult<PublicCatalogData<ProductPage>>> {
   try {
     const filters = productFiltersFromSearchParams(searchParams);
 
     try {
       return {
         status: 200,
-        body: await loadProducts(filters),
+        body: await resolvePublicCatalogData(() => loadProducts(filters)),
       };
     } catch {
       return {
         status: 200,
-        body: getDemoProductPage(filters),
+        body: await resolvePublicCatalogData(
+          async () => {
+            throw new Error("catalog unavailable");
+          },
+          getDemoProductPage(filters),
+        ),
       };
     }
   } catch (error) {
