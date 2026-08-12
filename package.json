@@ -12,6 +12,8 @@
     "lighthouse": "lhci autorun --config=./lighthouserc.json",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "tsx scripts/deploy-migrations.ts",
+    "db:bootstrap:render": "tsx scripts/render-postgres-bootstrap.ts",
     "db:seed": "tsx prisma/seed.ts",
     "runtime:check": "tsx scripts/check-runtime-contract.ts",
     "scrape:disco": "tsx scripts/scrapers/disco.ts",
