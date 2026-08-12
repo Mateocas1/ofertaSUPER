@@ -70,7 +70,7 @@ function promotionFiltersFromSearchParams(searchParams: Record<string, string>):
   };
 }
 
-function getDemoPromotions(filters: PromotionFilters) {
+export function getDemoPromotions(filters: PromotionFilters) {
   const wallet = filters.wallet?.toLowerCase();
 
   return demoPromotions.filter((promotion) => {

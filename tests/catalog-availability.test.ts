@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { getDatabaseEndpoint } from "../src/lib/catalog-availability";
+import {
+  getDatabaseEndpoint,
+  isCatalogOfflineMode,
+  isCatalogRuntimeAvailable,
+} from "../src/lib/catalog-availability";
 
 describe("catalog availability preflight", () => {
   it("extracts host and port from a database URL without opening Prisma", () => {
@@ -14,5 +18,26 @@ describe("catalog availability preflight", () => {
   it("fails closed when the database URL is missing or invalid", () => {
     assert.equal(getDatabaseEndpoint(undefined), null);
     assert.equal(getDatabaseEndpoint("not-a-url"), null);
+  });
+
+  it("enables offline mode only for the exact server-side value true", () => {
+    assert.equal(isCatalogOfflineMode({ CATALOG_OFFLINE_MODE: "true" }), true);
+    assert.equal(isCatalogOfflineMode({}), false);
+    assert.equal(isCatalogOfflineMode({ CATALOG_OFFLINE_MODE: "TRUE" }), false);
+    assert.equal(isCatalogOfflineMode({ CATALOG_OFFLINE_MODE: "1" }), false);
+  });
+
+  it("short-circuits offline mode before opening a socket", async () => {
+    let socketCalls = 0;
+    const available = await isCatalogRuntimeAvailable(
+      { CATALOG_OFFLINE_MODE: "true", DATABASE_URL: "postgresql://localhost/catalog" },
+      () => {
+        socketCalls += 1;
+        throw new Error("socket must not open");
+      },
+    );
+
+    assert.equal(available, false);
+    assert.equal(socketCalls, 0);
   });
 });

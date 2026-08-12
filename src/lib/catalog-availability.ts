@@ -1,5 +1,7 @@
 import net from "node:net";
 
+import "server-only";
+
 type DatabaseEndpoint = {
   host: string;
   port: number;
@@ -37,7 +39,14 @@ export function getDatabaseEndpoint(databaseUrl = process.env.DATABASE_URL): Dat
   }
 }
 
-async function canReachDatabase(databaseUrl = process.env.DATABASE_URL) {
+type CreateConnection = typeof net.createConnection;
+type CatalogEnvironment = Record<string, string | undefined>;
+
+export function isCatalogOfflineMode(env: CatalogEnvironment = process.env) {
+  return env.CATALOG_OFFLINE_MODE === "true";
+}
+
+async function canReachDatabase(databaseUrl: string | undefined, createConnection: CreateConnection) {
   const endpoint = getDatabaseEndpoint(databaseUrl);
 
   if (!endpoint) {
@@ -45,7 +54,7 @@ async function canReachDatabase(databaseUrl = process.env.DATABASE_URL) {
   }
 
   return new Promise<boolean>((resolve) => {
-    const socket = net.createConnection(endpoint);
+    const socket = createConnection(endpoint);
     let settled = false;
 
     const finish = (ok: boolean) => {
@@ -65,14 +74,21 @@ async function canReachDatabase(databaseUrl = process.env.DATABASE_URL) {
   });
 }
 
-export async function isCatalogRuntimeAvailable() {
+export async function isCatalogRuntimeAvailable(
+  env: CatalogEnvironment = process.env,
+  createConnection: CreateConnection = net.createConnection,
+) {
+  if (isCatalogOfflineMode(env)) {
+    return false;
+  }
+
   const now = Date.now();
 
   if (availabilityCache && availabilityCache.expiresAt > now) {
     return availabilityCache.ok;
   }
 
-  const ok = await canReachDatabase();
+  const ok = await canReachDatabase(env.DATABASE_URL, createConnection);
   availabilityCache = {
     ok,
     expiresAt: now + DATABASE_CHECK_CACHE_MS,
