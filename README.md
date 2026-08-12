@@ -76,6 +76,8 @@ Open `http://localhost:3000`.
 
 Copy `.env.example` to `.env.local` and fill only local/development values. Do not commit `.env` or `.env.local`; both are ignored.
 
+For role-scoped environment requirements and conventional PostgreSQL operation, see [`docs/portable-runtime-contract.md`](docs/portable-runtime-contract.md).
+
 Minimum keys for real-data work:
 
 ```env

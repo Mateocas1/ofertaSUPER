@@ -13,6 +13,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "runtime:check": "tsx scripts/check-runtime-contract.ts",
     "scrape:disco": "tsx scripts/scrapers/disco.ts",
     "scrape:carrefour": "tsx scripts/scrapers/carrefour.ts",
     "scrape:jumbo": "tsx scripts/scrapers/jumbo.ts",
