@@ -5,7 +5,7 @@ import {
 	RUNTIME_ROLES,
 	type RuntimeRole,
 	validateRuntimeContract,
-} from "./runtime-contract";
+} from "../src/lib/runtime-contract";
 
 const role = process.argv[2] as RuntimeRole | undefined;
 

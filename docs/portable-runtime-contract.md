@@ -28,7 +28,7 @@ The default Dockerfile packages only the Next.js web server. During development,
 
 Supply the `web` names below at runtime; no environment file or secret is copied into the image. `NEXT_PUBLIC_*` values referenced by client code are build-time inputs. The PWA plugin mutates only the isolated builder stage. The runner starts with `node server.js`, owns `.next` for runtime cache, and is not a job or migration image because standalone output omits repository scripts and development tooling.
 
-No healthcheck is declared because the app has no dedicated liveness route. Operators must define platform readiness and writable cache/storage policy before production use.
+`GET /api/health/live` reports process liveness without probing dependencies; the image HEALTHCHECK uses it so a database outage does not restart a healthy process. `GET /api/health/ready` validates the generic web runtime contract and executes a PostgreSQL query; it returns `503` when traffic must stop. Redis is reported as optional and never gates readiness. Responses contain only generic status/component data. Compose uses readiness because its web service should accept traffic only after PostgreSQL is usable; container liveness and orchestrator readiness are deliberately distinct.
 
 ## Dependency matrix
 
@@ -69,4 +69,4 @@ Inspect the archive first, restore only into a disposable empty database, then r
 
 ## Parity and deferred work
 
-This contract does not make every external service portable: VTEX acquisition still calls VTEX and admin mode still uses Clerk. Production Compose/orchestration, health routes, scheduling, job packaging, auth migration, durable production operations, and Upstash-coupled alert deduplication remain deferred.
+This contract does not make every external service portable: VTEX acquisition still calls VTEX and admin mode still uses Clerk. Production orchestration policy, scheduling, job packaging, auth migration, durable production operations, and Upstash-coupled alert deduplication remain deferred.

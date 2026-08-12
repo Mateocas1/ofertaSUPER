@@ -13,11 +13,12 @@ test("Compose orders healthy dependencies, owner migration, grants, fixture, the
   assert.match(compose, /migrate:[\s\S]*DIRECT_URL: postgresql:\/\/ofertasuper_owner/);
   assert.match(compose, /fixture:[\s\S]*service_completed_successfully[\s\S]*web:/);
   assert.match(compose, /DATABASE_URL: postgresql:\/\/ofertasuper_app/);
+  assert.match(compose, /web:[\s\S]*healthcheck:[\s\S]*\/api\/health\/ready/);
   assert.doesNotMatch(compose, /env_file|platform:|5432:5432|6379:6379/);
 });
 
 test("smoke verifies runtime evidence and always removes state", () => {
-  for (const claim of ["dataSource", "degraded", "latestCheckedAt", "x-ratelimit-limit", "search:v3:", "ofertas-super:api:search:"]) {
+  for (const claim of ["/api/health/live", "/api/health/ready", "dataSource", "degraded", "latestCheckedAt", "x-ratelimit-limit", "search:v3:", "ofertas-super:api:search:"]) {
     assert.ok(smoke.includes(claim), `missing assertion for ${claim}`);
   }
   assert.match(smoke, /finally \{[\s\S]*down.*--volumes.*--remove-orphans/);

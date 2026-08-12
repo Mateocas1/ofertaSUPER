@@ -23,6 +23,14 @@ async function waitForSearch() {
 
 try {
   docker(["up", "--build", "--detach", "--wait", "web"]);
+  const live = await fetch(`http://127.0.0.1:${port}/api/health/live`);
+  assert.deepEqual(await live.json(), { status: "live" });
+  const ready = await fetch(`http://127.0.0.1:${port}/api/health/ready`);
+  assert.equal(ready.status, 200);
+  assert.deepEqual(await ready.json(), {
+    status: "ready",
+    components: { configuration: "ok", database: "ok", redis: "optional" },
+  });
   const { response, body } = await waitForSearch();
   assert.equal(response.status, 200);
   assert.equal(body.dataSource, "database");
@@ -35,7 +43,7 @@ try {
   assert.ok(cacheTtl > 0, `expected positive search cache TTL, got ${cacheTtl}`);
   const rateKeys = docker(["exec", "-T", "redis", "redis-cli", "--scan", "--pattern", "ofertas-super:api:search:*"], true);
   assert.ok(rateKeys, "expected a Redis rate-limit key with the search prefix");
-  console.log("Compose smoke passed: database provenance, fixture, Redis cache, and rate limit verified.");
+  console.log("Compose smoke passed: health probes, database provenance, fixture, Redis cache, and rate limit verified.");
 } finally {
   docker(["down", "--volumes", "--remove-orphans"]);
 }
