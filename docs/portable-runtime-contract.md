@@ -12,6 +12,14 @@ npm run db:bootstrap:render -- ofertasuper ofertasuper_owner ofertasuper_app > b
 npm run db:migrate:deploy
 ```
 
+## Standalone web image
+
+The default Dockerfile packages only the Next.js web server. During development, its contract and build passed, and the non-root container served `/` in an isolated no-network, read-only smoke test without configured dependencies. This proves packaging and dependency-free degraded startup—not DB/Redis-backed behavior, durable storage, backup/restore, or production operations.
+
+Supply the `web` names below at runtime; no environment file or secret is copied into the image. `NEXT_PUBLIC_*` values referenced by client code are build-time inputs. The PWA plugin mutates only the isolated builder stage. The runner starts with `node server.js`, owns `.next` for runtime cache, and is not a job or migration image because standalone output omits repository scripts and development tooling.
+
+No healthcheck is declared because the app has no dedicated liveness route. Operators must define platform readiness and writable cache/storage policy before production use.
+
 ## Dependency matrix
 
 | Role or mode | Required names | Optional names and behavior |
@@ -51,4 +59,4 @@ Inspect the archive first, restore only into a disposable empty database, then r
 
 ## Parity and deferred work
 
-This contract does not make every external service portable: VTEX acquisition still calls VTEX and admin mode still uses Clerk. Compose, health routes, scheduling, images, job packaging, auth migration, and Upstash-coupled alert deduplication remain deferred.
+This contract does not make every external service portable: VTEX acquisition still calls VTEX and admin mode still uses Clerk. Compose, health routes, scheduling, job packaging, auth migration, DB/Redis-backed runtime validation, durable production operations, and Upstash-coupled alert deduplication remain deferred.
