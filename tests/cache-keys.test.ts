@@ -8,7 +8,7 @@ import {
 
 describe("public cache keys", () => {
 	it("centralizes search and product detail cache keys", () => {
-		assert.equal(buildSearchCacheKey(" LeChe ", 5), "search:leche:5");
+		assert.equal(buildSearchCacheKey(" LeChe ", 5), "search:v3:leche:5");
 		assert.equal(buildProductDetailCacheKey("7790000000001"), "product:detail:7790000000001");
 	});
 });

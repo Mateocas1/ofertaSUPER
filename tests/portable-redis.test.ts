@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { getCachedJsonWithClient, selectCacheProvider, setCachedJsonWithClient } from "../src/lib/redis";
 import { limitRequestOrFallback, type RateLimitState } from "../src/lib/rate-limit";
+import { buildSearchCacheKey } from "../src/lib/cache-keys";
 
 test("selects cache providers deterministically without exposing values", () => {
   assert.equal(selectCacheProvider({}), "none");
@@ -35,4 +36,10 @@ test("rate limiter preserves allow, deny, and fail-open shape", async () => {
   assert.deepEqual(await limitRequestOrFallback({ limit: async () => denied }, "id"), denied);
   const open = await limitRequestOrFallback({ limit: async () => { throw new Error("redis://secret"); } }, "id");
   assert.deepEqual({ success: open.success, limit: open.limit, remaining: open.remaining }, { success: true, limit: 60, remaining: 60 });
+});
+
+test("integrated search cache isolates the top-level envelope in v3 and excludes degraded writes", async () => {
+  assert.equal(buildSearchCacheKey(" Leche ", 8), "search:v3:leche:8");
+  const route = await import("node:fs/promises").then(({ readFile }) => readFile("src/app/api/search/route.ts", "utf8"));
+  assert.match(route, /if \(!data\.degraded\) \{\s*await setCachedJson\(cacheKey, data,/);
 });

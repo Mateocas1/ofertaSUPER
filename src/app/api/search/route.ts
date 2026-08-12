@@ -7,7 +7,7 @@ import { buildSearchCacheKey } from "@/lib/cache-keys";
 import { getDemoSearchSuggestions } from "@/lib/demo-data";
 import { getCachedJson, setCachedJson } from "@/lib/redis";
 import { rejectIfRateLimited, withRateLimitHeaders } from "@/lib/rate-limit";
-import { withFallback } from "@/lib/safe-data";
+import { resolvePublicCatalogData, type PublicCatalogData } from "@/lib/public-catalog-api";
 import { searchQuerySchema } from "@/lib/schemas/search";
 
 const CACHE_TTL_SECONDS = 300;
@@ -23,25 +23,28 @@ export async function GET(request: NextRequest) {
   try {
     const parsed = searchQuerySchema.parse(searchParamsToObject(request.nextUrl));
     const cacheKey = buildSearchCacheKey(parsed.q, parsed.limit);
-    const cached = await getCachedJson(cacheKey);
+    const cached = await getCachedJson<PublicCatalogData<{ items: Awaited<ReturnType<typeof getSearchSuggestions>> }>>(cacheKey);
 
     if (cached) {
-      const response = NextResponse.json({ items: cached });
+      const response = NextResponse.json(cached);
       void limiter.state.pending;
       return withRateLimitHeaders(response, limiter.state);
     }
 
-    const fallbackItems = getDemoSearchSuggestions(parsed.q, parsed.limit);
+    const fallbackData = { items: getDemoSearchSuggestions(parsed.q, parsed.limit) };
     const canUseCatalog = await isCatalogRuntimeAvailable();
-    const items = canUseCatalog
-      ? await withFallback(getSearchSuggestions(parsed.q, parsed.limit), fallbackItems)
-      : fallbackItems;
+    const data = canUseCatalog
+      ? await resolvePublicCatalogData(
+          async () => ({ items: await getSearchSuggestions(parsed.q, parsed.limit) }),
+          fallbackData,
+        )
+      : await resolvePublicCatalogData(async () => { throw new Error("catalog unavailable"); }, fallbackData);
 
-    if (items !== fallbackItems) {
-      await setCachedJson(cacheKey, items, CACHE_TTL_SECONDS);
+    if (!data.degraded) {
+      await setCachedJson(cacheKey, data, CACHE_TTL_SECONDS);
     }
 
-    const response = NextResponse.json({ items });
+    const response = NextResponse.json(data);
     void limiter.state.pending;
     return withRateLimitHeaders(response, limiter.state);
   } catch (error) {
