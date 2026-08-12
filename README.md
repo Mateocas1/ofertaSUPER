@@ -60,7 +60,7 @@ Older screenshots may exist as historical evidence. Treat the filenames and repo
 - TypeScript
 - Tailwind CSS v4
 - Prisma + Supabase Postgres
-- Upstash Redis for cache/rate-limit when configured
+- Conventional Redis or Upstash for cache/rate-limit when configured
 - Clerk for admin auth
 - VTEX ingestion/probe scripts
 - Node test runner via `tsx --test`
@@ -83,6 +83,7 @@ Minimum keys for real-data work:
 ```env
 DATABASE_URL=
 DIRECT_URL=
+REDIS_URL=
 VTEX_SHA256_HASH=
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
