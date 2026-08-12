@@ -2,6 +2,7 @@
 import { describe, it } from "node:test";
 
 import {
+  getDemoPromotions,
   resolvePublicCategories,
   resolvePublicProductList,
   resolvePublicPromotions,
@@ -56,5 +57,10 @@ describe("public catalog API fallback semantics", () => {
 
     assert.equal(degraded.status, 200);
     assert.equal(degraded.body.items.every((item) => item.supermarket.slug === "disco"), true);
+  });
+
+  it("applies the offers page filters to demo promotions", () => {
+    assert.deepEqual(getDemoPromotions({ wallet: "mercado", type: "wallet_discount" }).map(({ id }) => id), [1]);
+    assert.deepEqual(getDemoPromotions({ supermarket: "jumbo", type: "wallet_discount" }), []);
   });
 });

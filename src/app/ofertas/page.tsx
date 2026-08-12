@@ -5,7 +5,10 @@ import { PromotionBadge } from "@/components/promotion-badge";
 import { StaleResultsNotice } from "@/components/stale-results-notice";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { getPromotions, listProducts } from "@/lib/catalog";
+import { isCatalogRuntimeAvailable } from "@/lib/catalog-availability";
+import { getDemoProductPage } from "@/lib/demo-data";
 import { getSingleParam } from "@/lib/page-params";
+import { getDemoPromotions } from "@/lib/public-catalog-api";
 import { createMetadata } from "@/lib/seo/metadata";
 import { SUPERMARKETS } from "@/lib/supermarkets";
 
@@ -34,16 +37,24 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 		| "percentage"
 		| undefined;
 
-	const [promotions, discountedProducts] = await Promise.all([
-		getPromotions({ supermarket, wallet, type }),
-		listProducts({
+	const promotionFilters = { supermarket, wallet, type };
+	const productFilters = {
 			supermarket,
 			offersOnly: true,
 			sort: "discount",
 			limit: 24,
 			page: 1,
-		}),
-	]);
+		} as const;
+	const fallback = () => [getDemoPromotions(promotionFilters), getDemoProductPage(productFilters)] as const;
+	const [promotions, discountedProducts] = await (async () => {
+		if (!(await isCatalogRuntimeAvailable())) return fallback();
+
+		try {
+			return await Promise.all([getPromotions(promotionFilters), listProducts(productFilters)]);
+		} catch {
+			return fallback();
+		}
+	})();
 	const allDiscountedProductsAreStale =
 		discountedProducts.items.length > 0 && discountedProducts.items.every((product) => product.rankFreshnessStatus !== "fresh");
 
