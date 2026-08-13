@@ -9,8 +9,9 @@ import { PriceComparison } from "@/components/price-comparison";
 import { PromotionBadge } from "@/components/promotion-badge";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { getProductDetail, getProductHistory } from "@/lib/catalog";
+import { getProductDetail } from "@/lib/catalog";
 import { formatCurrency, formatPercent } from "@/lib/format";
+import { loadProductPageData } from "@/lib/product-history";
 import { createMetadata } from "@/lib/seo/metadata";
 import { buildProductPageSchema, serializeJsonLd } from "@/lib/seo/schema";
 import { cn } from "@/lib/utils";
@@ -55,7 +56,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { ean } = await params;
-  const [product, history] = await Promise.all([getProductDetail(ean), getProductHistory(ean, 90)]);
+  const { product, history } = await loadProductPageData(ean, 90);
 
   if (!product) {
     notFound();
