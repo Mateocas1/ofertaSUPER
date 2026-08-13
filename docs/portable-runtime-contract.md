@@ -57,7 +57,17 @@ psql -X -v ON_ERROR_STOP=1 --file bootstrap.sql "$DIRECT_URL"
 
 Run migrations first on a fresh database. The SQL grants runtime table/sequence access, configures owner-scoped default privileges, and revokes schema `CREATE` from the app role. Reapply it after ownership changes. It grants no superuser, role/database administration, or RLS bypass. Historical Supabase RLS remediation is not in Prisma migrations; owners normally bypass RLS unless `FORCE ROW LEVEL SECURITY` is set, so these grants do **not** reproduce or prove that posture.
 
-Backup and restore are operator procedures, not automated or rehearsed here:
+Run the disposable local recovery rehearsal with Docker Engine and Compose v2:
+
+```bash
+npm run smoke:postgres-recovery
+```
+
+The command creates unique source and restore Compose projects and volumes. It migrates and fixtures the source under the existing owner/application role model, writes a custom-format logical archive to a harness-owned operating-system temporary directory, restores it into fresh target state, reapplies application grants, and verifies migration state, the deterministic catalog fixture, and application-role reads. A row inserted only after the dump must remain visible in the source and absent from the restore, proving the checks address distinct database state.
+
+Both projects, their networks and volumes, and the temporary archive are removed after success, failure, `SIGINT`, or `SIGTERM` where the process can handle the signal. If the process is forcibly killed, use the project prefixes printed by Docker to identify and remove residual disposable resources.
+
+For manual operator reference, the core archive commands are:
 
 ```bash
 pg_dump --format=custom --no-owner --no-acl --file backup.dump "$DIRECT_URL"
@@ -65,7 +75,7 @@ pg_restore --list backup.dump
 pg_restore --exit-on-error --no-owner --no-acl --dbname "$DISPOSABLE_URL" backup.dump
 ```
 
-Inspect the archive first, restore only into a disposable empty database, then run application integrity checks. No recovery objective or production parity is claimed.
+Inspect an archive first, restore only into a disposable empty database, then run application integrity checks. This rehearsal proves local PostgreSQL logical dump/restore mechanics only. It does not prove production automation, scheduling, retention, encryption, remote storage, RPO/RTO, production-scale duration, or platform-specific recovery procedures.
 
 ## Parity and deferred work
 
