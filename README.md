@@ -2,7 +2,7 @@
 
 ofertasSUPER is a supermarket price and offer comparison app for Argentina. It is built around a search-first home, product comparison by EAN, a local smart basket, public catalog APIs, VTEX ingestion tooling, and guarded admin surfaces.
 
-> Status: portfolio/readiness project with a smoke-verified public Vercel demo. This is not a launch or live-ops sign-off; operational limits remain documented in `docs/handoff.md` and `docs/reports/production-readiness/`.
+> Status: the functional portfolio MVP is complete and green at merged functional baseline `45d014f`. This is **not** production launch or live-operations sign-off. See the [current evidence report](docs/reports/portfolio-readiness/2026-08-13-functional-mvp-closure.md).
 
 ## Demo
 
@@ -17,9 +17,11 @@ ofertasSUPER is a supermarket price and offer comparison app for Argentina. It i
 - Prisma catalog schema for products, supermarket prices, price history, promotions, categories, ingestion runs, staging products, and source health.
 - VTEX probe and ingestion pipeline with shadow/dry-run mode, quality validation, reconciliation code, and operational metrics.
 - Admin access policy that fails closed unless a Clerk user matches `ADMIN_EMAILS` or has an explicit admin role in metadata.
-- PWA assets/offline fallback; current local build passes with PWA enabled.
+- PWA assets/offline fallback; the local build at pre-candidate base `82c594d` passed with PWA enabled.
 
 ## Current readiness evidence
+
+Portfolio closure: [`docs/reports/portfolio-readiness/2026-08-13-functional-mvp-closure.md`](docs/reports/portfolio-readiness/2026-08-13-functional-mvp-closure.md).
 
 | Gate | Status | Evidence |
 |---|---|---|
@@ -65,14 +67,16 @@ Older screenshots may exist as historical evidence. Treat the filenames and repo
 - VTEX ingestion/probe scripts
 - Node test runner via `tsx --test`
 
-## Local setup
+## Credential-free portfolio quick path
 
 ```bash
 npm ci
-npm run dev
+CATALOG_OFFLINE_MODE=true npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3000`, search for `yerba`, open EAN `7790002000022`, add it to the basket, and visit `/ofertas`. Exact `CATALOG_OFFLINE_MODE=true` enables bounded historical demo data; no credentials or secrets are required.
+
+## Production and live-data setup
 
 Copy `.env.example` to `.env.local` and fill only local/development values. Do not commit `.env` or `.env.local`; both are ignored.
 
@@ -135,14 +139,13 @@ Do not run active/non-dry-run ingestion without an explicit approval and a rollb
 
 ## Honest claim boundary
 
-Defensible: this repo demonstrates a full-stack price comparison product with search, catalog APIs, basket UX, VTEX ingestion tooling, Prisma/Supabase modeling, admin guardrails, documented readiness gates, and a smoke-verified public Vercel demo.
+Defensible: the functional portfolio MVP is complete. This repo demonstrates a full-stack price comparison product with a credential-free search/detail/basket/offers journey, catalog APIs, VTEX ingestion tooling, Prisma/Supabase modeling, admin guardrails, documented readiness gates, and a smoke-verified public Vercel demo.
 
-Not defensible yet: launch sign-off, complete E2E coverage, active ingestion approved/running, production admin positive path fully validated, custom domain/backups/monitoring closed, or scheduled ingestion cadence configured.
+Not defensible yet: production launch sign-off, live database/cache connectivity, active ingestion with managed secrets, the production Clerk admin positive path, or closed operational ownership for alerts, backups/restore, cadence, SLOs, on-call, and go/no-go.
 
 ## Main pending items
 
-- Add/verify `ADMIN_EMAILS` and validate the authenticated admin positive path in production Clerk.
-- Decide and test any active ingestion writes with explicit approval.
-- Keep scheduled GitHub Actions paused until repository secrets and ingestion cadence are intentionally configured.
-- Add launch-ops items before any launch-readiness claim: custom domain if desired, backups, monitoring/alerts, and broader E2E.
-- Basket product loading uses one bounded batch endpoint and a set-based catalog query.
+- Connect and verify production PostgreSQL and cache services.
+- Run approved shadow ingestion with managed secrets before any active writes.
+- Validate the authenticated Clerk admin positive path in production.
+- Assign alerts, backups/restore, cadence, SLO, on-call, and launch go/no-go ownership.
