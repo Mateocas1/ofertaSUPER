@@ -145,4 +145,4 @@ Not defensible yet: launch sign-off, complete E2E coverage, active ingestion app
 - Decide and test any active ingestion writes with explicit approval.
 - Keep scheduled GitHub Actions paused until repository secrets and ingestion cadence are intentionally configured.
 - Add launch-ops items before any launch-readiness claim: custom domain if desired, backups, monitoring/alerts, and broader E2E.
-- Consider a future basket batch endpoint to remove the N+1 product-fetch pattern documented in Gate 7.
+- Basket product loading uses one bounded batch endpoint and a set-based catalog query.

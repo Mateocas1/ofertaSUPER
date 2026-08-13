@@ -11,29 +11,9 @@ import { SupermarketBadge } from "@/components/supermarket-badge";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { useCanasta, type CanastaItem } from "@/hooks/use-canasta";
 import { formatCurrency } from "@/lib/format";
+import { fetchBasketProducts } from "@/lib/basket-products-client";
+import type { BasketProduct as CanastaProduct } from "@/lib/basket-products-contract";
 import { cn } from "@/lib/utils";
-
-type CanastaProduct = {
-  ean: string;
-  name: string;
-  brand: string | null;
-  imageUrl: string | null;
-  minPrice: number | null;
-  freshMinPrice: number | null;
-  hasFreshPrice: boolean;
-  priceEntries: Array<{
-    supermarket: {
-      id: number;
-      name: string;
-      slug: string;
-      logoUrl: string | null;
-    };
-    price: number | null;
-    isAvailable: boolean;
-    productUrl: string | null;
-    freshnessStatus: "fresh" | "stale" | "unknown";
-  }>;
-};
 
 type SupermarketSummary = {
   slug: string;
@@ -118,28 +98,8 @@ export function CanastaPage() {
 
     void (async () => {
       try {
-        const responses = await Promise.all(
-          eans.map(async (ean) => {
-            const response = await fetch(`/api/products/${ean}`, {
-              signal: controller.signal,
-            });
-
-            if (!response.ok) {
-              return null;
-            }
-
-            const payload = (await response.json()) as CanastaProduct;
-            return payload;
-          }),
-        );
-
-        const nextProducts = responses.reduce<Record<string, CanastaProduct>>((accumulator, product) => {
-          if (product) {
-            accumulator[product.ean] = product;
-          }
-
-          return accumulator;
-        }, {});
+        const { items: products } = await fetchBasketProducts(eans, controller.signal);
+        const nextProducts = Object.fromEntries(products.map((product) => [product.ean, product]));
 
         startTransition(() => {
           setProductsByEan(nextProducts);
