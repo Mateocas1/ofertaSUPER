@@ -137,6 +137,17 @@ function withCalculatedFoundationSha(
 	return evidence;
 }
 
+function createInvalidEvidenceFixture(
+	mutate: (evidence: Record<string, Record<string, unknown>>) => void,
+): DirectRefreshDiscoveryPrewriteFoundationEvidence {
+	const evidence = structuredClone(completeEvidence) as unknown as Record<
+		string,
+		Record<string, unknown>
+	>;
+	mutate(evidence);
+	return evidence as unknown as DirectRefreshDiscoveryPrewriteFoundationEvidence;
+}
+
 function evaluateFoundation(input: {
 	evidence: DirectRefreshDiscoveryPrewriteFoundationEvidence;
 	evidencePath?: string;
@@ -622,13 +633,12 @@ describe("direct-refresh discovery prewrite foundation", () => {
 		] as const;
 
 		for (const { group, field, reason } of cases) {
-			const evidence = structuredClone(completeEvidence) as Record<string, Record<string, unknown>>;
-			delete evidence[group][field];
+			const evidence = createInvalidEvidenceFixture((fixture) => {
+				delete fixture[group][field];
+			});
 
 			const report = evaluateFoundation({
-				evidence: withCalculatedFoundationSha(
-					evidence as DirectRefreshDiscoveryPrewriteFoundationEvidence,
-				),
+				evidence: withCalculatedFoundationSha(evidence),
 				now: new Date("2026-06-06T12:30:00.000Z"),
 			});
 
@@ -678,13 +688,12 @@ describe("direct-refresh discovery prewrite foundation", () => {
 
 		for (const { group, field, ...reasons } of groups) {
 			for (const { value, reasonKey } of timestampCases) {
-				const evidence = structuredClone(completeEvidence) as Record<string, Record<string, unknown>>;
-				evidence[group][field] = value;
+				const evidence = createInvalidEvidenceFixture((fixture) => {
+					fixture[group][field] = value;
+				});
 
 				const report = evaluateFoundation({
-					evidence: withCalculatedFoundationSha(
-						evidence as DirectRefreshDiscoveryPrewriteFoundationEvidence,
-					),
+					evidence: withCalculatedFoundationSha(evidence),
 					now: new Date("2026-06-06T12:30:00.000Z"),
 				});
 
@@ -699,13 +708,12 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("keeps alert policy freshness separate from test-alert proof freshness", () => {
-		const evidence = structuredClone(completeEvidence) as Record<string, Record<string, unknown>>;
-		delete evidence.alertChannel.policyVerifiedAt;
+		const evidence = createInvalidEvidenceFixture((fixture) => {
+			delete fixture.alertChannel.policyVerifiedAt;
+		});
 
 		const report = evaluateFoundation({
-			evidence: withCalculatedFoundationSha(
-				evidence as DirectRefreshDiscoveryPrewriteFoundationEvidence,
-			),
+			evidence: withCalculatedFoundationSha(evidence),
 			now: new Date("2026-06-06T12:30:00.000Z"),
 		});
 
