@@ -203,8 +203,8 @@ function extractProductRecords(payload: unknown): LooseRecord[] {
   const queue: unknown[] = [payload];
   const products: LooseRecord[] = [];
 
-  while (queue.length > 0) {
-    const current = queue.shift();
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const current = queue[cursor];
 
     if (Array.isArray(current)) {
       queue.push(...current);

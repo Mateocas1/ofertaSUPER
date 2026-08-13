@@ -21,6 +21,18 @@ import {
 } from "../src/lib/redis";
 import { limitRequestOrFallback } from "../src/lib/rate-limit";
 
+function vtexProduct(id: string) {
+	return {
+		productName: `Product ${id}`,
+		items: [
+			{
+				itemId: id,
+				referenceId: [{ Value: `7790001${id.padStart(6, "0")}` }],
+			},
+		],
+	};
+}
+
 describe("VTEX request builder", () => {
 	it("builds direct catalog lookup URLs without productSuggestions or persisted hash", () => {
 		const sku = buildVtexCatalogSearchRequest({
@@ -145,6 +157,70 @@ describe("VTEX request builder", () => {
     assert.equal(variables.count, 12);
     assert.equal(variables.productOriginVtex, true);
   });
+});
+
+describe("VTEX payload traversal", () => {
+	const baseUrl = "https://www.example.com";
+
+	it("preserves breadth-first extraction order across nested arrays and objects", () => {
+		const products = normalizeVtexCatalogPayload(
+			{
+				first: [vtexProduct("1"), { nested: vtexProduct("3") }],
+				second: vtexProduct("2"),
+			},
+			baseUrl,
+		);
+
+		assert.deepEqual(
+			products.map((product) => product.skuId),
+			["2", "1", "3"],
+		);
+	});
+
+	it("discovers valid records behind non-record wrapper objects", () => {
+		const products = normalizeVtexCatalogPayload(
+			{ data: { search: { results: [{ node: vtexProduct("4") }] } } },
+			baseUrl,
+		);
+
+		assert.deepEqual(products.map((product) => product.skuId), ["4"]);
+	});
+
+	it("ignores malformed records, primitives, and null while preserving duplicates", () => {
+		const duplicate = vtexProduct("5");
+		const products = normalizeVtexCatalogPayload(
+			[
+				null,
+				false,
+				"text",
+				42,
+				{ productName: "Missing items and EAN" },
+				{ items: [{ itemId: "missing-ean" }] },
+				duplicate,
+				duplicate,
+			],
+			baseUrl,
+		);
+
+		assert.deepEqual(products.map((product) => product.skuId), ["5", "5"]);
+	});
+
+	it("extracts a deterministic wide and deep payload in breadth-first order", () => {
+		const width = 200;
+		const roots = Array.from({ length: width }, (_, index) => ({
+			product: vtexProduct(String(index + 1)),
+			child: { product: vtexProduct(String(width + index + 1)) },
+		}));
+
+		const products = normalizeVtexCatalogPayload({ roots }, baseUrl);
+		const expected = [
+			...Array.from({ length: width }, (_, index) => String(index + 1)),
+			...Array.from({ length: width }, (_, index) => String(width + index + 1)),
+		];
+
+		assert.equal(products.length, width * 2);
+		assert.deepEqual(products.map((product) => product.skuId), expected);
+	});
 });
 
 describe("safe data fallback", () => {
