@@ -8,10 +8,10 @@ const read = (path: string) => readFile(new URL(path, root), "utf8");
 test("builds a pinned standalone web runner deterministically", async () => {
 	const dockerfile = await read("Dockerfile");
 
-	assert.equal((dockerfile.match(/^FROM node:22\.19\.0-bookworm-slim/gm) ?? []).length, 2);
-	assert.match(dockerfile, /^FROM .* AS dependencies$/m);
+	assert.match(dockerfile, /^FROM node:22\.19\.0-bookworm-slim AS openssl-node$/m);
+	assert.match(dockerfile, /^FROM openssl-node AS dependencies$/m);
 	assert.match(dockerfile, /^FROM .* AS builder$/m);
-	assert.match(dockerfile, /^FROM .* AS runner$/m);
+	assert.match(dockerfile, /^FROM node:22\.19\.0-bookworm-slim AS runner$/m);
 	assert.match(dockerfile, /npm ci --ignore-scripts --no-audit --no-fund/);
 	assert.ok(dockerfile.indexOf("npm run db:generate") < dockerfile.indexOf("npm run build"));
 	assert.match(dockerfile, /\/app\/\.next\/standalone \.\//);
