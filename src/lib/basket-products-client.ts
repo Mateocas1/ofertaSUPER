@@ -9,6 +9,7 @@ export async function fetchBasketProducts(eans: string[], signal?: AbortSignal) 
   const products = new Map<string, BasketProduct>();
   const unavailable = new Set<string>();
   let successfulChunks = 0;
+  let allSuccessfulChunksAreDegradedDemo = true;
 
   for (let offset = 0; offset < requested.length; offset += BASKET_PRODUCTS_BATCH_SIZE) {
     const chunk = requested.slice(offset, offset + BASKET_PRODUCTS_BATCH_SIZE);
@@ -25,6 +26,7 @@ export async function fetchBasketProducts(eans: string[], signal?: AbortSignal) 
       parsed.items.forEach((product) => products.set(product.ean, product));
       parsed.missing.forEach((ean) => unavailable.add(ean));
       successfulChunks += 1;
+      allSuccessfulChunksAreDegradedDemo &&= parsed.dataSource === "demo" && parsed.degraded;
     } catch (error) {
       if (signal?.aborted) throw error;
       chunk.forEach((ean) => unavailable.add(ean));
@@ -35,5 +37,6 @@ export async function fetchBasketProducts(eans: string[], signal?: AbortSignal) 
   return {
     items: requested.flatMap((ean) => products.get(ean) ?? []),
     missing: requested.filter((ean) => unavailable.has(ean)),
+    degradedDemo: successfulChunks > 0 && allSuccessfulChunksAreDegradedDemo,
   };
 }

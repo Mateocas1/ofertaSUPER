@@ -3,6 +3,7 @@ import "server-only";
 import { classifyPriceFreshness } from "@/lib/price-freshness";
 import { db } from "@/lib/db";
 import type { BasketProduct } from "@/lib/basket-products-contract";
+import { resolveOfflineBasketProducts } from "@/lib/portfolio-catalog";
 export { basketProductsBodySchema } from "@/lib/basket-products-contract";
 
 type ProductReader = Pick<typeof db, "product">;
@@ -74,12 +75,19 @@ export async function loadBasketProducts(eans: string[], client: ProductReader =
 export async function handleBasketProductsRequest(
   readJson: () => Promise<unknown>,
   loader: typeof loadBasketProducts = loadBasketProducts,
+  env: Record<string, string | undefined> = process.env,
 ) {
   try {
     const { basketProductsBodySchema } = await import("@/lib/basket-products-contract");
     const { eans } = basketProductsBodySchema.parse(await readJson());
-    const result = await loader(eans);
-    return { status: 200, body: { ...result, dataSource: "database", degraded: false, latestCheckedAt: null } };
+    const offlineResult = resolveOfflineBasketProducts(eans, env);
+    const result = offlineResult ?? await loader(eans);
+    return { status: 200, body: {
+      ...result,
+      dataSource: offlineResult ? "demo" : "database",
+      degraded: Boolean(offlineResult),
+      latestCheckedAt: null,
+    } };
   } catch (error) {
     const { ZodError } = await import("zod");
     if (error instanceof ZodError || error instanceof SyntaxError) {

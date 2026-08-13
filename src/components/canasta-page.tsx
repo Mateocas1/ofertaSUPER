@@ -24,7 +24,11 @@ type SupermarketSummary = {
   missingItems: number;
 };
 
-function buildSupermarketSummaries(items: CanastaItem[], productsByEan: Record<string, CanastaProduct>) {
+function buildSupermarketSummaries(
+  items: CanastaItem[],
+  productsByEan: Record<string, CanastaProduct>,
+  degradedDemo: boolean,
+) {
   const summaryMap = new Map<string, SupermarketSummary>();
 
   for (const item of items) {
@@ -60,7 +64,10 @@ function buildSupermarketSummaries(items: CanastaItem[], productsByEan: Record<s
     for (const summary of summaries) {
       const entry = product.priceEntries.find((candidate) => candidate.supermarket.slug === summary.slug);
 
-      if (entry && entry.price !== null && entry.isAvailable && entry.freshnessStatus === "fresh") {
+      const eligible = entry?.freshnessStatus === "fresh" ||
+        (degradedDemo && entry?.freshnessStatus === "stale");
+
+      if (entry && entry.price !== null && entry.isAvailable && eligible) {
         summary.coveredItems += 1;
         summary.total += entry.price * item.qty;
       } else {
@@ -81,6 +88,7 @@ function buildSupermarketSummaries(items: CanastaItem[], productsByEan: Record<s
 export function CanastaPage() {
   const { clearCanasta, distinctItems, hasHydrated, items, removeItem, totalItems } = useCanasta();
   const [productsByEan, setProductsByEan] = useState<Record<string, CanastaProduct>>({});
+  const [degradedDemo, setDegradedDemo] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -89,20 +97,23 @@ export function CanastaPage() {
   useEffect(() => {
     if (!uniqueEansKey) {
       setProductsByEan({});
+      setDegradedDemo(false);
       setLoadError(null);
       return;
     }
 
     const controller = new AbortController();
     const eans = uniqueEansKey.split("|").filter(Boolean);
+    setDegradedDemo(false);
 
     void (async () => {
       try {
-        const { items: products } = await fetchBasketProducts(eans, controller.signal);
+        const { items: products, degradedDemo: nextDegradedDemo } = await fetchBasketProducts(eans, controller.signal);
         const nextProducts = Object.fromEntries(products.map((product) => [product.ean, product]));
 
         startTransition(() => {
           setProductsByEan(nextProducts);
+          setDegradedDemo(nextDegradedDemo);
           setLoadError(null);
         });
       } catch (error) {
@@ -117,7 +128,7 @@ export function CanastaPage() {
     return () => controller.abort();
   }, [uniqueEansKey]);
 
-  const summaries = buildSupermarketSummaries(items, productsByEan);
+  const summaries = buildSupermarketSummaries(items, productsByEan, degradedDemo);
   const bestCompleteSummary = summaries.find((summary) => summary.missingItems === 0) ?? null;
   const unresolvedItems = items.filter((item) => !productsByEan[item.ean]);
 
@@ -160,7 +171,9 @@ export function CanastaPage() {
               <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Canasta activa</p>
               <h1 className="mt-2 text-4xl font-semibold text-foreground md:text-5xl">{distinctItems} productos, {totalItems} unidades</h1>
               <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">
-                Ajusta cantidades y compara cuanto costaría resolver la canasta con registros recientes disponibles por supermercado.
+                {degradedDemo
+                  ? "Esta demostración estima la canasta con precios históricos; no muestra precios actuales."
+                  : "Ajusta cantidades y compara cuanto costaría resolver la canasta con registros recientes disponibles por supermercado."}
               </p>
             </div>
 
@@ -179,6 +192,12 @@ export function CanastaPage() {
             </p>
           ) : null}
 
+          {degradedDemo ? (
+            <p role="status" className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 font-medium text-amber-950">
+              Estimaciones de demostración con precios históricos o desactualizados. No son precios actuales.
+            </p>
+          ) : null}
+
           {unresolvedItems.length > 0 ? (
             <p className="mt-5 rounded-2xl border border-border/70 bg-white/80 px-4 py-3 text-sm text-muted-foreground">
               {unresolvedItems.length} producto(s) todavia no pudieron resolverse desde la API. El comparador sigue calculando con los items cargados.
@@ -189,7 +208,8 @@ export function CanastaPage() {
         <div className="space-y-4">
           {items.map((item) => {
             const product = productsByEan[item.ean];
-            const lineTotal = product?.freshMinPrice !== null && product?.freshMinPrice !== undefined ? product.freshMinPrice * item.qty : null;
+            const linePrice = degradedDemo ? product?.minPrice : product?.freshMinPrice;
+            const lineTotal = linePrice !== null && linePrice !== undefined ? linePrice * item.qty : null;
 
             return (
               <article key={item.ean} className="surface-soft p-5">
@@ -228,7 +248,7 @@ export function CanastaPage() {
                       </p>
 
                       <p className="mt-3 text-sm text-muted-foreground">
-                        Total con registro reciente: <strong className="text-foreground">{formatCurrency(lineTotal)}</strong>
+                        {degradedDemo ? "Estimación histórica" : "Total con registro reciente"}: <strong className="text-foreground">{formatCurrency(lineTotal)}</strong>
                       </p>
                     </div>
                   </div>
@@ -276,7 +296,9 @@ export function CanastaPage() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Comparativa</p>
-              <h2 className="mt-2 text-3xl font-semibold text-foreground">Total por supermercado</h2>
+              <h2 className="mt-2 text-3xl font-semibold text-foreground">
+                {degradedDemo ? "Estimación histórica por supermercado" : "Total por supermercado"}
+              </h2>
             </div>
             {isPending ? <LoaderCircle className="size-5 animate-spin text-muted-foreground" /> : null}
           </div>
@@ -301,7 +323,7 @@ export function CanastaPage() {
                     />
                     {isBestComplete ? (
                       <span className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-900">
-                        Mejor canasta completa
+                        {degradedDemo ? "Menor estimación completa" : "Mejor canasta completa"}
                       </span>
                     ) : null}
                   </div>
@@ -327,7 +349,9 @@ export function CanastaPage() {
         <section className="surface-soft p-6">
           <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Lectura rapida</p>
           <ul className="mt-4 space-y-3 text-sm leading-6 text-muted-foreground">
-            <li>El total suma registros recientes por supermercado, no descuentos condicionales de billeteras o bancos.</li>
+            <li>{degradedDemo
+              ? "La estimación de demostración suma precios históricos o desactualizados conocidos, no precios actuales."
+              : "El total suma registros recientes por supermercado, no descuentos condicionales de billeteras o bancos."}</li>
             <li>Si un super no tiene precio disponible para un item, se marca como faltante y el total queda parcial.</li>
             <li>La canasta vive en tu navegador, sin cuenta ni persistencia en base de datos.</li>
           </ul>

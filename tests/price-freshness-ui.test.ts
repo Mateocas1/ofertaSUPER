@@ -44,4 +44,15 @@ describe("public price freshness UI contracts", () => {
     assert.match(notice, /datos de demostración/i);
     assert.doesNotMatch(notice, /actual(?:es|izado)|en vivo/i);
   });
+
+  it("guards degraded-demo basket calculations and claims", () => {
+    const basketPage = readFileSync("src/components/canasta-page.tsx", "utf8");
+
+    assert.match(basketPage, /degradedDemo \? product\?\.minPrice : product\?\.freshMinPrice/);
+    assert.match(basketPage, /degradedDemo && entry\?\.freshnessStatus === "stale"/);
+    assert.doesNotMatch(basketPage, /degradedDemo && entry\?\.freshnessStatus === "unknown"/);
+    assert.match(basketPage, /precios históricos o desactualizados/i);
+    assert.match(basketPage, /No son precios actuales/i);
+    assert.match(basketPage, /Menor estimación completa/);
+  });
 });

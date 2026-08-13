@@ -398,3 +398,8 @@ export function getDemoSearchSuggestions(query: string, limit = 8) {
     freshnessStatus: product.displayPriceFreshnessStatus,
   }));
 }
+
+export function getDemoProductsByEan(eans: string[]) {
+  const requested = new Set(eans);
+  return demoProducts.filter((product) => requested.has(product.ean));
+}

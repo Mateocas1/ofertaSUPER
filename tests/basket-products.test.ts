@@ -10,6 +10,8 @@ const product = (code: string) => ({ ean: code, name: code, brand: null, imageUr
   freshMinPrice: null, hasFreshPrice: false, priceEntries: [] });
 const envelope = (items: ReturnType<typeof product>[], missing: string[] = []) =>
   ({ items, missing, dataSource: "database", degraded: false, latestCheckedAt: null });
+const demoEnvelope = (items: ReturnType<typeof product>[], missing: string[] = []) =>
+  ({ ...envelope(items, missing), dataSource: "demo" as const, degraded: true });
 
 describe("basket product endpoint", () => {
   it("validates raw request length before dedupe and preserves trimmed first order", () => {
@@ -31,6 +33,26 @@ describe("basket product endpoint", () => {
     assert.deepEqual(success, { status: 200, body: envelope([product(ean(1))]) });
   });
 
+  it("returns bounded offline demo results with honest provenance and no dependency call", async () => {
+    let loaderCalls = 0;
+    const result = await handleBasketProductsRequest(
+      async () => ({ eans: ["7790002000022", "7799999999999", "7790002000022"] }),
+      async () => { loaderCalls += 1; throw new Error("database must not be called"); },
+      { CATALOG_OFFLINE_MODE: "true" },
+    );
+    assert.equal(loaderCalls, 0);
+    assert.equal(result.status, 200);
+    assert.deepEqual("items" in result.body ? result.body.items.map(({ ean }) => ean) : [], ["7790002000022"]);
+    assert.deepEqual(result.body, {
+      ...result.body,
+      missing: ["7799999999999"],
+      dataSource: "demo",
+      degraded: true,
+      latestCheckedAt: null,
+    });
+    assert.equal(basketProductsResponseSchema.safeParse(result.body).success, true);
+  });
+
   it("rejects malformed route bodies and extra properties", async () => {
     for (const body of [null, "bad", [], { eans: null }, { eans: [ean(1)], extra: true }]) {
       const result = await handleBasketProductsRequest(async () => body);
@@ -50,10 +72,44 @@ describe("basket product endpoint", () => {
 });
 
 describe("basket product client", () => {
+  it("enables degraded demo estimates only when every successful chunk is demo", async () => {
+    const originalFetch = globalThis.fetch;
+    const requested = Array.from({ length: 25 }, (_, index) => ean(index));
+    globalThis.fetch = async (_url, init) => {
+      const chunk = (JSON.parse(String(init?.body)) as { eans: string[] }).eans;
+      return Response.json(demoEnvelope(chunk.map(product)));
+    };
+    try {
+      const result = await fetchBasketProducts(requested);
+      assert.equal(result.degradedDemo, true);
+      assert.deepEqual(result.items.map(({ ean: code }) => code), requested);
+    } finally { globalThis.fetch = originalFetch; }
+  });
+
+  it("fails closed for mixed and non-demo successful provenance", async () => {
+    const originalFetch = globalThis.fetch;
+    const requested = Array.from({ length: 25 }, (_, index) => ean(index));
+    try {
+      for (const provenance of ["mixed", "database"] as const) {
+        let calls = 0;
+        globalThis.fetch = async (_url, init) => {
+          const chunk = (JSON.parse(String(init?.body)) as { eans: string[] }).eans;
+          calls += 1;
+          return Response.json(provenance === "mixed" && calls === 1
+            ? demoEnvelope(chunk.map(product)) : envelope(chunk.map(product)));
+        };
+        const result = await fetchBasketProducts(requested);
+        assert.equal(result.degradedDemo, false);
+        assert.deepEqual(result.items.map(({ ean: code }) => code), requested);
+      }
+    } finally { globalThis.fetch = originalFetch; }
+  });
+
   it("fails closed for malformed successful envelopes", () => {
     const valid = envelope([product(ean(1))]);
     const invalid = [
       { ...valid, dataSource: "cache" }, { ...valid, degraded: true },
+      { ...valid, dataSource: "demo" }, { ...valid, dataSource: "demo", degraded: false },
       { ...valid, latestCheckedAt: "yesterday" }, { ...valid, extra: true },
       { ...valid, items: null }, { ...valid, missing: null },
       { ...valid, items: [{ ...product(ean(1)), name: null }] },
