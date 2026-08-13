@@ -48,3 +48,31 @@ test("isolates the disposable runtime proof and always removes its image", async
 	assert.match(smoke, /image", "rm", "--force"/);
 	assert.match(smoke, /\["SIGINT", "SIGTERM"\]/);
 });
+
+test("runs only shadow ingestion through the workflow job image", async () => {
+	const workflow = await read(".github/workflows/ingest.yml");
+	const buildStep = workflow.match(/- name: Build ingestion job image\n((?:\s{8,}.*\n?)+)/)?.[1] ?? "";
+	const runStep = workflow.match(/- name: Run shadow ingestion in job image\n([\s\S]*?)(?=\n\s{6}- name:)/)?.[1] ?? "";
+
+	assert.match(buildStep, /docker build --target job --tag ofertas-super-ingestion-job \./);
+	assert.doesNotMatch(buildStep, /--build-arg/);
+	assert.match(runStep, /docker run --rm/);
+	assert.doesNotMatch(runStep, /npm run ingest|tsx scripts\/ingest\.ts/);
+	assert.match(runStep, /--env INGESTION_V2[\s\\]+ofertas-super-ingestion-job\s*$/m);
+
+	for (const name of [
+		"DATABASE_URL",
+		"DIRECT_URL",
+		"VTEX_SHA256_HASH",
+		"UPSTASH_REDIS_REST_URL",
+		"UPSTASH_REDIS_REST_TOKEN",
+		"SCRAPER_ALERT_WEBHOOK_URL",
+		"INGESTION_V2",
+	]) {
+		assert.match(runStep, new RegExp(`--env ${name}(?:\\s|\\\\)`));
+		assert.doesNotMatch(runStep, new RegExp(`--env ${name}=`));
+	}
+
+	assert.match(runStep, /INGESTION_V2: shadow/);
+	assert.doesNotMatch(workflow, /^\s*schedule:/m);
+});

@@ -31,9 +31,21 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Run shadow ingestion
+      - name: Build ingestion job image
+        run: docker build --target job --tag ofertas-super-ingestion-job .
+
+      - name: Run shadow ingestion in job image
         id: ingest_shadow
-        run: npm run ingest
+        run: |
+          docker run --rm \
+            --env DATABASE_URL \
+            --env DIRECT_URL \
+            --env VTEX_SHA256_HASH \
+            --env UPSTASH_REDIS_REST_URL \
+            --env UPSTASH_REDIS_REST_TOKEN \
+            --env SCRAPER_ALERT_WEBHOOK_URL \
+            --env INGESTION_V2 \
+            ofertas-super-ingestion-job
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
