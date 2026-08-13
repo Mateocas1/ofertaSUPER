@@ -27,6 +27,7 @@ test("runs as non-root with writable cache and direct Node signal handling", asy
 	assert.match(dockerfile, /mkdir -p \.next\/cache/);
 	assert.match(dockerfile, /chown -R nextjs:nextjs \.next/);
 	assert.match(dockerfile, /^USER nextjs$/m);
+	assert.match(dockerfile, /HEALTHCHECK[\s\S]*\/api\/health\/live/);
 	assert.match(dockerfile, /^CMD \["node", "server\.js"\]$/m);
 	assert.doesNotMatch(dockerfile, /COPY .*\.env|ENV (?:DATABASE_URL|DIRECT_URL|.*SECRET|.*TOKEN)=/);
 });

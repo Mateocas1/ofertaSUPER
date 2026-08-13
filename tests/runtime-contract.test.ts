@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatRuntimeContractErrors, validateRuntimeContract } from "../scripts/runtime-contract";
+import { formatRuntimeContractErrors, validateRuntimeContract } from "../src/lib/runtime-contract";
 
 const postgres = "postgresql://app:private@db.internal:5432/ofertas";
 

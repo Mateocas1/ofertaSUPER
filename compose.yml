@@ -56,6 +56,11 @@ services:
       VTEX_SHA256_HASH: ""
       SCRAPER_ALERT_WEBHOOK_URL: ""
     ports: ["127.0.0.1:${COMPOSE_WEB_PORT:-3300}:3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
     depends_on:
       fixture: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
