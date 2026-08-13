@@ -24,7 +24,15 @@ The command uses only explicit local credentials, publishes only the web service
 
 This proves fresh-database migrations as owner, generated app grants, fixture insertion through the least-privileged role, database provenance and freshness from `/api/search`, and conventional Redis cache/rate-limit writes. It does not prove production security, durability, backup/restore, external services, admin auth, ingestion, or orchestration readiness.
 
-The default Dockerfile packages only the Next.js web server. During development, its contract and build passed, and the non-root container served `/` in an isolated no-network, read-only smoke test without configured dependencies. This proves packaging and dependency-free degraded startup—not DB/Redis-backed behavior, durable storage, backup/restore, or production operations.
+The default Dockerfile runner packages only the Next.js web server. During development, its contract and build passed, and the non-root container served `/` in an isolated no-network, read-only smoke test without configured dependencies. This proves packaging and dependency-free degraded startup—not DB/Redis-backed behavior, durable storage, backup/restore, or production operations.
+
+## Ingestion job image
+
+Build the dedicated image with `docker build --target job .`. Its direct command is `tsx scripts/ingest.ts`, the same canonical entrypoint used by `npm run ingest` and the ingestion workflow. Generation and runtime share the same OpenSSL-enabled Node base. A preparation stage generates the Prisma client, prunes development dependencies, and removes build CLIs retained through optional peer metadata; the clean final stage receives that runtime tree and only the required source/config. `tsx` is deliberately retained as a production dependency for the canonical TypeScript entrypoint. The image runs as an unprivileged user and contains no environment file or embedded credential. This is a production-only dependency boundary, not a claim that every retained production dependency is exercised by the job.
+
+Run `npm run smoke:job-image` for a disposable local proof. It builds the `job` target, validates the `job` preflight with syntactically valid fictional values, and starts the default entrypoint with `INGESTION_V2=off`. Both checks run without networking and with a read-only root filesystem plus a bounded temporary `/tmp`; output assertions ensure fictional values are not printed. The harness removes its image after success, failure, `SIGINT`, or `SIGTERM` where signal handling is possible.
+
+The disabled entrypoint parses and validates options, reports a skipped run, and returns before source lookup, VTEX calls, or ingestion writes. Imports still construct the Prisma client in memory, but Prisma does not connect until an operation is issued. This smoke proves packaging, preflight, non-root execution, and that disabled control-flow boundary. It does not prove database connectivity, VTEX acquisition, Redis/webhook behavior, active or shadow ingestion, reconciliation, scheduling, production hardening, or forced-kill cleanup.
 
 Supply the `web` names below at runtime; no environment file or secret is copied into the image. `NEXT_PUBLIC_*` values referenced by client code are build-time inputs. The PWA plugin mutates only the isolated builder stage. The runner starts with `node server.js`, owns `.next` for runtime cache, and is not a job or migration image because standalone output omits repository scripts and development tooling.
 
@@ -79,4 +87,4 @@ Inspect an archive first, restore only into a disposable empty database, then ru
 
 ## Parity and deferred work
 
-This contract does not make every external service portable: VTEX acquisition still calls VTEX and admin mode still uses Clerk. Production orchestration policy, scheduling, job packaging, auth migration, durable production operations, and Upstash-coupled alert deduplication remain deferred.
+This contract does not make every external service portable: VTEX acquisition still calls VTEX and admin mode still uses Clerk. Production orchestration policy, scheduling, auth migration, durable production operations, and Upstash-coupled alert deduplication remain deferred.
