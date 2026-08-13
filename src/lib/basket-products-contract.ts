@@ -29,9 +29,13 @@ export const basketProductsResponseSchema = z.object({
     }).strict()),
   }).strict()),
   missing: z.array(eanSchema),
-  dataSource: z.literal("database"),
-  degraded: z.literal(false),
+  dataSource: z.enum(["database", "demo"]),
+  degraded: z.boolean(),
   latestCheckedAt: nullableTimestamp,
-}).strict();
+}).strict().superRefine((value, context) => {
+  if ((value.dataSource === "demo") !== value.degraded) {
+    context.addIssue({ code: "custom", message: "Invalid catalog provenance" });
+  }
+});
 
 export type BasketProduct = z.infer<typeof basketProductsResponseSchema>["items"][number];

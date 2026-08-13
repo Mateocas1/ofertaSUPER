@@ -12,10 +12,12 @@ const PUBLIC_COPY_FILES = [
 ] as const;
 
 const UNBACKED_LIVE_PRICE_PATTERN =
-	/\b(Mercado vivo|precio actual|precio real|precios actuales|mejor total actual|en vivo|Actualizado hoy|Datos actualizados hoy|última semana|ultima semana)\b/i;
+	/\b(Mercado vivo|precio actual|precio real|(?<!no )(?<!no son )(?<!no muestra )precios actuales|mejor total actual|en vivo|Actualizado hoy|Datos actualizados hoy|última semana|ultima semana)\b/i;
 
 describe("public price copy claims", () => {
 	it("keeps public surfaces away from unbacked live/current price language", () => {
+		assert.match("Estos son precios actuales", UNBACKED_LIVE_PRICE_PATTERN);
+		assert.doesNotMatch("No son precios actuales; no muestra precios actuales", UNBACKED_LIVE_PRICE_PATTERN);
 		for (const filePath of PUBLIC_COPY_FILES) {
 			const source = readFileSync(filePath, "utf8");
 

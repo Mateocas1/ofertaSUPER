@@ -24,6 +24,7 @@ import {
 } from "@/lib/catalog-query-planning";
 import { classifyPriceFreshness, type PriceFreshnessStatus } from "@/lib/price-freshness";
 import { DETAILED_CATEGORIES } from "@/lib/vtex/categories";
+import { resolveProductDetail } from "@/lib/portfolio-catalog";
 
 type PriceEntryRecord = {
   supermarket: {
@@ -717,7 +718,7 @@ const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail 
 });
 
 export function getProductDetail(ean: string) {
-  return getProductDetailCached(ean);
+  return resolveProductDetail(ean, getProductDetailCached);
 }
 
 export async function getProductHistory(ean: string, days = 30): Promise<ProductHistory> {
