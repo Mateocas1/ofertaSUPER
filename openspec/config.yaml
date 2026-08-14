@@ -2,10 +2,41 @@ schema: spec-driven
 
 context: |
   Project: ofertasuper
-  Stack: Next.js 15, React 19, TypeScript, Prisma, Tailwind CSS 4, Clerk, Upstash Redis/Ratelimit, PWA support
-  Architecture: App Router-based Next.js application with Prisma-backed data access and CLI/script-heavy operational workflows
-  Testing: tsx --test for Node test files under tests/, ESLint, TypeScript typecheck
+  Stack: Next.js 15 App Router, React 19, TypeScript 5, Prisma 6/PostgreSQL, Tailwind CSS 4, Clerk, Redis or Upstash, PWA support
+  Architecture: App Router web/API application with Prisma-backed catalog data and script-heavy ingestion and operational workflows
+  Testing: Node test runner through tsx for tests/**/*.test.ts; no code coverage or browser E2E suite detected
   Style: Strict TypeScript, Next.js ESLint presets, path alias @/* -> src/*
+
+execution:
+  mode: interactive
+  artifact_store: hybrid
+  delivery_strategy: auto-chain
+  review_budget_lines: 400
+
+strict_tdd: true
+
+testing:
+  detected: 2026-08-14
+  test_runner:
+    framework: Node.js test runner through tsx
+    command: npm test
+  layers:
+    unit:
+      available: true
+      tool: Node.js test runner
+    integration:
+      available: true
+      tool: Node.js test runner with repository and runtime contract tests
+    e2e:
+      available: false
+      tool: null
+  coverage:
+    available: false
+    command: null
+  quality:
+    linter: npm run lint
+    type_checker: npm run typecheck
+    formatter: null
 
 rules:
   proposal:
@@ -21,11 +52,14 @@ rules:
     - Keep tasks completable in one session
   apply:
     - Follow existing code patterns
-    - tdd: true
-    - test_command: "npm test"
+    - Keep review units within 400 authored lines; chain larger deliveries
+    - Use strict TDD; run the exact test command npm test
+    - Obey AGENTS.md; block Next.js edits when exact-version documentation under node_modules/next/dist/docs/ is unavailable
   verify:
-    - test_command: "npm test"
-    - build_command: "npm run build"
-    - coverage_threshold: 0
+    - Run npm test
+    - Run npm run lint
+    - Run npm run typecheck
+    - Run npm run build
+    - Coverage threshold is 0 because no coverage command is available
   archive:
     - Warn before merging destructive deltas
