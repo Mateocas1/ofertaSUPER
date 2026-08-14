@@ -34,13 +34,13 @@ Strict TDD: RED precedes GREEN.
 
 ## Phase 0: Foundation — PR 0
 
-- [ ] 0.1 **RED:** In `tests/production-dependency-gate.test.ts`, reject hostile traversal/absolute/Windows/NUL, `requirements.txt`, `CMakeLists.txt`, MD/MDX, and `README.sh`; retain inert payload; deny incomplete/residual classification, shell metacharacter execution, secret leakage, stale/tampered/missing/replayed/mixed evidence, and wrong-root/staged/empty/mismatched extraction inventory.
-- [ ] 0.2 **GREEN:** With explicit authorization, create `wip/production-readiness-foundation` branch/commit with canonical base/status hashes; clean main restores allowlisted `src/lib/production-readiness/dependency-gate.ts`, its test, and `scripts/production-security-evidence.ts`. Keep data-only classifier, paired invariant, fixed baseline-only npm argv, redacted environment; exclude `repository.ts`/test, Prisma schema/migration, repository smoke/script, acceptance-policy hunks, and failed Next15 manifest/lock bytes. **PRS-REQ-001; PRS-SCN-001–002.**
+- [x] 0.1 **RED:** In `tests/production-dependency-gate.test.ts`, reject hostile traversal/absolute/Windows/NUL, `requirements.txt`, `CMakeLists.txt`, MD/MDX, and `README.sh`; retain inert payload; deny incomplete/residual classification, shell metacharacter execution, secret leakage, stale/tampered/missing/replayed/mixed evidence, and wrong-root/staged/empty/mismatched extraction inventory.
+- [x] 0.2 **GREEN:** With explicit authorization, create `wip/production-readiness-foundation` branch/commit with canonical base/status hashes; clean main restores allowlisted `src/lib/production-readiness/dependency-gate.ts`, its test, and `scripts/production-security-evidence.ts`. Keep data-only classifier, paired invariant, fixed baseline-only npm argv, redacted environment; exclude `repository.ts`/test, Prisma schema/migration, repository smoke/script, acceptance-policy hunks, and failed Next15 manifest/lock bytes. **PRS-REQ-001; PRS-SCN-001–002.**
 
 ## Phase 1: Graph and Audit Authority — PR 1
 
-- [ ] 1.1 **RED:** Add `tests/next16-security-graph.test.ts` proving unknown lifecycle `hasInstallScript`/marker execution fails and zero-audit authority rejects every finding or unclassified path.
-- [ ] 1.2 **GREEN:** Add Graph receipts; update fixed Next/Clerk/Prisma/Axios graph/lock; `shadcn` dev, `tsx` retained; `--ignore-scripts`, reviewed argv. **PRS-REQ-001; PRS-SCN-001–002.**
+- [x] 1.1 **RED:** Add `tests/next16-security-graph.test.ts` proving unknown lifecycle `hasInstallScript`/marker execution fails and zero-audit authority rejects every finding or unclassified path.
+- [x] 1.2 **GREEN:** Add Graph receipts; update fixed Next/Clerk/Prisma/Axios graph/lock; `shadcn` dev, `tsx` retained; `--ignore-scripts`, reviewed argv. **PRS-REQ-001; PRS-SCN-001–002.**
 
 ## Phase 2: Proxy and Framework — PR 2
 
