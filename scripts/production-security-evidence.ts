@@ -29,7 +29,7 @@ function canonicalize(value: unknown): unknown {
 }
 
 function runNpmAudit(command: string, args: string[], options: RunOptions) {
-	const result = spawnSync(command, args, { ...options, encoding: "utf8" });
+	const result = spawnSync(command, args, { ...options, env: options.env as NodeJS.ProcessEnv, encoding: "utf8" });
 	return { status: result.status, stdout: result.stdout ?? "", error: result.error };
 }
 
