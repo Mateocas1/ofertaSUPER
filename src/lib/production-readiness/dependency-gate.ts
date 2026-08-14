@@ -1,5 +1,6 @@
 export type DependencyPath = { package: string; version: string; path: string };
 export type AuditFinding = { path?: string; advisory?: string };
+export type LifecycleReceipt = { path: string; hasInstallScript?: boolean; markerExecuted?: boolean };
 
 export const FOUNDATION_PATHS = [
 	"scripts/production-security-evidence.ts",
@@ -56,6 +57,27 @@ export function classifyProductionAudit({ tree, findings }: { tree: DependencyPa
 		return { ...entry, advisories: found, remediation: found.length ? "residual" : "clear" };
 	});
 	return { allowed: reasons.length === 0, reasons: [...new Set(reasons)].sort(), classifications };
+}
+
+export function evaluateGraphAuthority({ tree, findings, lifecycle }: { tree: DependencyPath[]; findings: AuditFinding[]; lifecycle: LifecycleReceipt[] }) {
+	const audit = classifyProductionAudit({ tree, findings });
+	const reasons = [...audit.reasons];
+	const markers = new Map<string, LifecycleReceipt>();
+	for (const receipt of lifecycle) {
+		if (markers.has(receipt.path)) reasons.push(`duplicate lifecycle receipt: ${receipt.path}`);
+		markers.set(receipt.path, receipt);
+	}
+	for (const entry of tree) {
+		const receipt = markers.get(entry.path);
+		if (!receipt) {
+			reasons.push(`lifecycle receipt missing: ${entry.path}`);
+			continue;
+		}
+		if (typeof receipt.hasInstallScript !== "boolean" || typeof receipt.markerExecuted !== "boolean") reasons.push(`lifecycle marker unknown: ${entry.path}`);
+		else if (receipt.markerExecuted) reasons.push(`lifecycle marker executed: ${entry.path}`);
+	}
+	for (const path of markers.keys()) if (!tree.some((entry) => entry.path === path)) reasons.push(`unclassified lifecycle receipt: ${path}`);
+	return { allowed: reasons.length === 0, reasons: [...new Set(reasons)].sort(), classifications: audit.classifications };
 }
 
 export function validateFoundationInventory(input: { root: string; expectedRoot: string; base: string; expectedBase: string; staged: string[]; paths: readonly string[] }): Verdict {
