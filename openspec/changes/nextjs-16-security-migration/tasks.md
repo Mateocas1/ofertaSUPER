@@ -44,8 +44,8 @@ Strict TDD: RED precedes GREEN.
 
 ## Phase 2: Proxy and Framework — PR 2
 
-- [ ] 2.1 **RED:** Add `tests/proxy-contract.test.ts` for unchanged admin/API matching, authorized/unauthorized decisions, and public catalog access.
-- [ ] 2.2 **GREEN:** Rename `src/middleware.ts` to `src/proxy.ts`; preserve Clerk and `src/lib/admin/access.ts`; make only typegen/lint-proven corrections. **PRS-SCN-003.**
+- [x] 2.1 **RED:** Add `tests/proxy-contract.test.ts` for unchanged admin/API matching, authorized/unauthorized decisions, and public catalog access.
+- [x] 2.2 **GREEN:** Rename `src/middleware.ts` to `src/proxy.ts`; preserve Clerk and `src/lib/admin/access.ts`; make only typegen/lint-proven corrections. **PRS-SCN-003.**
 
 ## Phase 3: Webpack PWA and Images — PR 3
 
