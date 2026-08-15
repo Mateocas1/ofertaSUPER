@@ -49,8 +49,8 @@ Strict TDD: RED precedes GREEN.
 
 ## Phase 3: Webpack PWA and Images — PR 3
 
-- [ ] 3.1 **RED:** Add `tests/pwa-build-contract.test.ts`, `tests/next16-pwa.browser.ts`, and `playwright.config.ts`: `--webpack`, manifest, SW cache/update, offline fallback, unoptimized images.
-- [ ] 3.2 **GREEN:** Update `package.json`, `next.config.ts`, `.github/workflows/lighthouse-ci.yml`, and PWA hashes; retain Workbox/`next build --webpack`. **PRS-SCN-004.**
+- [x] 3.1 **RED:** Add `tests/pwa-build-contract.test.ts`, `tests/next16-pwa.browser.ts`, and `playwright.config.ts`: `--webpack`, manifest, SW cache/update, offline fallback, unoptimized images.
+- [x] 3.2 **GREEN:** Update `package.json`, `next.config.ts`, `.github/workflows/lighthouse-ci.yml`, and PWA hashes; retain Workbox/`next build --webpack`. **PRS-SCN-004.**
 
 ## Phase 4: Standalone Rollout and Handoff — PR 4
 

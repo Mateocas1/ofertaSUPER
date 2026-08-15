@@ -9,6 +9,14 @@ const withPWA = withPWAInit({
   register: true,
   reloadOnOnline: true,
   cacheOnFrontEndNav: true,
+  fallbacks: {
+    document: "/~offline",
+  },
+  workboxOptions: {
+    skipWaiting: true,
+    clientsClaim: true,
+    cleanupOutdatedCaches: true,
+  },
 });
 
 const securityHeaders = [
