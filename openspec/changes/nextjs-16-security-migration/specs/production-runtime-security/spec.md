@@ -6,7 +6,8 @@ Close production dependency vulnerabilities while preserving production runtime 
 
 ## Requirements
 
-### Requirement PRS-REQ-001: Complete production audit closure
+### Requirement: Complete production audit closure
+**Stable ID:** PRS-REQ-001
 
 The system MUST establish and retain a bounded dependency-gate/foundation baseline that deterministically classifies every production dependency path by package, version, advisory status, path, and remediation state. A final production audit MUST report zero findings across Next.js, Clerk, Prisma, Axios, and every other production dependency. Risk acceptance, suppression, or an unclassified path MUST NOT satisfy closure.
 
@@ -22,7 +23,8 @@ The system MUST establish and retain a bounded dependency-gate/foundation baseli
 - THEN the migration MUST remain incomplete
 - AND the finding or path MUST NOT be accepted as closed by risk acceptance
 
-### Requirement PRS-REQ-002: Production runtime continuity
+### Requirement: Production runtime continuity
+**Stable ID:** PRS-REQ-002
 
 The migrated runtime MUST preserve authenticated and unauthorized access decisions, public catalog availability, PWA installation, cache and offline fallback behavior, representative image rendering, production build success, and standalone startup. Each boundary MUST have production-like evidence before promotion.
 
@@ -46,7 +48,8 @@ The migrated runtime MUST preserve authenticated and unauthorized access decisio
 - WHEN promotion is requested
 - THEN promotion MUST be blocked and the candidate MUST remain unpromoted
 
-### Requirement PRS-REQ-003: Interruption-free reversible rollout
+### Requirement: Interruption-free reversible rollout
+**Stable ID:** PRS-REQ-003
 
 The rollout MUST retain a last verified release, preserve public availability during cutover, and be reversibly recoverable. A critical regression in authentication, catalog, PWA/offline, images, build, or standalone runtime MUST trigger rollback.
 
@@ -68,7 +71,8 @@ The rollout MUST retain a last verified release, preserve public availability du
 - THEN the prior release MUST continue serving the public
 - AND the migration state MUST be recorded as incomplete or rolled back
 
-### Requirement PRS-REQ-004: Evidence handoff without cross-change completion
+### Requirement: Evidence handoff without cross-change completion
+**Stable ID:** PRS-REQ-004
 
 The change MUST produce traceable audit, runtime, rollout, and migration-state evidence for `production-readiness` task 1.3. This handoff MUST NOT modify that task's completion state or claim its gate is complete; that change SHALL evaluate and record its own gate.
 
