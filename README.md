@@ -16,7 +16,7 @@ ofertasSUPER is a supermarket price and offer comparison app for Argentina. It i
 - Product detail route `/producto/[ean]`, category route `/categoria/[slug]`, offers hub `/ofertas`, and local basket route `/canasta`.
 - Prisma catalog schema for products, supermarket prices, price history, promotions, categories, ingestion runs, staging products, and source health.
 - VTEX probe and ingestion pipeline with shadow/dry-run mode, quality validation, reconciliation code, and operational metrics.
-- Admin access policy that fails closed unless a Clerk user matches `ADMIN_EMAILS` or has an explicit admin role in metadata.
+- Admin access policy that fails closed unless the signed Clerk session contains the exact `metadata.role` admin claim.
 - PWA assets/offline fallback; the local build at pre-candidate base `82c594d` passed with PWA enabled.
 
 ## Current readiness evidence
@@ -100,10 +100,11 @@ VTEX_SHA256_HASH=
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
-ADMIN_EMAILS=
 UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 ```
+
+Admin authorization requires a Clerk session-token template and a backend-managed role assignment. Follow the signed-claim setup and rotation procedure in [`docs/portable-runtime-contract.md`](docs/portable-runtime-contract.md); the application does not authorize from email addresses or live user metadata.
 
 ## Verification commands
 

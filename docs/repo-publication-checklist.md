@@ -21,7 +21,7 @@ This checklist is for publishing the repository as honest portfolio evidence. It
 | Admin fail-closed checked | Done | Gate 6 report |
 | Complexity risks documented | Done | Gate 7 report |
 | Vercel public deploy smoke | Done | `docs/reports/production-readiness/2026-05-18-gate3-vercel-deploy-context.md` |
-| Production admin positive path | Pending | `ADMIN_EMAILS` was not present locally and was not invented |
+| Production admin positive path | Pending | Signed exact-role claim setup and live validation remain external work |
 | Scheduled ingestion ops | Pending | GitHub Actions schedules are paused until secrets/cadence are configured |
 
 ## Claims allowed
@@ -31,7 +31,7 @@ This checklist is for publishing the repository as honest portfolio evidence. It
 - Prisma/Supabase catalog model and VTEX ingestion tooling.
 - Readiness gates with real logs/screenshots.
 - Smoke-verified public Vercel demo.
-- Admin access policy fails closed by allowlist or Clerk admin role.
+- Admin access policy fails closed unless Clerk supplies the exact signed admin role claim.
 
 ## Claims forbidden
 

@@ -1,37 +1,16 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-import { canAccessAdmin, parseAdminEmailAllowlist } from "@/lib/admin/access-policy";
+import { canAccessAdmin } from "@/lib/admin/access-policy";
 
-type ClerkLikeUser = Awaited<ReturnType<typeof currentUser>>;
+type ClerkAuth = typeof import("@clerk/nextjs/server").auth;
+type AdminAuthState = Awaited<ReturnType<ClerkAuth>>;
 
-function getUserEmails(user: ClerkLikeUser) {
-  const emails = new Set<string>();
-
-  if (user?.primaryEmailAddress?.emailAddress) {
-    emails.add(user.primaryEmailAddress.emailAddress);
-  }
-
-  for (const email of user?.emailAddresses ?? []) {
-    if (email.emailAddress) {
-      emails.add(email.emailAddress);
-    }
-  }
-
-  return Array.from(emails);
+async function getClerkAuth() {
+  const { auth } = await import("@clerk/nextjs/server");
+  return auth();
 }
 
-function userCanAccessAdmin(user: ClerkLikeUser) {
-  return canAccessAdmin({
-    emails: getUserEmails(user),
-    allowedEmails: parseAdminEmailAllowlist(process.env.ADMIN_EMAILS),
-    metadata: [user?.publicMetadata, user?.privateMetadata, user?.unsafeMetadata],
-  });
-}
-
-export async function requireAdminPageAccess() {
-  const authState = await auth();
-
+export function evaluateAdminPageAccess(authState: AdminAuthState) {
   if (!authState.isAuthenticated) {
     return {
       status: "unauthenticated" as const,
@@ -39,9 +18,7 @@ export async function requireAdminPageAccess() {
     };
   }
 
-  const user = await currentUser();
-
-  if (!userCanAccessAdmin(user)) {
+  if (!canAccessAdmin(authState.sessionClaims)) {
     return {
       status: "forbidden" as const,
     };
@@ -49,22 +26,25 @@ export async function requireAdminPageAccess() {
 
   return {
     status: "authorized" as const,
-    user,
   };
 }
 
-export async function requireAdminApiAccess() {
-  const authState = await auth();
-
+export function evaluateAdminApiAccess(authState: AdminAuthState) {
   if (!authState.isAuthenticated) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await currentUser();
-
-  if (!userCanAccessAdmin(user)) {
+  if (!canAccessAdmin(authState.sessionClaims)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   return null;
+}
+
+export async function requireAdminPageAccess() {
+  return evaluateAdminPageAccess(await getClerkAuth());
+}
+
+export async function requireAdminApiAccess() {
+  return evaluateAdminApiAccess(await getClerkAuth());
 }
