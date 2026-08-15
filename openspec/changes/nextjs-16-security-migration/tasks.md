@@ -54,5 +54,5 @@ Strict TDD: RED precedes GREEN.
 
 ## Phase 4: Standalone Rollout and Handoff — PR 4
 
-- [ ] 4.1 **RED:** Add `tests/next16-rollout.test.ts` for standalone routes, missing runtime proof promotion block, and failure/timeout/signal/cleanup rollback; pre-cutover keeps traffic and critical failure switches once.
-- [ ] 4.2 **GREEN:** Add `scripts/next16-rollout.ts`, runtime smoke, immutable records, and `docs/next16-rollout.md`; validate retained release, cut over/rehearse recovery, and hand off without `production-readiness` task-state change. **PRS-SCN-005–011.**
+- [x] 4.1 **RED:** Add `tests/next16-rollout.test.ts` for standalone routes, missing runtime proof promotion block, and failure/timeout/signal/cleanup rollback; pre-cutover keeps traffic and critical failure switches once.
+- [x] 4.2 **GREEN:** Add `scripts/next16-rollout.ts`, runtime smoke, immutable records, and `docs/next16-rollout.md`; validate retained release, cut over/rehearse recovery, and hand off without `production-readiness` task-state change. **PRS-SCN-005–011.**
