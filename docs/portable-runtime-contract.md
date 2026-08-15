@@ -45,11 +45,27 @@ Supply the `web` names below at runtime; no environment file or secret is copied
 | Role or mode | Required names | Optional names and behavior |
 |---|---|---|
 | `web` | `DATABASE_URL` | `NEXT_PUBLIC_SITE_URL`; `REDIS_URL` or Upstash pair; public paths degrade when cache is absent |
-| `web` with `ADMIN_ENABLED=true` | `DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | `ADMIN_EMAILS` narrows access by allowlist; Clerk metadata roles remain supported |
+| `web` with admin routes | `DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | Requires the signed Clerk claim configured below; missing or stale claims fail closed |
 | `job` | `DATABASE_URL`, `VTEX_SHA256_HASH` | `REDIS_URL` or Upstash pair; `SCRAPER_ALERT_WEBHOOK_URL`; VTEX delay/user-agent tuning |
 | `migration` | `DIRECT_URL` | None |
 
 Configure exactly one Redis provider: conventional Redis through `REDIS_URL`, or Upstash through both Upstash names. `REDIS_URL` wins deterministically at runtime, while preflight rejects conflicts. Without a complete provider, cache misses and rate limiting fail open. The conventional limiter uses an atomic Lua fixed window (60 requests/60 seconds), connects lazily with a one-second bound, and does not reconnect automatically; it does not claim sliding-window parity. Errors and probes expose names or reason codes, never values.
+
+## Clerk admin claim
+
+In the Clerk Dashboard session-token claims editor, project only the backend-managed role into the signed session:
+
+```json
+{
+  "metadata": {
+    "role": "{{user.public_metadata.role}}"
+  }
+}
+```
+
+The application authorizes only exact `sessionClaims.metadata.role === "admin"`. Email addresses, live user objects, alternate metadata objects, role arrays, and case variants do not grant access.
+
+Role changes do not rewrite an already-issued session token. After a controlled grant or removal, refresh the token with Clerk's cache-bypassing token refresh or require a new sign-in before testing access. For urgent removal, delete the backend-managed role and revoke the affected active sessions; account for any already-issued token until it expires rather than treating the metadata write alone as immediate revocation.
 
 ## Conventional PostgreSQL
 

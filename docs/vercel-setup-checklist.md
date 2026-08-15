@@ -37,7 +37,6 @@ Production environment, and usually Preview too if preview deploys are used.
 | `NEXT_PUBLIC_SITE_URL` | metadata/canonical URL | Set to the final public Vercel URL after it exists. |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | root `ClerkProvider` | Use the intended Clerk instance for this deployment. |
 | `CLERK_SECRET_KEY` | protected admin/server Clerk calls | Server-side secret only. |
-| `ADMIN_EMAILS` | admin allowlist | Comma-separated allowlist if admin is enabled. |
 | `VTEX_SHA256_HASH` | VTEX-backed fetches/ingestion paths | Server-side only; never `NEXT_PUBLIC_*`. |
 
 Recommended:
@@ -50,6 +49,8 @@ Recommended:
 
 Operational-only variables from `.env.example` should be added only if running
 scheduled/manual ingestion jobs from that environment.
+
+Admin access also requires the signed session-token claim configured in `docs/portable-runtime-contract.md`. This is Clerk tenant configuration, not a Vercel environment variable. Refresh the session token after role changes, and revoke affected sessions when access must be removed urgently.
 
 ## Safe CLI flow after approval
 
