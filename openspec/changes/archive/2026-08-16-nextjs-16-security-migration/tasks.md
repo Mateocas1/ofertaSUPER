@@ -56,3 +56,11 @@ Strict TDD: RED precedes GREEN.
 
 - [x] 4.1 **RED:** Add `tests/next16-rollout.test.ts` for standalone routes, missing runtime proof promotion block, and failure/timeout/signal/cleanup rollback; pre-cutover keeps traffic and critical failure switches once.
 - [x] 4.2 **GREEN:** Add `scripts/next16-rollout.ts`, runtime smoke, immutable records, and `docs/next16-rollout.md`; validate retained release, cut over/rehearse recovery, and hand off without `production-readiness` task-state change. **PRS-SCN-005–011.**
+
+## Verification Remediation
+
+- [x] S1 Dependency graph/lifecycle receipts — **PRS-SCN-001–002**; deterministic clean-install graph evidence only, ≤400 lines.
+- [x] S2 Standalone catalog proof — **PRS-SCN-005**; standalone public catalog receipt only, ≤400 lines.
+- [x] S3 Promotion gates/incomplete handoff — **PRS-SCN-006, PRS-SCN-011**; complete gate and blocked handoff only, ≤400 lines.
+- [x] S4 Distinct-release rollout/rollback — **PRS-SCN-007–009**; maintainer-authorized read-only Docker registry metadata/auth resolution and pulls admit the preserved historical proof. Docker Hub read egress occurred and remains disclosed; pushes, publication, configuration mutation, and credential exposure remain forbidden.
+- [x] S5 Live authorized identity proof — **PRS-SCN-003**; the maintainer-preserved corrected candidate passed the authorized closure checks within the ≤40-line correction budget.
