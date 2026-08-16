@@ -145,7 +145,7 @@ export function buildCategoryPaginationCatalogComparisonReport({
 	source: CategoryPaginationSource;
 }): CategoryPaginationCatalogComparisonReport {
 	const boundary = categoryPaginationCatalogComparisonOutputBoundary({ issue, source });
-	const safeOutputPath = normalizeCategoryPaginationCatalogComparisonOutputPath(outputPath, boundary);
+	normalizeCategoryPaginationCatalogComparisonOutputPath(outputPath, boundary);
 	const candidateRows = extractCandidateRows(candidateArtifact, source);
 	const catalogRows = extractCatalogRows(catalogFixture, source);
 	const catalogIndex = buildCatalogIndex(catalogRows, source);

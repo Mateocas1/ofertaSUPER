@@ -588,8 +588,8 @@ describe("direct-refresh discovery prewrite foundation", () => {
 	});
 
 	it("reports missing foundation evidence timestamp without stale-noise duplication", () => {
-		const { generatedAt: _generatedAt, ...evidenceWithoutTimestamp } =
-			completeEvidence;
+		const evidenceWithoutTimestamp = { ...completeEvidence };
+		delete (evidenceWithoutTimestamp as Partial<DirectRefreshDiscoveryPrewriteFoundationEvidence>).generatedAt;
 		const report = evaluateFoundation({
 			evidence:
 				evidenceWithoutTimestamp as DirectRefreshDiscoveryPrewriteFoundationEvidence,
