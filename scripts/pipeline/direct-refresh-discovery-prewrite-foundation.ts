@@ -624,10 +624,6 @@ function check(name: string, rules: Rule[]) {
 	return { name, status: reasons.length === 0 ? "PASS" : "FAIL", reasons };
 }
 
-function hasText(value: string | undefined) {
-	return typeof value === "string" && value.trim().length > 0;
-}
-
 function hasPositiveInteger(value: number | undefined) {
 	return typeof value === "number" && Number.isInteger(value) && value > 0;
 }

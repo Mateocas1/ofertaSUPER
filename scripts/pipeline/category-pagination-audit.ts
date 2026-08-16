@@ -401,7 +401,14 @@ export function buildCategoryPaginationAuditReport({
 			skippedEligibleCount: skippedEligibleCategoryPathCount,
 		},
 		candidates: Array.from(rowsByIdentity.values())
-			.map(({ rows: _rows, ...candidate }) => candidate)
+			.map((candidate) => ({
+				source: candidate.source,
+				surface: candidate.surface,
+				identityKind: candidate.identityKind,
+				identity: candidate.identity,
+				categoryPath: candidate.categoryPath,
+				productUrl: candidate.productUrl,
+			}))
 			.sort((left, right) => `${left.identityKind}:${left.identity}`.localeCompare(`${right.identityKind}:${right.identity}`)),
 		errors: errors.map(({ endpoint, reason, status }) => ({ endpoint, reason, ...(status ? { status } : {}) })),
 		confidence: { status: confidenceReasons.length === 0 ? "PASS" : "FAIL", reasons: confidenceReasons },
