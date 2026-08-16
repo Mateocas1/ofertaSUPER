@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 
 import {
@@ -9,6 +10,7 @@ import {
 	validatePairedPackages,
 } from "../src/lib/production-readiness/dependency-gate";
 import { captureBaselineEvidence, NPM_AUDIT_ARGS } from "../scripts/production-security-evidence";
+import { createProductionGraphEvidence, PRODUCTION_SECURITY_COMMANDS, verifyRetainedProductionGraphEvidence } from "../scripts/production-security-graph-evidence";
 
 test("audit input rejects hostile paths and retains inert JSON payloads as data", () => {
 	for (const path of ["../audit.json", "/tmp/audit.json", "C:\\audit.json", "\\\\server\\audit.json", "audit\u0000.json", "requirements.txt", "CMakeLists.txt", "report.md", "report.mdx", "README.sh"]) {
@@ -83,4 +85,38 @@ test("baseline evidence fixes argv, blocks shell interpretation, and redacts the
 	});
 	assert.doesNotMatch(evidence, new RegExp(secret));
 	assert.doesNotMatch(evidence, /touch never-runs/);
+});
+
+test("graph evidence binds a complete classified zero-audit snapshot to fixed commands", () => {
+	const tree = [{ package: "next", version: "16.3.1", path: "node_modules/next" }];
+	const lifecycle = [{ ...tree[0], hasInstallScript: false, markerExecuted: false, status: "skipped" as const }];
+	const audit = `sha256:${"a".repeat(64)}`;
+	assert.deepEqual(PRODUCTION_SECURITY_COMMANDS, [["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"], ["npm", "ls", "--omit=dev", "--all", "--json", "--long"], ["npm", "audit", "--omit=dev", "--json", "--ignore-scripts"]]);
+	const evidence = createProductionGraphEvidence({ tree, findings: [], lifecycle, audit: { sha256: audit, status: 0 }, candidate: { "package-lock.json": "sha256:lock", "package.json": "sha256:package" } });
+	assert.equal(evidence.manifest.records.length, 3);
+	assert.equal(evidence.manifest.records[1].sha256, `sha256:${createHash("sha256").update('[{"advisories":[],"package":"next","path":"node_modules/next","remediation":"clear","version":"16.3.1"}]\n').digest("hex")}`);
+	assert.match(evidence.snapshotId, /^sha256:[a-f0-9]{64}$/);
+	assert.throws(() => createProductionGraphEvidence({ tree, findings: [], lifecycle: [{ ...lifecycle[0], markerExecuted: true }], audit: { sha256: audit, status: 0 }, candidate: {} }), /graph evidence rejected/);
+});
+
+test("retained graph evidence accepts only an independently anchored current context", () => {
+	const tree = [{ package: "next", version: "16.3.1", path: "node_modules/next" }];
+	const candidate = { "package-lock.json": `sha256:${"b".repeat(64)}`, "package.json": `sha256:${"c".repeat(64)}`, "scripts/production-security-graph-evidence.ts": `sha256:${"d".repeat(64)}`, "src/lib/production-readiness/dependency-gate.ts": `sha256:${"e".repeat(64)}` };
+	const audit = "{\"vulnerabilities\":{}}\n";
+	const redefinedAudit = "{ \"vulnerabilities\": {} }\n";
+	const classifications = "[{\"advisories\":[],\"package\":\"next\",\"path\":\"node_modules/next\",\"remediation\":\"clear\",\"version\":\"16.3.1\"}]\n";
+	const lifecycle = "[{\"hasInstallScript\":false,\"markerExecuted\":false,\"package\":\"next\",\"path\":\"node_modules/next\",\"status\":\"skipped\",\"version\":\"16.3.1\"}]\n";
+	const evidence = createProductionGraphEvidence({ tree, findings: [], lifecycle: [{ ...tree[0], hasInstallScript: false, markerExecuted: false, status: "skipped" as const }], audit: { sha256: `sha256:${createHash("sha256").update(audit).digest("hex")}`, status: 0 }, candidate });
+	const retained = { directorySnapshotId: evidence.snapshotId, anchor: { snapshotId: evidence.snapshotId, candidate }, manifest: evidence.manifest, records: { audit, classifications, lifecycle }, candidate };
+	assert.equal(verifyRetainedProductionGraphEvidence(retained), true);
+	for (const invalid of [
+		{ ...retained, candidate: { ...candidate, "package-lock.json": `sha256:${"d".repeat(64)}` } },
+		{ ...retained, manifest: { ...evidence.manifest, audit: { sha256: "malformed", status: 0 } } },
+		{ ...retained, manifest: { ...evidence.manifest, audit: { sha256: `sha256:${createHash("sha256").update(redefinedAudit).digest("hex")}`, status: 0 }, records: evidence.manifest.records.map((record) => record.path === "audit.json" ? { ...record, sha256: `sha256:${createHash("sha256").update(redefinedAudit).digest("hex")}` } : record) }, records: { ...retained.records, audit: redefinedAudit } },
+		{ ...retained, manifest: { ...evidence.manifest, records: evidence.manifest.records.map((record) => record.path === "classifications.json" ? { ...record, sha256: `sha256:${"e".repeat(64)}` } : record) } },
+		{ ...retained, records: { ...retained.records, classifications: "[]\n" } },
+		{ ...retained, records: { ...retained.records, lifecycle: lifecycle.replace("]", `,${lifecycle.slice(1).trim()}`) } },
+		{ ...retained, records: { ...retained.records, unexpected: "tampered" } }, { ...retained, manifest: { ...evidence.manifest, schema: "production-security-graph/v2" } }, { ...retained, manifest: { ...evidence.manifest, version: "v1" } }, { ...retained, manifest: { ...evidence.manifest, unexpected: "tampered" } },
+		{ ...retained, anchor: { ...retained.anchor, snapshotId: `sha256:${"f".repeat(64)}` } },
+	]) assert.throws(() => verifyRetainedProductionGraphEvidence(invalid), /retained graph evidence rejected/);
 });

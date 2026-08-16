@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { evaluateGraphAuthority } from "../src/lib/production-readiness/dependency-gate";
+import { evaluateGraphAuthority, validateProductionGraphEvidence } from "../src/lib/production-readiness/dependency-gate";
+import { extractProductionTree } from "../scripts/production-security-graph-evidence";
 
 const tree = [
 	{ package: "next", version: "16.3.1", path: "node_modules/next" },
@@ -44,4 +45,19 @@ test("graph authority closes only a classified zero-audit graph", () => {
 	]) {
 		assert.equal(evaluateGraphAuthority({ tree, findings, lifecycle: tree.map(({ path }) => ({ path, hasInstallScript: false, markerExecuted: false })) }).allowed, false);
 	}
+});
+
+test("persisted graph evidence requires one matching lifecycle receipt for every path", () => {
+	const lifecycle = tree.map(({ package: name, version, path }) => ({ package: name, version, path, hasInstallScript: false, markerExecuted: false, status: "skipped" as const }));
+	assert.equal(validateProductionGraphEvidence({ tree, findings: [], lifecycle }).allowed, true);
+	for (const invalid of [
+		[...lifecycle, lifecycle[0]],
+		[...lifecycle, { ...lifecycle[0], path: "node_modules/extra" }],
+		lifecycle.map((receipt, index) => index === 0 ? { ...receipt, version: "unexpected" } : receipt),
+	]) assert.equal(validateProductionGraphEvidence({ tree, findings: [], lifecycle: invalid }).allowed, false);
+});
+
+test("installed-tree extraction ignores pathless references and collapses repeated physical paths", () => {
+	const raw = JSON.stringify({ dependencies: { next: { path: "/repo/node_modules/next", version: "16.3.1", dependencies: { shared: { path: "/repo/node_modules/shared", version: "1.0.0" } } }, alias: { dependencies: { shared: { path: "/repo/node_modules/shared", version: "1.0.0" } } } } });
+	assert.deepEqual(extractProductionTree(raw, "/repo"), [{ package: "next", version: "16.3.1", path: "node_modules/next" }, { package: "shared", version: "1.0.0", path: "node_modules/shared" }]);
 });
