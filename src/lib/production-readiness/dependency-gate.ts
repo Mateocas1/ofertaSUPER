@@ -1,6 +1,7 @@
 export type DependencyPath = { package: string; version: string; path: string };
 export type AuditFinding = { path?: string; advisory?: string };
 export type LifecycleReceipt = { path: string; hasInstallScript?: boolean; markerExecuted?: boolean };
+export type PersistedLifecycleReceipt = DependencyPath & LifecycleReceipt & { status?: "skipped" };
 
 export const FOUNDATION_PATHS = [
 	"scripts/production-security-evidence.ts",
@@ -78,6 +79,18 @@ export function evaluateGraphAuthority({ tree, findings, lifecycle }: { tree: De
 	}
 	for (const path of markers.keys()) if (!tree.some((entry) => entry.path === path)) reasons.push(`unclassified lifecycle receipt: ${path}`);
 	return { allowed: reasons.length === 0, reasons: [...new Set(reasons)].sort(), classifications: audit.classifications };
+}
+
+export function validateProductionGraphEvidence({ tree, findings, lifecycle }: { tree: DependencyPath[]; findings: AuditFinding[]; lifecycle: PersistedLifecycleReceipt[] }) {
+	const graph = evaluateGraphAuthority({ tree, findings, lifecycle });
+	const reasons = [...graph.reasons];
+	const paths = new Map(tree.map((entry) => [entry.path, entry]));
+	for (const receipt of lifecycle) {
+		const entry = paths.get(receipt.path);
+		if (!entry || entry.package !== receipt.package || entry.version !== receipt.version) reasons.push(`lifecycle receipt identity mismatch: ${receipt.path}`);
+		if (receipt.status !== "skipped") reasons.push(`lifecycle status invalid: ${receipt.path}`);
+	}
+	return { ...graph, allowed: reasons.length === 0, reasons: [...new Set(reasons)].sort() };
 }
 
 export function validateFoundationInventory(input: { root: string; expectedRoot: string; base: string; expectedBase: string; staged: string[]; paths: readonly string[] }): Verdict {
