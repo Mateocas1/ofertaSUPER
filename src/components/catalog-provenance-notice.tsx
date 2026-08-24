@@ -1,6 +1,6 @@
-import type { PublicCatalogProvenance } from "@/lib/public-catalog-api";
+import type { LegacyPublicCatalogProvenance } from "@/lib/public-catalog-api";
 
-type CatalogProvenanceNoticeProps = PublicCatalogProvenance;
+type CatalogProvenanceNoticeProps = LegacyPublicCatalogProvenance;
 
 export function CatalogProvenanceNotice({ degraded }: CatalogProvenanceNoticeProps) {
   if (!degraded) {

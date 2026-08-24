@@ -30,13 +30,13 @@ type PublicApiResult<T> =
     };
 
 type ProductPage = ReturnType<typeof getDemoProductPage>;
-export type PublicCatalogProvenance = {
+export type LegacyPublicCatalogProvenance = {
   dataSource: "database" | "demo";
   degraded: boolean;
   latestCheckedAt: string | null;
 };
 
-export type PublicCatalogData<T> = T & PublicCatalogProvenance;
+export type LegacyPublicCatalogData<T> = T & LegacyPublicCatalogProvenance;
 
 type ProductListLoader = (filters: ProductListFilters) => Promise<ProductPage>;
 type CategoryLoader = () => Promise<CategorySummary[]>;
@@ -113,10 +113,10 @@ function getLatestCheckedAt(value: unknown): string | null {
     .sort((left, right) => right.localeCompare(left))[0] ?? null;
 }
 
-export async function resolvePublicCatalogData<T extends object>(
+export async function resolveLegacyPublicCatalogData<T extends object>(
   loadData: () => Promise<T>,
   demoData?: T,
-): Promise<PublicCatalogData<T>> {
+): Promise<LegacyPublicCatalogData<T>> {
   try {
     const data = await loadData();
     return {
@@ -142,19 +142,19 @@ export async function resolvePublicCatalogData<T extends object>(
 export async function resolvePublicProductList(
   searchParams: Record<string, string>,
   loadProducts: ProductListLoader,
-): Promise<PublicApiResult<PublicCatalogData<ProductPage>>> {
+): Promise<PublicApiResult<LegacyPublicCatalogData<ProductPage>>> {
   try {
     const filters = productFiltersFromSearchParams(searchParams);
 
     try {
       return {
         status: 200,
-        body: await resolvePublicCatalogData(() => loadProducts(filters)),
+        body: await resolveLegacyPublicCatalogData(() => loadProducts(filters)),
       };
     } catch {
       return {
         status: 200,
-        body: await resolvePublicCatalogData(
+        body: await resolveLegacyPublicCatalogData(
           async () => {
             throw new Error("catalog unavailable");
           },
