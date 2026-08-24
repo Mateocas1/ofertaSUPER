@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { badRequestResponse, searchParamsToObject } from "@/lib/api";
+import { buildDatabaseCatalogResponse } from "@/lib/basket-products-contract";
 import { getSearchSuggestions } from "@/lib/catalog";
 import { buildSearchCacheKey } from "@/lib/cache-keys";
 import { getCachedJson, setCachedJson } from "@/lib/redis";
@@ -45,12 +46,13 @@ export async function GET(request: NextRequest) {
       await setCachedJson(cacheKey, data, CACHE_TTL_SECONDS);
     }
 
-    const response = NextResponse.json(data);
+    const result = buildDatabaseCatalogResponse(data, publicCatalogUnavailable());
+    const response = NextResponse.json(result.body, { status: result.status });
     void limiter.state.pending;
     return withRateLimitHeaders(response, limiter.state);
   } catch (error) {
     const response = error instanceof PublicCatalogUnavailableError
-      ? NextResponse.json(publicCatalogUnavailable(), { status: 503 })
+      ? NextResponse.json(buildDatabaseCatalogResponse(null, publicCatalogUnavailable()).body, { status: 503 })
       : badRequestResponse(error);
     void limiter.state.pending;
     return withRateLimitHeaders(response, limiter.state);
