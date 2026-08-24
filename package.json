@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "prisma generate && next build --webpack",
     "start": "next start",
     "test": "tsx --conditions=react-server --test tests/**/*.test.ts",
     "lint": "eslint .",

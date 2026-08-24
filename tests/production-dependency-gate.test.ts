@@ -30,6 +30,7 @@ test("Prisma 6.12.0 is paired in the lockfile without deepmerge-ts", () => {
 	const lockfile = JSON.parse(readFileSync(new URL("../package-lock.json", import.meta.url), "utf8"));
 	assert.equal(manifest.dependencies["@prisma/client"], "6.12.0");
 	assert.equal(manifest.devDependencies.prisma, "6.12.0");
+	assert.equal(manifest.scripts.build, "prisma generate && next build --webpack");
 	assert.equal(lockfile.packages["node_modules/@prisma/client"].version, "6.12.0");
 	assert.equal(lockfile.packages["node_modules/prisma"].version, "6.12.0");
 	assert.equal(lockfile.packages["node_modules/deepmerge-ts"], undefined);

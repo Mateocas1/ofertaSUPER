@@ -9,7 +9,7 @@ test("keeps the Next 16 PWA build on Webpack with explicit Workbox update and fa
   const [packageJson, nextConfig] = await Promise.all([read("package.json"), read("next.config.ts")]);
   const packageData = JSON.parse(packageJson) as { scripts: Record<string, string> };
 
-  assert.equal(packageData.scripts.build, "next build --webpack");
+  assert.equal(packageData.scripts.build, "prisma generate && next build --webpack");
   assert.match(nextConfig, /dest:\s*["']public["']/);
   assert.match(nextConfig, /register:\s*true/);
   assert.match(nextConfig, /reloadOnOnline:\s*true/);
