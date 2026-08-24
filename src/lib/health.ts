@@ -1,3 +1,4 @@
+import { classifyPublicCatalogReadiness } from "./public-catalog-readiness";
 import { validateRuntimeContract, type RuntimeEnvironment } from "./runtime-contract";
 
 export type Readiness = {
@@ -6,7 +7,21 @@ export type Readiness = {
 };
 
 type DatabaseCheck = () => Promise<unknown>;
+type PublicationCheck = () => Promise<{ verified_at: Date | null } | null>;
 type Cache = { expiresAt: number; database: "ok" | "error" } | undefined;
+
+export type CatalogHealth = { status: "current" | "degraded"; publication: "current" | "unproven" };
+
+export function createCatalogHealthChecker(loadPublication: PublicationCheck, options: { now?: () => Date } = {}) {
+	return async (): Promise<CatalogHealth> => {
+		try {
+			const readiness = classifyPublicCatalogReadiness(await loadPublication(), { now: options.now?.() });
+			return readiness.status === "fresh" ? { status: "current", publication: "current" } : { status: "degraded", publication: "unproven" };
+		} catch {
+			return { status: "degraded", publication: "unproven" };
+		}
+	};
+}
 
 export function createReadinessChecker(
 	databaseCheck: DatabaseCheck,
