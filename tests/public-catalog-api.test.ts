@@ -8,6 +8,7 @@ import {
   resolveLegacyPublicCategories,
   resolveLegacyPublicProductList,
   resolveLegacyPublicPromotions,
+  reclassifyCachedPublicCatalogData,
   resolvePublicCatalogData,
   resolvePublicCategories,
   resolvePublicProductList,
@@ -173,6 +174,24 @@ describe("public catalog publication gate", () => {
     assert.equal(result.status, 200);
     assert.equal(result.body.dataSource, "database");
     assert.equal(result.body.degraded, true);
+  });
+
+  it("reclassifies cached database payloads and rejects demo, invalid, and future watermarks", () => {
+    const cached = {
+      ...databasePage,
+      dataSource: "database" as const,
+      degraded: false,
+      verifiedAt: "2026-08-12T12:00:00.000Z",
+      latestCheckedAt: null,
+    };
+
+    assert.deepEqual(reclassifyCachedPublicCatalogData(cached, NOW), { ...cached, degraded: true });
+    assert.equal(reclassifyCachedPublicCatalogData({ ...cached, dataSource: "demo" } as never, NOW), null);
+    assert.equal(reclassifyCachedPublicCatalogData({ ...cached, verifiedAt: "invalid" }, NOW), null);
+    assert.equal(
+      reclassifyCachedPublicCatalogData({ ...cached, verifiedAt: "2026-08-13T12:00:00.001Z" }, NOW),
+      null,
+    );
   });
 
   it("withholds unverified and failed catalog payloads without demo substitution", async () => {
