@@ -38,6 +38,21 @@ enum DirectRefreshRunStatus {
   COMPLETED
 }
 
+enum ProductionReadinessState {
+  PENDING
+  BLOCKED
+  PROMOTED
+  ROLLED_BACK
+}
+
+enum ProductionReadinessReceiptKind {
+  PROVENANCE
+  AUTHORIZATION
+  ALERT
+  RESTORE
+  OWNERSHIP
+}
+
 model Supermarket {
   id                   Int                  @id @default(autoincrement())
   name                 String
@@ -218,6 +233,54 @@ model SourceHealth {
 
   @@index([source_slug, checked_at])
   @@map("source_health")
+}
+
+model ProductionReadinessPromotion {
+  id                 String                   @id @default(cuid())
+  candidate_digest   String                   @unique
+  deployment_id      String
+  commit_sha         String
+  owner              String
+  rollback_authority String
+  expires_at         DateTime
+  state              ProductionReadinessState @default(PENDING)
+  receipts           ProductionReadinessReceipt[]
+  publications       ProductionReadinessPublication[]
+  created_at         DateTime                 @default(now())
+  updated_at         DateTime                 @updatedAt
+
+  @@index([state, expires_at])
+  @@map("production_readiness_promotions")
+}
+
+model ProductionReadinessReceipt {
+  id             String                         @id @default(cuid())
+  promotion_id   String
+  kind           ProductionReadinessReceiptKind
+  payload_digest String
+  signer         String
+  scope          String
+  expires_at     DateTime
+  state          ProductionReadinessState       @default(PENDING)
+  created_at     DateTime                       @default(now())
+  promotion      ProductionReadinessPromotion   @relation(fields: [promotion_id], references: [id], onDelete: Cascade)
+
+  @@unique([promotion_id, kind, payload_digest])
+  @@index([state, expires_at])
+  @@map("production_readiness_receipts")
+}
+
+model ProductionReadinessPublication {
+  id           String                   @id @default(cuid())
+  promotion_id String
+  target       String
+  state        ProductionReadinessState @default(PENDING)
+  created_at   DateTime                 @default(now())
+  promotion    ProductionReadinessPromotion @relation(fields: [promotion_id], references: [id], onDelete: Cascade)
+
+  @@unique([promotion_id, target])
+  @@index([state])
+  @@map("production_readiness_publications")
 }
 
 model DirectRefreshRunLedger {
