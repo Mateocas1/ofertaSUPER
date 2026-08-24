@@ -326,6 +326,30 @@ export async function resolvePublicCatalogData<T extends object>(
   }
 }
 
+export function reclassifyCachedPublicCatalogData<T extends object>(
+  cached: PublicCatalogData<T> | null,
+  now?: Date,
+): PublicCatalogData<T> | null {
+  if (
+    !cached
+    || typeof cached !== "object"
+    || cached.dataSource !== "database"
+    || typeof cached.verifiedAt !== "string"
+  ) {
+    return null;
+  }
+
+  const readiness = classifyPublicCatalogReadiness(
+    { verified_at: new Date(cached.verifiedAt) },
+    { now },
+  );
+  if (readiness.status === "unavailable") {
+    return null;
+  }
+
+  return { ...cached, degraded: readiness.status === "degraded" };
+}
+
 async function catalogResult<T extends object>(
   loadData: () => Promise<T>,
   loadPublication?: PublicationLoader,

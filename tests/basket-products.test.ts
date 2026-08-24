@@ -36,21 +36,17 @@ describe("basket product endpoint", () => {
     assert.deepEqual(success, { status: 200, body: envelope([product(ean(1))]) });
   });
 
-  it("returns bounded offline demo results with honest provenance and no dependency call", async (t) => {
+  it("does not synthesize demo basket data in offline mode", async (t) => {
     const previousOfflineMode = process.env.CATALOG_OFFLINE_MODE;
     process.env.CATALOG_OFFLINE_MODE = "true";
     t.after(() => { if (previousOfflineMode === undefined) delete process.env.CATALOG_OFFLINE_MODE; else process.env.CATALOG_OFFLINE_MODE = previousOfflineMode; });
     let loaderCalls = 0;
     const result = await handleBasketProductsRequest(
       async () => ({ eans: ["7790002000022", "7799999999999", "7790002000022"] }),
-      async () => { loaderCalls += 1; throw new Error("database must not be called"); },
+      async () => { loaderCalls += 1; throw new Error("database unavailable"); },
     );
-    assert.equal(loaderCalls, 0);
-    assert.equal(result.status, 200);
-    assert.deepEqual("items" in result.body ? result.body.items.map(({ ean }) => ean) : [], ["7790002000022"]);
-    assert.deepEqual(result.body, { ...result.body, missing: ["7799999999999"],
-      dataSource: "demo", degraded: true, latestCheckedAt: null });
-    assert.equal(basketProductsResponseSchema.safeParse(result.body).success, true);
+    assert.equal(loaderCalls, 1);
+    assert.deepEqual(result, { status: 503, body: { error: "Catalog temporarily unavailable" } });
   });
 
   it("rejects malformed route bodies and extra properties", async () => {

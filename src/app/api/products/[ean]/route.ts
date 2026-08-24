@@ -2,9 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getProductDetail } from "@/lib/catalog";
 import { buildProductDetailCacheKey } from "@/lib/cache-keys";
+import {
+  PublicCatalogUnavailableError,
+  publicCatalogUnavailable,
+  reclassifyCachedPublicCatalogData,
+  resolvePublicCatalogData,
+  type PublicCatalogData,
+} from "@/lib/public-catalog-api";
 import { getCachedJson, setCachedJson } from "@/lib/redis";
 import { rejectIfRateLimited, withRateLimitHeaders } from "@/lib/rate-limit";
-import { resolveRouteProductDetail } from "@/lib/portfolio-catalog";
 
 const CACHE_TTL_SECONDS = 300;
 
@@ -22,26 +28,37 @@ export async function GET(
   }
 
   const { ean } = await context.params;
-  const product = await resolveRouteProductDetail(ean, {
-    loadDetail: getProductDetail,
-    readCache: (candidate) => getCachedJson(buildProductDetailCacheKey(candidate)),
-    writeCache: (candidate, detail) => setCachedJson(
-      buildProductDetailCacheKey(candidate), detail, CACHE_TTL_SECONDS,
-    ),
-  });
 
-  if (!product) {
-    const response = NextResponse.json(
-      {
-        error: "Product not found",
-      },
-      { status: 404 },
+  try {
+    const cacheKey = buildProductDetailCacheKey(ean);
+    const cached = reclassifyCachedPublicCatalogData(
+      await getCachedJson<PublicCatalogData<{ item: Awaited<ReturnType<typeof getProductDetail>> }>>(cacheKey),
     );
+    if (cached) {
+      const response = NextResponse.json(cached);
+      void limiter.state.pending;
+      return withRateLimitHeaders(response, limiter.state);
+    }
+
+    const data = await resolvePublicCatalogData(async () => ({ item: await getProductDetail(ean) }));
+    if (!data.item) {
+      const response = NextResponse.json({ error: "Product not found" }, { status: 404 });
+      void limiter.state.pending;
+      return withRateLimitHeaders(response, limiter.state);
+    }
+
+    if (!data.degraded) {
+      await setCachedJson(cacheKey, data, CACHE_TTL_SECONDS);
+    }
+
+    const response = NextResponse.json(data);
+    void limiter.state.pending;
+    return withRateLimitHeaders(response, limiter.state);
+  } catch (error) {
+    const response = error instanceof PublicCatalogUnavailableError
+      ? NextResponse.json(publicCatalogUnavailable(), { status: 503 })
+      : NextResponse.json({ error: "Catalog temporarily unavailable" }, { status: 503 });
     void limiter.state.pending;
     return withRateLimitHeaders(response, limiter.state);
   }
-
-  const response = NextResponse.json(product);
-  void limiter.state.pending;
-  return withRateLimitHeaders(response, limiter.state);
 }
