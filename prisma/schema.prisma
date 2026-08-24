@@ -275,6 +275,7 @@ model ProductionReadinessPublication {
   promotion_id String
   target       String
   state        ProductionReadinessState @default(PENDING)
+  verified_at  DateTime?
   created_at   DateTime                 @default(now())
   promotion    ProductionReadinessPromotion @relation(fields: [promotion_id], references: [id], onDelete: Cascade)
 
