@@ -34,15 +34,15 @@ describe("public price freshness UI contracts", () => {
     assert.match(productPage, /registrado/i);
   });
 
-  it("renders an accessible, explicit demo-data warning on search results", () => {
+  it("renders an accessible historical-data notice on degraded search results", () => {
     const searchPage = readFileSync("src/app/buscar/page.tsx", "utf8");
     const notice = readFileSync("src/components/catalog-provenance-notice.tsx", "utf8");
 
     assert.match(searchPage, /CatalogProvenanceNotice/);
     assert.match(searchPage, /CatalogProvenanceNotice \{\.\.\.result\}/);
     assert.match(notice, /role="status"/);
-    assert.match(notice, /datos de demostración/i);
-    assert.doesNotMatch(notice, /actual(?:es|izado)|en vivo/i);
+    assert.match(notice, /Información histórica del catálogo/);
+    assert.doesNotMatch(notice, /demostración|ejemplos|actual(?:es|izado)|en vivo/i);
   });
 
   it("guards degraded-demo basket calculations and claims", () => {
