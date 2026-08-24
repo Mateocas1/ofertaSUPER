@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 
 import {
 	CARREFOUR_ACTIVE_WRITE_CONFIRMATION,
@@ -37,6 +37,14 @@ import {
 	buildPrewriteReportHash,
 	type DirectRefreshPrewriteExistingRow,
 } from "../scripts/pipeline/direct-refresh-prewrite-gate";
+
+const temporaryDirectories = new Set<string>();
+
+after(async () => {
+	await Promise.all(
+		[...temporaryDirectories].map((directory) => rm(directory, { recursive: true, force: true })),
+	);
+});
 
 function rows(count = 10): DirectRefreshPrewriteExistingRow[] {
 	return Array.from({ length: count }, (_, index) => {
@@ -528,6 +536,7 @@ function repo(
 
 async function writeKillSwitchControl(control: unknown) {
 	const dir = await mkdtemp(join(tmpdir(), "direct-refresh-kill-switch-"));
+	temporaryDirectories.add(dir);
 	const path = join(dir, "control.json");
 	await writeFile(path, `${JSON.stringify(control, null, 2)}\n`, "utf8");
 	return path;
@@ -622,6 +631,7 @@ function capacityEvidenceForRows({
 
 async function writeCapacityReport(raw: string) {
 	const dir = await mkdtemp(join(tmpdir(), "direct-refresh-capacity-"));
+	temporaryDirectories.add(dir);
 	const path = join(dir, "capacity-report.json");
 	await writeFile(path, raw, "utf8");
 	return path;
