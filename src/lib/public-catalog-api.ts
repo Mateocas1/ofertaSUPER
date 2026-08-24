@@ -1,11 +1,6 @@
 import { ZodError } from "zod";
 
 import { classifyPublicCatalogReadiness } from "@/lib/public-catalog-readiness";
-import {
-  demoCategories,
-  demoPromotions,
-  getDemoProductPage,
-} from "@/lib/demo-data";
 import { productListQuerySchema } from "@/lib/schemas/product";
 import { promotionListQuerySchema } from "@/lib/schemas/promotion";
 import type {
@@ -20,16 +15,6 @@ type PublicApiError = {
   issues: ReturnType<ZodError["flatten"]>;
 };
 
-type LegacyPublicApiResult<T> =
-  | {
-      status: 200;
-      body: T;
-    }
-  | {
-      status: 400;
-      body: PublicApiError;
-    };
-
 export type PublicCatalogUnavailable = {
   error: "Catalog temporarily unavailable";
   dataSource: "unavailable";
@@ -42,18 +27,9 @@ type PublicApiResult<T> =
   | { status: 400; body: PublicApiError }
   | { status: 503; body: PublicCatalogUnavailable };
 
-type LegacyProductPage = ReturnType<typeof getDemoProductPage>;
 type ProductPage = { items: object[]; total: number; page: number; limit: number; totalPages: number };
 type Publication = { verified_at: Date | null } | null;
 type PublicationLoader = () => Promise<Publication>;
-export type LegacyPublicCatalogProvenance = {
-  dataSource: "database" | "demo";
-  degraded: boolean;
-  latestCheckedAt: string | null;
-};
-
-export type LegacyPublicCatalogData<T> = T & LegacyPublicCatalogProvenance;
-
 export type PublicCatalogProvenance = {
   dataSource: "database";
   degraded: boolean;
@@ -89,20 +65,9 @@ export const loadPublicCatalogPublication: PublicationLoader = async () => {
   });
 };
 
-type LegacyProductListLoader = (filters: ProductListFilters) => Promise<LegacyProductPage>;
 type ProductListLoader = (filters: ProductListFilters) => Promise<ProductPage>;
 type CategoryLoader = () => Promise<CategorySummary[]>;
 type PromotionLoader = (filters: PromotionFilters) => Promise<PromotionSummary[]>;
-
-function legacyValidationErrorResult(error: ZodError): LegacyPublicApiResult<never> {
-  return {
-    status: 400,
-    body: {
-      error: "Invalid query parameters",
-      issues: error.flatten(),
-    },
-  };
-}
 
 function validationErrorResult(error: ZodError): PublicApiResult<never> {
   return {
@@ -140,41 +105,6 @@ function promotionFiltersFromSearchParams(searchParams: Record<string, string>):
   };
 }
 
-export function getDemoPromotions(filters: PromotionFilters) {
-  const wallet = filters.wallet?.toLowerCase();
-
-  return demoPromotions.filter((promotion) => {
-    if (filters.supermarket && promotion.supermarket.slug !== filters.supermarket) {
-      return false;
-    }
-
-    if (filters.type && promotion.type !== filters.type) {
-      return false;
-    }
-
-    if (wallet && !promotion.walletProvider?.toLowerCase().includes(wallet)) {
-      return false;
-    }
-
-    return true;
-  });
-}
-
-function getLatestCheckedAt(value: unknown): string | null {
-  if (!value || typeof value !== "object" || !("items" in value) || !Array.isArray(value.items)) {
-    return null;
-  }
-
-  return value.items
-    .map((item) =>
-      item && typeof item === "object" && "latestCheckedAt" in item && typeof item.latestCheckedAt === "string"
-        ? item.latestCheckedAt
-        : null,
-    )
-    .filter((checkedAt): checkedAt is string => checkedAt !== null)
-    .sort((left, right) => right.localeCompare(left))[0] ?? null;
-}
-
 function getPublicLatestCheckedAt(value: unknown): string | null {
   if (!value || typeof value !== "object" || !("items" in value) || !Array.isArray(value.items)) {
     return null;
@@ -188,115 +118,6 @@ function getPublicLatestCheckedAt(value: unknown): string | null {
     )
     .filter((checkedAt): checkedAt is string => checkedAt !== null)
     .sort((left, right) => right.localeCompare(left))[0] ?? null;
-}
-
-export async function resolveLegacyPublicCatalogData<T extends object>(
-  loadData: () => Promise<T>,
-  demoData?: T,
-): Promise<LegacyPublicCatalogData<T>> {
-  try {
-    const data = await loadData();
-    return {
-      ...data,
-      dataSource: "database",
-      degraded: false,
-      latestCheckedAt: getLatestCheckedAt(data),
-    };
-  } catch (error) {
-    if (!demoData) {
-      throw error;
-    }
-
-    return {
-      ...demoData,
-      dataSource: "demo",
-      degraded: true,
-      latestCheckedAt: null,
-    };
-  }
-}
-
-export async function resolveLegacyPublicProductList(
-  searchParams: Record<string, string>,
-  loadProducts: LegacyProductListLoader,
-): Promise<LegacyPublicApiResult<LegacyPublicCatalogData<LegacyProductPage>>> {
-  try {
-    const filters = productFiltersFromSearchParams(searchParams);
-
-    try {
-      return {
-        status: 200,
-        body: await resolveLegacyPublicCatalogData(() => loadProducts(filters)),
-      };
-    } catch {
-      return {
-        status: 200,
-        body: await resolveLegacyPublicCatalogData(
-          async () => {
-            throw new Error("catalog unavailable");
-          },
-          getDemoProductPage(filters),
-        ),
-      };
-    }
-  } catch (error) {
-    if (error instanceof ZodError) {
-      return legacyValidationErrorResult(error);
-    }
-
-    throw error;
-  }
-}
-
-export async function resolveLegacyPublicCategories(
-  loadCategories: CategoryLoader,
-): Promise<LegacyPublicApiResult<{ items: CategorySummary[] }>> {
-  try {
-    return {
-      status: 200,
-      body: {
-        items: await loadCategories(),
-      },
-    };
-  } catch {
-    return {
-      status: 200,
-      body: {
-        items: demoCategories,
-      },
-    };
-  }
-}
-
-export async function resolveLegacyPublicPromotions(
-  searchParams: Record<string, string>,
-  loadPromotions: PromotionLoader,
-): Promise<LegacyPublicApiResult<{ items: PromotionSummary[] }>> {
-  try {
-    const filters = promotionFiltersFromSearchParams(searchParams);
-
-    try {
-      return {
-        status: 200,
-        body: {
-          items: await loadPromotions(filters),
-        },
-      };
-    } catch {
-      return {
-        status: 200,
-        body: {
-          items: getDemoPromotions(filters),
-        },
-      };
-    }
-  } catch (error) {
-    if (error instanceof ZodError) {
-      return legacyValidationErrorResult(error);
-    }
-
-    throw error;
-  }
 }
 
 export async function resolvePublicCatalogData<T extends object>(

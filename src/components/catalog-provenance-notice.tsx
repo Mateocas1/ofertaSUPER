@@ -1,6 +1,6 @@
-import type { LegacyPublicCatalogProvenance } from "@/lib/public-catalog-api";
+import type { PublicCatalogProvenance } from "@/lib/public-catalog-api";
 
-type CatalogProvenanceNoticeProps = LegacyPublicCatalogProvenance;
+type CatalogProvenanceNoticeProps = PublicCatalogProvenance;
 
 export function CatalogProvenanceNotice({ degraded }: CatalogProvenanceNoticeProps) {
   if (!degraded) {
@@ -9,13 +9,13 @@ export function CatalogProvenanceNotice({ degraded }: CatalogProvenanceNoticePro
 
   return (
     <section
-      aria-label="Origen de los resultados"
+      aria-label="Información de frescura del catálogo"
       className="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950"
       role="status"
     >
-      <p className="font-semibold">Estás viendo datos de demostración.</p>
+      <p className="font-semibold">Información histórica del catálogo.</p>
       <p className="mt-1">
-        El catálogo no está disponible. Estos ejemplos no representan precios reales ni vigentes; usalos solo para explorar la interfaz.
+        Estos son resultados reales de una publicación anterior. Revisá la fecha, la fuente y el enlace oficial antes de comprar porque los precios o las promociones pueden haber cambiado.
       </p>
     </section>
   );

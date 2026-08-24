@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
 
+import { CatalogProvenanceNotice } from "@/components/catalog-provenance-notice";
 import { ProductCard } from "@/components/product-card";
 import { PromotionBadge } from "@/components/promotion-badge";
-import { StaleResultsNotice } from "@/components/stale-results-notice";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { getPromotions, listProducts } from "@/lib/catalog";
-import { isCatalogRuntimeAvailable } from "@/lib/catalog-availability";
-import { getDemoProductPage } from "@/lib/demo-data";
 import { getSingleParam } from "@/lib/page-params";
-import { getDemoPromotions } from "@/lib/public-catalog-api";
+import { resolvePublicCatalogData } from "@/lib/public-catalog-api";
 import { createMetadata } from "@/lib/seo/metadata";
 import { SUPERMARKETS } from "@/lib/supermarkets";
 
@@ -45,18 +43,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 			limit: 24,
 			page: 1,
 		} as const;
-	const fallback = () => [getDemoPromotions(promotionFilters), getDemoProductPage(productFilters)] as const;
-	const [promotions, discountedProducts] = await (async () => {
-		if (!(await isCatalogRuntimeAvailable())) return fallback();
-
-		try {
-			return await Promise.all([getPromotions(promotionFilters), listProducts(productFilters)]);
-		} catch {
-			return fallback();
-		}
-	})();
-	const allDiscountedProductsAreStale =
-		discountedProducts.items.length > 0 && discountedProducts.items.every((product) => product.rankFreshnessStatus !== "fresh");
+	const catalog = await resolvePublicCatalogData(async () => ({
+		promotions: await getPromotions(promotionFilters),
+		discountedProducts: await listProducts(productFilters),
+	})).catch(() => null);
+	const promotions = catalog?.promotions ?? [];
+	const discountedProducts = catalog?.discountedProducts ?? { items: [] };
 
 	return (
 		<div className="px-6 py-8 md:py-10">
@@ -131,7 +123,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 					</div>
 				</section>
 
-				<section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+				{catalog ? <CatalogProvenanceNotice {...catalog} /> : (
+					<section role="alert" className="rounded-[1.5rem] border border-amber-300 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
+						<p className="font-semibold">El catálogo no está disponible.</p>
+						<p className="mt-1">No podemos mostrar promociones ni descuentos reales en este momento. Probá de nuevo más tarde.</p>
+					</section>
+				)}
+
+				{catalog ? <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
 					<div className="surface p-6">
 						<div>
 							<p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">
@@ -188,7 +187,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 								Productos con list price por encima del precio registrado
 							</h2>
 						</div>
-						{allDiscountedProductsAreStale ? <StaleResultsNotice context="descuentos detectados" /> : null}
 						<div className="grid gap-5 md:grid-cols-2">
 							{discountedProducts.items.map((product) => (
 								<ProductCard key={product.ean} product={product} />
@@ -200,7 +198,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 							</article>
 						) : null}
 					</div>
-				</section>
+				</section> : null}
 			</div>
 		</div>
 	);

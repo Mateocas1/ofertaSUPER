@@ -3,12 +3,9 @@ import type { Metadata } from "next";
 import { CatalogProvenanceNotice } from "@/components/catalog-provenance-notice";
 import { ProductCard } from "@/components/product-card";
 import { SearchBar } from "@/components/search-bar";
-import { StaleResultsNotice } from "@/components/stale-results-notice";
-import { isCatalogRuntimeAvailable } from "@/lib/catalog-availability";
 import { listProducts } from "@/lib/catalog";
-import { getDemoProductPage } from "@/lib/demo-data";
 import { getSingleParam } from "@/lib/page-params";
-import { resolveLegacyPublicCatalogData } from "@/lib/public-catalog-api";
+import { resolvePublicCatalogData } from "@/lib/public-catalog-api";
 import { createMetadata } from "@/lib/seo/metadata";
 import { SUPERMARKETS } from "@/lib/supermarkets";
 
@@ -43,18 +40,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     limit: 24,
     page: 1,
   };
-  const fallbackResult = getDemoProductPage(filters);
   const result = query
-    ? (await isCatalogRuntimeAvailable())
-      ? await resolveLegacyPublicCatalogData(() => listProducts(filters), fallbackResult)
-      : await resolveLegacyPublicCatalogData(
-          async () => {
-            throw new Error("catalog unavailable");
-          },
-          fallbackResult,
-        )
-    : await resolveLegacyPublicCatalogData(async () => ({ items: [], total: 0 }));
-  const allResultsAreStale = result.items.length > 0 && result.items.every((product) => product.rankFreshnessStatus !== "fresh");
+    ? await resolvePublicCatalogData(() => listProducts(filters)).catch(() => null)
+    : null;
 
   return (
     <div className="px-6 py-8 md:py-10">
@@ -95,10 +83,15 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </div>
         </section>
 
-        {query ? <CatalogProvenanceNotice {...result} /> : null}
-        {query && !result.degraded && allResultsAreStale ? <StaleResultsNotice context="resultados" /> : null}
+        {result ? <CatalogProvenanceNotice {...result} /> : null}
+        {query && !result ? (
+          <section role="alert" className="rounded-[1.5rem] border border-amber-300 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
+            <p className="font-semibold">El catálogo no está disponible.</p>
+            <p className="mt-1">No podemos mostrar resultados reales en este momento. Probá de nuevo más tarde.</p>
+          </section>
+        ) : null}
 
-        {query ? (
+        {query && result ? (
           <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             <h2 className="sr-only">Resultados de búsqueda</h2>
             {result.items.map((product) => (
@@ -111,7 +104,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </section>
         )}
 
-        {query && result.items.length === 0 ? (
+        {query && result && result.items.length === 0 ? (
           <section className="surface-soft p-6 text-sm text-muted-foreground">
             No encontramos coincidencias para esa búsqueda con los filtros actuales.
           </section>
