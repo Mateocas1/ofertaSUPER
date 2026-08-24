@@ -1,0 +1,13 @@
+{
+  "input": {
+    "event": { "action": "shadow", "source": "disco", "sources": ["disco"], "result": "success" },
+    "promotion": { "stage": "idle", "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "candidateHash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "deploymentId": "fixture-only" },
+    "receipts": [],
+    "expiryPolicy": { "approvedBy": "", "durationsMs": {} },
+    "killSwitch": false,
+    "now": "2026-08-25T12:00:00.000Z",
+    "commitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "supportWindow": { "user": "operator", "startsAt": "2026-08-25T10:00:00.000Z", "endsAt": "2026-08-25T14:00:00.000Z", "available": true }
+  },
+  "expected": { "allowed": false, "stage": "idle" }
+}
