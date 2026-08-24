@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -12,6 +13,9 @@ import {
 } from "../src/lib/production-readiness/dependency-gate";
 import { captureBaselineEvidence, NPM_AUDIT_ARGS } from "../scripts/production-security-evidence";
 import { createProductionGraphEvidence, PRODUCTION_SECURITY_COMMANDS, verifyRetainedProductionGraphEvidence } from "../scripts/production-security-graph-evidence";
+
+const root = new URL("../", import.meta.url);
+const read = (path: string) => readFile(new URL(path, root), "utf8");
 
 test("audit input rejects hostile paths and retains inert JSON payloads as data", () => {
 	for (const path of ["../audit.json", "/tmp/audit.json", "C:\\audit.json", "\\\\server\\audit.json", "audit\u0000.json", "requirements.txt", "CMakeLists.txt", "report.md", "report.mdx", "README.sh"]) {
@@ -34,6 +38,16 @@ test("Prisma 6.12.0 is paired in the lockfile without deepmerge-ts", () => {
 	assert.equal(lockfile.packages["node_modules/@prisma/client"].version, "6.12.0");
 	assert.equal(lockfile.packages["node_modules/prisma"].version, "6.12.0");
 	assert.equal(lockfile.packages["node_modules/deepmerge-ts"], undefined);
+});
+
+test("disables Vercel master deployments while leaving PR branches enabled", async () => {
+	const config = JSON.parse(await read("vercel.json")) as {
+		$schema?: unknown;
+		git?: { deploymentEnabled?: unknown };
+	};
+
+	assert.equal(config.$schema, "https://openapi.vercel.sh/vercel.json");
+	assert.deepEqual(config.git?.deploymentEnabled, { master: false });
 });
 
 test("classification covers every supplied path in deterministic order", () => {
