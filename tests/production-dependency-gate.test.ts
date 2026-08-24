@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -12,6 +14,9 @@ import {
 import { captureBaselineEvidence, NPM_AUDIT_ARGS } from "../scripts/production-security-evidence";
 import { createProductionGraphEvidence, PRODUCTION_SECURITY_COMMANDS, verifyRetainedProductionGraphEvidence } from "../scripts/production-security-graph-evidence";
 
+const root = new URL("../", import.meta.url);
+const read = (path: string) => readFile(new URL(path, root), "utf8");
+
 test("audit input rejects hostile paths and retains inert JSON payloads as data", () => {
 	for (const path of ["../audit.json", "/tmp/audit.json", "C:\\audit.json", "\\\\server\\audit.json", "audit\u0000.json", "requirements.txt", "CMakeLists.txt", "report.md", "report.mdx", "README.sh"]) {
 		assert.throws(() => assertJsonAuditInput({ path, raw: '{"critical":0}' }), /repository-relative JSON/);
@@ -22,6 +27,27 @@ test("audit input rejects hostile paths and retains inert JSON payloads as data"
 test("paired Next.js packages must share one supplied version", () => {
 	assert.deepEqual(validatePairedPackages({ next: "16.3.1", "@next/env": "16.3.1", "eslint-config-next": "16.3.1" }), { allowed: true, reasons: [] });
 	assert.deepEqual(validatePairedPackages({ next: "16.3.1", "@next/env": "16.3.0", "eslint-config-next": "16.3.1" }), { allowed: false, reasons: ["paired package versions differ"] });
+});
+
+test("Prisma 6.12.0 is paired in the lockfile without deepmerge-ts", () => {
+	const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+	const lockfile = JSON.parse(readFileSync(new URL("../package-lock.json", import.meta.url), "utf8"));
+	assert.equal(manifest.dependencies["@prisma/client"], "6.12.0");
+	assert.equal(manifest.devDependencies.prisma, "6.12.0");
+	assert.equal(manifest.scripts.build, "prisma generate && next build --webpack");
+	assert.equal(lockfile.packages["node_modules/@prisma/client"].version, "6.12.0");
+	assert.equal(lockfile.packages["node_modules/prisma"].version, "6.12.0");
+	assert.equal(lockfile.packages["node_modules/deepmerge-ts"], undefined);
+});
+
+test("disables Vercel master deployments while leaving PR branches enabled", async () => {
+	const config = JSON.parse(await read("vercel.json")) as {
+		$schema?: unknown;
+		git?: { deploymentEnabled?: unknown };
+	};
+
+	assert.equal(config.$schema, "https://openapi.vercel.sh/vercel.json");
+	assert.deepEqual(config.git?.deploymentEnabled, { master: false });
 });
 
 test("classification covers every supplied path in deterministic order", () => {
