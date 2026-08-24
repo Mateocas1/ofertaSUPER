@@ -8,7 +8,7 @@ import { isCatalogRuntimeAvailable } from "@/lib/catalog-availability";
 import { listProducts } from "@/lib/catalog";
 import { getDemoProductPage } from "@/lib/demo-data";
 import { getSingleParam } from "@/lib/page-params";
-import { resolvePublicCatalogData } from "@/lib/public-catalog-api";
+import { resolveLegacyPublicCatalogData } from "@/lib/public-catalog-api";
 import { createMetadata } from "@/lib/seo/metadata";
 import { SUPERMARKETS } from "@/lib/supermarkets";
 
@@ -46,14 +46,14 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const fallbackResult = getDemoProductPage(filters);
   const result = query
     ? (await isCatalogRuntimeAvailable())
-      ? await resolvePublicCatalogData(() => listProducts(filters), fallbackResult)
-      : await resolvePublicCatalogData(
+      ? await resolveLegacyPublicCatalogData(() => listProducts(filters), fallbackResult)
+      : await resolveLegacyPublicCatalogData(
           async () => {
             throw new Error("catalog unavailable");
           },
           fallbackResult,
         )
-    : await resolvePublicCatalogData(async () => ({ items: [], total: 0 }));
+    : await resolveLegacyPublicCatalogData(async () => ({ items: [], total: 0 }));
   const allResultsAreStale = result.items.length > 0 && result.items.every((product) => product.rankFreshnessStatus !== "fresh");
 
   return (

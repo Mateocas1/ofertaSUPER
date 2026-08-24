@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   getDemoPromotions,
-  resolvePublicCatalogData,
+  resolveLegacyPublicCatalogData,
   resolvePublicCategories,
   resolvePublicProductList,
   resolvePublicPromotions,
@@ -71,8 +71,8 @@ describe("public catalog API fallback semantics", () => {
   });
 
   it("builds honest provenance for database and demo loaders", async () => {
-    const database = await resolvePublicCatalogData(async () => databasePage);
-    const demo = await resolvePublicCatalogData(async () => {
+    const database = await resolveLegacyPublicCatalogData(async () => databasePage);
+    const demo = await resolveLegacyPublicCatalogData(async () => {
       throw new Error("database unavailable");
     }, databasePage);
 

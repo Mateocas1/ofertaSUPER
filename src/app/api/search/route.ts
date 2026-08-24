@@ -7,7 +7,7 @@ import { buildSearchCacheKey } from "@/lib/cache-keys";
 import { getDemoSearchSuggestions } from "@/lib/demo-data";
 import { getCachedJson, setCachedJson } from "@/lib/redis";
 import { rejectIfRateLimited, withRateLimitHeaders } from "@/lib/rate-limit";
-import { resolvePublicCatalogData, type PublicCatalogData } from "@/lib/public-catalog-api";
+import { resolveLegacyPublicCatalogData, type LegacyPublicCatalogData } from "@/lib/public-catalog-api";
 import { searchQuerySchema } from "@/lib/schemas/search";
 
 const CACHE_TTL_SECONDS = 300;
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   try {
     const parsed = searchQuerySchema.parse(searchParamsToObject(request.nextUrl));
     const cacheKey = buildSearchCacheKey(parsed.q, parsed.limit);
-    const cached = await getCachedJson<PublicCatalogData<{ items: Awaited<ReturnType<typeof getSearchSuggestions>> }>>(cacheKey);
+    const cached = await getCachedJson<LegacyPublicCatalogData<{ items: Awaited<ReturnType<typeof getSearchSuggestions>> }>>(cacheKey);
 
     if (cached) {
       const response = NextResponse.json(cached);
@@ -34,11 +34,11 @@ export async function GET(request: NextRequest) {
     const fallbackData = { items: getDemoSearchSuggestions(parsed.q, parsed.limit) };
     const canUseCatalog = await isCatalogRuntimeAvailable();
     const data = canUseCatalog
-      ? await resolvePublicCatalogData(
+      ? await resolveLegacyPublicCatalogData(
           async () => ({ items: await getSearchSuggestions(parsed.q, parsed.limit) }),
           fallbackData,
         )
-      : await resolvePublicCatalogData(async () => { throw new Error("catalog unavailable"); }, fallbackData);
+      : await resolveLegacyPublicCatalogData(async () => { throw new Error("catalog unavailable"); }, fallbackData);
 
     if (!data.degraded) {
       await setCachedJson(cacheKey, data, CACHE_TTL_SECONDS);
