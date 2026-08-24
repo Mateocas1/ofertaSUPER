@@ -22,6 +22,7 @@
     "smoke:next16-runtime": "tsx scripts/next16-rollout.ts",
     "smoke:next16-authorized": "tsx scripts/next16-authorized-smoke.ts",
     "smoke:production-gate": "tsx scripts/production-gate-smoke.ts",
+    "production-catalog": "tsx scripts/production-catalog-run.ts",
     "evidence:production-security-graph": "tsx scripts/production-security-graph-evidence.ts",
     "scrape:disco": "tsx scripts/scrapers/disco.ts",
     "scrape:carrefour": "tsx scripts/scrapers/carrefour.ts",
