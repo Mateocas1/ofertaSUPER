@@ -1,0 +1,29 @@
+name: Production catalog shadow
+
+on:
+  workflow_dispatch:
+    inputs:
+      promotion_stage:
+        description: Future promotion stage; this workflow remains shadow-only.
+        required: true
+        default: shadow
+        type: choice
+        options: [shadow, limited-writes, scheduled]
+      approval_receipt:
+        description: Future externally approved receipt reference.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  shadow-fixture:
+    runs-on: ubuntu-latest
+    environment: production-catalog-shadow
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: npm run production-catalog -- --stage shadow --source fixture --dry-run
