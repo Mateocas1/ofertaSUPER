@@ -22,6 +22,11 @@ describe("price freshness model", () => {
     );
   });
 
+  it("treats 24 hours exactly as stale and never extends a source SLA beyond 24 hours", () => {
+    assert.equal(classifyPriceFreshness("2026-05-18T12:00:00.000Z", { now: NOW, maxAgeHours: 24 }).status, "stale");
+    assert.equal(classifyPriceFreshness("2026-05-19T00:00:00.000Z", { now: NOW, maxAgeHours: 48 }).maxAgeHours, 24);
+  });
+
   it("uses explicit stale copy instead of presenting old prices as current", () => {
     const stale = classifyPriceFreshness("2026-03-23T02:38:39.230Z", {
       now: NOW,

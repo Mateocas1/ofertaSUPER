@@ -3,7 +3,7 @@ import "server-only";
 import { classifyPriceFreshness } from "@/lib/price-freshness";
 import { db } from "@/lib/db";
 import type { BasketProduct } from "@/lib/basket-products-contract";
-import { resolveOfflineBasketProducts } from "@/lib/portfolio-catalog";
+import { loadPublicCatalogPublication, resolvePublicCatalogData } from "@/lib/public-catalog-api";
 export { basketProductsBodySchema } from "@/lib/basket-products-contract";
 
 type ProductReader = Pick<typeof db, "product">;
@@ -72,21 +72,22 @@ export async function loadBasketProducts(eans: string[], client: ProductReader =
   };
 }
 
+type PublicationLoader = () => Promise<{ verified_at: Date | null } | null>;
+
 export async function handleBasketProductsRequest(
   readJson: () => Promise<unknown>,
   loader: typeof loadBasketProducts = loadBasketProducts,
-  env: Record<string, string | undefined> = process.env,
+  loadPublication: PublicationLoader = loadPublicCatalogPublication,
 ) {
   try {
     const { basketProductsBodySchema } = await import("@/lib/basket-products-contract");
     const { eans } = basketProductsBodySchema.parse(await readJson());
-    const offlineResult = resolveOfflineBasketProducts(eans, env);
-    const result = offlineResult ?? await loader(eans);
+    const result = await resolvePublicCatalogData(() => loader(eans), loadPublication);
     return { status: 200, body: {
       ...result,
-      dataSource: offlineResult ? "demo" : "database",
-      degraded: Boolean(offlineResult),
-      latestCheckedAt: null,
+      degraded: result.degraded || result.items.some((item) => item.priceEntries.some((entry) =>
+        entry.price !== null && entry.freshnessStatus !== "fresh",
+      )),
     } };
   } catch (error) {
     const { ZodError } = await import("zod");

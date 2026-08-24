@@ -2,6 +2,15 @@ import { z } from "zod";
 
 export const BASKET_PRODUCTS_BATCH_SIZE = 24;
 
+export function buildDatabaseCatalogResponse<T extends { dataSource?: unknown }, TUnavailable>(
+  data: T | null,
+  unavailable: TUnavailable,
+) {
+  return data?.dataSource === "database"
+    ? { status: 200, body: data }
+    : { status: 503, body: unavailable };
+}
+
 const eanSchema = z.string().trim().regex(/^\d{8,18}$/, "Invalid EAN");
 
 export const basketProductsBodySchema = z
@@ -29,13 +38,10 @@ export const basketProductsResponseSchema = z.object({
     }).strict()),
   }).strict()),
   missing: z.array(eanSchema),
-  dataSource: z.enum(["database", "demo"]),
+  dataSource: z.literal("database"),
   degraded: z.boolean(),
+  verifiedAt: z.string().datetime({ offset: true }),
   latestCheckedAt: nullableTimestamp,
-}).strict().superRefine((value, context) => {
-  if ((value.dataSource === "demo") !== value.degraded) {
-    context.addIssue({ code: "custom", message: "Invalid catalog provenance" });
-  }
-});
+}).strict();
 
 export type BasketProduct = z.infer<typeof basketProductsResponseSchema>["items"][number];

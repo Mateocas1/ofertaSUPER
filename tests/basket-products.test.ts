@@ -3,13 +3,16 @@ import { describe, it } from "node:test";
 
 import { handleBasketProductsRequest, loadBasketProducts } from "../src/lib/basket-products";
 import { BASKET_PRODUCTS_BATCH_SIZE, basketProductsBodySchema, basketProductsResponseSchema } from "../src/lib/basket-products-contract";
+import { classifyPriceFreshness } from "../src/lib/price-freshness";
 import { fetchBasketProducts } from "../src/lib/basket-products-client";
 
 const ean = (index: number) => String(index).padStart(8, "0");
+const VERIFIED_AT = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+const freshPublication = async () => ({ verified_at: new Date(VERIFIED_AT) });
 const product = (code: string) => ({ ean: code, name: code, brand: null, imageUrl: null, minPrice: null,
   freshMinPrice: null, hasFreshPrice: false, priceEntries: [] });
-const envelope = (items: ReturnType<typeof product>[], missing: string[] = []) =>
-  ({ items, missing, dataSource: "database", degraded: false, latestCheckedAt: null });
+const envelope = (items: ReturnType<typeof product>[], missing: string[] = [], degraded = false) =>
+  ({ items, missing, dataSource: "database", degraded, verifiedAt: VERIFIED_AT, latestCheckedAt: null });
 const demoEnvelope = (items: ReturnType<typeof product>[], missing: string[] = []) =>
   ({ ...envelope(items, missing), dataSource: "demo" as const, degraded: true });
 
@@ -30,23 +33,57 @@ describe("basket product endpoint", () => {
     t.after(() => { if (previousOfflineMode === undefined) delete process.env.CATALOG_OFFLINE_MODE; else process.env.CATALOG_OFFLINE_MODE = previousOfflineMode; });
     const malformed = await handleBasketProductsRequest(async () => { throw new SyntaxError(); });
     assert.deepEqual(malformed, { status: 400, body: { error: "Invalid request body" } });
-    const failed = await handleBasketProductsRequest(async () => ({ eans: [ean(1)] }), async () => { throw new Error(); });
+    const failed = await handleBasketProductsRequest(async () => ({ eans: [ean(1)] }), async () => { throw new Error(); }, freshPublication);
     assert.deepEqual(failed, { status: 503, body: { error: "Catalog temporarily unavailable" } });
-    const success = await handleBasketProductsRequest(async () => ({ eans: [ean(1)] }), async () => ({ items: [product(ean(1))], missing: [] }));
+    const success = await handleBasketProductsRequest(
+      async () => ({ eans: [ean(1)] }), async () => ({ items: [product(ean(1))], missing: [] }), freshPublication,
+    );
     assert.deepEqual(success, { status: 200, body: envelope([product(ean(1))]) });
   });
 
-  it("does not synthesize demo basket data in offline mode", async (t) => {
+  it("publishes a verified fresh basket with durable provenance", async () => {
+    const result = await handleBasketProductsRequest(
+      async () => ({ eans: [ean(1)] }),
+      async () => ({ items: [product(ean(1))], missing: [] }), freshPublication,
+    );
+
+    assert.equal(result.status, 200);
+    if (result.status !== 200 || !("dataSource" in result.body)) throw new Error("fresh basket should be available");
+    assert.equal(result.body.dataSource, "database");
+    assert.equal(result.body.degraded, false);
+    assert.match(result.body.verifiedAt, /^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("returns unavailable instead of manufacturing an offline demo basket", async (t) => {
     const previousOfflineMode = process.env.CATALOG_OFFLINE_MODE;
     process.env.CATALOG_OFFLINE_MODE = "true";
     t.after(() => { if (previousOfflineMode === undefined) delete process.env.CATALOG_OFFLINE_MODE; else process.env.CATALOG_OFFLINE_MODE = previousOfflineMode; });
     let loaderCalls = 0;
     const result = await handleBasketProductsRequest(
-      async () => ({ eans: ["7790002000022", "7799999999999", "7790002000022"] }),
-      async () => { loaderCalls += 1; throw new Error("database unavailable"); },
+      async () => ({ eans: ["7790002000022"] }),
+      async () => { loaderCalls += 1; throw new Error("database unavailable"); }, freshPublication,
     );
     assert.equal(loaderCalls, 1);
     assert.deepEqual(result, { status: 503, body: { error: "Catalog temporarily unavailable" } });
+  });
+
+  it("withholds missing, unpromoted, null, and failed database payloads", async () => {
+    for (const publication of [async () => null, async () => ({ verified_at: null })]) {
+      let loaderCalls = 0;
+      const result = await handleBasketProductsRequest(
+        async () => ({ eans: [ean(1)] }), async () => { loaderCalls += 1; return { items: [product(ean(1))], missing: [] }; }, publication,
+      );
+      assert.deepEqual(result, { status: 503, body: { error: "Catalog temporarily unavailable" } });
+      assert.equal(loaderCalls, 0);
+    }
+    const historical = await handleBasketProductsRequest(
+      async () => ({ eans: [ean(1)] }), async () => ({ items: [product(ean(1))], missing: [] }),
+      async () => ({ verified_at: new Date(Date.now() - 24 * 60 * 60 * 1000) }),
+    );
+    assert.equal(historical.status, 200);
+    if (historical.status !== 200 || !("dataSource" in historical.body)) throw new Error("historical basket should be available");
+    assert.equal(historical.body.degraded, true);
+    assert.equal(historical.body.dataSource, "database");
   });
 
   it("rejects malformed route bodies and extra properties", async () => {
@@ -54,6 +91,28 @@ describe("basket product endpoint", () => {
       const result = await handleBasketProductsRequest(async () => body);
       assert.deepEqual(result, { status: 400, body: { error: "Invalid request body" } });
     }
+  });
+
+  it("marks the basket degraded when an included source price is stale or unknown", async () => {
+    for (const freshnessStatus of ["stale", "unknown"] as const) {
+      const result = await handleBasketProductsRequest(
+        async () => ({ eans: [ean(1)] }),
+        async () => ({ items: [{ ...product(ean(1)), priceEntries: [{
+          supermarket: { id: 1, name: "Super", slug: "super", logoUrl: null }, price: 1, isAvailable: true,
+          productUrl: null, freshnessStatus,
+        }] }], missing: [] }),
+        freshPublication,
+      );
+      assert.equal(result.status, 200);
+      if (result.status !== 200 || !("degraded" in result.body)) throw new Error("basket should be available");
+      assert.equal(result.body.degraded, true);
+    }
+  });
+
+  it("keeps per-source SLA degradation under the public 24-hour ceiling", () => {
+    const now = new Date("2026-08-13T12:00:00.000Z");
+    assert.equal(classifyPriceFreshness("2026-08-13T09:59:59.999Z", { now, maxAgeHours: 2 }).status, "stale");
+    assert.equal(classifyPriceFreshness("2026-08-12T12:00:00.000Z", { now, maxAgeHours: 72 }).status, "stale");
   });
 
   it("uses one set query and maps partial results in request order", async () => {
@@ -68,7 +127,7 @@ describe("basket product endpoint", () => {
 });
 
 describe("basket product client", () => {
-  it("enables degraded demo estimates only when every successful chunk is demo", async () => {
+  it("rejects demo provenance from every successful chunk", async () => {
     const originalFetch = globalThis.fetch;
     const requested = Array.from({ length: 25 }, (_, index) => ean(index));
     globalThis.fetch = async (_url, init) => {
@@ -76,35 +135,43 @@ describe("basket product client", () => {
       return Response.json(demoEnvelope(chunk.map(product)));
     };
     try {
-      const result = await fetchBasketProducts(requested);
-      assert.equal(result.degradedDemo, true);
-      assert.deepEqual(result.items.map(({ ean: code }) => code), requested);
+      await assert.rejects(fetchBasketProducts(requested), { message: "No se pudo cargar la canasta." });
     } finally { globalThis.fetch = originalFetch; }
   });
 
-  it("fails closed for mixed and non-demo successful provenance", async () => {
+  it("preserves consistent database provenance and rejects mixed or inconsistent chunk watermarks", async () => {
     const originalFetch = globalThis.fetch;
     const requested = Array.from({ length: 25 }, (_, index) => ean(index));
     try {
-      for (const provenance of ["mixed", "database"] as const) {
-        let calls = 0;
-        globalThis.fetch = async (_url, init) => {
-          const chunk = (JSON.parse(String(init?.body)) as { eans: string[] }).eans;
-          calls += 1;
-          return Response.json(provenance === "mixed" && calls === 1
-            ? demoEnvelope(chunk.map(product)) : envelope(chunk.map(product)));
-        };
-        const result = await fetchBasketProducts(requested);
-        assert.equal(result.degradedDemo, false);
-        assert.deepEqual(result.items.map(({ ean: code }) => code), requested);
-      }
+      let calls = 0;
+      globalThis.fetch = async (_url, init) => {
+        const chunk = (JSON.parse(String(init?.body)) as { eans: string[] }).eans;
+        calls += 1;
+        return Response.json(calls === 1 ? demoEnvelope(chunk.map(product)) : envelope(chunk.map(product)));
+      };
+      await assert.rejects(fetchBasketProducts(requested), { message: "No se pudo cargar la canasta." });
+      calls = 0;
+      globalThis.fetch = async (_url, init) => {
+        const chunk = (JSON.parse(String(init?.body)) as { eans: string[] }).eans;
+        calls += 1;
+        return Response.json({ ...envelope(chunk.map(product)), verifiedAt: calls === 1 ? VERIFIED_AT : "2026-08-13T11:00:00.000Z" });
+      };
+      await assert.rejects(fetchBasketProducts(requested), { message: "No se pudo cargar la canasta." });
+      calls = 0;
+      globalThis.fetch = async (_url, init) => Response.json({
+        ...envelope((JSON.parse(String(init?.body)) as { eans: string[] }).eans.map(product)), degraded: ++calls === 2,
+      });
+      const database = await fetchBasketProducts(requested);
+      assert.deepEqual(database.items.map(({ ean: code }) => code), requested);
+      assert.deepEqual({ dataSource: database.dataSource, degraded: database.degraded, verifiedAt: database.verifiedAt },
+        { dataSource: "database", degraded: true, verifiedAt: VERIFIED_AT });
     } finally { globalThis.fetch = originalFetch; }
   });
 
   it("fails closed for malformed successful envelopes", () => {
     const valid = envelope([product(ean(1))]);
     const invalid = [
-      { ...valid, dataSource: "cache" }, { ...valid, degraded: true },
+      { ...valid, dataSource: "cache" },
       { ...valid, dataSource: "demo" }, { ...valid, dataSource: "demo", degraded: false },
       { ...valid, latestCheckedAt: "yesterday" }, { ...valid, extra: true },
       { ...valid, items: null }, { ...valid, missing: null },
@@ -114,7 +181,7 @@ describe("basket product client", () => {
       { ...valid, items: [{ ...product(ean(1)), priceEntries: [{ supermarket: { id: "1", name: "S", slug: "s", logoUrl: null }, price: 1, isAvailable: true, productUrl: null, freshnessStatus: "fresh" }] }] },
     ];
     invalid.forEach((value) => assert.equal(basketProductsResponseSchema.safeParse(value).success, false));
-    assert.equal(basketProductsResponseSchema.safeParse({ ...valid, latestCheckedAt: "2026-08-13T12:00:00.000Z" }).success, true);
+    assert.equal(basketProductsResponseSchema.safeParse({ ...valid, degraded: true, latestCheckedAt: "2026-08-13T12:00:00.000Z" }).success, true);
   });
 
   it("rejects invalid EAN correspondence", async () => {

@@ -24,7 +24,7 @@ export function classifyPriceFreshness(
   checkedAt: string | Date | null | undefined,
   options: FreshnessOptions = {},
 ): PriceFreshness {
-  const maxAgeHours = normalizeMaxAgeHours(options.maxAgeHours);
+  const maxAgeHours = Math.min(normalizeMaxAgeHours(options.maxAgeHours), DEFAULT_MAX_AGE_HOURS);
 
   if (!checkedAt) {
     return {
@@ -50,7 +50,7 @@ export function classifyPriceFreshness(
   const ageHours = Math.max(0, (now.getTime() - date.getTime()) / MS_PER_HOUR);
 
   return {
-    status: ageHours <= maxAgeHours ? "fresh" : "stale",
+    status: ageHours < maxAgeHours ? "fresh" : "stale",
     checkedAt: date.toISOString(),
     ageHours,
     maxAgeHours,
