@@ -13,8 +13,10 @@ test("keeps the Next 16 PWA build on Webpack with explicit Workbox update and fa
   assert.match(nextConfig, /dest:\s*["']public["']/);
   assert.match(nextConfig, /register:\s*true/);
   assert.match(nextConfig, /reloadOnOnline:\s*true/);
-  assert.match(nextConfig, /cacheOnFrontEndNav:\s*true/);
+  assert.match(nextConfig, /cacheOnFrontEndNav:\s*false/);
   assert.match(nextConfig, /fallbacks:\s*{[\s\S]*?document:\s*["']\/~offline["'],?[\s\S]*?}/);
+  assert.match(nextConfig, /runtimeCaching:\s*\[[\s\S]*?url\.pathname === "\/buscar" \|\| url\.pathname === "\/ofertas"[\s\S]*?handler:\s*["']NetworkOnly["']/);
+  assert.match(nextConfig, /extendDefaultRuntimeCaching:\s*true/);
   assert.match(nextConfig, /workboxOptions:\s*{[\s\S]*?skipWaiting:\s*true,[\s\S]*?clientsClaim:\s*true,[\s\S]*?cleanupOutdatedCaches:\s*true,?[\s\S]*?}/);
 });
 

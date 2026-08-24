@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createReadinessChecker } from "../src/lib/health";
+import { createCatalogHealthChecker, createReadinessChecker } from "../src/lib/health";
 import { GET as liveness } from "../src/app/api/health/live/route";
 
 const valid = { DATABASE_URL: "postgresql://private:secret@db.internal/app" };
@@ -37,6 +37,22 @@ test("database failures are generic and Redis never gates readiness", async () =
 	assert.doesNotMatch(JSON.stringify(result), /private|unreachable|failure/);
 	const available = createReadinessChecker(async () => undefined);
 	assert.equal((await available({ ...valid, UPSTASH_REDIS_REST_URL: "https://incomplete-private" })).status, "ready");
+});
+
+test("catalog health is current only for a fresh promoted publication", async () => {
+	const now = new Date("2026-08-25T12:00:00.000Z");
+	const current = createCatalogHealthChecker(async () => ({ verified_at: new Date("2026-08-25T11:00:00.000Z") }), { now: () => now });
+	assert.deepEqual(await current(), { status: "current", publication: "current" });
+
+	for (const loadPublication of [
+		async () => ({ verified_at: new Date("2026-08-24T12:00:00.000Z") }),
+		async () => null,
+		async () => { throw new Error("database unavailable"); },
+	]) {
+		assert.deepEqual(await createCatalogHealthChecker(loadPublication, { now: () => now })(), {
+			status: "degraded", publication: "unproven",
+		});
+	}
 });
 
 test("database checks use single-flight and short outcome-specific caches", async () => {

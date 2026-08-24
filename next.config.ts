@@ -8,7 +8,8 @@ const withPWA = withPWAInit({
   disable: process.env.NODE_ENV === "development" || disablePwa,
   register: true,
   reloadOnOnline: true,
-  cacheOnFrontEndNav: true,
+  // The plugin's frontend-navigation cache ignores query strings, so it cannot safely cache catalog routes.
+  cacheOnFrontEndNav: false,
   fallbacks: {
     document: "/~offline",
   },
@@ -16,7 +17,15 @@ const withPWA = withPWAInit({
     skipWaiting: true,
     clientsClaim: true,
     cleanupOutdatedCaches: true,
+    runtimeCaching: [
+      {
+        urlPattern: ({ sameOrigin, url }) => sameOrigin && (url.pathname === "/buscar" || url.pathname === "/ofertas"),
+        handler: "NetworkOnly",
+        options: { cacheName: "catalog-navigation" },
+      },
+    ],
   },
+  extendDefaultRuntimeCaching: true,
 });
 
 const securityHeaders = [
