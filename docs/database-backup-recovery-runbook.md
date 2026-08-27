@@ -7,6 +7,7 @@ This manual-only workflow streams a PostgreSQL custom archive through rclone cry
 1. Set the repository secrets and variables below; `BACKUP_DATABASE_ROLE` must exactly equal the URL username.
 2. An approved operator runs **Encrypted database backup** from Actions.
 3. Treat success as a published pair. A failed pre-publication run is not a backup.
+4. To rehearse recovery, dispatch **Encrypted database recovery** with exactly the logical manifest basename (for example, `postgres-r2-…manifest.json`); it has no Production authority.
 
 | Setting | Repository value |
 | --- | --- |
@@ -16,9 +17,9 @@ This manual-only workflow streams a PostgreSQL custom archive through rclone cry
 
 ## Failure semantics and recovery
 
-Before manifest publication, the job attempts to remove every owned temporary object and any archive it promoted; cleanup errors do not hide the original failure. It never removes a possibly pre-existing final manifest after an immutable-name collision. After complete manifest publication, retention failure fails the run but may leave the new valid pair intact. Retention considers only complete owned archive/manifest pairs, so incomplete newer objects never consume a retention slot.
+Before manifest publication, the job attempts to remove every owned temporary object and any archive it promoted; cleanup errors do not hide the original failure. Manifest v2 additionally records the encrypted relative key and SHA-256 after immutable archive promotion. It never removes a possibly pre-existing final manifest after an immutable-name collision. After complete manifest publication, retention failure fails the run but may leave the new valid pair intact.
 
-For recovery, use the configured crypt remote, validate again with the pinned PostgreSQL image, and restore only into an isolated approved target. To roll back this delivery, disable or remove the manual workflow and retain existing encrypted pairs while investigating failures.
+Recovery accepts only one strict logical manifest basename, reads its v2 metadata, downloads the raw ciphertext once into an owned workspace, hashes that exact file, and decrypts that same file while streaming to a unique PostgreSQL 17 container. No plaintext dump is written. It verifies completed migrations, core tables/indexes, app-role reads, and nonzero allowlisted counts for `products`, `supermarkets`, `supermarket_products`, and `price_history`. On every failure or signal it removes the container, network, volume, ciphertext workspace, and rclone credentials; cleanup errors are aggregated without masking the primary error. The workflow never accepts a destination, URL, or Production input: it has no-Production authority.
 
 ## Checklist
 

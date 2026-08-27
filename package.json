@@ -21,6 +21,7 @@
     "smoke:compose": "node scripts/compose-smoke.mjs",
     "smoke:postgres-recovery": "node scripts/postgres-recovery-smoke.mjs",
     "backup:postgres-r2": "node scripts/postgres-backup-r2.mjs",
+    "recovery:postgres-r2": "node scripts/postgres-recovery-r2.mjs",
     "smoke:next16-runtime": "tsx scripts/next16-rollout.ts",
     "smoke:next16-authorized": "tsx scripts/next16-authorized-smoke.ts",
     "smoke:production-gate": "tsx scripts/production-gate-smoke.ts",
