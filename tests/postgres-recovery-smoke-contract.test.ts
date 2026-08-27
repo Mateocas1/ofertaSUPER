@@ -43,7 +43,7 @@ test("source-only control prevents a false restore result", () => {
 test("harness owns its temporary archive and always tears down all state", () => {
   assert.match(harness, /mkdtempSync\(join\(tmpdir\(\), "ofertasuper-recovery-"\)\)/);
   assert.match(harness, /try \{ cleanup\(\); \} catch \(error\)/);
-  assert.match(harness, /\[restoreProject, sourceProject\][\s\S]*down[\s\S]*--volumes[\s\S]*--remove-orphans/);
+  assert.match(harness, /\[restoreProject, sourceProject\][\s\S]*down[\s\S]*--volumes[\s\S]*--remove-orphans[\s\S]*--rmi[\s\S]*local/);
   assert.match(harness, /rmSync\(workspace, \{ recursive: true, force: true \}\)/);
   assert.doesNotMatch(harness, /process\.env|\.env|DATABASE_URL|DIRECT_URL|https?:\/\//);
 });

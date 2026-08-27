@@ -34,7 +34,7 @@ function cleanup() {
   cleaning = true;
   const failures = [];
   for (const project of [restoreProject, sourceProject]) {
-    try { compose(project, ["down", "--volumes", "--remove-orphans"]); } catch (error) {
+    try { compose(project, ["down", "--volumes", "--remove-orphans", "--rmi", "local"]); } catch (error) {
       console.error(`Cleanup failed for ${project}:`, error.message);
       failures.push(error);
     }

@@ -6,7 +6,7 @@ import test from "node:test";
 import { createBackupPlan, createRuntime, redact, runBackup, selectOwnedPairs } from "../scripts/postgres-backup-r2.mjs";
 
 const root = new URL("../", import.meta.url), read = (path: string) => readFileSync(new URL(path, root), "utf8");
-const env = { DATABASE_URL: "postgresql://backup_user:secret-password@db.example:6543/catalog?sslmode=require", RCLONE_CRYPT_REMOTE: "crypt:ofertasuper-r2", BACKUP_RETENTION: "2", BACKUP_DATABASE_ROLE: "backup_user", PG_IMAGE: "postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3" };
+const env = { DATABASE_URL: "postgresql://backup_user:secret-password@db.example:6543/catalog?sslmode=require", RCLONE_CRYPT_REMOTE: "crypt:ofertasuper-r2", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", BACKUP_RETENTION: "2", BACKUP_DATABASE_ROLE: "backup_user", PG_IMAGE: "postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3" };
 type Call = { program: string; args: string[]; input?: string; env?: Record<string, string> };
 type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[]) => boolean); files?: string[]; version?: string };
 const settles = (promise: Promise<unknown>) => {
@@ -22,6 +22,8 @@ function mockRuntime(options: MockOptions = {}) {
       calls.push({ program, args, ...input });
       if (args[0] === "version") return { stdout: options.version || "rclone v1.75.0\n" };
       if (args[0] === "lsf") return { stdout: (options.files || []).join("\n") };
+      if (args[0] === "cryptdecode") return { stdout: `${args[2]}\tencrypted/archive\n` };
+      if (args[0] === "hashsum") return { stdout: `${"b".repeat(64)}  ${args[2]}\n` };
       if (fails(program, args)) throw new Error(`${typeof options.fail === "string" ? options.fail : args[0]} failed`);
       return { stdout: "" };
     },
@@ -57,7 +59,10 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   const manifestMove = calls.findIndex(({ args }) => args[0] === "moveto" && args.at(-1)?.endsWith("manifest.json"));
   assert.ok(archiveMove < manifestUpload && manifestUpload < manifestMove);
   assert.ok(calls.filter(({ args }) => args[0] === "moveto").every(({ args }) => args.includes("--immutable")));
-  assert.match(calls[manifestUpload].input!, /"bytes":3.*"sha256":"a{64}"/);
+  assert.match(calls[manifestUpload].input!, /"schemaVersion":2.*"bytes":3.*"sha256":"a{64}".*"ciphertext":\{"key":"encrypted\/archive","sha256":"b{64}"\}/);
+  const decode = calls.findIndex(({ args }) => args[0] === "cryptdecode"), hash = calls.findIndex(({ args }) => args[0] === "hashsum");
+  assert.ok(archiveMove < decode && decode < hash && hash < manifestUpload);
+  assert.deepEqual(calls[hash].args.slice(0, 3), ["hashsum", "SHA-256", "r2:bucket/encrypted/archive"]); assert.ok(calls[hash].args.includes("--download"));
     assert.deepEqual(calls.filter(({ program }) => program === "docker").map(({ args }) => args), [
       ["run", "--rm", "-i", "--env", "PGHOST", "--env", "PGPORT", "--env", "PGUSER", "--env", "PGPASSWORD", "--env", "PGDATABASE", "--env", "PGSSLMODE", env.PG_IMAGE, "pg_dump", "--format=custom", "--no-owner", "--no-acl", "--serializable-deferrable"],
       ["run", "--rm", "-i", "--env", "PGHOST", "--env", "PGPORT", "--env", "PGUSER", "--env", "PGPASSWORD", "--env", "PGDATABASE", "--env", "PGSSLMODE", env.PG_IMAGE, "pg_restore", "--list"],
@@ -102,6 +107,10 @@ test("pipeline consumes stderr and settles both children after destination failu
   destination.emit("close", 1); await new Promise((resolve) => setImmediate(resolve));
   assert.equal(source.killed, true); assert.ok(source.stderr.listenerCount("data") && destination.stderr.listenerCount("data"));
   source.emit("close", null, "SIGTERM"); await assert.rejects(settles(pending), /backup stream command failed/);
+    const controller = new AbortController(), abortSource = child(), abortDestination = child(); let abortCount = 0;
+    const aborted = createRuntime((() => abortCount++ ? abortDestination : abortSource) as never).pipeline({ program: "source", args: [] }, { program: "destination", args: [] }, { signal: controller.signal });
+    controller.abort(); assert.equal(abortSource.killed, true); assert.equal(abortDestination.killed, true);
+    abortSource.emit("close", null, "SIGTERM"); abortDestination.emit("close", null, "SIGTERM"); await assert.rejects(settles(aborted), /backup stream command failed/);
     const stranded = child(); let spawned = 0;
     const synchronousThrow = createRuntime((() => { if (!spawned++) return stranded; throw new Error("destination spawn failed"); }) as never).pipeline({ program: "source", args: [] }, { program: "destination", args: [] });
     let settled = false; void synchronousThrow.then(() => { settled = true; }, () => { settled = true; });
