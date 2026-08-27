@@ -20,6 +20,7 @@
     "smoke:job-image": "node scripts/job-image-smoke.mjs",
     "smoke:compose": "node scripts/compose-smoke.mjs",
     "smoke:postgres-recovery": "node scripts/postgres-recovery-smoke.mjs",
+    "backup:postgres-r2": "node scripts/postgres-backup-r2.mjs",
     "smoke:next16-runtime": "tsx scripts/next16-rollout.ts",
     "smoke:next16-authorized": "tsx scripts/next16-authorized-smoke.ts",
     "smoke:production-gate": "tsx scripts/production-gate-smoke.ts",
