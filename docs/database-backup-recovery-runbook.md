@@ -11,7 +11,7 @@ This manual-only workflow streams a PostgreSQL custom archive through rclone cry
 
 | Setting | Repository value |
 | --- | --- |
-| Secrets | `DATABASE_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `RCLONE_CRYPT_PASSWORD`, `RCLONE_CRYPT_PASSWORD2` |
+| Secrets | `BACKUP_DATABASE_URL` (dedicated direct backup role), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `RCLONE_CRYPT_PASSWORD`, `RCLONE_CRYPT_PASSWORD2` |
 | Variables | `BACKUP_DATABASE_ROLE`, `R2_ENDPOINT`, `R2_BUCKET`, `RCLONE_CRYPT_REMOTE` (`crypt:` path), `BACKUP_RETENTION` (2–90) |
 | Pins | checkout v4 commit, rclone 1.75.0, PostgreSQL 17.6 Bookworm digest |
 
