@@ -116,3 +116,17 @@ test("reports are deterministic machine-readable per-function audit records", ()
 	assert.match(formatComplexityReport(first), /Over-threshold: cyclomatic=1 cognitive=1/);
 });
 
+test("persisted policy has an empty exception ledger and an independent fork-safe CI job", () => {
+	const persistedBaseline = JSON.parse(readFileSync("config/complexity-baseline.json", "utf8"));
+	const persistedExceptions = JSON.parse(readFileSync("config/complexity-exceptions.json", "utf8"));
+	const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
+	const eslintConfig = readFileSync("eslint.config.mjs", "utf8");
+	const workflow = readFileSync(".github/workflows/lighthouse-ci.yml", "utf8");
+	assert.doesNotThrow(() => validateComplexityPolicy(persistedBaseline, persistedExceptions, context));
+	assert.equal(persistedExceptions.exceptions.length, 0);
+	assert.equal(packageJson.scripts["audit:complexity"], "node scripts/audit-complexity.mjs");
+	assert.match(eslintConfig, /complexity: \["warn", 10\]/);
+	assert.match(eslintConfig, /"sonarjs\/cognitive-complexity": \["warn", 15\]/);
+	assert.match(workflow, /complexity:\n\s+runs-on: ubuntu-latest[\s\S]*?run: npm ci[\s\S]*?run: npm run audit:complexity/);
+	assert.doesNotMatch(workflow.match(/complexity:[\s\S]*?(?=\n  \w|$)/)?.[0] ?? "", /head\.repo\.fork/);
+});
