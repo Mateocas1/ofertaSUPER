@@ -133,7 +133,7 @@ test("rejects a mismatched rclone before upload and preserves a published pair o
 
 test("workflow remains manual-only, pins checkout, and documents failure semantics", () => {
   const script = read("scripts/postgres-backup-r2.mjs"), workflow = read(".github/workflows/database-backup.yml"), docs = read("docs/database-backup-recovery-runbook.md");
-  assert.match(workflow, /actions\/checkout@11d5960a326750d5838078e36cf38b85af677262\s+# v4/); assert.match(workflow, /BACKUP_DATABASE_ROLE/); assert.doesNotMatch(workflow, /schedule:|cron:/);
+  assert.match(workflow, /actions\/checkout@11d5960a326750d5838078e36cf38b85af677262\s+# v4/); assert.match(workflow, /BACKUP_DATABASE_ROLE/); assert.match(workflow, /DATABASE_URL:\s*\$\{\{ secrets\.BACKUP_DATABASE_URL \}\}/); assert.doesNotMatch(workflow, /DATABASE_URL:\s*\$\{\{ secrets\.DATABASE_URL \}\}|schedule:|cron:/);
   assert.match(script, /createHash|--immutable|manifest\.uploading|BACKUP_DATABASE_ROLE/); assert.doesNotMatch(script, /--file=|writeFile|createWriteStream/);
   assert.match(docs, /retention failure.*fails/i); assert.match(docs, /never writes a plaintext dump/i);
 });
