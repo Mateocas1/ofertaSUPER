@@ -150,7 +150,7 @@ export async function runBackup(environment, runtime = createRuntime(), now = ne
     await rawPreflight(runtime, childEnv);
     await cryptPreflight(runtime, plan.remote, childEnv);
     owned.push(plan.temporary);
-    const dumped = await runtime.pipeline(docker("pg_dump", ["--format=custom", "--no-owner", "--no-acl", "--serializable-deferrable"]), rclone(["rcat", `${plan.remote}/${plan.temporary}`]), { env: childEnv });
+    const dumped = await runtime.pipeline(docker("pg_dump", ["--format=custom", "--no-owner", "--no-acl", "--serializable-deferrable", "--schema=public"]), rclone(["rcat", `${plan.remote}/${plan.temporary}`]), { env: childEnv });
     const restored = await runtime.pipeline(rclone(["cat", `${plan.remote}/${plan.temporary}`]), docker("pg_restore", ["--list"]), { env: childEnv });
     validated(dumped, restored);
     owned.push(plan.archive);

@@ -71,6 +71,13 @@ function mockRuntime(options: MockOptions = {}) {
   }};
 }
 
+function assertPublicSchemaDumpArgs(args: string[]) {
+  assert.deepEqual(args, [
+    "run", "--rm", "-i", "--env", "PGHOST", "--env", "PGPORT", "--env", "PGUSER", "--env", "PGPASSWORD", "--env", "PGDATABASE", "--env", "PGSSLMODE",
+    env.PG_IMAGE, "pg_dump", "--format=custom", "--no-owner", "--no-acl", "--serializable-deferrable", "--schema=public",
+  ]);
+}
+
 test("plans only a direct role and redacts the URL", () => {
   const plan = createBackupPlan(env, new Date("2026-03-01T02:03:04Z"), "abcdef123456");
   assert.equal(plan.pg.PGUSER, "backup_user");
@@ -149,11 +156,27 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   assert.deepEqual(calls[hash].args.slice(0, 3), ["hashsum", "SHA-256", "r2:bucket/encrypted/archive"]); assert.ok(calls[hash].args.includes("--download"));
   assert.equal(calls[hash].env?.RCLONE_CONFIG_CRYPT_REMOTE, "r2:bucket"); assert.equal(calls[hash].env?.RCLONE_CONFIG_CRYPTPROBE_TYPE, undefined);
   assert.strictEqual(calls[hash].env, rcloneCalls[1].env);
-    assert.deepEqual(calls.filter(({ program }) => program === "docker").map(({ args }) => args), [
-      ["run", "--rm", "-i", "--env", "PGHOST", "--env", "PGPORT", "--env", "PGUSER", "--env", "PGPASSWORD", "--env", "PGDATABASE", "--env", "PGSSLMODE", env.PG_IMAGE, "pg_dump", "--format=custom", "--no-owner", "--no-acl", "--serializable-deferrable"],
-      ["run", "--rm", "-i", "--env", "PGHOST", "--env", "PGPORT", "--env", "PGUSER", "--env", "PGPASSWORD", "--env", "PGDATABASE", "--env", "PGSSLMODE", env.PG_IMAGE, "pg_restore", "--list"],
-    ]);
-    assert.ok(calls.every(({ args }) => !args.some((arg) => [env.DATABASE_URL, "backup_user", "secret-password", "db.example", "6543", "catalog"].includes(arg))));
+  const dockerCalls = calls.filter(({ program }) => program === "docker");
+  assert.equal(dockerCalls.length, 2);
+  assertPublicSchemaDumpArgs(dockerCalls[0].args);
+  assert.deepEqual(dockerCalls[1].args, ["run", "--rm", "-i", "--env", "PGHOST", "--env", "PGPORT", "--env", "PGUSER", "--env", "PGPASSWORD", "--env", "PGDATABASE", "--env", "PGSSLMODE", env.PG_IMAGE, "pg_restore", "--list"]);
+  assert.ok(calls.every(({ args }) => !args.some((arg) => [env.DATABASE_URL, "backup_user", "secret-password", "db.example", "6543", "catalog"].includes(arg))));
+});
+
+test("enforces the exact public-schema pg_dump command", async () => {
+  const { calls, runtime } = mockRuntime();
+  await runBackup({ ...env }, runtime);
+  const dumpArgs = calls.find(({ program, args }) => program === "docker" && args.includes("pg_dump"))!.args;
+  assertPublicSchemaDumpArgs(dumpArgs);
+  const invalidCases: Array<[string, string[]]> = [
+    ["missing public", dumpArgs.filter((arg) => arg !== "--schema=public")],
+    ["wildcard", dumpArgs.map((arg) => arg === "--schema=public" ? "--schema=*" : arg)],
+    ["all", dumpArgs.map((arg) => arg === "--schema=public" ? "--schema=all" : arg)],
+    ["auth", dumpArgs.map((arg) => arg === "--schema=public" ? "--schema=auth" : arg)],
+    ["storage", dumpArgs.map((arg) => arg === "--schema=public" ? "--schema=storage" : arg)],
+    ["extra schema selector", [...dumpArgs, "--schema=auth"]],
+  ];
+  for (const [name, invalidArgs] of invalidCases) assert.throws(() => assertPublicSchemaDumpArgs(invalidArgs), name);
 });
 
 test("rejects bad, empty, or mismatched restored archives before publication", async () => {
