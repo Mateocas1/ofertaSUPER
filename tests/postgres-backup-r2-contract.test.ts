@@ -3,29 +3,33 @@ import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import test from "node:test";
-import { createBackupPlan, createRuntime, redact, runBackup, selectOwnedPairs } from "../scripts/postgres-backup-r2.mjs";
+import { createBackupPlan, createRuntime, formatManifestBasename, redact, runBackup, selectOwnedPairs } from "../scripts/postgres-backup-r2.mjs";
 
 const root = new URL("../", import.meta.url), read = (path: string) => readFileSync(new URL(path, root), "utf8");
 const env = { DATABASE_URL: "postgresql://backup_user:secret-password@db.example:6543/catalog?sslmode=require", RCLONE_CRYPT_REMOTE: "crypt:ofertasuper-r2", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", BACKUP_RETENTION: "2", BACKUP_DATABASE_ROLE: "backup_user", PG_IMAGE: "postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3" };
 type Call = { program: string; args: string[]; input?: string; env?: Record<string, string> };
-type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[]) => boolean); files?: string[]; version?: string };
+type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[]) => boolean); error?: string; files?: string[]; version?: string };
+type SpawnOptions = { timeout?: number; killSignal?: string };
 const settles = (promise: Promise<unknown>) => {
   let timer: ReturnType<typeof setTimeout>;
   return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("child settlement timed out")), 100); })]).finally(() => clearTimeout(timer));
 };
 
+function mockOutput(args: string[], options: MockOptions) {
+  if (args[0] === "version") return options.version || "rclone v1.75.0\n";
+  if (args[0] === "lsf") return (options.files || []).join("\n");
+  if (args[0] === "cryptdecode") return `${args[2]}\tencrypted/archive\n`;
+  if (args[0] === "hashsum") return `${"b".repeat(64)}  ${args[2]}\n`;
+  return "";
+}
 function mockRuntime(options: MockOptions = {}) {
   const calls: Call[] = [], results = options.results || [{ stdout: "", bytes: 3, sha256: "a".repeat(64) }, { stdout: "archive contents\n", bytes: 3, sha256: "a".repeat(64) }];
   const fails = (program: string, args: string[]) => typeof options.fail === "function" ? options.fail(program, args) : Boolean(options.fail && args.join(" ").includes(options.fail));
   return { calls, runtime: {
     command: async (program: string, args: string[], input: { input?: string; env?: Record<string, string> } = {}) => {
       calls.push({ program, args, ...input });
-      if (args[0] === "version") return { stdout: options.version || "rclone v1.75.0\n" };
-      if (args[0] === "lsf") return { stdout: (options.files || []).join("\n") };
-      if (args[0] === "cryptdecode") return { stdout: `${args[2]}\tencrypted/archive\n` };
-      if (args[0] === "hashsum") return { stdout: `${"b".repeat(64)}  ${args[2]}\n` };
-      if (fails(program, args)) throw new Error(`${typeof options.fail === "string" ? options.fail : args[0]} failed`);
-      return { stdout: "" };
+      if (fails(program, args)) throw new Error(options.error || `${typeof options.fail === "string" ? options.fail : args[0]} failed`);
+      return { stdout: mockOutput(args, options) };
     },
     pipeline: async (source: Call, destination: Call) => {
       calls.push(source, destination);
@@ -49,11 +53,22 @@ test("retention ignores incomplete newer objects and deletes only old complete p
   assert.deepEqual(selectOwnedPairs(files, 2), complete("20260101T020304Z", "dbcdef123456"));
 });
 
+test("preflights raw R2 then crypt targets and redacts preflight failures", async () => {
+  const raw = mockRuntime({ fail: (_program, args) => args[0] === "lsf" && args.at(-1) === env.RCLONE_CONFIG_CRYPT_REMOTE, error: "raw-r2-secret r2:bucket" });
+  await assert.rejects(runBackup({ ...env }, raw.runtime), (error: Error) => { assert.match(error.message, /^R2 credential preflight failed$/); assert.doesNotMatch(error.message, /raw-r2-secret|r2:bucket/); return true; });
+  assert.deepEqual(raw.calls.map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]]]);
+
+  const crypt = mockRuntime({ fail: (_program, args) => args[0] === "lsf" && args.at(-1) === env.RCLONE_CRYPT_REMOTE, error: "crypt-password crypt:ofertasuper-r2" });
+  await assert.rejects(runBackup({ ...env }, crypt.runtime), (error: Error) => { assert.match(error.message, /^crypt remote preflight failed$/); assert.doesNotMatch(error.message, /crypt-password|crypt:ofertasuper-r2/); return true; });
+  assert.deepEqual(crypt.calls.map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["lsf", "--max-depth", "1", "crypt:ofertasuper-r2"]]]);
+});
+
 test("streams, verifies bytes/hash/listing, then atomically publishes both halves", async () => {
   const { calls, runtime } = mockRuntime({ files: ["postgres-r2-20260101T020304Z-abcdef123456.dump", "postgres-r2-20260101T020304Z-abcdef123456.manifest.json"] });
   const mutable = { ...env, RCLONE_CONFIG_CRYPT_PASSWORD: "crypt-canary" };
   await runBackup(mutable, runtime, new Date("2026-03-01T02:03:04Z"), "abcdef123456");
   assert.equal(mutable.DATABASE_URL, undefined); assert.equal(mutable.RCLONE_CONFIG_CRYPT_PASSWORD, undefined);
+  assert.deepEqual(calls.slice(0, 3).map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["lsf", "--max-depth", "1", "crypt:ofertasuper-r2"]]]);
   const archiveMove = calls.findIndex(({ args }) => args[0] === "moveto" && args.at(-1)?.endsWith(".dump"));
   const manifestUpload = calls.findIndex(({ args }) => args[0] === "rcat" && args.at(-1)?.includes("manifest.json.uploading"));
   const manifestMove = calls.findIndex(({ args }) => args[0] === "moveto" && args.at(-1)?.endsWith("manifest.json"));
@@ -79,45 +94,47 @@ test("rejects bad, empty, or mismatched restored archives before publication", a
   }
 });
 
-test("cleans failed temporary and immutable promotions without deleting a final manifest", async () => {
+test("cleans temporary and final candidates after ambiguous promotions", async () => {
   const temporary = mockRuntime({ fail: (_program, args) => args[0] === "rcat" && Boolean(args.at(-1)?.endsWith("manifest.json.uploading")) });
   await assert.rejects(runBackup({ ...env }, temporary.runtime), /rcat failed/);
   assert.ok(temporary.calls.some(({ args }) => args[0] === "deletefile" && args.at(-1)?.endsWith(".dump")));
   assert.ok(temporary.calls.some(({ args }) => args[0] === "deletefile" && args.at(-1)?.endsWith("manifest.json.uploading")));
-  const archive = mockRuntime({ fail: (_program, args) => args[0] === "moveto" && Boolean(args.at(-1)?.endsWith(".dump")) });
-  await assert.rejects(runBackup({ ...env }, archive.runtime), /moveto failed/);
-  assert.ok(archive.calls.some(({ args }) => args[0] === "deletefile" && args.at(-1)?.endsWith(".dump.uploading")));
-  const promotion = mockRuntime(), command = promotion.runtime.command;
-  promotion.runtime.command = async (...input: Parameters<typeof command>) => {
-    if (input[1][0] === "moveto" && input[1].at(-1)?.endsWith("manifest.json")) throw new Error("manifest promotion failed");
-    return command(...input);
-  };
-  await assert.rejects(runBackup({ ...env }, promotion.runtime), /manifest promotion failed/);
-  assert.ok(promotion.calls.some(({ args }) => args[0] === "deletefile" && args.at(-1)?.endsWith(".dump")));
-  assert.equal(promotion.calls.some(({ args }) => args[0] === "deletefile" && args.at(-1)?.endsWith(".manifest.json")), false);
+  for (const final of [".dump", ".manifest.json"]) {
+    const promotion = mockRuntime(), command = promotion.runtime.command;
+    promotion.runtime.command = async (...input: Parameters<typeof command>) => {
+      if (input[1][0] === "moveto" && input[1].at(-1)?.endsWith(final)) throw new Error("promotion failed");
+      return command(...input);
+    };
+    await assert.rejects(runBackup({ ...env }, promotion.runtime), /promotion failed/);
+    assert.ok(promotion.calls.some(({ args }) => args[0] === "deletefile" && args.at(-1)?.endsWith(final)));
+  }
   const aggregate = mockRuntime({ fail: (_program, args) => args[0] === "deletefile" || args[0] === "rcat" && Boolean(args.at(-1)?.endsWith("manifest.json.uploading")) });
   await assert.rejects(runBackup({ ...env }, aggregate.runtime), (error: Error) => { assert.ok(error instanceof AggregateError); assert.match(error.message, /rcat failed/); return true; });
   assert.equal(aggregate.calls.filter(({ args }) => args[0] === "deletefile").length, 2);
 });
 
-test("pipeline consumes stderr and settles both children after destination failure", async () => {
-  const child = () => Object.assign(new EventEmitter(), { stdout: new PassThrough(), stdin: new PassThrough(), stderr: new PassThrough(), killed: false, kill() { this.killed = true; } });
-  const source = child(), destination = child(); let count = 0;
-  const pending = createRuntime((() => count++ ? destination : source) as never).pipeline({ program: "source", args: [] }, { program: "destination", args: [] });
-  destination.emit("close", 1); await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(source.killed, true); assert.ok(source.stderr.listenerCount("data") && destination.stderr.listenerCount("data"));
-  source.emit("close", null, "SIGTERM"); await assert.rejects(settles(pending), /backup stream command failed/);
-    const controller = new AbortController(), abortSource = child(), abortDestination = child(); let abortCount = 0;
-    const aborted = createRuntime((() => abortCount++ ? abortDestination : abortSource) as never).pipeline({ program: "source", args: [] }, { program: "destination", args: [] }, { signal: controller.signal });
-    controller.abort(); assert.equal(abortSource.killed, true); assert.equal(abortDestination.killed, true);
-    abortSource.emit("close", null, "SIGTERM"); abortDestination.emit("close", null, "SIGTERM"); await assert.rejects(settles(aborted), /backup stream command failed/);
-    const stranded = child(); let spawned = 0;
-    const synchronousThrow = createRuntime((() => { if (!spawned++) return stranded; throw new Error("destination spawn failed"); }) as never).pipeline({ program: "source", args: [] }, { program: "destination", args: [] });
-    let settled = false; void synchronousThrow.then(() => { settled = true; }, () => { settled = true; });
-    const rejected = assert.rejects(settles(synchronousThrow), /backup stream command failed/);
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(settled, false); assert.equal(stranded.killed, true); assert.ok(stranded.stderr.listenerCount("data"));
-    stranded.emit("close", null, "SIGTERM"); await rejected;
+test("pipeline has bounded children, force-kills peers, and settles once", async () => {
+  const child = () => Object.assign(new EventEmitter(), { stdout: new PassThrough(), stdin: new PassThrough(), stderr: new PassThrough(), killed: false, kills: [] as string[], kill(signal?: string) { this.killed = true; this.kills.push(signal || ""); return true; } });
+  const source = child(), destination = child(), spawned: [unknown, unknown, SpawnOptions][] = [];
+  const pending = createRuntime(((program: unknown, args: unknown, options: SpawnOptions) => { spawned.push([program, args, options]); return spawned.length === 1 ? source : destination; }) as never).pipeline({ program: "source", args: ["source-secret"] }, { program: "destination", args: ["destination-secret"] });
+  destination.emit("error", new Error("destination error")); destination.emit("close", 1); source.emit("close", null, "SIGKILL");
+  await assert.rejects(settles(pending), (error: Error) => { assert.match(error.message, /^backup destination stream command failed$/); assert.doesNotMatch(error.message, /secret/); return true; });
+  assert.deepEqual(source.kills, ["SIGKILL"]); assert.ok(source.stderr.listenerCount("data") && destination.stderr.listenerCount("data"));
+  assert.ok(spawned.every(([, , options]) => options.timeout && options.timeout > 0 && options.killSignal === "SIGKILL"));
+  const failedSource = child(), stoppedDestination = child(); let sourceCount = 0, settlements = 0;
+  const sourceFirst = createRuntime((() => sourceCount++ ? stoppedDestination : failedSource) as never).pipeline({ program: "source", args: [] }, { program: "destination", args: [] });
+  void sourceFirst.then(() => { settlements += 1; }, () => { settlements += 1; });
+  failedSource.emit("error", new Error("source error")); failedSource.emit("close", 1); stoppedDestination.emit("close", null, "SIGKILL");
+  await assert.rejects(settles(sourceFirst), /^Error: backup source stream command failed$/); assert.equal(settlements, 1); assert.deepEqual(stoppedDestination.kills, ["SIGKILL"]);
+  const synchronousThrow = createRuntime((() => { throw new Error("source spawn failed"); }) as never).pipeline({ program: "source", args: [] }, { program: "destination", args: [] });
+  await assert.rejects(settles(synchronousThrow), /^Error: backup source stream command failed$/);
+});
+
+test("synchronous commands use a finite timeout", async () => {
+  let options: SpawnOptions | undefined;
+  const runtime = createRuntime(undefined, ((_program: string, _args: string[], input: SpawnOptions) => { options = input; return { status: 0, stdout: "" }; }) as never);
+  await runtime.command("rclone", ["version"]);
+  assert.ok(options?.timeout && options.timeout > 0); assert.equal(options?.killSignal, "SIGKILL");
 });
 
 test("rejects a mismatched rclone before upload and preserves a published pair on retention failure", async () => {
@@ -129,6 +146,11 @@ test("rejects a mismatched rclone before upload and preserves a published pair o
   await assert.rejects(runBackup({ ...env }, retention.runtime, new Date("2026-03-01T02:03:04Z"), "abcdef123456"), /deletefile failed/);
   assert.ok(retention.calls.some(({ args }) => args[0] === "deletefile" && args.at(-1)?.includes("20260101T020304Z")));
   assert.equal(retention.calls.some(({ args }) => args[0] === "deletefile" && args.at(-1)?.includes("20260301T020304Z-abcdef123456")), false);
+});
+
+test("formats only a strict logical manifest basename for operator output", () => {
+  assert.equal(formatManifestBasename({ manifest: "postgres-r2-20260301T020304Z-abcdef123456.manifest.json" }), "postgres-r2-20260301T020304Z-abcdef123456.manifest.json");
+  assert.throws(() => formatManifestBasename({ manifest: "crypt:ofertasuper-r2/secret" }), /manifest name invalid/);
 });
 
 test("workflow remains manual-only, pins checkout, and documents failure semantics", () => {

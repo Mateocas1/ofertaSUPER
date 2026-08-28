@@ -9,6 +9,7 @@ export const PG_IMAGE = "postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa800
 const OWNED = /^postgres-r2-(\d{8}T\d{6}Z-[a-f0-9]{12})\.(dump|manifest\.json)$/;
 const PG_NAMES = ["PGHOST", "PGPORT", "PGUSER", "PGPASSWORD", "PGDATABASE", "PGSSLMODE"];
 const RCLONE_CONFIG_CLEANUP = ["RCLONE_CONFIG_R2_ACCESS_KEY_ID", "RCLONE_CONFIG_R2_SECRET_ACCESS_KEY", "RCLONE_CONFIG_CRYPT_PASSWORD", "RCLONE_CONFIG_CRYPT_PASSWORD2"];
+const PROCESS_TIMEOUT = 10 * 60 * 1000;
 
 function required(value, name) { if (!value) throw new Error(`${name} is required`); return value; }
 function directDatabase(value, role) {
@@ -24,6 +25,11 @@ function backupNames(now, runId) {
   if (!suffix) throw new Error("backup run identifier must end in 12 lowercase hex characters");
   const archive = `postgres-r2-${stamp}-${suffix}.dump`;
   return { archive, manifest: `${archive.slice(0, -5)}.manifest.json` };
+}
+export function formatManifestBasename(plan) {
+  const manifest = String(plan?.manifest || "");
+  if (!OWNED.test(manifest) || !manifest.endsWith(".manifest.json")) throw new Error("backup manifest name invalid");
+  return manifest;
 }
 
 export function redact(value, canaries = []) {
@@ -53,22 +59,29 @@ function metricStream() {
   return { tap, result: () => ({ bytes, sha256: hash.digest("hex") }) };
 }
 
-export function createRuntime(spawnProcess = spawn) {
+export function createRuntime(spawnProcess = spawn, spawnSyncProcess = spawnSync) {
   const command = async (program, args, options = {}) => {
-    const result = spawnSync(program, args, { encoding: "utf8", input: options.input, env: options.env, stdio: ["pipe", "pipe", "pipe"] });
+    const result = spawnSyncProcess(program, args, { encoding: "utf8", input: options.input, env: options.env, stdio: ["pipe", "pipe", "pipe"], timeout: PROCESS_TIMEOUT, killSignal: "SIGKILL" });
     if (result.error || !(options.acceptStatuses || [0]).includes(result.status)) throw new Error(`${program} command failed`);
     return /** @type {{ stdout: string, status?: number | null }} */ ({ stdout: result.stdout || "", status: result.status });
   };
   const pipeline = (source, destination, options = {}) => new Promise((resolvePipeline, rejectPipeline) => {
-    const metric = metricStream(), children = []; let left, right, output = "", closed = 0, failed = false;
-    const stop = (child) => { if (!child.killed) child.kill(); };
-    const fail = () => { if (!failed) { failed = true; children.forEach(stop); } };
-    const done = () => { if (closed === children.length) { options.signal?.removeEventListener("abort", fail); if (failed) rejectPipeline(new Error("backup stream command failed")); else resolvePipeline({ stdout: output, ...metric.result() }); } };
-    const close = (code, signal) => { if (code || signal) fail(); closed += 1; done(); };
-    const attach = (child) => { children.push(child); if (failed) stop(child); child.on("error", fail); child.stderr.on("data", () => {}); child.on("close", close); };
-    if (options.signal?.aborted) fail(); else options.signal?.addEventListener("abort", fail, { once: true });
-    try { left = spawnProcess(source.program, source.args, { env: options.env, signal: options.signal, stdio: ["ignore", "pipe", "pipe"] }); attach(left); right = spawnProcess(destination.program, destination.args, { env: options.env, signal: options.signal, stdio: ["pipe", "pipe", "pipe"] }); attach(right); } catch { fail(); done(); return; }
-    left.stdout.on("error", fail); metric.tap.on("error", fail); right.stdin.on("error", fail); right.stdout.on("data", (chunk) => { output += chunk; });
+    const metric = metricStream(), children = []; let left, right, output = "", closed = 0, failed = false, failedSide = "", settled = false;
+    const stop = (child) => { if (!child.killed) child.kill("SIGKILL"); };
+    const fail = (side = "") => { if (!failed) { failed = true; failedSide = side; children.forEach(stop); } };
+    const abort = () => fail();
+    const done = () => {
+      if (settled || closed !== children.length) return;
+      settled = true; options.signal?.removeEventListener("abort", abort);
+      if (failed) rejectPipeline(new Error(failedSide ? `backup ${failedSide} stream command failed` : "backup stream command failed"));
+      else resolvePipeline({ stdout: output, ...metric.result() });
+    };
+    const attach = (child, side) => { children.push(child); if (failed) stop(child); child.on("error", () => fail(side)); child.stderr.on("data", () => {}); child.stderr.on("error", () => fail(side)); child.on("close", (code, signal) => { if (code || signal) fail(side); closed += 1; done(); }); };
+    if (options.signal?.aborted) { abort(); done(); return; }
+    options.signal?.addEventListener("abort", abort, { once: true });
+    let spawning = "source";
+    try { left = spawnProcess(source.program, source.args, { env: options.env, signal: options.signal, stdio: ["ignore", "pipe", "pipe"], timeout: PROCESS_TIMEOUT, killSignal: "SIGKILL" }); attach(left, spawning); spawning = "destination"; right = spawnProcess(destination.program, destination.args, { env: options.env, signal: options.signal, stdio: ["pipe", "pipe", "pipe"], timeout: PROCESS_TIMEOUT, killSignal: "SIGKILL" }); attach(right, spawning); } catch { fail(spawning); done(); return; }
+    left.stdout.on("error", () => fail("source")); metric.tap.on("error", () => fail("source")); right.stdin.on("error", () => fail("destination")); right.stdout.on("error", () => fail("destination")); right.stdout.on("data", (chunk) => { output += chunk; });
     left.stdout.pipe(metric.tap).pipe(right.stdin);
   });
   return { command, pipeline };
@@ -97,6 +110,9 @@ async function verifiedVersion(runtime, environment) {
   const version = await runtime.command("rclone", ["version"], { env: environment });
   if (!new RegExp(`rclone v${RCLONE_VERSION.replaceAll(".", "\\.")}\\b`).test(version.stdout)) throw new Error("rclone version pin check failed");
 }
+async function preflight(runtime, target, environment, message) {
+  try { await runtime.command("rclone", ["lsf", "--max-depth", "1", required(target, "RCLONE_CONFIG_CRYPT_REMOTE")], { env: environment }); } catch { throw new Error(message); }
+}
 async function retain(runtime, plan, environment) {
   const files = (await runtime.command("rclone", ["lsf", "--files-only", plan.remote], { env: environment })).stdout.split("\n");
   for (const file of selectOwnedPairs(files, plan.retention)) await runtime.command("rclone", ["deletefile", `${plan.remote}/${file}`], { env: environment });
@@ -114,16 +130,20 @@ export async function runBackup(environment, runtime = createRuntime(), now = ne
     plan = createBackupPlan(environment, now, runId); delete environment.DATABASE_URL; childEnv = { ...environment, ...plan.pg };
     const { docker, rclone } = commands(plan);
     await verifiedVersion(runtime, childEnv);
+    await preflight(runtime, childEnv.RCLONE_CONFIG_CRYPT_REMOTE, childEnv, "R2 credential preflight failed");
+    await preflight(runtime, plan.remote, childEnv, "crypt remote preflight failed");
     owned.push(plan.temporary);
     const dumped = await runtime.pipeline(docker("pg_dump", ["--format=custom", "--no-owner", "--no-acl", "--serializable-deferrable"]), rclone(["rcat", `${plan.remote}/${plan.temporary}`]), { env: childEnv });
     const restored = await runtime.pipeline(rclone(["cat", `${plan.remote}/${plan.temporary}`]), docker("pg_restore", ["--list"]), { env: childEnv });
     validated(dumped, restored);
-    await runtime.command("rclone", ["moveto", "--immutable", `${plan.remote}/${plan.temporary}`, `${plan.remote}/${plan.archive}`], { env: childEnv }); owned.pop(); promoted = plan.archive;
+    owned.push(plan.archive);
+    await runtime.command("rclone", ["moveto", "--immutable", `${plan.remote}/${plan.temporary}`, `${plan.remote}/${plan.archive}`], { env: childEnv }); owned.splice(owned.indexOf(plan.temporary), 1); promoted = plan.archive;
     const encrypted = await ciphertext(runtime, plan, childEnv);
     owned.push(plan.manifestTemporary);
     const manifest = JSON.stringify({ schemaVersion: 2, archive: plan.archive, timestamp: now.toISOString(), format: "custom", validation: "pg_restore --list", bytes: dumped.bytes, sha256: dumped.sha256, ciphertext: encrypted }) + "\n";
     await runtime.command("rclone", ["rcat", `${plan.remote}/${plan.manifestTemporary}`], { env: childEnv, input: manifest });
-    await runtime.command("rclone", ["moveto", "--immutable", `${plan.remote}/${plan.manifestTemporary}`, `${plan.remote}/${plan.manifest}`], { env: childEnv }); owned.pop(); published = true;
+    owned.push(plan.manifest);
+    await runtime.command("rclone", ["moveto", "--immutable", `${plan.remote}/${plan.manifestTemporary}`, `${plan.remote}/${plan.manifest}`], { env: childEnv }); owned.splice(owned.indexOf(plan.manifestTemporary), 1); published = true;
     await retain(runtime, plan, childEnv);
   } catch (error) { primary = error; }
   finally {
@@ -136,6 +156,6 @@ export async function runBackup(environment, runtime = createRuntime(), now = ne
 
 async function main() {
   const canaries = Object.entries(process.env).filter(([name, value]) => /PASSWORD|SECRET|ACCESS_KEY|DATABASE_URL/.test(name) && value).map(([, value]) => value);
-  try { await runBackup(process.env); console.log("Encrypted PostgreSQL backup completed."); } catch (error) { console.error(redact(error.stack || error.message, canaries)); process.exitCode = 1; }
+  try { const plan = await runBackup(process.env); console.log(formatManifestBasename(plan)); } catch (error) { console.error(redact(error.stack || error.message, canaries)); process.exitCode = 1; }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) void main();
