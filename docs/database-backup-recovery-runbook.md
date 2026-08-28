@@ -25,7 +25,7 @@ Store `RCLONE_CRYPT_PASSWORD` and `RCLONE_CRYPT_PASSWORD2` as canonical non-empt
 
 ## Database boundary
 
-The backup and recovery boundary is the application-owned `public` schema only. The custom archive includes `_prisma_migrations` and the core application catalog in `public`; it excludes Supabase-managed `auth` and `storage` schemas. Do not grant the dedicated backup role access to managed schemas.
+The backup and recovery boundary is the application-owned `public` schema only. The custom archive includes `_prisma_migrations` and the core application catalog in `public`; it excludes Supabase-managed `auth` and `storage` schemas. Do not grant the dedicated backup role access to managed schemas. `pg_dump` uses its default consistent snapshot and bounds table-lock acquisition to `--lock-wait-timeout=30s` for Supabase session-pooler connections; it does not use serializable-deferrable mode. If the lock timeout expires, the backup fails closed before publication.
 
 ## Failure semantics and recovery
 
