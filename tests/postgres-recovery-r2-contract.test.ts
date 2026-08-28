@@ -6,6 +6,32 @@ import { createRecoveryPlan, runRecovery } from "../scripts/postgres-recovery-r2
 const root = new URL("../", import.meta.url), read = (path: string) => readFileSync(new URL(path, root), "utf8");
 const env = { RECOVERY_MANIFEST_KEY: "postgres-r2-20260301T020304Z-abcdef123456.manifest.json", RCLONE_CRYPT_REMOTE: "crypt:backups", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", RCLONE_CONFIG_CRYPT_PASSWORD: "canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "canary2" };
 const manifest = { schemaVersion: 2, archive: "postgres-r2-20260301T020304Z-abcdef123456.dump", timestamp: "2026-03-01T02:03:04.000Z", format: "custom", validation: "pg_restore --list", bytes: 3, sha256: "a".repeat(64), ciphertext: { key: "enc/archive", sha256: "d7439bee24773bcbfa2d0a97947ee36227b10d1022b1a55847e928965bb6bfde" } };
+const count = (text: string, value: string) => text.split(value).length - 1;
+
+function assertRuntimeCryptPasswordDerivation(workflow: string) {
+  const heading = "      - name: Derive rclone crypt passwords\n", start = workflow.indexOf(heading), nextStep = workflow.indexOf("\n      - ", start + heading.length);
+  assert.ok(start >= 0 && nextStep > start); assert.equal(count(workflow, heading), 1);
+  const step = workflow.slice(start, nextStep), run = "        run: |\n", runStart = step.indexOf(run);
+  assert.ok(runStart >= 0); const body = step.slice(runStart + run.length), guardStart = body.indexOf("if [[ "), guardEnd = body.indexOf(" ]]; then", guardStart);
+  assert.ok(guardStart >= 0 && guardEnd > guardStart); const guard = body.slice(guardStart, guardEnd + " ]]; then".length);
+  const bindings = [["RCLONE_CRYPT_PASSWORD_PLAINTEXT", "RCLONE_CRYPT_PASSWORD", "${{ secrets.RCLONE_CRYPT_PASSWORD }}", "primary_crypt_password"], ["RCLONE_CRYPT_PASSWORD2_PLAINTEXT", "RCLONE_CRYPT_PASSWORD2", "${{ secrets.RCLONE_CRYPT_PASSWORD2 }}", "secondary_crypt_password"]] as const;
+  const job = workflow.slice(0, workflow.indexOf("    steps:\n"));
+  for (const [plaintext, secretName, secret, obscured] of bindings) {
+    const secretBinding = new RegExp(`\\$\\{\\{\\s*secrets\\.${secretName}\\s*\\}\\}`, "g");
+    assert.equal((workflow.match(secretBinding) || []).length, 1); assert.equal((step.match(secretBinding) || []).length, 1); assert.ok(step.includes(`          ${plaintext}: ${secret}\n`)); assert.equal((job.match(secretBinding) || []).length, 0);
+    assert.doesNotMatch(workflow, new RegExp(`^\\s+${plaintext.replace("_PLAINTEXT", "")}:\\s*\\$\\{\\{\\s*secrets\\.`, "m"));
+    assert.ok(guard.includes(`-z "$${plaintext}"`)); assert.ok(guard.includes(`"$${plaintext}" == *$'\\n'*`)); assert.ok(guard.includes(`"$${plaintext}" == *$'\\r'*`));
+    const obscure = `${obscured}="$(printf '%s' "$${plaintext}" | "$RUNNER_TEMP/rclone" obscure -)"`;
+    assert.equal(count(body, obscure), 1);
+    const plaintextReference = new RegExp(`\\$(?:${plaintext}\\b|\\{${plaintext}\\})`);
+    assert.deepEqual(body.split("\n").filter((line) => plaintextReference.test(line)).map((line) => line.trim()), [guard.trim(), obscure]);
+  }
+  const masks = ["printf '::add-mask::%s\\n' \"$primary_crypt_password\"", "printf '::add-mask::%s\\n' \"$secondary_crypt_password\""], writes = ["printf 'RCLONE_CONFIG_CRYPT_PASSWORD=%s\\n' \"$primary_crypt_password\" >> \"$GITHUB_ENV\"", "printf 'RCLONE_CONFIG_CRYPT_PASSWORD2=%s\\n' \"$secondary_crypt_password\" >> \"$GITHUB_ENV\""];
+  for (const command of [...masks, ...writes]) assert.equal(count(body, command), 1);
+  assert.equal(count(body, "$GITHUB_ENV"), writes.length); assert.ok(Math.max(...masks.map((command) => body.indexOf(command))) < Math.min(...writes.map((command) => body.indexOf(command))));
+}
+
+
 
 test("unsafe manifest input makes zero rclone or Docker calls", async () => {
   for (const key of ["../x", "dir/x", "x\\y", "x\u0000y"]) {
@@ -90,4 +116,12 @@ test("collision never claims existing state and readiness is bounded", async () 
 test("abort reaches the restore pipeline, stops following phases, and redacts argv", async () => {
   const controller = new AbortController(), aborted = runtimeFor({ archive: true }); aborted.runtime.pipeline = async (_left: unknown, _right: unknown, options: { signal?: AbortSignal }) => { assert.equal(options.signal, controller.signal); controller.abort(); throw new Error("cancelled"); };
   await assert.rejects(runRecovery({ ...env }, aborted.runtime as never, () => "e".repeat(32), { signal: controller.signal }), /cancelled|recovery cancelled/); assert.equal(aborted.calls.some(({ options }) => options?.input?.includes("CREATE ROLE")), false); assert.ok(aborted.calls.every(({ args }) => !args.join(" ").includes("canary") && !args.join(" ").includes("PGPASSWORD=")));
+});
+
+test("workflow derives plaintext crypt secrets only at runtime", () => {
+  const workflow = read(".github/workflows/database-recovery.yml"), docs = read("docs/database-backup-recovery-runbook.md");
+  assertRuntimeCryptPasswordDerivation(workflow);
+  assert.doesNotMatch(workflow, /set -x/);
+  const install = workflow.indexOf("Install pinned rclone"), derive = workflow.indexOf("Derive rclone crypt passwords"), recovery = workflow.indexOf("npm run recovery:postgres-r2"); assert.ok(install >= 0 && install < derive && derive < recovery);
+  assert.match(docs, /rotate both together/i); assert.match(docs, /ephemeral.*masked|masked.*ephemeral/i);
 });

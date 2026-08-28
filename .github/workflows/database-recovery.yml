@@ -26,8 +26,6 @@ jobs:
       RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       RCLONE_CONFIG_CRYPT_TYPE: crypt
       RCLONE_CONFIG_CRYPT_REMOTE: r2:${{ vars.R2_BUCKET }}
-      RCLONE_CONFIG_CRYPT_PASSWORD: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
-      RCLONE_CONFIG_CRYPT_PASSWORD2: ${{ secrets.RCLONE_CRYPT_PASSWORD2 }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install pinned rclone
@@ -37,4 +35,19 @@ jobs:
           unzip -q rclone-v1.75.0-linux-amd64.zip
           install -m 0755 rclone-v1.75.0-linux-amd64/rclone "$RUNNER_TEMP/rclone"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Derive rclone crypt passwords
+        env:
+          RCLONE_CRYPT_PASSWORD_PLAINTEXT: ${{ secrets.RCLONE_CRYPT_PASSWORD }}
+          RCLONE_CRYPT_PASSWORD2_PLAINTEXT: ${{ secrets.RCLONE_CRYPT_PASSWORD2 }}
+        run: |
+          if [[ -z "$RCLONE_CRYPT_PASSWORD_PLAINTEXT" || -z "$RCLONE_CRYPT_PASSWORD2_PLAINTEXT" || "$RCLONE_CRYPT_PASSWORD_PLAINTEXT" == *$'\n'* || "$RCLONE_CRYPT_PASSWORD_PLAINTEXT" == *$'\r'* || "$RCLONE_CRYPT_PASSWORD2_PLAINTEXT" == *$'\n'* || "$RCLONE_CRYPT_PASSWORD2_PLAINTEXT" == *$'\r'* ]]; then
+            echo "RCLONE crypt passwords must be non-empty single-line plaintext" >&2
+            exit 1
+          fi
+          primary_crypt_password="$(printf '%s' "$RCLONE_CRYPT_PASSWORD_PLAINTEXT" | "$RUNNER_TEMP/rclone" obscure -)"
+          secondary_crypt_password="$(printf '%s' "$RCLONE_CRYPT_PASSWORD2_PLAINTEXT" | "$RUNNER_TEMP/rclone" obscure -)"
+          printf '::add-mask::%s\n' "$primary_crypt_password"
+          printf '::add-mask::%s\n' "$secondary_crypt_password"
+          printf 'RCLONE_CONFIG_CRYPT_PASSWORD=%s\n' "$primary_crypt_password" >> "$GITHUB_ENV"
+          printf 'RCLONE_CONFIG_CRYPT_PASSWORD2=%s\n' "$secondary_crypt_password" >> "$GITHUB_ENV"
       - run: npm run recovery:postgres-r2
