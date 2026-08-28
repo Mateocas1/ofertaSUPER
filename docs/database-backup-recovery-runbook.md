@@ -15,6 +15,10 @@ This manual-only workflow streams a PostgreSQL custom archive through rclone cry
 | Variables | `BACKUP_DATABASE_ROLE`, `R2_ENDPOINT`, `R2_BUCKET`, `RCLONE_CRYPT_REMOTE` (`crypt:` path), `BACKUP_RETENTION` (2–90) |
 | Pins | checkout v4 commit, rclone 1.75.0, PostgreSQL 17.6 Bookworm digest |
 
+## R2 least-privilege setup
+
+Pre-provision the `R2_BUCKET` before running either workflow. Scope its R2 token to that bucket with **Object Read & Write** only; do not grant `CreateBucket` permission. Both workflows set `RCLONE_CONFIG_R2_NO_CHECK_BUCKET: "true"`, so rclone is configured not to check for or create the bucket.
+
 ## Crypt secret handling
 
 Store `RCLONE_CRYPT_PASSWORD` and `RCLONE_CRYPT_PASSWORD2` as canonical non-empty single-line plaintext repository secrets; do not pre-obscure either value. The backup and recovery workflows derive rclone's reversible obscured values at runtime from step-local plaintext. Each derived value is masked before being passed to later steps through the job environment; derivation is ephemeral and plaintext is not persisted outside that step. Rotate both together so the two crypt passwords stay paired.

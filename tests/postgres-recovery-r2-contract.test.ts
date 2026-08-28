@@ -8,6 +8,13 @@ const env = { RECOVERY_MANIFEST_KEY: "postgres-r2-20260301T020304Z-abcdef123456.
 const manifest = { schemaVersion: 2, archive: "postgres-r2-20260301T020304Z-abcdef123456.dump", timestamp: "2026-03-01T02:03:04.000Z", format: "custom", validation: "pg_restore --list", bytes: 3, sha256: "a".repeat(64), ciphertext: { key: "enc/archive", sha256: "d7439bee24773bcbfa2d0a97947ee36227b10d1022b1a55847e928965bb6bfde" } };
 const count = (text: string, value: string) => text.split(value).length - 1;
 
+function assertFixedR2NoCheckBucket(workflow: string) {
+  const required = '      RCLONE_CONFIG_R2_NO_CHECK_BUCKET: "true"';
+  assert.equal((workflow.match(/^      RCLONE_CONFIG_R2_NO_CHECK_BUCKET:\s*"true"\s*$/gm) || []).length, 1);
+  assert.doesNotMatch(workflow, /^      RCLONE_CONFIG_R2_NO_CHECK_BUCKET:\s*\$\{\{/m);
+  for (const invalid of ["", "false", '"false"', "${{ vars.R2_NO_CHECK_BUCKET }}"]) assert.throws(() => assert.equal((workflow.replace(required, `      RCLONE_CONFIG_R2_NO_CHECK_BUCKET: ${invalid}`).match(/^      RCLONE_CONFIG_R2_NO_CHECK_BUCKET:\s*"true"\s*$/gm) || []).length, 1));
+}
+
 function assertRuntimeCryptPasswordDerivation(workflow: string) {
   const heading = "      - name: Derive rclone crypt passwords\n", start = workflow.indexOf(heading), nextStep = workflow.indexOf("\n      - ", start + heading.length);
   assert.ok(start >= 0 && nextStep > start); assert.equal(count(workflow, heading), 1);
@@ -121,6 +128,7 @@ test("abort reaches the restore pipeline, stops following phases, and redacts ar
 test("workflow derives plaintext crypt secrets only at runtime", () => {
   const workflow = read(".github/workflows/database-recovery.yml"), docs = read("docs/database-backup-recovery-runbook.md");
   assertRuntimeCryptPasswordDerivation(workflow);
+  assertFixedR2NoCheckBucket(workflow);
   assert.doesNotMatch(workflow, /set -x/);
   const install = workflow.indexOf("Install pinned rclone"), derive = workflow.indexOf("Derive rclone crypt passwords"), recovery = workflow.indexOf("npm run recovery:postgres-r2"); assert.ok(install >= 0 && install < derive && derive < recovery);
   assert.match(docs, /rotate both together/i); assert.match(docs, /ephemeral.*masked|masked.*ephemeral/i);
