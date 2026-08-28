@@ -110,6 +110,7 @@ async function verifiedVersion(runtime, environment) {
   const version = await runtime.command("rclone", ["version"], { env: environment });
   if (!new RegExp(`rclone v${RCLONE_VERSION.replaceAll(".", "\\.")}\\b`).test(version.stdout)) throw new Error("rclone version pin check failed");
 }
+function cryptRemoteRoot(remote) { return remote.slice(0, remote.indexOf(":") + 1); }
 async function preflight(runtime, target, environment, message) {
   try { await runtime.command("rclone", ["lsf", "--max-depth", "1", required(target, "RCLONE_CONFIG_CRYPT_REMOTE")], { env: environment }); } catch { throw new Error(message); }
 }
@@ -131,7 +132,7 @@ export async function runBackup(environment, runtime = createRuntime(), now = ne
     const { docker, rclone } = commands(plan);
     await verifiedVersion(runtime, childEnv);
     await preflight(runtime, childEnv.RCLONE_CONFIG_CRYPT_REMOTE, childEnv, "R2 credential preflight failed");
-    await preflight(runtime, plan.remote, childEnv, "crypt remote preflight failed");
+    await preflight(runtime, cryptRemoteRoot(plan.remote), childEnv, "crypt remote preflight failed");
     owned.push(plan.temporary);
     const dumped = await runtime.pipeline(docker("pg_dump", ["--format=custom", "--no-owner", "--no-acl", "--serializable-deferrable"]), rclone(["rcat", `${plan.remote}/${plan.temporary}`]), { env: childEnv });
     const restored = await runtime.pipeline(rclone(["cat", `${plan.remote}/${plan.temporary}`]), docker("pg_restore", ["--list"]), { env: childEnv });
