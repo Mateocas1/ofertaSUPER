@@ -111,8 +111,11 @@ async function verifiedVersion(runtime, environment) {
   if (!new RegExp(`rclone v${RCLONE_VERSION.replaceAll(".", "\\.")}\\b`).test(version.stdout)) throw new Error("rclone version pin check failed");
 }
 function cryptRemoteRoot(remote) { return remote.slice(0, remote.indexOf(":") + 1); }
-async function preflight(runtime, target, environment, message) {
-  try { await runtime.command("rclone", ["lsf", "--max-depth", "1", required(target, "RCLONE_CONFIG_CRYPT_REMOTE")], { env: environment }); } catch { throw new Error(message); }
+async function rawPreflight(runtime, environment) {
+  try { await runtime.command("rclone", ["lsf", "--max-depth", "1", required(environment.RCLONE_CONFIG_CRYPT_REMOTE, "RCLONE_CONFIG_CRYPT_REMOTE")], { env: environment }); } catch { throw new Error("R2 credential preflight failed"); }
+}
+async function cryptPreflight(runtime, remote, environment) {
+  try { await runtime.command("rclone", ["backend", "features", cryptRemoteRoot(remote)], { env: environment }); } catch { throw new Error("crypt remote preflight failed"); }
 }
 async function retain(runtime, plan, environment) {
   const files = (await runtime.command("rclone", ["lsf", "--files-only", plan.remote], { env: environment })).stdout.split("\n");
@@ -131,8 +134,8 @@ export async function runBackup(environment, runtime = createRuntime(), now = ne
     plan = createBackupPlan(environment, now, runId); delete environment.DATABASE_URL; childEnv = { ...environment, ...plan.pg };
     const { docker, rclone } = commands(plan);
     await verifiedVersion(runtime, childEnv);
-    await preflight(runtime, childEnv.RCLONE_CONFIG_CRYPT_REMOTE, childEnv, "R2 credential preflight failed");
-    await preflight(runtime, cryptRemoteRoot(plan.remote), childEnv, "crypt remote preflight failed");
+    await rawPreflight(runtime, childEnv);
+    await cryptPreflight(runtime, plan.remote, childEnv);
     owned.push(plan.temporary);
     const dumped = await runtime.pipeline(docker("pg_dump", ["--format=custom", "--no-owner", "--no-acl", "--serializable-deferrable"]), rclone(["rcat", `${plan.remote}/${plan.temporary}`]), { env: childEnv });
     const restored = await runtime.pipeline(rclone(["cat", `${plan.remote}/${plan.temporary}`]), docker("pg_restore", ["--list"]), { env: childEnv });
