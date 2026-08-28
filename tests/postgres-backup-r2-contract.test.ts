@@ -3,10 +3,10 @@ import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
 import test from "node:test";
-import { createBackupPlan, createRuntime, formatManifestBasename, redact, runBackup, selectOwnedPairs } from "../scripts/postgres-backup-r2.mjs";
+import { createBackupPlan, createRuntime, cryptProbeEnvironment, formatManifestBasename, redact, runBackup, selectOwnedPairs } from "../scripts/postgres-backup-r2.mjs";
 
 const root = new URL("../", import.meta.url), read = (path: string) => readFileSync(new URL(path, root), "utf8");
-const env = { DATABASE_URL: "postgresql://backup_user:secret-password@db.example:6543/catalog?sslmode=require", RCLONE_CRYPT_REMOTE: "crypt:ofertasuper-r2", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", BACKUP_RETENTION: "2", BACKUP_DATABASE_ROLE: "backup_user", PG_IMAGE: "postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3" };
+const env = { PATH: "/runtime-bin", DATABASE_URL: "postgresql://backup_user:secret-password@db.example:6543/catalog?sslmode=require", RCLONE_CRYPT_REMOTE: "crypt:ofertasuper-r2", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", BACKUP_RETENTION: "2", BACKUP_DATABASE_ROLE: "backup_user", PG_IMAGE: "postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3" };
 const count = (text: string, value: string) => text.split(value).length - 1;
 
 function assertRuntimeCryptPasswordDerivation(workflow: string) {
@@ -78,12 +78,24 @@ test("retention ignores incomplete newer objects and deletes only old complete p
   assert.deepEqual(selectOwnedPairs(files, 2), complete("20260101T020304Z", "dbcdef123456"));
 });
 
+test("builds crypt probe environments from a minimal allowlist without mutating the source", () => {
+  const source = { PATH: "/crypt-probe-bin", HOME: "/crypt-probe-home", RCLONE_CONFIG: "/inherited/rclone.conf", RCLONE_CONFIG_R2_ACCESS_KEY_ID: "r2-access-key", RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: "r2-secret-key", RCLONE_CONFIG_CRYPT_PASSWORD2: "secondary-secret", DATABASE_URL: "postgresql://database-secret", GITHUB_ENV: "/github/env", PGHOST: "database-host", UNRELATED: "not-for-probe" };
+  const original = { ...source }, primary = cryptProbeEnvironment(source, "primary-candidate"), secondary = cryptProbeEnvironment(source, "secondary-candidate"), withoutHome = cryptProbeEnvironment({ ...source, HOME: undefined }, "without-home-candidate");
+  const expectedKeys = ["HOME", "PATH", "RCLONE_CONFIG", "RCLONE_CONFIG_CRYPTPROBE_TYPE", "RCLONE_CONFIG_CRYPT_PASSWORD", "RCLONE_CONFIG_CRYPT_REMOTE", "RCLONE_CONFIG_CRYPT_TYPE"];
+  assert.deepEqual(Object.keys(primary).sort(), expectedKeys); assert.deepEqual(Object.keys(secondary).sort(), expectedKeys); assert.deepEqual(Object.keys(withoutHome).sort(), expectedKeys.filter((name) => name !== "HOME"));
+  for (const [probe, candidate] of [[primary, "primary-candidate"], [secondary, "secondary-candidate"]] as const) {
+    assert.equal(probe.PATH, source.PATH); assert.equal(probe.HOME, source.HOME); assert.equal(probe.RCLONE_CONFIG, "/dev/null"); assert.equal(probe.RCLONE_CONFIG_CRYPT_TYPE, "crypt"); assert.equal(probe.RCLONE_CONFIG_CRYPT_REMOTE, "cryptprobe:"); assert.equal(probe.RCLONE_CONFIG_CRYPTPROBE_TYPE, "local"); assert.equal(probe.RCLONE_CONFIG_CRYPT_PASSWORD, candidate);
+  }
+  assert.notStrictEqual(primary, secondary); assert.notEqual(primary.RCLONE_CONFIG_CRYPT_PASSWORD, secondary.RCLONE_CONFIG_CRYPT_PASSWORD); assert.deepEqual(source, original);
+  assert.throws(() => cryptProbeEnvironment({ ...source, PATH: "" }, "missing-path-candidate"), /PATH is required/);
+});
+
 test("preflights raw R2 then each crypt secret in isolated local-backed environments", async () => {
   const raw = mockRuntime({ fail: (_program, args) => args[0] === "lsf" && args.at(-1) === env.RCLONE_CONFIG_CRYPT_REMOTE, error: "raw-r2-secret r2:bucket" });
   await assert.rejects(runBackup({ ...env }, raw.runtime), (error: Error) => { assert.match(error.message, /^R2 credential preflight failed$/); assert.doesNotMatch(error.message, /raw-r2-secret|r2:bucket/); return true; });
   assert.deepEqual(raw.calls.map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]]]);
 
-  const input = { ...env, RCLONE_CONFIG_CRYPT_PASSWORD: "primary-crypt-password", RCLONE_CONFIG_CRYPT_PASSWORD2: "secondary-crypt-password", RCLONE_CONFIG_R2_ACCESS_KEY_ID: "r2-access-key" };
+  const input = { ...env, PATH: "/crypt-probe-bin", HOME: "/crypt-probe-home", RCLONE_CONFIG: "/inherited/rclone.conf", RCLONE_CONFIG_CRYPT_PASSWORD: "primary-crypt-password", RCLONE_CONFIG_CRYPT_PASSWORD2: "secondary-crypt-password", RCLONE_CONFIG_R2_ACCESS_KEY_ID: "r2-access-key", RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: "r2-secret-key", GITHUB_ENV: "/github/env", PGHOST: "database-host", UNRELATED: "not-for-probe" };
   const primary = mockRuntime({ fail: (_program, args, probeEnv) => args[0] === "backend" && probeEnv?.RCLONE_CONFIG_CRYPT_PASSWORD === input.RCLONE_CONFIG_CRYPT_PASSWORD, error: "primary-crypt-password crypt:" });
   await assert.rejects(runBackup({ ...input }, primary.runtime), (error: Error) => { assert.match(error.message, /^primary crypt secret preflight failed$/); assert.doesNotMatch(error.message, /primary-crypt-password|secondary-crypt-password|crypt:|r2-access-key/); return true; });
   assert.equal(primary.calls.length, 3);
@@ -93,16 +105,17 @@ test("preflights raw R2 then each crypt secret in isolated local-backed environm
   assert.deepEqual(secondary.calls.map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["backend", "features", "crypt:"]], ["rclone", ["backend", "features", "crypt:"]]]);
   const rawEnv = secondary.calls[1].env!, primaryEnv = secondary.calls[2].env!, secondaryEnv = secondary.calls[3].env!;
   assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_REMOTE, "r2:bucket"); assert.equal(rawEnv.RCLONE_CONFIG_CRYPTPROBE_TYPE, undefined);
+  const probeKeys = ["HOME", "PATH", "RCLONE_CONFIG", "RCLONE_CONFIG_CRYPTPROBE_TYPE", "RCLONE_CONFIG_CRYPT_PASSWORD", "RCLONE_CONFIG_CRYPT_REMOTE", "RCLONE_CONFIG_CRYPT_TYPE"];
   for (const [probeEnv, candidate] of [[primaryEnv, input.RCLONE_CONFIG_CRYPT_PASSWORD], [secondaryEnv, input.RCLONE_CONFIG_CRYPT_PASSWORD2]] as const) {
-    assert.notStrictEqual(probeEnv, rawEnv); assert.equal(probeEnv.RCLONE_CONFIG_CRYPT_REMOTE, "cryptprobe:"); assert.equal(probeEnv.RCLONE_CONFIG_CRYPTPROBE_TYPE, "local");
-    assert.equal(probeEnv.RCLONE_CONFIG_CRYPT_PASSWORD, candidate); assert.equal(probeEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, undefined); assert.equal(probeEnv.RCLONE_CONFIG_R2_ACCESS_KEY_ID, "r2-access-key");
+    assert.notStrictEqual(probeEnv, rawEnv); assert.deepEqual(Object.keys(probeEnv).sort(), probeKeys); assert.equal(probeEnv.PATH, input.PATH); assert.equal(probeEnv.HOME, input.HOME);
+    assert.equal(probeEnv.RCLONE_CONFIG, "/dev/null"); assert.equal(probeEnv.RCLONE_CONFIG_CRYPT_TYPE, "crypt"); assert.equal(probeEnv.RCLONE_CONFIG_CRYPT_REMOTE, "cryptprobe:"); assert.equal(probeEnv.RCLONE_CONFIG_CRYPTPROBE_TYPE, "local"); assert.equal(probeEnv.RCLONE_CONFIG_CRYPT_PASSWORD, candidate);
   }
   assert.equal(input.RCLONE_CONFIG_CRYPT_PASSWORD, "primary-crypt-password"); assert.equal(input.RCLONE_CONFIG_CRYPT_PASSWORD2, "secondary-crypt-password");
 });
 
 test("streams, verifies bytes/hash/listing, then atomically publishes both halves", async () => {
   const { calls, runtime } = mockRuntime({ files: ["postgres-r2-20260101T020304Z-abcdef123456.dump", "postgres-r2-20260101T020304Z-abcdef123456.manifest.json"] });
-  const mutable = { ...env, RCLONE_CONFIG_CRYPT_PASSWORD: "primary-crypt-canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "secondary-crypt-canary" };
+  const mutable = { ...env, GITHUB_ACTIONS: "true", UNRELATED: "operational-value", RCLONE_CONFIG_CRYPT_PASSWORD: "primary-crypt-canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "secondary-crypt-canary" };
   await runBackup(mutable, runtime, new Date("2026-03-01T02:03:04Z"), "abcdef123456");
   assert.equal(mutable.DATABASE_URL, undefined); assert.equal(mutable.RCLONE_CONFIG_CRYPT_PASSWORD, undefined); assert.equal(mutable.RCLONE_CONFIG_CRYPT_PASSWORD2, undefined);
   const firstUpload = calls.findIndex(({ args }) => args[0] === "rcat" && args.at(-1)?.endsWith(".dump.uploading"));
@@ -110,7 +123,7 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   assert.deepEqual(rcloneCalls.slice(0, 4).map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["backend", "features", "crypt:"]], ["rclone", ["backend", "features", "crypt:"]]]);
   assert.equal(rcloneCalls[4].args[0], "rcat");
   const [rawEnv, primaryProbeEnv, secondaryProbeEnv] = rcloneCalls.slice(1, 4).map(({ env }) => env!);
-  assert.ok(rcloneCalls.filter(({ args }) => args[0] !== "backend").every(({ env }) => env === rawEnv)); assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "primary-crypt-canary"); assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, "secondary-crypt-canary");
+  assert.ok(rcloneCalls.filter(({ args }) => args[0] !== "backend").every(({ env }) => env === rawEnv)); assert.equal(rawEnv.GITHUB_ACTIONS, "true"); assert.equal(rawEnv.UNRELATED, "operational-value"); assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "primary-crypt-canary"); assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, "secondary-crypt-canary");
   assert.equal(primaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "primary-crypt-canary"); assert.equal(primaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, undefined);
   assert.equal(secondaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "secondary-crypt-canary"); assert.equal(secondaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, undefined);
   assert.equal(calls.some(({ args }) => args[0] === "lsf" && args.includes("--max-depth") && args.at(-1) === "crypt:"), false);

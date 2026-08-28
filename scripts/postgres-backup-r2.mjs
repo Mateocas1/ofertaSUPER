@@ -111,10 +111,16 @@ async function verifiedVersion(runtime, environment) {
   if (!new RegExp(`rclone v${RCLONE_VERSION.replaceAll(".", "\\.")}\\b`).test(version.stdout)) throw new Error("rclone version pin check failed");
 }
 function cryptRemoteRoot(remote) { return remote.slice(0, remote.indexOf(":") + 1); }
-function cryptProbeEnvironment(environment, candidate) {
-  const probe = { ...environment, RCLONE_CONFIG_CRYPT_REMOTE: "cryptprobe:", RCLONE_CONFIG_CRYPTPROBE_TYPE: "local", RCLONE_CONFIG_CRYPT_PASSWORD: candidate };
-  delete probe.RCLONE_CONFIG_CRYPT_PASSWORD2;
-  return probe;
+export function cryptProbeEnvironment(environment, candidate) {
+  return {
+    PATH: required(environment.PATH, "PATH"),
+    ...(environment.HOME === undefined ? {} : { HOME: environment.HOME }),
+    RCLONE_CONFIG: "/dev/null",
+    RCLONE_CONFIG_CRYPT_TYPE: "crypt",
+    RCLONE_CONFIG_CRYPT_REMOTE: "cryptprobe:",
+    RCLONE_CONFIG_CRYPTPROBE_TYPE: "local",
+    RCLONE_CONFIG_CRYPT_PASSWORD: candidate,
+  };
 }
 async function rawPreflight(runtime, environment) {
   try { await runtime.command("rclone", ["lsf", "--max-depth", "1", required(environment.RCLONE_CONFIG_CRYPT_REMOTE, "RCLONE_CONFIG_CRYPT_REMOTE")], { env: environment }); } catch { throw new Error("R2 credential preflight failed"); }
