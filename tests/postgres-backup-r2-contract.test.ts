@@ -8,7 +8,7 @@ import { createBackupPlan, createRuntime, formatManifestBasename, redact, runBac
 const root = new URL("../", import.meta.url), read = (path: string) => readFileSync(new URL(path, root), "utf8");
 const env = { DATABASE_URL: "postgresql://backup_user:secret-password@db.example:6543/catalog?sslmode=require", RCLONE_CRYPT_REMOTE: "crypt:ofertasuper-r2", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", BACKUP_RETENTION: "2", BACKUP_DATABASE_ROLE: "backup_user", PG_IMAGE: "postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3" };
 type Call = { program: string; args: string[]; input?: string; env?: Record<string, string> };
-type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[]) => boolean); error?: string; files?: string[]; version?: string };
+type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[], env?: Record<string, string>) => boolean); error?: string; files?: string[]; version?: string };
 type SpawnOptions = { timeout?: number; killSignal?: string };
 const settles = (promise: Promise<unknown>) => {
   let timer: ReturnType<typeof setTimeout>;
@@ -24,15 +24,15 @@ function mockOutput(args: string[], options: MockOptions) {
 }
 function mockRuntime(options: MockOptions = {}) {
   const calls: Call[] = [], results = options.results || [{ stdout: "", bytes: 3, sha256: "a".repeat(64) }, { stdout: "archive contents\n", bytes: 3, sha256: "a".repeat(64) }];
-  const fails = (program: string, args: string[]) => typeof options.fail === "function" ? options.fail(program, args) : Boolean(options.fail && args.join(" ").includes(options.fail));
+  const fails = (program: string, args: string[], environment?: Record<string, string>) => typeof options.fail === "function" ? options.fail(program, args, environment) : Boolean(options.fail && args.join(" ").includes(options.fail));
   return { calls, runtime: {
     command: async (program: string, args: string[], input: { input?: string; env?: Record<string, string> } = {}) => {
       calls.push({ program, args, ...input });
-      if (fails(program, args)) throw new Error(options.error || `${typeof options.fail === "string" ? options.fail : args[0]} failed`);
+      if (fails(program, args, input.env)) throw new Error(options.error || `${typeof options.fail === "string" ? options.fail : args[0]} failed`);
       return { stdout: mockOutput(args, options) };
     },
-    pipeline: async (source: Call, destination: Call) => {
-      calls.push(source, destination);
+    pipeline: async (source: Call, destination: Call, input: { env?: Record<string, string> } = {}) => {
+      calls.push({ ...source, env: input.env }, { ...destination, env: input.env });
       if (options.fail === "stream") throw new Error("stream failed");
       return results.shift()!;
     },
@@ -53,30 +53,41 @@ test("retention ignores incomplete newer objects and deletes only old complete p
   assert.deepEqual(selectOwnedPairs(files, 2), complete("20260101T020304Z", "dbcdef123456"));
 });
 
-test("preflights raw R2 then crypt backend features in an isolated local-backed crypt environment", async () => {
+test("preflights raw R2 then each crypt secret in isolated local-backed environments", async () => {
   const raw = mockRuntime({ fail: (_program, args) => args[0] === "lsf" && args.at(-1) === env.RCLONE_CONFIG_CRYPT_REMOTE, error: "raw-r2-secret r2:bucket" });
   await assert.rejects(runBackup({ ...env }, raw.runtime), (error: Error) => { assert.match(error.message, /^R2 credential preflight failed$/); assert.doesNotMatch(error.message, /raw-r2-secret|r2:bucket/); return true; });
   assert.deepEqual(raw.calls.map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]]]);
 
-  const input = { ...env, RCLONE_CONFIG_CRYPT_PASSWORD: "crypt-password", RCLONE_CONFIG_R2_ACCESS_KEY_ID: "r2-access-key" };
-  const crypt = mockRuntime({ fail: (_program, args) => args[0] === "backend" && args[1] === "features", error: "crypt-password crypt:" });
-  await assert.rejects(runBackup(input, crypt.runtime), (error: Error) => { assert.match(error.message, /^crypt remote preflight failed$/); assert.doesNotMatch(error.message, /crypt-password|crypt:|r2-access-key/); return true; });
-  assert.deepEqual(crypt.calls.map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["backend", "features", "crypt:"]]]);
-  const rawEnv = crypt.calls[1].env!, probeEnv = crypt.calls[2].env!;
+  const input = { ...env, RCLONE_CONFIG_CRYPT_PASSWORD: "primary-crypt-password", RCLONE_CONFIG_CRYPT_PASSWORD2: "secondary-crypt-password", RCLONE_CONFIG_R2_ACCESS_KEY_ID: "r2-access-key" };
+  const primary = mockRuntime({ fail: (_program, args, probeEnv) => args[0] === "backend" && probeEnv?.RCLONE_CONFIG_CRYPT_PASSWORD === input.RCLONE_CONFIG_CRYPT_PASSWORD, error: "primary-crypt-password crypt:" });
+  await assert.rejects(runBackup({ ...input }, primary.runtime), (error: Error) => { assert.match(error.message, /^primary crypt secret preflight failed$/); assert.doesNotMatch(error.message, /primary-crypt-password|secondary-crypt-password|crypt:|r2-access-key/); return true; });
+  assert.equal(primary.calls.length, 3);
+
+  const secondary = mockRuntime({ fail: (_program, args, probeEnv) => args[0] === "backend" && probeEnv?.RCLONE_CONFIG_CRYPT_PASSWORD === input.RCLONE_CONFIG_CRYPT_PASSWORD2, error: "secondary-crypt-password crypt:" });
+  await assert.rejects(runBackup({ ...input }, secondary.runtime), (error: Error) => { assert.match(error.message, /^secondary crypt secret preflight failed$/); assert.doesNotMatch(error.message, /primary-crypt-password|secondary-crypt-password|crypt:|r2-access-key/); return true; });
+  assert.deepEqual(secondary.calls.map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["backend", "features", "crypt:"]], ["rclone", ["backend", "features", "crypt:"]]]);
+  const rawEnv = secondary.calls[1].env!, primaryEnv = secondary.calls[2].env!, secondaryEnv = secondary.calls[3].env!;
   assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_REMOTE, "r2:bucket"); assert.equal(rawEnv.RCLONE_CONFIG_CRYPTPROBE_TYPE, undefined);
-  assert.notStrictEqual(probeEnv, rawEnv); assert.equal(probeEnv.RCLONE_CONFIG_CRYPT_REMOTE, "cryptprobe:"); assert.equal(probeEnv.RCLONE_CONFIG_CRYPTPROBE_TYPE, "local");
-  assert.equal(probeEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "crypt-password"); assert.equal(probeEnv.RCLONE_CONFIG_R2_ACCESS_KEY_ID, "r2-access-key");
+  for (const [probeEnv, candidate] of [[primaryEnv, input.RCLONE_CONFIG_CRYPT_PASSWORD], [secondaryEnv, input.RCLONE_CONFIG_CRYPT_PASSWORD2]] as const) {
+    assert.notStrictEqual(probeEnv, rawEnv); assert.equal(probeEnv.RCLONE_CONFIG_CRYPT_REMOTE, "cryptprobe:"); assert.equal(probeEnv.RCLONE_CONFIG_CRYPTPROBE_TYPE, "local");
+    assert.equal(probeEnv.RCLONE_CONFIG_CRYPT_PASSWORD, candidate); assert.equal(probeEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, undefined); assert.equal(probeEnv.RCLONE_CONFIG_R2_ACCESS_KEY_ID, "r2-access-key");
+  }
+  assert.equal(input.RCLONE_CONFIG_CRYPT_PASSWORD, "primary-crypt-password"); assert.equal(input.RCLONE_CONFIG_CRYPT_PASSWORD2, "secondary-crypt-password");
 });
 
 test("streams, verifies bytes/hash/listing, then atomically publishes both halves", async () => {
   const { calls, runtime } = mockRuntime({ files: ["postgres-r2-20260101T020304Z-abcdef123456.dump", "postgres-r2-20260101T020304Z-abcdef123456.manifest.json"] });
-  const mutable = { ...env, RCLONE_CONFIG_CRYPT_PASSWORD: "crypt-canary" };
+  const mutable = { ...env, RCLONE_CONFIG_CRYPT_PASSWORD: "primary-crypt-canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "secondary-crypt-canary" };
   await runBackup(mutable, runtime, new Date("2026-03-01T02:03:04Z"), "abcdef123456");
-  assert.equal(mutable.DATABASE_URL, undefined); assert.equal(mutable.RCLONE_CONFIG_CRYPT_PASSWORD, undefined);
+  assert.equal(mutable.DATABASE_URL, undefined); assert.equal(mutable.RCLONE_CONFIG_CRYPT_PASSWORD, undefined); assert.equal(mutable.RCLONE_CONFIG_CRYPT_PASSWORD2, undefined);
   const firstUpload = calls.findIndex(({ args }) => args[0] === "rcat" && args.at(-1)?.endsWith(".dump.uploading"));
   const rcloneCalls = calls.filter(({ program }) => program === "rclone");
-  assert.deepEqual(rcloneCalls.slice(0, 3).map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["backend", "features", "crypt:"]]]);
-  assert.equal(rcloneCalls[3].args[0], "rcat");
+  assert.deepEqual(rcloneCalls.slice(0, 4).map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["backend", "features", "crypt:"]], ["rclone", ["backend", "features", "crypt:"]]]);
+  assert.equal(rcloneCalls[4].args[0], "rcat");
+  const [rawEnv, primaryProbeEnv, secondaryProbeEnv] = rcloneCalls.slice(1, 4).map(({ env }) => env!);
+  assert.ok(rcloneCalls.filter(({ args }) => args[0] !== "backend").every(({ env }) => env === rawEnv)); assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "primary-crypt-canary"); assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, "secondary-crypt-canary");
+  assert.equal(primaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "primary-crypt-canary"); assert.equal(primaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, undefined);
+  assert.equal(secondaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "secondary-crypt-canary"); assert.equal(secondaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, undefined);
   assert.equal(calls.some(({ args }) => args[0] === "lsf" && args.includes("--max-depth") && args.at(-1) === "crypt:"), false);
   const remotePaths = calls.filter(({ args }) => ["rcat", "cat", "moveto", "deletefile"].includes(args[0]) || args[0] === "lsf" && args.includes("--files-only")).flatMap(({ args }) => args.filter((arg) => arg.startsWith("crypt:")));
   assert.ok(remotePaths.length > 0 && remotePaths.every((path) => path === env.RCLONE_CRYPT_REMOTE || path.startsWith(`${env.RCLONE_CRYPT_REMOTE}/`)));
