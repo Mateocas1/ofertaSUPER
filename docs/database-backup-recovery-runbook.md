@@ -23,6 +23,10 @@ Pre-provision the `R2_BUCKET` before running either workflow. Scope its R2 token
 
 Store `RCLONE_CRYPT_PASSWORD` and `RCLONE_CRYPT_PASSWORD2` as canonical non-empty single-line plaintext repository secrets; do not pre-obscure either value. The backup and recovery workflows derive rclone's reversible obscured values at runtime from step-local plaintext. Each derived value is masked before being passed to later steps through the job environment; derivation is ephemeral and plaintext is not persisted outside that step. Rotate both together so the two crypt passwords stay paired.
 
+## Database boundary
+
+The backup and recovery boundary is the application-owned `public` schema only. The custom archive includes `_prisma_migrations` and the core application catalog in `public`; it excludes Supabase-managed `auth` and `storage` schemas. Do not grant the dedicated backup role access to managed schemas.
+
 ## Failure semantics and recovery
 
 Before manifest publication, the job attempts to remove every owned temporary object and any archive it promoted; cleanup errors do not hide the original failure. Manifest v2 additionally records the encrypted relative key and SHA-256 after immutable archive promotion. It never removes a possibly pre-existing final manifest after an immutable-name collision. After complete manifest publication, retention failure fails the run but may leave the new valid pair intact.
