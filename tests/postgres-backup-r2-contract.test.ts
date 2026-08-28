@@ -53,14 +53,14 @@ test("retention ignores incomplete newer objects and deletes only old complete p
   assert.deepEqual(selectOwnedPairs(files, 2), complete("20260101T020304Z", "dbcdef123456"));
 });
 
-test("preflights raw R2 then the crypt root without requiring an empty logical namespace", async () => {
+test("preflights raw R2 then crypt backend features without listing a crypt path", async () => {
   const raw = mockRuntime({ fail: (_program, args) => args[0] === "lsf" && args.at(-1) === env.RCLONE_CONFIG_CRYPT_REMOTE, error: "raw-r2-secret r2:bucket" });
   await assert.rejects(runBackup({ ...env }, raw.runtime), (error: Error) => { assert.match(error.message, /^R2 credential preflight failed$/); assert.doesNotMatch(error.message, /raw-r2-secret|r2:bucket/); return true; });
   assert.deepEqual(raw.calls.map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]]]);
 
-  const crypt = mockRuntime({ fail: (_program, args) => args[0] === "lsf" && args.at(-1) === "crypt:", error: "crypt-password crypt:" });
+  const crypt = mockRuntime({ fail: (_program, args) => args[0] === "backend" && args[1] === "features", error: "crypt-password crypt:" });
   await assert.rejects(runBackup({ ...env }, crypt.runtime), (error: Error) => { assert.match(error.message, /^crypt remote preflight failed$/); assert.doesNotMatch(error.message, /crypt-password|crypt:/); return true; });
-  assert.deepEqual(crypt.calls.map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["lsf", "--max-depth", "1", "crypt:"]]]);
+  assert.deepEqual(crypt.calls.map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["backend", "features", "crypt:"]]]);
 });
 
 test("streams, verifies bytes/hash/listing, then atomically publishes both halves", async () => {
@@ -68,10 +68,13 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   const mutable = { ...env, RCLONE_CONFIG_CRYPT_PASSWORD: "crypt-canary" };
   await runBackup(mutable, runtime, new Date("2026-03-01T02:03:04Z"), "abcdef123456");
   assert.equal(mutable.DATABASE_URL, undefined); assert.equal(mutable.RCLONE_CONFIG_CRYPT_PASSWORD, undefined);
-  assert.deepEqual(calls.slice(0, 3).map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["lsf", "--max-depth", "1", "crypt:"]]]);
+  const firstUpload = calls.findIndex(({ args }) => args[0] === "rcat" && args.at(-1)?.endsWith(".dump.uploading"));
+  const rcloneCalls = calls.filter(({ program }) => program === "rclone");
+  assert.deepEqual(rcloneCalls.slice(0, 3).map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["backend", "features", "crypt:"]]]);
+  assert.equal(rcloneCalls[3].args[0], "rcat");
+  assert.equal(calls.some(({ args }) => args[0] === "lsf" && args.includes("--max-depth") && args.at(-1) === "crypt:"), false);
   const remotePaths = calls.filter(({ args }) => ["rcat", "cat", "moveto", "deletefile"].includes(args[0]) || args[0] === "lsf" && args.includes("--files-only")).flatMap(({ args }) => args.filter((arg) => arg.startsWith("crypt:")));
   assert.ok(remotePaths.length > 0 && remotePaths.every((path) => path === env.RCLONE_CRYPT_REMOTE || path.startsWith(`${env.RCLONE_CRYPT_REMOTE}/`)));
-  const firstUpload = calls.findIndex(({ args }) => args[0] === "rcat" && args.at(-1)?.endsWith(".dump.uploading"));
   const retentionList = calls.findIndex(({ args }) => args[0] === "lsf" && args.includes("--files-only") && args.at(-1) === env.RCLONE_CRYPT_REMOTE);
   assert.ok(firstUpload >= 0 && retentionList > firstUpload);
   const archiveMove = calls.findIndex(({ args }) => args[0] === "moveto" && args.at(-1)?.endsWith(".dump"));
