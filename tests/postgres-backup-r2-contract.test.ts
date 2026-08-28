@@ -40,7 +40,7 @@ function assertRuntimeCryptPasswordDerivation(workflow: string) {
 }
 
 type Call = { program: string; args: string[]; input?: string; env?: Record<string, string> };
-type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[], env?: Record<string, string>) => boolean); error?: string; files?: string[]; version?: string };
+type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[], env?: Record<string, string>) => boolean); streamFailure?: "source" | "destination"; error?: string; files?: string[]; version?: string };
 type SpawnOptions = { timeout?: number; killSignal?: string };
 const settles = (promise: Promise<unknown>) => {
   let timer: ReturnType<typeof setTimeout>;
@@ -65,7 +65,7 @@ function mockRuntime(options: MockOptions = {}) {
     },
     pipeline: async (source: Call, destination: Call, input: { env?: Record<string, string> } = {}) => {
       calls.push({ ...source, env: input.env }, { ...destination, env: input.env });
-      if (options.fail === "stream") throw new Error("stream failed");
+      if (options.fail === "stream" || options.streamFailure) throw new Error(`backup ${options.streamFailure || "source"} stream command failed`);
       return results.shift()!;
     },
   }};
@@ -74,7 +74,7 @@ function mockRuntime(options: MockOptions = {}) {
 function assertPublicSchemaDumpArgs(args: string[]) {
   assert.deepEqual(args, [
     "run", "--rm", "-i", "--env", "PGHOST", "--env", "PGPORT", "--env", "PGUSER", "--env", "PGPASSWORD", "--env", "PGDATABASE", "--env", "PGSSLMODE",
-    env.PG_IMAGE, "pg_dump", "--format=custom", "--no-owner", "--no-acl", "--serializable-deferrable", "--schema=public",
+    env.PG_IMAGE, "pg_dump", "--format=custom", "--no-owner", "--no-acl", "--lock-wait-timeout=30s", "--schema=public",
   ]);
 }
 
@@ -175,6 +175,10 @@ test("enforces the exact public-schema pg_dump command", async () => {
     ["auth", dumpArgs.map((arg) => arg === "--schema=public" ? "--schema=auth" : arg)],
     ["storage", dumpArgs.map((arg) => arg === "--schema=public" ? "--schema=storage" : arg)],
     ["extra schema selector", [...dumpArgs, "--schema=auth"]],
+    ["missing lock timeout", dumpArgs.filter((arg) => arg !== "--lock-wait-timeout=30s")],
+    ["wrong lock timeout", dumpArgs.map((arg) => arg === "--lock-wait-timeout=30s" ? "--lock-wait-timeout=29s" : arg)],
+    ["unbounded lock timeout", dumpArgs.map((arg) => arg === "--lock-wait-timeout=30s" ? "--lock-wait-timeout=0" : arg)],
+    ["serializable deferrable", [...dumpArgs, "--serializable-deferrable"]],
   ];
   for (const [name, invalidArgs] of invalidCases) assert.throws(() => assertPublicSchemaDumpArgs(invalidArgs), name);
 });
@@ -186,6 +190,23 @@ test("rejects bad, empty, or mismatched restored archives before publication", a
     assert.equal(calls.some(({ args }) => args[0] === "moveto"), false);
     assert.ok(calls.some(({ args }) => args[0] === "deletefile" && args.at(-1)?.endsWith(".dump.uploading")));
   }
+});
+
+test("fails closed after a pg_dump lock timeout and preserves source failure during cleanup", async () => {
+  const failed = mockRuntime({ streamFailure: "source", fail: (_program, args) => args[0] === "deletefile" });
+  await assert.rejects(runBackup({ ...env }, failed.runtime, new Date("2026-03-01T02:03:04Z"), "abcdef123456"), (error: unknown) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.message, "backup source stream command failed");
+    assert.equal(error.errors.length, 2);
+    assert.equal((error.errors[0] as Error).message, "backup source stream command failed");
+    assert.equal((error.errors[1] as Error).message, "deletefile failed");
+    assert.doesNotMatch([error.message, ...error.errors.map((failure) => String((failure as Error).message))].join("\n"), /secret-password|db\.example|lock timeout/i);
+    return true;
+  });
+  assertPublicSchemaDumpArgs(failed.calls.find(({ program, args }) => program === "docker" && args.includes("pg_dump"))!.args);
+  assert.equal(failed.calls.some(({ args }) => args[0] === "moveto"), false);
+  assert.equal(failed.calls.some(({ args }) => args[0] === "rcat" && args.at(-1)?.includes("manifest.json")), false);
+  assert.deepEqual(failed.calls.filter(({ args }) => args[0] === "deletefile").map(({ args }) => args.at(-1)), [`${env.RCLONE_CRYPT_REMOTE}/postgres-r2-20260301T020304Z-abcdef123456.dump.uploading`]);
 });
 
 test("cleans temporary and final candidates after ambiguous promotions", async () => {
