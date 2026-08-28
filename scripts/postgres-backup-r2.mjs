@@ -111,11 +111,12 @@ async function verifiedVersion(runtime, environment) {
   if (!new RegExp(`rclone v${RCLONE_VERSION.replaceAll(".", "\\.")}\\b`).test(version.stdout)) throw new Error("rclone version pin check failed");
 }
 function cryptRemoteRoot(remote) { return remote.slice(0, remote.indexOf(":") + 1); }
+function cryptProbeEnvironment(environment) { return { ...environment, RCLONE_CONFIG_CRYPT_REMOTE: "cryptprobe:", RCLONE_CONFIG_CRYPTPROBE_TYPE: "local" }; }
 async function rawPreflight(runtime, environment) {
   try { await runtime.command("rclone", ["lsf", "--max-depth", "1", required(environment.RCLONE_CONFIG_CRYPT_REMOTE, "RCLONE_CONFIG_CRYPT_REMOTE")], { env: environment }); } catch { throw new Error("R2 credential preflight failed"); }
 }
 async function cryptPreflight(runtime, remote, environment) {
-  try { await runtime.command("rclone", ["backend", "features", cryptRemoteRoot(remote)], { env: environment }); } catch { throw new Error("crypt remote preflight failed"); }
+  try { await runtime.command("rclone", ["backend", "features", cryptRemoteRoot(remote)], { env: cryptProbeEnvironment(environment) }); } catch { throw new Error("crypt remote preflight failed"); }
 }
 async function retain(runtime, plan, environment) {
   const files = (await runtime.command("rclone", ["lsf", "--files-only", plan.remote], { env: environment })).stdout.split("\n");
