@@ -47,10 +47,10 @@ async function download(runtime, env, plan, manifest, workspace, signal) {
   return { logical, path };
 }
 async function ready(runtime, env, container, signal, options) {
-  const attempts = options.attempts ?? 10, pause = options.pause ?? (() => new Promise((done) => setTimeout(done, 250)));
+  const attempts = options.attempts ?? 30, pause = options.pause ?? (() => new Promise((done) => setTimeout(done, 1000)));
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const result = await phase(signal, () => docker(runtime, env, ["exec", container, "pg_isready", "-U", OWNER, "-d", DATABASE], { acceptStatuses: [0, 1] }));
-    if ((result.status ?? 0) === 0) return;
+    const result = await phase(signal, () => docker(runtime, env, ["exec", container, "pg_isready", "-U", OWNER, "-d", DATABASE], { acceptStatuses: [0, 1, 2] }));
+    if (result.status === 0) return;
     if (attempt + 1 < attempts) await phase(signal, pause);
   }
   fail("PostgreSQL readiness timed out");

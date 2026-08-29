@@ -62,6 +62,7 @@ test("recovery verifies one downloaded ciphertext before creating a unique dispo
     if (args[0] === "cat" && args[1].startsWith("crypt:")) return { stdout: JSON.stringify(manifest) };
     if (args[0] === "cryptdecode") return { stdout: " ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump \t enc/archive \n" };
     if (args[0] === "copyto") { writeFileSync(args.at(-1)!, "raw"); return { stdout: "" }; }
+    if (args.includes("pg_isready")) return { stdout: "", status: 0 };
     return { stdout: args.includes("psql") ? psql(args.at(-1) || "") : "" };
   }, pipeline: async (source: { args: string[] }, destination: { args: string[] }, options: { env?: Record<string, string> }) => { calls.push(["pipe", ...source.args, "=>", ...destination.args]); if (options.env) pipelineEnvs.push({ ...options.env }); return {}; } };
   const receipt = await runRecovery({ ...env, RCLONE_CONFIG: "/hostile/rclone.conf", RCLONE_CRYPT_REMOTE: "crypt:reserved-collision" }, runtime as never, () => "a".repeat(32));
@@ -113,10 +114,10 @@ test("mismatch creates neither Docker target nor restore, and contracts keep sec
 });
 
 function runtimeFor(option: Record<string, unknown> = {}) {
-  const calls: { program: string; args: string[]; options?: { input?: string; signal?: AbortSignal } }[] = [], migrations = "20260320_init\n20260322_ingestion_sprint1\n20260322_price_history_avg_idx\n20260322_staging_unlogged\n20260605_direct_refresh_run_ledger\n20260606_discovery_prewrite_foundation\n20260823_production_readiness_state\n20260824_catalog_publication_verification\n";
-  const command = async (program: string, args: string[], options: { input?: string; signal?: AbortSignal } = {}) => { calls.push({ program, args, options }); const sql = options.input || args.at(-1) || "";
+  const calls: { program: string; args: string[]; options?: { input?: string; signal?: AbortSignal; acceptStatuses?: number[] } }[] = [], migrations = "20260320_init\n20260322_ingestion_sprint1\n20260322_price_history_avg_idx\n20260322_staging_unlogged\n20260605_direct_refresh_run_ledger\n20260606_discovery_prewrite_foundation\n20260823_production_readiness_state\n20260824_catalog_publication_verification\n", readiness = Array.isArray(option.readyStatuses) ? [...option.readyStatuses] : [option.ready ? 1 : 0];
+  const command = async (program: string, args: string[], options: { input?: string; signal?: AbortSignal; acceptStatuses?: number[] } = {}) => { calls.push({ program, args, options }); const sql = options.input || args.at(-1) || "";
     if (args[0] === "version") return { stdout: "rclone v1.75.0\n" }; if (args[0] === "cat" && args[1].startsWith("crypt:")) return { stdout: JSON.stringify(manifest) }; if (args[0] === "cryptdecode") return { stdout: " ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump \t enc/archive \n" }; if (args[0] === "copyto") { writeFileSync(args.at(-1)!, "raw"); return { stdout: "" }; }
-    if (args.includes("inspect")) return { stdout: "", status: option.collision ? 0 : 1 }; if (args.includes("pg_isready")) return { stdout: "", status: option.ready ? 1 : 0 }; if (option.grant && options.input?.includes("CREATE ROLE")) throw new Error("grant failed"); if (sql.includes("server_version")) return { stdout: "17.6\n" }; if (sql.includes("migration_name")) return { stdout: String(option.migrations ?? migrations) }; if (sql.includes("finished_at IS NULL")) return { stdout: `${option.unfinished || 0}\n` }; if (sql.includes("information_schema")) return { stdout: "price_history\nproducts\nsupermarket_products\nsupermarkets\n" }; if (sql.includes("pg_indexes")) return { stdout: String(option.indexes ?? "price_history_supermarket_product_id_scraped_at_idx\nproducts_category_idx\nsupermarket_products_product_ean_supermarket_id_key\nsupermarkets_slug_key\n") }; if (sql.includes("UNION")) return { stdout: String(option.counts ?? "products|1\nsupermarkets|1\nsupermarket_products|1\nprice_history|1\n") }; if (option.app && options.input?.includes("SET ROLE")) throw new Error("app read failed"); return { stdout: "" };
+    if (args.includes("inspect")) return { stdout: "", status: option.collision ? 0 : 1 }; if (args.includes("pg_isready")) { if (option.readyCommandFailure) throw new Error("Docker command failed"); const status = readiness.length > 1 ? readiness.shift() : readiness[0]; if (typeof status !== "number" || !options.acceptStatuses?.includes(status)) throw new Error(`Docker command failed with status ${status}`); return { stdout: "", status }; } if (option.grant && options.input?.includes("CREATE ROLE")) throw new Error("grant failed"); if (sql.includes("server_version")) return { stdout: "17.6\n" }; if (sql.includes("migration_name")) return { stdout: String(option.migrations ?? migrations) }; if (sql.includes("finished_at IS NULL")) return { stdout: `${option.unfinished || 0}\n` }; if (sql.includes("information_schema")) return { stdout: "price_history\nproducts\nsupermarket_products\nsupermarkets\n" }; if (sql.includes("pg_indexes")) return { stdout: String(option.indexes ?? "price_history_supermarket_product_id_scraped_at_idx\nproducts_category_idx\nsupermarket_products_product_ean_supermarket_id_key\nsupermarkets_slug_key\n") }; if (sql.includes("UNION")) return { stdout: String(option.counts ?? "products|1\nsupermarkets|1\nsupermarket_products|1\nprice_history|1\n") }; if (option.app && options.input?.includes("SET ROLE")) throw new Error("app read failed"); return { stdout: "" };
   };
   return { calls, runtime: { command, pipeline: async (_left: unknown, _right: unknown, options: { signal?: AbortSignal }) => { if (option.abort) (options.signal as AbortSignal).dispatchEvent(new Event("abort")); if (option.archive) throw new Error("archive failed"); return {}; } } };
 }
@@ -132,9 +133,28 @@ test("primary and cleanup failures are retained together", async () => {
   await assert.rejects(runRecovery({ ...env }, aggregate.runtime as never, () => "f".repeat(32)), (error: Error) => { assert.ok(error instanceof AggregateError); assert.match(error.message, /archive/); return true; });
 });
 
-test("collision never claims existing state and readiness is bounded", async () => {
+test("collision never claims existing state", async () => {
   const collision = runtimeFor({ collision: true }); await assert.rejects(runRecovery({ ...env }, collision.runtime as never, () => "c".repeat(32)), /collision/); assert.equal(collision.calls.some(({ args }) => args.includes("create")), false);
-  const slow = runtimeFor({ ready: true }); await assert.rejects(runRecovery({ ...env }, slow.runtime as never, () => "d".repeat(32), { attempts: 2, pause: async () => {} }), /readiness/); assert.equal(slow.calls.filter(({ args }) => args.includes("pg_isready")).length, 2);
+});
+
+test("readiness retries startup status 2 until status 0", async () => {
+  const recovery = runtimeFor({ readyStatuses: [2, 0] }), pauses: number[] = [];
+  await runRecovery({ ...env }, recovery.runtime as never, () => "d".repeat(32), { attempts: 2, pause: async () => { pauses.push(1); } });
+  assert.equal(recovery.calls.filter(({ args }) => args.includes("pg_isready")).length, 2); assert.equal(pauses.length, 1);
+});
+
+test("readiness status 2 uses the exact default retry bound", async () => {
+  const recovery = runtimeFor({ readyStatuses: [2] }), pauses: number[] = [];
+  await assert.rejects(runRecovery({ ...env }, recovery.runtime as never, () => "e".repeat(32), { pause: async () => { pauses.push(1); } }), /readiness/);
+  assert.equal(recovery.calls.filter(({ args }) => args.includes("pg_isready")).length, 30); assert.equal(pauses.length, 29);
+});
+
+test("readiness fails immediately for unexpected statuses and Docker failures", async () => {
+  for (const option of [{ readyStatuses: [3] }, { readyCommandFailure: true }]) {
+    const recovery = runtimeFor(option), pauses: number[] = [];
+    await assert.rejects(runRecovery({ ...env }, recovery.runtime as never, () => "f".repeat(32), { attempts: 2, pause: async () => { pauses.push(1); } }), /Docker command failed/);
+    assert.equal(recovery.calls.filter(({ args }) => args.includes("pg_isready")).length, 1); assert.equal(pauses.length, 0);
+  }
 });
 
 test("abort reaches the restore pipeline, stops following phases, and redacts argv", async () => {
