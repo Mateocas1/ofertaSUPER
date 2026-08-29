@@ -152,7 +152,7 @@ export async function runBackup(environment, runtime = createRuntime(), now = ne
     await cryptPreflight(runtime, plan.remote, childEnv);
     owned.push(plan.temporary);
     const dumped = await runtime.pipeline(docker("pg_dump", ["--format=custom", "--no-owner", "--no-acl", "--lock-wait-timeout=30s", "--schema=public"]), rclone(["rcat", `${plan.remote}/${plan.temporary}`]), { env: childEnv, phase: "upload" });
-    const restored = await runtime.pipeline(rclone(["cat", `${plan.remote}/${plan.temporary}`]), docker("pg_restore", ["--list"]), { env: childEnv, phase: "validation" });
+    const restored = await runtime.pipeline(rclone(["cat", `${plan.remote}/${plan.temporary}`]), docker("sh", ["-ec", "pg_restore --list; cat >/dev/null"]), { env: childEnv, phase: "validation" });
     validated(dumped, restored);
     owned.push(plan.archive);
     await runtime.command("rclone", ["moveto", "--immutable", `${plan.remote}/${plan.temporary}`, `${plan.remote}/${plan.archive}`], { env: childEnv }); owned.splice(owned.indexOf(plan.temporary), 1); promoted = plan.archive;

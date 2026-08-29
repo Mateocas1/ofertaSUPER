@@ -1,6 +1,6 @@
 # Manual encrypted database backup
 
-This manual-only workflow streams a PostgreSQL custom archive through rclone crypt to R2, validates its restore listing and SHA-256, then immutably publishes an archive/manifest pair. It never writes a plaintext dump to disk. It does not authorize a recurring trigger or live backup.
+This manual-only workflow streams a PostgreSQL custom archive through rclone crypt to R2, validates its restore listing and SHA-256, then immutably publishes an archive/manifest pair. It never writes a plaintext dump to disk. It does not authorize a recurring trigger or live backup. Validation runs `pg_restore --list` in-container and drains the remaining stream to EOF only after it succeeds.
 
 ## Quick path
 

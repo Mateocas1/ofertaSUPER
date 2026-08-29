@@ -101,6 +101,13 @@ function assertPublicSchemaDumpArgs(args: string[]) {
   ]);
 }
 
+function assertDrainingPgRestoreArgs(args: string[]) {
+  assert.deepEqual(args, [
+    "run", "--rm", "-i", "--env", "PGHOST", "--env", "PGPORT", "--env", "PGUSER", "--env", "PGPASSWORD", "--env", "PGDATABASE", "--env", "PGSSLMODE",
+    env.PG_IMAGE, "sh", "-ec", "pg_restore --list; cat >/dev/null",
+  ]);
+}
+
 test("plans only a direct role and redacts the URL", () => {
   const plan = createBackupPlan(env, new Date("2026-03-01T02:03:04Z"), "abcdef123456");
   assert.equal(plan.pg.PGUSER, "backup_user");
@@ -182,7 +189,7 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   const dockerCalls = calls.filter(({ program }) => program === "docker");
   assert.equal(dockerCalls.length, 2);
   assertPublicSchemaDumpArgs(dockerCalls[0].args);
-  assert.deepEqual(dockerCalls[1].args, ["run", "--rm", "-i", "--env", "PGHOST", "--env", "PGPORT", "--env", "PGUSER", "--env", "PGPASSWORD", "--env", "PGDATABASE", "--env", "PGSSLMODE", env.PG_IMAGE, "pg_restore", "--list"]);
+  assertDrainingPgRestoreArgs(dockerCalls[1].args);
   assert.ok(calls.every(({ args }) => !args.some((arg) => [env.DATABASE_URL, "backup_user", "secret-password", "db.example", "6543", "catalog"].includes(arg))));
 });
 
@@ -204,6 +211,19 @@ test("enforces the exact public-schema pg_dump command", async () => {
     ["serializable deferrable", [...dumpArgs, "--serializable-deferrable"]],
   ];
   for (const [name, invalidArgs] of invalidCases) assert.throws(() => assertPublicSchemaDumpArgs(invalidArgs), name);
+});
+
+test("enforces the exact draining pg_restore validation command", async () => {
+  const { calls, runtime } = mockRuntime();
+  await runBackup({ ...env }, runtime);
+  const restoreArgs = calls.find(({ program, args }) => program === "docker" && args.includes("pg_restore --list; cat >/dev/null"))!.args;
+  assertDrainingPgRestoreArgs(restoreArgs);
+  const invalidCases: Array<[string, string[]]> = [
+    ["missing drain", restoreArgs.map((arg) => arg === "pg_restore --list; cat >/dev/null" ? "pg_restore --list" : arg)],
+    ["non-failing shell", restoreArgs.map((arg) => arg === "-ec" ? "-c" : arg)],
+    ["ignored restore failure", restoreArgs.map((arg) => arg === "pg_restore --list; cat >/dev/null" ? "pg_restore --list || true; cat >/dev/null" : arg)],
+  ];
+  for (const [name, invalidArgs] of invalidCases) assert.throws(() => assertDrainingPgRestoreArgs(invalidArgs), name);
 });
 
 test("rejects bad, empty, or mismatched restored archives before publication", async () => {
