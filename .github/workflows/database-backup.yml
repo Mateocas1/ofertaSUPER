@@ -50,4 +50,12 @@ jobs:
           printf 'RCLONE_CONFIG_CRYPT_PASSWORD=%s\n' "$primary_crypt_password" >> "$GITHUB_ENV"
           printf 'RCLONE_CONFIG_CRYPT_PASSWORD2=%s\n' "$secondary_crypt_password" >> "$GITHUB_ENV"
       - name: Stream, validate, publish, and retain encrypted backup
-        run: npm run backup:postgres-r2
+        id: backup
+        run: |
+          manifest_key="$(npm run --silent backup:postgres-r2)"
+          if [[ ! "$manifest_key" =~ ^postgres-r2-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}\.manifest\.json$ ]]; then
+            echo "Backup manifest key is invalid" >&2
+            exit 1
+          fi
+          printf 'manifest_key=%s\n' "$manifest_key" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$manifest_key"
