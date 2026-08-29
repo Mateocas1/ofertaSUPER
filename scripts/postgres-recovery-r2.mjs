@@ -38,18 +38,19 @@ async function migrations() {
 const docker = (runtime, env, args, options = {}) => runtime.command("docker", args, { env, ...options });
 const psql = (runtime, env, container, sql, input) => docker(runtime, env, ["exec", "-i", container, "psql", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", OWNER, "-d", DATABASE, ...(input ? ["-f", "-"] : ["-c", sql])], input ? { input: sql } : {}).then((result) => result.stdout.trim());
 async function download(runtime, env, plan, manifest, workspace, signal) {
-  const logical = `${plan.remote}/${manifest.archive}`, decoded = (await phase(signal, () => runtime.command("rclone", ["cryptdecode", "--reverse", logical], { env }))).stdout.trim().split("\t");
-  if (decoded.length !== 2 || decoded[0] !== logical || !safeKey(decoded[1]) || decoded[1] !== manifest.ciphertext.key) fail("ciphertext verification failed");
-  const path = join(workspace, decoded[1]); await mkdir(dirname(path), { recursive: true });
-  await phase(signal, () => runtime.command("rclone", ["copyto", `${env.RCLONE_CONFIG_CRYPT_REMOTE}/${decoded[1]}`, path], { env }));
+  const logical = `${plan.remote.slice(plan.remote.indexOf(":") + 1)}/${manifest.archive}`, lines = (await phase(signal, () => runtime.command("rclone", ["cryptdecode", "--reverse", "crypt:", logical], { env }))).stdout.trim().split("\n"), fields = lines.length === 1 ? lines[0].split("\t") : [];
+  const [decodedLogical, key] = fields.length === 2 ? fields.map((field) => field.trim()) : [];
+  if (decodedLogical !== logical || !safeKey(key) || key !== manifest.ciphertext.key) fail("ciphertext verification failed");
+  const path = join(workspace, key); await mkdir(dirname(path), { recursive: true });
+  await phase(signal, () => runtime.command("rclone", ["copyto", `${env.RCLONE_CONFIG_CRYPT_REMOTE}/${key}`, path], { env }));
   if (await hash(path) !== manifest.ciphertext.sha256) fail("ciphertext verification failed");
-  return { logical: logical.slice(6), path };
+  return { logical, path };
 }
 async function ready(runtime, env, container, signal, options) {
-  const attempts = options.attempts ?? 10, pause = options.pause ?? (() => new Promise((done) => setTimeout(done, 250)));
+  const attempts = options.attempts ?? 30, pause = options.pause ?? (() => new Promise((done) => setTimeout(done, 1000)));
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const result = await phase(signal, () => docker(runtime, env, ["exec", container, "pg_isready", "-U", OWNER, "-d", DATABASE], { acceptStatuses: [0, 1] }));
-    if ((result.status ?? 0) === 0) return;
+    const result = await phase(signal, () => docker(runtime, env, ["exec", container, "pg_isready", "-U", OWNER, "-d", DATABASE], { acceptStatuses: [0, 1, 2] }));
+    if (result.status === 0) return;
     if (attempt + 1 < attempts) await phase(signal, pause);
   }
   fail("PostgreSQL readiness timed out");
@@ -94,7 +95,7 @@ export async function runRecovery(environment, runtime = createRuntime(), id = (
     const raw = await download(runtime, child, plan, manifestFor(text, plan), state.workspace, options.signal);
     Object.assign(child, { RCLONE_CONFIG_RECOVERYLOCAL_TYPE: "local", RCLONE_CONFIG_RECOVERY_TYPE: "crypt", RCLONE_CONFIG_RECOVERY_REMOTE: `recoverylocal:${state.workspace}`, RCLONE_CONFIG_RECOVERY_PASSWORD: child.RCLONE_CONFIG_CRYPT_PASSWORD, RCLONE_CONFIG_RECOVERY_PASSWORD2: child.RCLONE_CONFIG_CRYPT_PASSWORD2 });
     await targets(runtime, child, state, names, options.signal); await ready(runtime, child, state.container, options.signal, options);
-    await phase(options.signal, () => runtime.pipeline({ program: "rclone", args: ["cat", `recovery:${raw.logical}`] }, { program: "docker", args: ["exec", "-i", state.container, "pg_restore", "--exit-on-error", "--no-owner", "--no-acl", "-U", OWNER, "-d", DATABASE] }, { env: child, signal: options.signal }));
+    await phase(options.signal, () => runtime.pipeline({ program: "rclone", args: ["cat", `recovery:${raw.logical}`] }, { program: "docker", args: ["exec", "-i", state.container, "pg_restore", "--exit-on-error", "--clean", "--if-exists", "--no-owner", "--no-acl", "-U", OWNER, "-d", DATABASE] }, { env: child, signal: options.signal }));
     await phase(options.signal, () => psql(runtime, child, state.container, `CREATE ROLE ${APP} LOGIN`, true));
     const grants = await readFile(new URL("../docker/compose/app-grants.sql", import.meta.url), "utf8"); await phase(options.signal, () => psql(runtime, child, state.container, grants, true));
     const verified = await verify(runtime, child, state.container, options.signal); receipt = { rclone: RCLONE_VERSION, postgres: 17, restored: true, appRead: true, counts: verified.counts, migrations: verified.migrations, manifest_key: plan.manifest };
