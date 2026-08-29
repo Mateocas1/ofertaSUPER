@@ -88,7 +88,7 @@ export async function runRecovery(environment, runtime = createRuntime(), id = (
   const state = { workspace: join(tmpdir(), `postgres-r2-recovery-${randomUUID()}`) }; let primary, receipt, child;
   try {
     const plan = createRecoveryPlan(environment), token = id(); if (!/^[a-f0-9]{32}$/.test(token)) fail("recovery identifier is invalid");
-    const names = { container: `recovery-container-${token}`, network: `recovery-network-${token}`, volume: `recovery-volume-${token}` }; child = { ...environment, POSTGRES_USER: OWNER, POSTGRES_DB: DATABASE, POSTGRES_PASSWORD: `recovery-${token}` }; delete child.RCLONE_CRYPT_REMOTE; state.image = plan.image;
+    const names = { container: `recovery-container-${token}`, network: `recovery-network-${token}`, volume: `recovery-volume-${token}` }; child = { ...environment, RCLONE_CONFIG: "/dev/null", POSTGRES_USER: OWNER, POSTGRES_DB: DATABASE, POSTGRES_PASSWORD: `recovery-${token}` }; delete child.RCLONE_CRYPT_REMOTE; state.image = plan.image;
     await phase(options.signal, () => runtime.command("rclone", ["version"], { env: child }).then((result) => /^rclone v1\.75\.0\b/.test(result.stdout) ? result : fail("rclone version pin check failed")));
     const text = (await phase(options.signal, () => runtime.command("rclone", ["cat", `${plan.remote}/${plan.manifest}`], { env: child, maxBuffer: LIMIT }))).stdout; if (Buffer.byteLength(text) > LIMIT) fail("manifest is invalid");
     const raw = await download(runtime, child, plan, manifestFor(text, plan), state.workspace, options.signal);

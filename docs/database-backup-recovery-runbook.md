@@ -1,6 +1,6 @@
 # Manual encrypted database backup
 
-This manual-only workflow streams a PostgreSQL custom archive through rclone crypt to R2, validates its restore listing and SHA-256, then immutably publishes an archive/manifest pair. It never writes a plaintext dump to disk. It does not authorize a recurring trigger or live backup.
+This manual-only workflow streams a PostgreSQL custom archive through rclone crypt to R2, validates its restore listing and SHA-256, then immutably publishes an archive/manifest pair. It never writes a plaintext dump to disk. It does not authorize a recurring trigger or live backup. Validation runs `pg_restore --list` in-container and drains the remaining stream to EOF only after it succeeds.
 
 ## Quick path
 
@@ -22,6 +22,8 @@ Pre-provision the `R2_BUCKET` before running either workflow. Scope its R2 token
 ## Logical crypt target migration
 
 `BACKUP_CRYPT_REMOTE` is the logical application target (for example, `crypt:ofertasuper-r2`) used for backup and recovery paths. Set it as a repository variable before dispatching either workflow. Do not use `RCLONE_CRYPT_REMOTE`: it is a reserved rclone backend option for `--crypt-remote`, and exporting it collides with `RCLONE_CONFIG_CRYPT_REMOTE`, which must remain the underlying raw target `r2:${R2_BUCKET}`. Migrate any existing `RCLONE_CRYPT_REMOTE` repository variable to `BACKUP_CRYPT_REMOTE` and remove the old variable; do not add the reserved name to workflow environments.
+
+Each operational backup and recovery child process owns an empty rclone configuration by forcing `RCLONE_CONFIG=/dev/null`; any ambient or caller-supplied rclone config is ignored. Backup stream diagnostics identify only the safe phase (`upload` or `validation`) and side (`source` or `destination`), never provider output, arguments, paths, hosts, or secrets.
 
 ## Crypt secret handling
 

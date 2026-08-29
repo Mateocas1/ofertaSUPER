@@ -73,7 +73,8 @@ export function createRuntime(spawnProcess = spawn, spawnSyncProcess = spawnSync
     const done = () => {
       if (settled || closed !== children.length) return;
       settled = true; options.signal?.removeEventListener("abort", abort);
-      if (failed) rejectPipeline(new Error(failedSide ? `backup ${failedSide} stream command failed` : "backup stream command failed"));
+      const phase = ["upload", "validation", "ciphertext"].includes(options.phase) ? `${options.phase} ` : "";
+      if (failed) rejectPipeline(new Error(failedSide ? `backup ${phase}${failedSide} stream command failed` : `backup ${phase}stream command failed`));
       else resolvePipeline({ stdout: output, ...metric.result() });
     };
     const attach = (child, side) => { children.push(child); if (failed) stop(child); child.on("error", () => fail(side)); child.stderr.on("data", () => {}); child.stderr.on("error", () => fail(side)); child.on("close", (code, signal) => { if (code || signal) fail(side); closed += 1; done(); }); };
@@ -96,15 +97,16 @@ function validated(dumped, restored) {
 }
 function ciphertextKey(value) { return /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value) && !value.split("/").includes("..") ? value : ""; }
 function oneOutput(value) { const lines = value.trim().split("\n"); if (lines.length !== 1) throw new Error("ciphertext verification failed"); return lines[0]; }
-async function ciphertext(runtime, plan, environment) {
-  const logical = `${plan.remote}/${plan.archive}`;
-  const decoded = oneOutput((await runtime.command("rclone", ["cryptdecode", "--reverse", logical], { env: environment })).stdout).split("\t");
-  const key = decoded.length === 2 && decoded[0] === logical && ciphertextKey(decoded[1]) ? decoded[1] : "";
+async function ciphertext(runtime, plan, environment, archive) {
+  const relativeLogical = `${plan.remote.slice(plan.remote.indexOf(":") + 1)}/${archive}`;
+  const decoded = oneOutput((await runtime.command("rclone", ["cryptdecode", "--reverse", cryptRemoteRoot(plan.remote), relativeLogical], { env: environment })).stdout).split("\t");
+  const [logical, encrypted] = decoded.length === 2 ? decoded.map((field) => field.trim()) : [];
+  const key = logical === relativeLogical && ciphertextKey(encrypted) ? encrypted : "";
   if (!key) throw new Error("ciphertext verification failed");
   const raw = `${required(environment.RCLONE_CONFIG_CRYPT_REMOTE, "RCLONE_CONFIG_CRYPT_REMOTE")}/${key}`;
-  const hash = oneOutput((await runtime.command("rclone", ["hashsum", "SHA-256", raw, "--download"], { env: environment })).stdout).match(/^([a-f0-9]{64})\s+\*?(.+)$/);
-  if (!key || !hash || hash[2] !== raw) throw new Error("ciphertext verification failed");
-  return { key, sha256: hash[1] };
+  const hash = await runtime.pipeline({ program: "rclone", args: ["cat", raw] }, { program: "sh", args: ["-ec", "cat >/dev/null"] }, { env: environment, phase: "ciphertext" });
+  if (!hash.bytes) throw new Error("ciphertext verification failed");
+  return { key, sha256: hash.sha256 };
 }
 async function verifiedVersion(runtime, environment) {
   const version = await runtime.command("rclone", ["version"], { env: environment });
@@ -144,18 +146,18 @@ function cleanupError(primary, failures) { return failures.length ? new Aggregat
 export async function runBackup(environment, runtime = createRuntime(), now = new Date(), runId) {
   let plan, childEnv, primary, promoted, published = false; const owned = [];
   try {
-    plan = createBackupPlan(environment, now, runId); delete environment.DATABASE_URL; childEnv = { ...environment, ...plan.pg }; delete childEnv.RCLONE_CRYPT_REMOTE;
+    plan = createBackupPlan(environment, now, runId); delete environment.DATABASE_URL; childEnv = { ...environment, ...plan.pg, RCLONE_CONFIG: "/dev/null" }; delete childEnv.RCLONE_CRYPT_REMOTE;
     const { docker, rclone } = commands(plan);
     await verifiedVersion(runtime, childEnv);
     await rawPreflight(runtime, childEnv);
     await cryptPreflight(runtime, plan.remote, childEnv);
     owned.push(plan.temporary);
-    const dumped = await runtime.pipeline(docker("pg_dump", ["--format=custom", "--no-owner", "--no-acl", "--lock-wait-timeout=30s", "--schema=public"]), rclone(["rcat", `${plan.remote}/${plan.temporary}`]), { env: childEnv });
-    const restored = await runtime.pipeline(rclone(["cat", `${plan.remote}/${plan.temporary}`]), docker("pg_restore", ["--list"]), { env: childEnv });
+    const dumped = await runtime.pipeline(docker("pg_dump", ["--format=custom", "--no-owner", "--no-acl", "--lock-wait-timeout=30s", "--schema=public"]), rclone(["rcat", `${plan.remote}/${plan.temporary}`]), { env: childEnv, phase: "upload" });
+    const restored = await runtime.pipeline(rclone(["cat", `${plan.remote}/${plan.temporary}`]), docker("sh", ["-ec", "pg_restore --list; cat >/dev/null"]), { env: childEnv, phase: "validation" });
     validated(dumped, restored);
     owned.push(plan.archive);
     await runtime.command("rclone", ["moveto", "--immutable", `${plan.remote}/${plan.temporary}`, `${plan.remote}/${plan.archive}`], { env: childEnv }); owned.splice(owned.indexOf(plan.temporary), 1); promoted = plan.archive;
-    const encrypted = await ciphertext(runtime, plan, childEnv);
+    const encrypted = await ciphertext(runtime, plan, childEnv, plan.archive);
     owned.push(plan.manifestTemporary);
     const manifest = JSON.stringify({ schemaVersion: 2, archive: plan.archive, timestamp: now.toISOString(), format: "custom", validation: "pg_restore --list", bytes: dumped.bytes, sha256: dumped.sha256, ciphertext: encrypted }) + "\n";
     await runtime.command("rclone", ["rcat", `${plan.remote}/${plan.manifestTemporary}`], { env: childEnv, input: manifest });

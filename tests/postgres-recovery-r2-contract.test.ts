@@ -54,7 +54,7 @@ test("RED: recovery rejects every non-owned manifest basename before runtime", (
 });
 
 test("recovery verifies one downloaded ciphertext before creating a unique disposable target", async () => {
-  const calls: string[][] = [], childEnvs: Record<string, string>[] = [];
+  const calls: string[][] = [], childEnvs: Record<string, string>[] = [], pipelineEnvs: Record<string, string>[] = [];
   const psql = (sql: string) => [[sql.includes("UNION"), "products|1\nsupermarkets|1\nsupermarket_products|1\nprice_history|1\n"], [sql.includes("server_version"), "17.6\n"], [sql.includes("migration_name"), "20260320_init\n20260322_ingestion_sprint1\n20260322_price_history_avg_idx\n20260322_staging_unlogged\n20260605_direct_refresh_run_ledger\n20260606_discovery_prewrite_foundation\n20260823_production_readiness_state\n20260824_catalog_publication_verification\n"], [sql.includes("information_schema"), "price_history\nproducts\nsupermarket_products\nsupermarkets\n"], [sql.includes("pg_indexes"), "price_history_supermarket_product_id_scraped_at_idx\nproducts_category_idx\nsupermarket_products_product_ean_supermarket_id_key\nsupermarkets_slug_key\n"]].find(([match]) => match)?.[1] || "0\n";
   const runtime = { command: async (program: string, args: string[], options: { env?: Record<string, string> } = {}) => {
     calls.push([program, ...args]); if (options.env) childEnvs.push({ ...options.env });
@@ -63,15 +63,15 @@ test("recovery verifies one downloaded ciphertext before creating a unique dispo
     if (args[0] === "cryptdecode") return { stdout: "crypt:backups/postgres-r2-20260301T020304Z-abcdef123456.dump\tenc/archive\n" };
     if (args[0] === "copyto") { writeFileSync(args.at(-1)!, "raw"); return { stdout: "" }; }
     return { stdout: args.includes("psql") ? psql(args.at(-1) || "") : "" };
-  }, pipeline: async (source: { args: string[] }, destination: { args: string[] }) => { calls.push(["pipe", ...source.args, "=>", ...destination.args]); return {}; } };
-  const receipt = await runRecovery({ ...env, RCLONE_CRYPT_REMOTE: "crypt:reserved-collision" }, runtime as never, () => "a".repeat(32));
+  }, pipeline: async (source: { args: string[] }, destination: { args: string[] }, options: { env?: Record<string, string> }) => { calls.push(["pipe", ...source.args, "=>", ...destination.args]); if (options.env) pipelineEnvs.push({ ...options.env }); return {}; } };
+  const receipt = await runRecovery({ ...env, RCLONE_CONFIG: "/hostile/rclone.conf", RCLONE_CRYPT_REMOTE: "crypt:reserved-collision" }, runtime as never, () => "a".repeat(32));
   assert.deepEqual(receipt!.counts, { products: 1, supermarkets: 1, supermarket_products: 1, price_history: 1 }); assert.equal(receipt!.migrations, 8);
   assert.equal(calls.filter((call) => call[1] === "copyto").length, 1);
   const pipe = calls.find((call) => call[0] === "pipe")!;
   assert.ok(pipe.includes("recovery:backups/postgres-r2-20260301T020304Z-abcdef123456.dump"));
   assert.ok(pipe.includes("--exit-on-error")); assert.ok(pipe.includes("pg_restore"));
   const copy = calls.find((call) => call[1] === "copyto")!, local = childEnvs.find((item) => item.RCLONE_CONFIG_RECOVERYLOCAL_TYPE === "local")!;
-  assert.equal(copy.at(-1), `${local.RCLONE_CONFIG_RECOVERY_REMOTE.slice("recoverylocal:".length)}/enc/archive`); assert.ok(childEnvs.every((item) => item.RCLONE_CRYPT_REMOTE === undefined));
+  assert.equal(copy.at(-1), `${local.RCLONE_CONFIG_RECOVERY_REMOTE.slice("recoverylocal:".length)}/enc/archive`); assert.ok([...childEnvs, ...pipelineEnvs].every((item) => item.RCLONE_CRYPT_REMOTE === undefined && item.RCLONE_CONFIG === "/dev/null"));
   assert.ok(calls.some((call) => call.includes("network") && call.includes("create")));
   assert.ok(calls.some((call) => call.includes("volume") && call.includes("create")));
 });
