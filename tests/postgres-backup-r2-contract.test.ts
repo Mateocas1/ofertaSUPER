@@ -40,7 +40,7 @@ function assertRuntimeCryptPasswordDerivation(workflow: string) {
 }
 
 type Call = { program: string; args: string[]; input?: string; env?: Record<string, string> };
-type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[], env?: Record<string, string>) => boolean); streamFailure?: "source" | "destination"; error?: string; files?: string[]; version?: string };
+type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[], env?: Record<string, string>) => boolean); streamFailure?: "source" | "destination"; streamPhase?: "upload" | "validation"; error?: string; files?: string[]; version?: string };
 type SpawnOptions = { timeout?: number; killSignal?: string };
 const settles = (promise: Promise<unknown>) => {
   let timer: ReturnType<typeof setTimeout>;
@@ -63,9 +63,9 @@ function mockRuntime(options: MockOptions = {}) {
       if (fails(program, args, input.env)) throw new Error(options.error || `${typeof options.fail === "string" ? options.fail : args[0]} failed`);
       return { stdout: mockOutput(args, options) };
     },
-    pipeline: async (source: Call, destination: Call, input: { env?: Record<string, string> } = {}) => {
+    pipeline: async (source: Call, destination: Call, input: { env?: Record<string, string>; phase?: "upload" | "validation" } = {}) => {
       calls.push({ ...source, env: input.env }, { ...destination, env: input.env });
-      if (options.fail === "stream" || options.streamFailure) throw new Error(`backup ${options.streamFailure || "source"} stream command failed`);
+      if ((options.fail === "stream" || options.streamFailure) && (!options.streamPhase || input.phase === options.streamPhase)) throw new Error(`backup ${input.phase || "unknown"} ${options.streamFailure || "source"} stream command failed`);
       return results.shift()!;
     },
   }};
@@ -129,7 +129,7 @@ test("preflights raw R2 then each crypt secret in isolated local-backed environm
 
 test("streams, verifies bytes/hash/listing, then atomically publishes both halves", async () => {
   const { calls, runtime } = mockRuntime({ files: ["postgres-r2-20260101T020304Z-abcdef123456.dump", "postgres-r2-20260101T020304Z-abcdef123456.manifest.json"] });
-  const mutable = { ...env, GITHUB_ACTIONS: "true", UNRELATED: "operational-value", RCLONE_CRYPT_REMOTE: "crypt:reserved-collision", RCLONE_CONFIG_CRYPT_PASSWORD: "primary-crypt-canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "secondary-crypt-canary" };
+  const mutable = { ...env, GITHUB_ACTIONS: "true", UNRELATED: "operational-value", RCLONE_CONFIG: "/hostile/rclone.conf", RCLONE_CRYPT_REMOTE: "crypt:reserved-collision", RCLONE_CONFIG_CRYPT_PASSWORD: "primary-crypt-canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "secondary-crypt-canary" };
   await runBackup(mutable, runtime, new Date("2026-03-01T02:03:04Z"), "abcdef123456");
   assert.equal(mutable.DATABASE_URL, undefined); assert.equal(mutable.RCLONE_CONFIG_CRYPT_PASSWORD, undefined); assert.equal(mutable.RCLONE_CONFIG_CRYPT_PASSWORD2, undefined);
   const firstUpload = calls.findIndex(({ args }) => args[0] === "rcat" && args.at(-1)?.endsWith(".dump.uploading"));
@@ -137,7 +137,7 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   assert.deepEqual(rcloneCalls.slice(0, 4).map(({ program, args }) => [program, args]), [["rclone", ["version"]], ["rclone", ["lsf", "--max-depth", "1", "r2:bucket"]], ["rclone", ["backend", "features", "crypt:"]], ["rclone", ["backend", "features", "crypt:"]]]);
   assert.equal(rcloneCalls[4].args[0], "rcat");
   const [rawEnv, primaryProbeEnv, secondaryProbeEnv] = rcloneCalls.slice(1, 4).map(({ env }) => env!);
-  assert.ok(rcloneCalls.filter(({ args }) => args[0] !== "backend").every(({ env }) => env === rawEnv)); assert.ok(rcloneCalls.every(({ env }) => env?.RCLONE_CRYPT_REMOTE === undefined)); assert.equal(rawEnv.GITHUB_ACTIONS, "true"); assert.equal(rawEnv.UNRELATED, "operational-value"); assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "primary-crypt-canary"); assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, "secondary-crypt-canary");
+  assert.ok(rcloneCalls.filter(({ args }) => args[0] !== "backend").every(({ env }) => env === rawEnv)); assert.ok(rcloneCalls.every(({ env }) => env?.RCLONE_CRYPT_REMOTE === undefined && env?.RCLONE_CONFIG === "/dev/null")); assert.equal(rawEnv.GITHUB_ACTIONS, "true"); assert.equal(rawEnv.UNRELATED, "operational-value"); assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "primary-crypt-canary"); assert.equal(rawEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, "secondary-crypt-canary");
   assert.equal(primaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "primary-crypt-canary"); assert.equal(primaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, undefined);
   assert.equal(secondaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD, "secondary-crypt-canary"); assert.equal(secondaryProbeEnv.RCLONE_CONFIG_CRYPT_PASSWORD2, undefined);
   assert.equal(calls.some(({ args }) => args[0] === "lsf" && args.includes("--max-depth") && args.at(-1) === "crypt:"), false);
@@ -196,9 +196,9 @@ test("fails closed after a pg_dump lock timeout and preserves source failure dur
   const failed = mockRuntime({ streamFailure: "source", fail: (_program, args) => args[0] === "deletefile" });
   await assert.rejects(runBackup({ ...env }, failed.runtime, new Date("2026-03-01T02:03:04Z"), "abcdef123456"), (error: unknown) => {
     assert.ok(error instanceof AggregateError);
-    assert.equal(error.message, "backup source stream command failed");
+    assert.equal(error.message, "backup upload source stream command failed");
     assert.equal(error.errors.length, 2);
-    assert.equal((error.errors[0] as Error).message, "backup source stream command failed");
+    assert.equal((error.errors[0] as Error).message, "backup upload source stream command failed");
     assert.equal((error.errors[1] as Error).message, "deletefile failed");
     assert.doesNotMatch([error.message, ...error.errors.map((failure) => String((failure as Error).message))].join("\n"), /secret-password|db\.example|lock timeout/i);
     return true;
@@ -207,6 +207,20 @@ test("fails closed after a pg_dump lock timeout and preserves source failure dur
   assert.equal(failed.calls.some(({ args }) => args[0] === "moveto"), false);
   assert.equal(failed.calls.some(({ args }) => args[0] === "rcat" && args.at(-1)?.includes("manifest.json")), false);
   assert.deepEqual(failed.calls.filter(({ args }) => args[0] === "deletefile").map(({ args }) => args.at(-1)), [`${env.BACKUP_CRYPT_REMOTE}/postgres-r2-20260301T020304Z-abcdef123456.dump.uploading`]);
+});
+
+test("attributes upload and validation stream failures safely and fails closed", async () => {
+  for (const phase of ["upload", "validation"] as const) {
+    const failed = mockRuntime({ streamFailure: "destination", streamPhase: phase });
+    await assert.rejects(runBackup({ ...env }, failed.runtime, new Date("2026-03-01T02:03:04Z"), "abcdef123456"), (error: Error) => {
+      assert.equal(error.message, `backup ${phase} destination stream command failed`);
+      assert.doesNotMatch(error.message, /secret-password|db\.example|r2:bucket|crypt:/);
+      return true;
+    });
+    assert.equal(failed.calls.some(({ args }) => args[0] === "moveto"), false);
+    assert.equal(failed.calls.some(({ args }) => args[0] === "rcat" && args.at(-1)?.includes("manifest.json")), false);
+    assert.ok(failed.calls.some(({ args }) => args[0] === "deletefile" && args.at(-1)?.endsWith(".dump.uploading")));
+  }
 });
 
 test("cleans temporary and final candidates after ambiguous promotions", async () => {
@@ -276,5 +290,5 @@ test("workflow remains manual-only, pins checkout, and documents failure semanti
   assert.doesNotMatch(workflow, /set -x/);
   const install = workflow.indexOf("Install pinned rclone"), derive = workflow.indexOf("Derive rclone crypt passwords"), backup = workflow.indexOf("npm run backup:postgres-r2"); assert.ok(install >= 0 && install < derive && derive < backup);
   assert.match(script, /createHash|--immutable|manifest\.uploading|BACKUP_DATABASE_ROLE/); assert.doesNotMatch(script, /--file=|writeFile|createWriteStream/);
-  assert.match(docs, /BACKUP_CRYPT_REMOTE.*logical/i); assert.match(docs, /RCLONE_CRYPT_REMOTE.*reserved/i); assert.match(docs, /retention failure.*fails/i); assert.match(docs, /never writes a plaintext dump/i); assert.match(docs, /plaintext.*do not pre-obscure|do not pre-obscure.*plaintext/i);
+  assert.match(docs, /BACKUP_CRYPT_REMOTE.*logical/i); assert.match(docs, /RCLONE_CRYPT_REMOTE.*reserved/i); assert.match(docs, /RCLONE_CONFIG=\/dev\/null/); assert.match(docs, /upload.*validation.*source.*destination/i); assert.match(docs, /retention failure.*fails/i); assert.match(docs, /never writes a plaintext dump/i); assert.match(docs, /plaintext.*do not pre-obscure|do not pre-obscure.*plaintext/i);
 });

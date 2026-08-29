@@ -73,7 +73,8 @@ export function createRuntime(spawnProcess = spawn, spawnSyncProcess = spawnSync
     const done = () => {
       if (settled || closed !== children.length) return;
       settled = true; options.signal?.removeEventListener("abort", abort);
-      if (failed) rejectPipeline(new Error(failedSide ? `backup ${failedSide} stream command failed` : "backup stream command failed"));
+      const phase = ["upload", "validation"].includes(options.phase) ? `${options.phase} ` : "";
+      if (failed) rejectPipeline(new Error(failedSide ? `backup ${phase}${failedSide} stream command failed` : `backup ${phase}stream command failed`));
       else resolvePipeline({ stdout: output, ...metric.result() });
     };
     const attach = (child, side) => { children.push(child); if (failed) stop(child); child.on("error", () => fail(side)); child.stderr.on("data", () => {}); child.stderr.on("error", () => fail(side)); child.on("close", (code, signal) => { if (code || signal) fail(side); closed += 1; done(); }); };
@@ -144,14 +145,14 @@ function cleanupError(primary, failures) { return failures.length ? new Aggregat
 export async function runBackup(environment, runtime = createRuntime(), now = new Date(), runId) {
   let plan, childEnv, primary, promoted, published = false; const owned = [];
   try {
-    plan = createBackupPlan(environment, now, runId); delete environment.DATABASE_URL; childEnv = { ...environment, ...plan.pg }; delete childEnv.RCLONE_CRYPT_REMOTE;
+    plan = createBackupPlan(environment, now, runId); delete environment.DATABASE_URL; childEnv = { ...environment, ...plan.pg, RCLONE_CONFIG: "/dev/null" }; delete childEnv.RCLONE_CRYPT_REMOTE;
     const { docker, rclone } = commands(plan);
     await verifiedVersion(runtime, childEnv);
     await rawPreflight(runtime, childEnv);
     await cryptPreflight(runtime, plan.remote, childEnv);
     owned.push(plan.temporary);
-    const dumped = await runtime.pipeline(docker("pg_dump", ["--format=custom", "--no-owner", "--no-acl", "--lock-wait-timeout=30s", "--schema=public"]), rclone(["rcat", `${plan.remote}/${plan.temporary}`]), { env: childEnv });
-    const restored = await runtime.pipeline(rclone(["cat", `${plan.remote}/${plan.temporary}`]), docker("pg_restore", ["--list"]), { env: childEnv });
+    const dumped = await runtime.pipeline(docker("pg_dump", ["--format=custom", "--no-owner", "--no-acl", "--lock-wait-timeout=30s", "--schema=public"]), rclone(["rcat", `${plan.remote}/${plan.temporary}`]), { env: childEnv, phase: "upload" });
+    const restored = await runtime.pipeline(rclone(["cat", `${plan.remote}/${plan.temporary}`]), docker("pg_restore", ["--list"]), { env: childEnv, phase: "validation" });
     validated(dumped, restored);
     owned.push(plan.archive);
     await runtime.command("rclone", ["moveto", "--immutable", `${plan.remote}/${plan.temporary}`, `${plan.remote}/${plan.archive}`], { env: childEnv }); owned.splice(owned.indexOf(plan.temporary), 1); promoted = plan.archive;

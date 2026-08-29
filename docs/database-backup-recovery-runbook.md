@@ -23,6 +23,8 @@ Pre-provision the `R2_BUCKET` before running either workflow. Scope its R2 token
 
 `BACKUP_CRYPT_REMOTE` is the logical application target (for example, `crypt:ofertasuper-r2`) used for backup and recovery paths. Set it as a repository variable before dispatching either workflow. Do not use `RCLONE_CRYPT_REMOTE`: it is a reserved rclone backend option for `--crypt-remote`, and exporting it collides with `RCLONE_CONFIG_CRYPT_REMOTE`, which must remain the underlying raw target `r2:${R2_BUCKET}`. Migrate any existing `RCLONE_CRYPT_REMOTE` repository variable to `BACKUP_CRYPT_REMOTE` and remove the old variable; do not add the reserved name to workflow environments.
 
+Each operational backup and recovery child process owns an empty rclone configuration by forcing `RCLONE_CONFIG=/dev/null`; any ambient or caller-supplied rclone config is ignored. Backup stream diagnostics identify only the safe phase (`upload` or `validation`) and side (`source` or `destination`), never provider output, arguments, paths, hosts, or secrets.
+
 ## Crypt secret handling
 
 Store `RCLONE_CRYPT_PASSWORD` and `RCLONE_CRYPT_PASSWORD2` as canonical non-empty single-line plaintext repository secrets; do not pre-obscure either value. The backup and recovery workflows derive rclone's reversible obscured values at runtime from step-local plaintext. Each derived value is masked before being passed to later steps through the job environment; derivation is ephemeral and plaintext is not persisted outside that step. Rotate both together so the two crypt passwords stay paired.
