@@ -38,8 +38,8 @@ export function redact(value, canaries = []) {
   return safe;
 }
 export function createBackupPlan(environment, now = new Date(), runId = crypto.randomUUID().replaceAll("-", "").slice(0, 12)) {
-  const remote = required(environment.RCLONE_CRYPT_REMOTE, "RCLONE_CRYPT_REMOTE");
-  if (!/^crypt:[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(remote) || remote.includes("..")) throw new Error("RCLONE_CRYPT_REMOTE must name a crypt remote");
+  const remote = required(environment.BACKUP_CRYPT_REMOTE, "BACKUP_CRYPT_REMOTE");
+  if (!/^crypt:[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(remote) || remote.includes("..")) throw new Error("BACKUP_CRYPT_REMOTE must name a crypt remote");
   const retention = Number(environment.BACKUP_RETENTION ?? 7);
   if (!Number.isInteger(retention) || retention < 2 || retention > 90) throw new Error("BACKUP_RETENTION must be an integer between 2 and 90");
   const names = backupNames(now, runId);
@@ -144,7 +144,7 @@ function cleanupError(primary, failures) { return failures.length ? new Aggregat
 export async function runBackup(environment, runtime = createRuntime(), now = new Date(), runId) {
   let plan, childEnv, primary, promoted, published = false; const owned = [];
   try {
-    plan = createBackupPlan(environment, now, runId); delete environment.DATABASE_URL; childEnv = { ...environment, ...plan.pg };
+    plan = createBackupPlan(environment, now, runId); delete environment.DATABASE_URL; childEnv = { ...environment, ...plan.pg }; delete childEnv.RCLONE_CRYPT_REMOTE;
     const { docker, rclone } = commands(plan);
     await verifiedVersion(runtime, childEnv);
     await rawPreflight(runtime, childEnv);

@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 30
     env:
       RECOVERY_MANIFEST_KEY: ${{ inputs.manifest_key }}
-      RCLONE_CRYPT_REMOTE: ${{ vars.RCLONE_CRYPT_REMOTE }}
+      BACKUP_CRYPT_REMOTE: ${{ vars.BACKUP_CRYPT_REMOTE }}
       PG_IMAGE: postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3
       RCLONE_CONFIG_R2_TYPE: s3
       RCLONE_CONFIG_R2_PROVIDER: Cloudflare
