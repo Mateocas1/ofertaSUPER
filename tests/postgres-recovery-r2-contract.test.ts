@@ -65,13 +65,15 @@ test("recovery verifies one downloaded ciphertext before creating a unique dispo
     if (args.includes("pg_isready")) return { stdout: "", status: 0 };
     return { stdout: args.includes("psql") ? psql(args.at(-1) || "") : "" };
   }, pipeline: async (source: { args: string[] }, destination: { args: string[] }, options: { env?: Record<string, string> }) => { calls.push(["pipe", ...source.args, "=>", ...destination.args]); if (options.env) pipelineEnvs.push({ ...options.env }); return {}; } };
-  const receipt = await runRecovery({ ...env, RCLONE_CONFIG: "/hostile/rclone.conf", RCLONE_CRYPT_REMOTE: "crypt:reserved-collision" }, runtime as never, () => "a".repeat(32));
+  const externalDatabase = "postgres://external.example/ofertasuper", receipt = await runRecovery({ ...env, DATABASE_URL: externalDatabase, RCLONE_CONFIG: "/hostile/rclone.conf", RCLONE_CRYPT_REMOTE: "crypt:reserved-collision" }, runtime as never, () => "a".repeat(32));
   assert.deepEqual(receipt!.counts, { products: 1, supermarkets: 1, supermarket_products: 1, price_history: 1 }); assert.equal(receipt!.migrations, 8);
   assert.equal(calls.filter((call) => call[1] === "copyto").length, 1);
   const pipe = calls.find((call) => call[0] === "pipe")!;
   assert.ok(pipe.includes("recovery:ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump"));
   assert.deepEqual(calls.find((call) => call[1] === "cryptdecode"), ["rclone", "cryptdecode", "--reverse", "crypt:", "ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump"]);
-  assert.ok(pipe.includes("--exit-on-error")); assert.ok(pipe.includes("pg_restore"));
+  const restore = pipe.slice(pipe.indexOf("=>") + 1), expectedRestore = ["exec", "-i", "recovery-container-" + "a".repeat(32), "pg_restore", "--exit-on-error", "--clean", "--if-exists", "--no-owner", "--no-acl", "-U", "ofertasuper_owner", "-d", "ofertasuper"];
+  assert.deepEqual(restore, expectedRestore); assert.equal(restore.includes(externalDatabase), false);
+  for (const flag of ["--clean", "--if-exists"]) assert.throws(() => assert.deepEqual(restore.filter((value) => value !== flag), expectedRestore));
   const copy = calls.find((call) => call[1] === "copyto")!, local = childEnvs.find((item) => item.RCLONE_CONFIG_RECOVERYLOCAL_TYPE === "local")!;
   assert.equal(copy.at(-1), `${local.RCLONE_CONFIG_RECOVERY_REMOTE.slice("recoverylocal:".length)}/enc/archive`); assert.ok([...childEnvs, ...pipelineEnvs].every((item) => item.RCLONE_CRYPT_REMOTE === undefined && item.RCLONE_CONFIG === "/dev/null"));
   assert.ok(calls.some((call) => call.includes("network") && call.includes("create")));
