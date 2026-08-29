@@ -62,8 +62,8 @@ function assertRuntimeCryptPasswordDerivation(workflow: string) {
   assert.equal(count(body, "$GITHUB_ENV"), writes.length); assert.ok(Math.max(...masks.map((command) => body.indexOf(command))) < Math.min(...writes.map((command) => body.indexOf(command))));
 }
 
-type Call = { program: string; args: string[]; input?: string; env?: Record<string, string> };
-type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[], env?: Record<string, string>) => boolean); streamFailure?: "source" | "destination"; streamPhase?: "upload" | "validation"; error?: string; files?: string[]; version?: string; cryptdecodeOutput?: string };
+type Call = { program: string; args: string[]; input?: string; env?: Record<string, string>; phase?: "upload" | "validation" | "ciphertext" };
+type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[], env?: Record<string, string>) => boolean); streamFailure?: "source" | "destination"; streamPhase?: "upload" | "validation" | "ciphertext"; error?: string; files?: string[]; version?: string; cryptdecodeOutput?: string };
 type SpawnOptions = { timeout?: number; killSignal?: string };
 const settles = (promise: Promise<unknown>) => {
   let timer: ReturnType<typeof setTimeout>;
@@ -74,11 +74,10 @@ function mockOutput(args: string[], options: MockOptions) {
   if (args[0] === "version") return options.version || "rclone v1.75.0\n";
   if (args[0] === "lsf") return (options.files || []).join("\n");
   if (args[0] === "cryptdecode") return options.cryptdecodeOutput || `${args[3]} \t encrypted/archive\n`;
-  if (args[0] === "hashsum") return `${"b".repeat(64)}  ${args[2]}\n`;
   return "";
 }
 function mockRuntime(options: MockOptions = {}) {
-  const calls: Call[] = [], results = options.results || [{ stdout: "", bytes: 3, sha256: "a".repeat(64) }, { stdout: "archive contents\n", bytes: 3, sha256: "a".repeat(64) }];
+  const calls: Call[] = [], results = options.results || [{ stdout: "", bytes: 3, sha256: "a".repeat(64) }, { stdout: "archive contents\n", bytes: 3, sha256: "a".repeat(64) }, { stdout: "", bytes: 4, sha256: "b".repeat(64) }];
   const fails = (program: string, args: string[], environment?: Record<string, string>) => typeof options.fail === "function" ? options.fail(program, args, environment) : Boolean(options.fail && args.join(" ").includes(options.fail));
   return { calls, runtime: {
     command: async (program: string, args: string[], input: { input?: string; env?: Record<string, string> } = {}) => {
@@ -86,8 +85,8 @@ function mockRuntime(options: MockOptions = {}) {
       if (fails(program, args, input.env)) throw new Error(options.error || `${typeof options.fail === "string" ? options.fail : args[0]} failed`);
       return { stdout: mockOutput(args, options) };
     },
-    pipeline: async (source: Call, destination: Call, input: { env?: Record<string, string>; phase?: "upload" | "validation" } = {}) => {
-      calls.push({ ...source, env: input.env }, { ...destination, env: input.env });
+    pipeline: async (source: Call, destination: Call, input: { env?: Record<string, string>; phase?: "upload" | "validation" | "ciphertext" } = {}) => {
+      calls.push({ ...source, env: input.env, phase: input.phase }, { ...destination, env: input.env, phase: input.phase });
       if ((options.fail === "stream" || options.streamFailure) && (!options.streamPhase || input.phase === options.streamPhase)) throw new Error(`backup ${input.phase || "unknown"} ${options.streamFailure || "source"} stream command failed`);
       return results.shift()!;
     },
@@ -111,14 +110,16 @@ function assertDrainingPgRestoreArgs(args: string[]) {
 function assertCiphertextPromotion(calls: Call[]) {
   const archiveMove = calls.findIndex(({ args }) => args[0] === "moveto" && args.at(-1)?.endsWith(".dump"));
   const decode = calls.findIndex(({ args }) => args[0] === "cryptdecode");
-  const hash = calls.findIndex(({ args }) => args[0] === "hashsum");
+  const ciphertextDownload = calls.findIndex(({ program, args }) => program === "rclone" && args[0] === "cat" && args[1] === "r2:bucket/encrypted/archive");
   const manifestUpload = calls.findIndex(({ args }) => args[0] === "rcat" && args.at(-1)?.includes("manifest.json.uploading"));
   const archive = calls[archiveMove].args.at(-1)!.slice(`${env.BACKUP_CRYPT_REMOTE}/`.length);
   assert.equal(calls.filter(({ args }) => args[0] === "cryptdecode").length, 1);
-  assert.equal(calls.filter(({ args }) => args[0] === "hashsum").length, 1);
-  assert.ok(archiveMove >= 0 && archiveMove < decode && decode < hash && hash < manifestUpload);
+  assert.equal(calls.filter(({ args }) => args[0] === "hashsum").length, 0);
+  assert.equal(calls.filter(({ program, args }) => program === "rclone" && args[0] === "cat" && args[1] === "r2:bucket/encrypted/archive").length, 1);
+  assert.ok(archiveMove >= 0 && archiveMove < decode && decode < ciphertextDownload && ciphertextDownload < manifestUpload);
   assert.deepEqual(calls[decode].args, ["cryptdecode", "--reverse", "crypt:", `ofertasuper-r2/${archive}`]);
-  assert.deepEqual(calls[hash].args, ["hashsum", "SHA-256", "r2:bucket/encrypted/archive", "--download"]);
+  assert.deepEqual(calls[ciphertextDownload].args, ["cat", "r2:bucket/encrypted/archive"]);
+  assert.deepEqual(calls[ciphertextDownload + 1], { program: "sh", args: ["-ec", "cat >/dev/null"], env: calls[ciphertextDownload].env, phase: "ciphertext" });
   assert.match(calls[manifestUpload].input!, /"ciphertext":\{"key":"encrypted\/archive","sha256":"b{64}"\}/);
 }
 
@@ -196,9 +197,9 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   assert.ok(calls.filter(({ args }) => args[0] === "moveto").every(({ args }) => args.includes("--immutable")));
   assert.match(calls[manifestUpload].input!, /"schemaVersion":2.*"bytes":3.*"sha256":"a{64}".*"ciphertext":\{"key":"encrypted\/archive","sha256":"b{64}"\}/);
   assertCiphertextPromotion(calls);
-  const hash = calls.findIndex(({ args }) => args[0] === "hashsum");
-  assert.equal(calls[hash].env?.RCLONE_CONFIG_CRYPT_REMOTE, "r2:bucket"); assert.equal(calls[hash].env?.RCLONE_CONFIG_CRYPTPROBE_TYPE, undefined);
-  assert.strictEqual(calls[hash].env, rcloneCalls[1].env);
+  const ciphertextDownload = calls.findIndex(({ program, args }) => program === "rclone" && args[0] === "cat" && args[1] === "r2:bucket/encrypted/archive");
+  assert.equal(calls[ciphertextDownload].env?.RCLONE_CONFIG_CRYPT_REMOTE, "r2:bucket"); assert.equal(calls[ciphertextDownload].env?.RCLONE_CONFIG_CRYPTPROBE_TYPE, undefined);
+  assert.strictEqual(calls[ciphertextDownload].env, rcloneCalls[1].env);
   const cloneCalls = () => calls.map((call) => ({ ...call, args: [...call.args] }));
   const archive = calls[archiveMove].args.at(-1)!.slice(`${env.BACKUP_CRYPT_REMOTE}/`.length);
   const oldOneArgument = cloneCalls(), oldDecode = oldOneArgument.find(({ args }) => args[0] === "cryptdecode")!;
@@ -208,6 +209,12 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   assert.throws(() => assertCiphertextPromotion(wrongRoot));
   const missingRelativePath = cloneCalls(); missingRelativePath.find(({ args }) => args[0] === "cryptdecode")!.args.pop();
   assert.throws(() => assertCiphertextPromotion(missingRelativePath));
+  const wrongRawPath = cloneCalls(); wrongRawPath[ciphertextDownload].args[1] = "r2:bucket/encrypted/wrong";
+  assert.throws(() => assertCiphertextPromotion(wrongRawPath));
+  const reintroducedHashsum = [...cloneCalls(), { program: "rclone", args: ["hashsum", "SHA-256", "r2:bucket/encrypted/archive", "--download"] }];
+  assert.throws(() => assertCiphertextPromotion(reintroducedHashsum));
+  const incompleteDrain = cloneCalls(); incompleteDrain[ciphertextDownload + 1].args[2] = "cat >/dev/null | head -c 1";
+  assert.throws(() => assertCiphertextPromotion(incompleteDrain));
   const temporaryManifestKey = cloneCalls();
   temporaryManifestKey[manifestUpload].input = temporaryManifestKey[manifestUpload].input!.replace("encrypted/archive", "encrypted/temporary");
   assert.throws(() => assertCiphertextPromotion(temporaryManifestKey));
@@ -222,11 +229,18 @@ test("accepts canonical spaced cryptdecode output and rejects malformed fields",
   const archive = "postgres-r2-20260301T020304Z-abcdef123456.dump", logical = `ofertasuper-r2/${archive}`, now = new Date("2026-03-01T02:03:04Z");
   const canonical = mockRuntime({ cryptdecodeOutput: `${logical} \t encrypted/archive\n` });
   await runBackup({ ...env }, canonical.runtime, now, "abcdef123456");
-  assert.ok(canonical.calls.some(({ args }) => args[0] === "hashsum" && args[2] === "r2:bucket/encrypted/archive"));
+  assert.ok(canonical.calls.some(({ program, args, phase }) => program === "rclone" && args[0] === "cat" && args[1] === "r2:bucket/encrypted/archive" && phase === "ciphertext"));
   for (const output of [`${logical} \t encrypted/archive \t extra\n`, `crypt:ofertasuper-r2/${archive} \t encrypted/archive\n`, `${logical} \t ../encrypted/archive\n`]) {
     const invalid = mockRuntime({ cryptdecodeOutput: output });
     await assert.rejects(runBackup({ ...env }, invalid.runtime, now, "abcdef123456"), /ciphertext verification failed/);
   }
+});
+
+test("rejects an empty ciphertext stream before manifest publication", async () => {
+  const empty = mockRuntime({ results: [{ stdout: "", bytes: 3, sha256: "a".repeat(64) }, { stdout: "archive contents\n", bytes: 3, sha256: "a".repeat(64) }, { stdout: "", bytes: 0, sha256: "b".repeat(64) }] });
+  await assert.rejects(runBackup({ ...env }, empty.runtime), /ciphertext verification failed/);
+  assert.equal(empty.calls.some(({ args }) => args[0] === "rcat" && args.at(-1)?.includes("manifest.json")), false);
+  assert.equal(empty.calls.filter(({ program, args }) => program === "rclone" && args[0] === "cat" && args[1] === "r2:bucket/encrypted/archive").length, 1);
 });
 
 test("enforces the exact public-schema pg_dump command", async () => {
@@ -369,6 +383,6 @@ test("workflow remains manual-only, pins checkout, and documents failure semanti
   assertFixedR2NoCheckBucket(workflow);
   assert.doesNotMatch(workflow, /set -x/);
   const install = workflow.indexOf("Install pinned rclone"), derive = workflow.indexOf("Derive rclone crypt passwords"), backup = workflow.indexOf('manifest_key="$(npm run --silent backup:postgres-r2)"'); assert.ok(install >= 0 && install < derive && derive < backup);
-  assert.match(script, /createHash|--immutable|manifest\.uploading|BACKUP_DATABASE_ROLE/); assert.doesNotMatch(script, /--file=|writeFile|createWriteStream/);
+  assert.match(script, /createHash|--immutable|manifest\.uploading|BACKUP_DATABASE_ROLE/); assert.doesNotMatch(script, /--file=|writeFile|createWriteStream|\bhashsum\b/);
   assert.match(docs, /BACKUP_CRYPT_REMOTE.*logical/i); assert.match(docs, /RCLONE_CRYPT_REMOTE.*reserved/i); assert.match(docs, /RCLONE_CONFIG=\/dev\/null/); assert.match(docs, /upload.*validation.*source.*destination/i); assert.match(docs, /retention failure.*fails/i); assert.match(docs, /never writes a plaintext dump/i); assert.match(docs, /plaintext.*do not pre-obscure|do not pre-obscure.*plaintext/i);
 });

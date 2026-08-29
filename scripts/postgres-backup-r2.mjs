@@ -73,7 +73,7 @@ export function createRuntime(spawnProcess = spawn, spawnSyncProcess = spawnSync
     const done = () => {
       if (settled || closed !== children.length) return;
       settled = true; options.signal?.removeEventListener("abort", abort);
-      const phase = ["upload", "validation"].includes(options.phase) ? `${options.phase} ` : "";
+      const phase = ["upload", "validation", "ciphertext"].includes(options.phase) ? `${options.phase} ` : "";
       if (failed) rejectPipeline(new Error(failedSide ? `backup ${phase}${failedSide} stream command failed` : `backup ${phase}stream command failed`));
       else resolvePipeline({ stdout: output, ...metric.result() });
     };
@@ -104,9 +104,9 @@ async function ciphertext(runtime, plan, environment, archive) {
   const key = logical === relativeLogical && ciphertextKey(encrypted) ? encrypted : "";
   if (!key) throw new Error("ciphertext verification failed");
   const raw = `${required(environment.RCLONE_CONFIG_CRYPT_REMOTE, "RCLONE_CONFIG_CRYPT_REMOTE")}/${key}`;
-  const hash = oneOutput((await runtime.command("rclone", ["hashsum", "SHA-256", raw, "--download"], { env: environment })).stdout).match(/^([a-f0-9]{64})\s+\*?(.+)$/);
-  if (!hash || hash[2] !== raw) throw new Error("ciphertext verification failed");
-  return { key, sha256: hash[1] };
+  const hash = await runtime.pipeline({ program: "rclone", args: ["cat", raw] }, { program: "sh", args: ["-ec", "cat >/dev/null"] }, { env: environment, phase: "ciphertext" });
+  if (!hash.bytes) throw new Error("ciphertext verification failed");
+  return { key, sha256: hash.sha256 };
 }
 async function verifiedVersion(runtime, environment) {
   const version = await runtime.command("rclone", ["version"], { env: environment });
