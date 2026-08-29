@@ -73,7 +73,7 @@ const settles = (promise: Promise<unknown>) => {
 function mockOutput(args: string[], options: MockOptions) {
   if (args[0] === "version") return options.version || "rclone v1.75.0\n";
   if (args[0] === "lsf") return (options.files || []).join("\n");
-  if (args[0] === "cryptdecode") return `${args[2]}\tencrypted/archive\n`;
+  if (args[0] === "cryptdecode") return `${args[2]}\tencrypted/${args[2].endsWith(".uploading") ? "temporary" : "archive"}\n`;
   if (args[0] === "hashsum") return `${"b".repeat(64)}  ${args[2]}\n`;
   return "";
 }
@@ -106,6 +106,17 @@ function assertDrainingPgRestoreArgs(args: string[]) {
     "run", "--rm", "-i", "--env", "PGHOST", "--env", "PGPORT", "--env", "PGUSER", "--env", "PGPASSWORD", "--env", "PGDATABASE", "--env", "PGSSLMODE",
     env.PG_IMAGE, "sh", "-ec", "pg_restore --list; cat >/dev/null",
   ]);
+}
+
+function assertCiphertextPromotion(calls: Call[]) {
+  const temporaryDecode = calls.findIndex(({ args }) => args[0] === "cryptdecode" && args.at(-1)?.endsWith(".dump.uploading"));
+  const temporaryHash = calls.findIndex(({ args }) => args[0] === "hashsum");
+  const finalDecode = calls.findIndex(({ args }) => args[0] === "cryptdecode" && args.at(-1)?.endsWith(".dump"));
+  const archiveMove = calls.findIndex(({ args }) => args[0] === "moveto" && args.at(-1)?.endsWith(".dump"));
+  const manifestUpload = calls.findIndex(({ args }) => args[0] === "rcat" && args.at(-1)?.includes("manifest.json.uploading"));
+  assert.ok(temporaryDecode >= 0 && temporaryDecode < temporaryHash && temporaryHash < finalDecode && finalDecode < archiveMove && archiveMove < manifestUpload);
+  assert.deepEqual(calls[temporaryHash].args.slice(0, 3), ["hashsum", "SHA-256", "r2:bucket/encrypted/temporary"]); assert.ok(calls[temporaryHash].args.includes("--download"));
+  assert.match(calls[manifestUpload].input!, /"ciphertext":\{"key":"encrypted\/archive","sha256":"b{64}"\}/);
 }
 
 test("plans only a direct role and redacts the URL", () => {
@@ -181,11 +192,16 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   assert.ok(archiveMove < manifestUpload && manifestUpload < manifestMove);
   assert.ok(calls.filter(({ args }) => args[0] === "moveto").every(({ args }) => args.includes("--immutable")));
   assert.match(calls[manifestUpload].input!, /"schemaVersion":2.*"bytes":3.*"sha256":"a{64}".*"ciphertext":\{"key":"encrypted\/archive","sha256":"b{64}"\}/);
-  const decode = calls.findIndex(({ args }) => args[0] === "cryptdecode"), hash = calls.findIndex(({ args }) => args[0] === "hashsum");
-  assert.ok(archiveMove < decode && decode < hash && hash < manifestUpload);
-  assert.deepEqual(calls[hash].args.slice(0, 3), ["hashsum", "SHA-256", "r2:bucket/encrypted/archive"]); assert.ok(calls[hash].args.includes("--download"));
+  assertCiphertextPromotion(calls);
+  const hash = calls.findIndex(({ args }) => args[0] === "hashsum");
   assert.equal(calls[hash].env?.RCLONE_CONFIG_CRYPT_REMOTE, "r2:bucket"); assert.equal(calls[hash].env?.RCLONE_CONFIG_CRYPTPROBE_TYPE, undefined);
   assert.strictEqual(calls[hash].env, rcloneCalls[1].env);
+  const finalHashAfterMove = calls.map((call) => ({ ...call, args: [...call.args] })), movedHash = finalHashAfterMove.splice(hash, 1)[0];
+  movedHash.args[2] = "r2:bucket/encrypted/archive"; finalHashAfterMove.splice(archiveMove + 1, 0, movedHash);
+  assert.throws(() => assertCiphertextPromotion(finalHashAfterMove));
+  const temporaryManifestKey = calls.map((call) => ({ ...call, args: [...call.args] }));
+  temporaryManifestKey[manifestUpload].input = temporaryManifestKey[manifestUpload].input!.replace("encrypted/archive", "encrypted/temporary");
+  assert.throws(() => assertCiphertextPromotion(temporaryManifestKey));
   const dockerCalls = calls.filter(({ program }) => program === "docker");
   assert.equal(dockerCalls.length, 2);
   assertPublicSchemaDumpArgs(dockerCalls[0].args);
