@@ -18,7 +18,7 @@ const check = (signal) => { if (signal?.aborted) fail("recovery cancelled"); };
 const phase = async (signal, work) => { check(signal); const result = await work(); check(signal); return result; };
 
 export function createRecoveryPlan(environment) {
-  const manifest = environment.RECOVERY_MANIFEST_KEY, remote = environment.RCLONE_CRYPT_REMOTE;
+  const manifest = environment.RECOVERY_MANIFEST_KEY, remote = environment.BACKUP_CRYPT_REMOTE;
   if (!MANIFEST.test(manifest || "")) fail("manifest key is invalid");
   if (typeof remote !== "string" || !/^crypt:[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(remote) || remote.includes("..")) fail("recovery remote is invalid");
   if (!environment.RCLONE_CONFIG_CRYPT_REMOTE) fail("recovery storage is invalid");
@@ -88,7 +88,7 @@ export async function runRecovery(environment, runtime = createRuntime(), id = (
   const state = { workspace: join(tmpdir(), `postgres-r2-recovery-${randomUUID()}`) }; let primary, receipt, child;
   try {
     const plan = createRecoveryPlan(environment), token = id(); if (!/^[a-f0-9]{32}$/.test(token)) fail("recovery identifier is invalid");
-    const names = { container: `recovery-container-${token}`, network: `recovery-network-${token}`, volume: `recovery-volume-${token}` }; child = { ...environment, POSTGRES_USER: OWNER, POSTGRES_DB: DATABASE, POSTGRES_PASSWORD: `recovery-${token}` }; state.image = plan.image;
+    const names = { container: `recovery-container-${token}`, network: `recovery-network-${token}`, volume: `recovery-volume-${token}` }; child = { ...environment, POSTGRES_USER: OWNER, POSTGRES_DB: DATABASE, POSTGRES_PASSWORD: `recovery-${token}` }; delete child.RCLONE_CRYPT_REMOTE; state.image = plan.image;
     await phase(options.signal, () => runtime.command("rclone", ["version"], { env: child }).then((result) => /^rclone v1\.75\.0\b/.test(result.stdout) ? result : fail("rclone version pin check failed")));
     const text = (await phase(options.signal, () => runtime.command("rclone", ["cat", `${plan.remote}/${plan.manifest}`], { env: child, maxBuffer: LIMIT }))).stdout; if (Buffer.byteLength(text) > LIMIT) fail("manifest is invalid");
     const raw = await download(runtime, child, plan, manifestFor(text, plan), state.workspace, options.signal);

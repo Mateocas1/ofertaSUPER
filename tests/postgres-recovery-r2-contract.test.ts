@@ -4,7 +4,7 @@ import test from "node:test";
 import { createRecoveryPlan, runRecovery } from "../scripts/postgres-recovery-r2.mjs";
 
 const root = new URL("../", import.meta.url), read = (path: string) => readFileSync(new URL(path, root), "utf8");
-const env = { RECOVERY_MANIFEST_KEY: "postgres-r2-20260301T020304Z-abcdef123456.manifest.json", RCLONE_CRYPT_REMOTE: "crypt:backups", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", RCLONE_CONFIG_CRYPT_PASSWORD: "canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "canary2" };
+const env = { RECOVERY_MANIFEST_KEY: "postgres-r2-20260301T020304Z-abcdef123456.manifest.json", BACKUP_CRYPT_REMOTE: "crypt:backups", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", RCLONE_CONFIG_CRYPT_PASSWORD: "canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "canary2" };
 const manifest = { schemaVersion: 2, archive: "postgres-r2-20260301T020304Z-abcdef123456.dump", timestamp: "2026-03-01T02:03:04.000Z", format: "custom", validation: "pg_restore --list", bytes: 3, sha256: "a".repeat(64), ciphertext: { key: "enc/archive", sha256: "d7439bee24773bcbfa2d0a97947ee36227b10d1022b1a55847e928965bb6bfde" } };
 const count = (text: string, value: string) => text.split(value).length - 1;
 
@@ -64,14 +64,14 @@ test("recovery verifies one downloaded ciphertext before creating a unique dispo
     if (args[0] === "copyto") { writeFileSync(args.at(-1)!, "raw"); return { stdout: "" }; }
     return { stdout: args.includes("psql") ? psql(args.at(-1) || "") : "" };
   }, pipeline: async (source: { args: string[] }, destination: { args: string[] }) => { calls.push(["pipe", ...source.args, "=>", ...destination.args]); return {}; } };
-  const receipt = await runRecovery({ ...env }, runtime as never, () => "a".repeat(32));
+  const receipt = await runRecovery({ ...env, RCLONE_CRYPT_REMOTE: "crypt:reserved-collision" }, runtime as never, () => "a".repeat(32));
   assert.deepEqual(receipt!.counts, { products: 1, supermarkets: 1, supermarket_products: 1, price_history: 1 }); assert.equal(receipt!.migrations, 8);
   assert.equal(calls.filter((call) => call[1] === "copyto").length, 1);
   const pipe = calls.find((call) => call[0] === "pipe")!;
   assert.ok(pipe.includes("recovery:backups/postgres-r2-20260301T020304Z-abcdef123456.dump"));
   assert.ok(pipe.includes("--exit-on-error")); assert.ok(pipe.includes("pg_restore"));
   const copy = calls.find((call) => call[1] === "copyto")!, local = childEnvs.find((item) => item.RCLONE_CONFIG_RECOVERYLOCAL_TYPE === "local")!;
-  assert.equal(copy.at(-1), `${local.RCLONE_CONFIG_RECOVERY_REMOTE.slice("recoverylocal:".length)}/enc/archive`);
+  assert.equal(copy.at(-1), `${local.RCLONE_CONFIG_RECOVERY_REMOTE.slice("recoverylocal:".length)}/enc/archive`); assert.ok(childEnvs.every((item) => item.RCLONE_CRYPT_REMOTE === undefined));
   assert.ok(calls.some((call) => call.includes("network") && call.includes("create")));
   assert.ok(calls.some((call) => call.includes("volume") && call.includes("create")));
 });
@@ -131,5 +131,5 @@ test("workflow derives plaintext crypt secrets only at runtime", () => {
   assertFixedR2NoCheckBucket(workflow);
   assert.doesNotMatch(workflow, /set -x/);
   const install = workflow.indexOf("Install pinned rclone"), derive = workflow.indexOf("Derive rclone crypt passwords"), recovery = workflow.indexOf("npm run recovery:postgres-r2"); assert.ok(install >= 0 && install < derive && derive < recovery);
-  assert.match(docs, /rotate both together/i); assert.match(docs, /ephemeral.*masked|masked.*ephemeral/i);
+  assert.match(workflow, /BACKUP_CRYPT_REMOTE:\s*\$\{\{ vars\.BACKUP_CRYPT_REMOTE \}\}/); assert.doesNotMatch(workflow, /^\s+RCLONE_CRYPT_REMOTE:/m); assert.match(docs, /rotate both together/i); assert.match(docs, /ephemeral.*masked|masked.*ephemeral/i);
 });

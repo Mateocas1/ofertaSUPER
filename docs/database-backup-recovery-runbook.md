@@ -12,12 +12,16 @@ This manual-only workflow streams a PostgreSQL custom archive through rclone cry
 | Setting | Repository value |
 | --- | --- |
 | Secrets | `BACKUP_DATABASE_URL` (dedicated direct backup role), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `RCLONE_CRYPT_PASSWORD`, `RCLONE_CRYPT_PASSWORD2` |
-| Variables | `BACKUP_DATABASE_ROLE`, `R2_ENDPOINT`, `R2_BUCKET`, `RCLONE_CRYPT_REMOTE` (`crypt:` path), `BACKUP_RETENTION` (2–90) |
+| Variables | `BACKUP_DATABASE_ROLE`, `R2_ENDPOINT`, `R2_BUCKET`, `BACKUP_CRYPT_REMOTE` (logical `crypt:` path), `BACKUP_RETENTION` (2–90) |
 | Pins | checkout v4 commit, rclone 1.75.0, PostgreSQL 17.6 Bookworm digest |
 
 ## R2 least-privilege setup
 
 Pre-provision the `R2_BUCKET` before running either workflow. Scope its R2 token to that bucket with **Object Read & Write** only; do not grant `CreateBucket` permission. Both workflows set `RCLONE_CONFIG_R2_NO_CHECK_BUCKET: "true"`, so rclone is configured not to check for or create the bucket.
+
+## Logical crypt target migration
+
+`BACKUP_CRYPT_REMOTE` is the logical application target (for example, `crypt:ofertasuper-r2`) used for backup and recovery paths. Set it as a repository variable before dispatching either workflow. Do not use `RCLONE_CRYPT_REMOTE`: it is a reserved rclone backend option for `--crypt-remote`, and exporting it collides with `RCLONE_CONFIG_CRYPT_REMOTE`, which must remain the underlying raw target `r2:${R2_BUCKET}`. Migrate any existing `RCLONE_CRYPT_REMOTE` repository variable to `BACKUP_CRYPT_REMOTE` and remove the old variable; do not add the reserved name to workflow environments.
 
 ## Crypt secret handling
 
