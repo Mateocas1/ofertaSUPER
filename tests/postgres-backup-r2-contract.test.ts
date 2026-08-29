@@ -63,7 +63,7 @@ function assertRuntimeCryptPasswordDerivation(workflow: string) {
 }
 
 type Call = { program: string; args: string[]; input?: string; env?: Record<string, string> };
-type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[], env?: Record<string, string>) => boolean); streamFailure?: "source" | "destination"; streamPhase?: "upload" | "validation"; error?: string; files?: string[]; version?: string };
+type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[], env?: Record<string, string>) => boolean); streamFailure?: "source" | "destination"; streamPhase?: "upload" | "validation"; error?: string; files?: string[]; version?: string; cryptdecodeOutput?: string };
 type SpawnOptions = { timeout?: number; killSignal?: string };
 const settles = (promise: Promise<unknown>) => {
   let timer: ReturnType<typeof setTimeout>;
@@ -73,7 +73,7 @@ const settles = (promise: Promise<unknown>) => {
 function mockOutput(args: string[], options: MockOptions) {
   if (args[0] === "version") return options.version || "rclone v1.75.0\n";
   if (args[0] === "lsf") return (options.files || []).join("\n");
-  if (args[0] === "cryptdecode") return `${args[2]}\tencrypted/${args[2].endsWith(".uploading") ? "temporary" : "archive"}\n`;
+  if (args[0] === "cryptdecode") return options.cryptdecodeOutput || `${args[3]}\tencrypted/archive\n`;
   if (args[0] === "hashsum") return `${"b".repeat(64)}  ${args[2]}\n`;
   return "";
 }
@@ -109,13 +109,16 @@ function assertDrainingPgRestoreArgs(args: string[]) {
 }
 
 function assertCiphertextPromotion(calls: Call[]) {
-  const temporaryDecode = calls.findIndex(({ args }) => args[0] === "cryptdecode" && args.at(-1)?.endsWith(".dump.uploading"));
-  const temporaryHash = calls.findIndex(({ args }) => args[0] === "hashsum");
-  const finalDecode = calls.findIndex(({ args }) => args[0] === "cryptdecode" && args.at(-1)?.endsWith(".dump"));
   const archiveMove = calls.findIndex(({ args }) => args[0] === "moveto" && args.at(-1)?.endsWith(".dump"));
+  const decode = calls.findIndex(({ args }) => args[0] === "cryptdecode");
+  const hash = calls.findIndex(({ args }) => args[0] === "hashsum");
   const manifestUpload = calls.findIndex(({ args }) => args[0] === "rcat" && args.at(-1)?.includes("manifest.json.uploading"));
-  assert.ok(temporaryDecode >= 0 && temporaryDecode < temporaryHash && temporaryHash < finalDecode && finalDecode < archiveMove && archiveMove < manifestUpload);
-  assert.deepEqual(calls[temporaryHash].args.slice(0, 3), ["hashsum", "SHA-256", "r2:bucket/encrypted/temporary"]); assert.ok(calls[temporaryHash].args.includes("--download"));
+  const archive = calls[archiveMove].args.at(-1)!.slice(`${env.BACKUP_CRYPT_REMOTE}/`.length);
+  assert.equal(calls.filter(({ args }) => args[0] === "cryptdecode").length, 1);
+  assert.equal(calls.filter(({ args }) => args[0] === "hashsum").length, 1);
+  assert.ok(archiveMove >= 0 && archiveMove < decode && decode < hash && hash < manifestUpload);
+  assert.deepEqual(calls[decode].args, ["cryptdecode", "--reverse", "crypt:", `ofertasuper-r2/${archive}`]);
+  assert.deepEqual(calls[hash].args, ["hashsum", "SHA-256", "r2:bucket/encrypted/archive", "--download"]);
   assert.match(calls[manifestUpload].input!, /"ciphertext":\{"key":"encrypted\/archive","sha256":"b{64}"\}/);
 }
 
@@ -196,10 +199,16 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   const hash = calls.findIndex(({ args }) => args[0] === "hashsum");
   assert.equal(calls[hash].env?.RCLONE_CONFIG_CRYPT_REMOTE, "r2:bucket"); assert.equal(calls[hash].env?.RCLONE_CONFIG_CRYPTPROBE_TYPE, undefined);
   assert.strictEqual(calls[hash].env, rcloneCalls[1].env);
-  const finalHashAfterMove = calls.map((call) => ({ ...call, args: [...call.args] })), movedHash = finalHashAfterMove.splice(hash, 1)[0];
-  movedHash.args[2] = "r2:bucket/encrypted/archive"; finalHashAfterMove.splice(archiveMove + 1, 0, movedHash);
-  assert.throws(() => assertCiphertextPromotion(finalHashAfterMove));
-  const temporaryManifestKey = calls.map((call) => ({ ...call, args: [...call.args] }));
+  const cloneCalls = () => calls.map((call) => ({ ...call, args: [...call.args] }));
+  const archive = calls[archiveMove].args.at(-1)!.slice(`${env.BACKUP_CRYPT_REMOTE}/`.length);
+  const oldOneArgument = cloneCalls(), oldDecode = oldOneArgument.find(({ args }) => args[0] === "cryptdecode")!;
+  oldDecode.args.splice(2, 2, `${env.BACKUP_CRYPT_REMOTE}/${archive}`);
+  assert.throws(() => assertCiphertextPromotion(oldOneArgument));
+  const wrongRoot = cloneCalls(); wrongRoot.find(({ args }) => args[0] === "cryptdecode")!.args[2] = "wrong:";
+  assert.throws(() => assertCiphertextPromotion(wrongRoot));
+  const missingRelativePath = cloneCalls(); missingRelativePath.find(({ args }) => args[0] === "cryptdecode")!.args.pop();
+  assert.throws(() => assertCiphertextPromotion(missingRelativePath));
+  const temporaryManifestKey = cloneCalls();
   temporaryManifestKey[manifestUpload].input = temporaryManifestKey[manifestUpload].input!.replace("encrypted/archive", "encrypted/temporary");
   assert.throws(() => assertCiphertextPromotion(temporaryManifestKey));
   const dockerCalls = calls.filter(({ program }) => program === "docker");
@@ -207,6 +216,12 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   assertPublicSchemaDumpArgs(dockerCalls[0].args);
   assertDrainingPgRestoreArgs(dockerCalls[1].args);
   assert.ok(calls.every(({ args }) => !args.some((arg) => [env.DATABASE_URL, "backup_user", "secret-password", "db.example", "6543", "catalog"].includes(arg))));
+});
+
+test("rejects a cryptdecode output with a non-relative logical column", async () => {
+  const archive = "postgres-r2-20260301T020304Z-abcdef123456.dump";
+  const invalid = mockRuntime({ cryptdecodeOutput: `crypt:ofertasuper-r2/${archive}\tencrypted/archive\n` });
+  await assert.rejects(runBackup({ ...env }, invalid.runtime, new Date("2026-03-01T02:03:04Z"), "abcdef123456"), /ciphertext verification failed/);
 });
 
 test("enforces the exact public-schema pg_dump command", async () => {
