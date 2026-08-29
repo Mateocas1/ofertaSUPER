@@ -100,7 +100,8 @@ function oneOutput(value) { const lines = value.trim().split("\n"); if (lines.le
 async function ciphertext(runtime, plan, environment, archive) {
   const relativeLogical = `${plan.remote.slice(plan.remote.indexOf(":") + 1)}/${archive}`;
   const decoded = oneOutput((await runtime.command("rclone", ["cryptdecode", "--reverse", cryptRemoteRoot(plan.remote), relativeLogical], { env: environment })).stdout).split("\t");
-  const key = decoded.length === 2 && decoded[0] === relativeLogical && ciphertextKey(decoded[1]) ? decoded[1] : "";
+  const [logical, encrypted] = decoded.length === 2 ? decoded.map((field) => field.trim()) : [];
+  const key = logical === relativeLogical && ciphertextKey(encrypted) ? encrypted : "";
   if (!key) throw new Error("ciphertext verification failed");
   const raw = `${required(environment.RCLONE_CONFIG_CRYPT_REMOTE, "RCLONE_CONFIG_CRYPT_REMOTE")}/${key}`;
   const hash = oneOutput((await runtime.command("rclone", ["hashsum", "SHA-256", raw, "--download"], { env: environment })).stdout).match(/^([a-f0-9]{64})\s+\*?(.+)$/);

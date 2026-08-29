@@ -73,7 +73,7 @@ const settles = (promise: Promise<unknown>) => {
 function mockOutput(args: string[], options: MockOptions) {
   if (args[0] === "version") return options.version || "rclone v1.75.0\n";
   if (args[0] === "lsf") return (options.files || []).join("\n");
-  if (args[0] === "cryptdecode") return options.cryptdecodeOutput || `${args[3]}\tencrypted/archive\n`;
+  if (args[0] === "cryptdecode") return options.cryptdecodeOutput || `${args[3]} \t encrypted/archive\n`;
   if (args[0] === "hashsum") return `${"b".repeat(64)}  ${args[2]}\n`;
   return "";
 }
@@ -218,10 +218,15 @@ test("streams, verifies bytes/hash/listing, then atomically publishes both halve
   assert.ok(calls.every(({ args }) => !args.some((arg) => [env.DATABASE_URL, "backup_user", "secret-password", "db.example", "6543", "catalog"].includes(arg))));
 });
 
-test("rejects a cryptdecode output with a non-relative logical column", async () => {
-  const archive = "postgres-r2-20260301T020304Z-abcdef123456.dump";
-  const invalid = mockRuntime({ cryptdecodeOutput: `crypt:ofertasuper-r2/${archive}\tencrypted/archive\n` });
-  await assert.rejects(runBackup({ ...env }, invalid.runtime, new Date("2026-03-01T02:03:04Z"), "abcdef123456"), /ciphertext verification failed/);
+test("accepts canonical spaced cryptdecode output and rejects malformed fields", async () => {
+  const archive = "postgres-r2-20260301T020304Z-abcdef123456.dump", logical = `ofertasuper-r2/${archive}`, now = new Date("2026-03-01T02:03:04Z");
+  const canonical = mockRuntime({ cryptdecodeOutput: `${logical} \t encrypted/archive\n` });
+  await runBackup({ ...env }, canonical.runtime, now, "abcdef123456");
+  assert.ok(canonical.calls.some(({ args }) => args[0] === "hashsum" && args[2] === "r2:bucket/encrypted/archive"));
+  for (const output of [`${logical} \t encrypted/archive \t extra\n`, `crypt:ofertasuper-r2/${archive} \t encrypted/archive\n`, `${logical} \t ../encrypted/archive\n`]) {
+    const invalid = mockRuntime({ cryptdecodeOutput: output });
+    await assert.rejects(runBackup({ ...env }, invalid.runtime, now, "abcdef123456"), /ciphertext verification failed/);
+  }
 });
 
 test("enforces the exact public-schema pg_dump command", async () => {
