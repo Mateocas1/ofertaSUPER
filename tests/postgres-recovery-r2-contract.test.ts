@@ -4,7 +4,7 @@ import test from "node:test";
 import { createRecoveryPlan, runRecovery } from "../scripts/postgres-recovery-r2.mjs";
 
 const root = new URL("../", import.meta.url), read = (path: string) => readFileSync(new URL(path, root), "utf8");
-const env = { RECOVERY_MANIFEST_KEY: "postgres-r2-20260301T020304Z-abcdef123456.manifest.json", BACKUP_CRYPT_REMOTE: "crypt:backups", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", RCLONE_CONFIG_CRYPT_PASSWORD: "canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "canary2" };
+const env = { RECOVERY_MANIFEST_KEY: "postgres-r2-20260301T020304Z-abcdef123456.manifest.json", BACKUP_CRYPT_REMOTE: "crypt:ofertasuper-r2", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", RCLONE_CONFIG_CRYPT_PASSWORD: "canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "canary2" };
 const manifest = { schemaVersion: 2, archive: "postgres-r2-20260301T020304Z-abcdef123456.dump", timestamp: "2026-03-01T02:03:04.000Z", format: "custom", validation: "pg_restore --list", bytes: 3, sha256: "a".repeat(64), ciphertext: { key: "enc/archive", sha256: "d7439bee24773bcbfa2d0a97947ee36227b10d1022b1a55847e928965bb6bfde" } };
 const count = (text: string, value: string) => text.split(value).length - 1;
 
@@ -60,7 +60,7 @@ test("recovery verifies one downloaded ciphertext before creating a unique dispo
     calls.push([program, ...args]); if (options.env) childEnvs.push({ ...options.env });
     if (args[0] === "version") return { stdout: "rclone v1.75.0\n" };
     if (args[0] === "cat" && args[1].startsWith("crypt:")) return { stdout: JSON.stringify(manifest) };
-    if (args[0] === "cryptdecode") return { stdout: "crypt:backups/postgres-r2-20260301T020304Z-abcdef123456.dump\tenc/archive\n" };
+    if (args[0] === "cryptdecode") return { stdout: " ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump \t enc/archive \n" };
     if (args[0] === "copyto") { writeFileSync(args.at(-1)!, "raw"); return { stdout: "" }; }
     return { stdout: args.includes("psql") ? psql(args.at(-1) || "") : "" };
   }, pipeline: async (source: { args: string[] }, destination: { args: string[] }, options: { env?: Record<string, string> }) => { calls.push(["pipe", ...source.args, "=>", ...destination.args]); if (options.env) pipelineEnvs.push({ ...options.env }); return {}; } };
@@ -68,7 +68,8 @@ test("recovery verifies one downloaded ciphertext before creating a unique dispo
   assert.deepEqual(receipt!.counts, { products: 1, supermarkets: 1, supermarket_products: 1, price_history: 1 }); assert.equal(receipt!.migrations, 8);
   assert.equal(calls.filter((call) => call[1] === "copyto").length, 1);
   const pipe = calls.find((call) => call[0] === "pipe")!;
-  assert.ok(pipe.includes("recovery:backups/postgres-r2-20260301T020304Z-abcdef123456.dump"));
+  assert.ok(pipe.includes("recovery:ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump"));
+  assert.deepEqual(calls.find((call) => call[1] === "cryptdecode"), ["rclone", "cryptdecode", "--reverse", "crypt:", "ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump"]);
   assert.ok(pipe.includes("--exit-on-error")); assert.ok(pipe.includes("pg_restore"));
   const copy = calls.find((call) => call[1] === "copyto")!, local = childEnvs.find((item) => item.RCLONE_CONFIG_RECOVERYLOCAL_TYPE === "local")!;
   assert.equal(copy.at(-1), `${local.RCLONE_CONFIG_RECOVERY_REMOTE.slice("recoverylocal:".length)}/enc/archive`); assert.ok([...childEnvs, ...pipelineEnvs].every((item) => item.RCLONE_CRYPT_REMOTE === undefined && item.RCLONE_CONFIG === "/dev/null"));
@@ -76,12 +77,28 @@ test("recovery verifies one downloaded ciphertext before creating a unique dispo
   assert.ok(calls.some((call) => call.includes("volume") && call.includes("create")));
 });
 
+test("recovery rejects cryptdecode outputs with wrong logical fields or malformed tabs", async () => {
+  const relative = "ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump", expected = ["rclone", "cryptdecode", "--reverse", "crypt:", relative];
+  for (const output of [`crypt:${relative}\tenc/archive\n`, `ofertasuper-r2/other.dump\tenc/archive\n`, `${relative}\tenc/archive\textra\n`, `${relative}\tenc/archive\nextra`]) {
+    const calls: string[][] = [], runtime = { command: async (program: string, args: string[]) => {
+      calls.push([program, ...args]);
+      if (args[0] === "version") return { stdout: "rclone v1.75.0\n" };
+      if (args[0] === "cat") return { stdout: JSON.stringify(manifest) };
+      if (args[0] === "cryptdecode") return { stdout: output };
+      return { stdout: "" };
+    }, pipeline: async () => ({}) };
+    await assert.rejects(runRecovery({ ...env }, runtime as never), /ciphertext/);
+    assert.deepEqual(calls.find((call) => call[1] === "cryptdecode"), expected);
+    assert.equal(calls.some((call) => call[1] === "copyto" || call[1] === "docker"), false);
+  }
+});
+
 test("mismatch creates neither Docker target nor restore, and contracts keep secrets out of receipts", async () => {
   const calls: string[] = [], runtime = { command: async (program: string, args: string[]) => {
     calls.push(program);
     if (args[0] === "version") return { stdout: "rclone v1.75.0\n" };
     if (args[0] === "cat") return { stdout: JSON.stringify(manifest) };
-    if (args[0] === "cryptdecode") return { stdout: "crypt:backups/postgres-r2-20260301T020304Z-abcdef123456.dump\tenc/archive\n" };
+    if (args[0] === "cryptdecode") return { stdout: " ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump \t enc/archive \n" };
     if (args[0] === "copyto") { writeFileSync(args.at(-1)!, "wrong"); return { stdout: "" }; }
     return { stdout: "" };
   }, pipeline: async () => ({}) };
@@ -98,7 +115,7 @@ test("mismatch creates neither Docker target nor restore, and contracts keep sec
 function runtimeFor(option: Record<string, unknown> = {}) {
   const calls: { program: string; args: string[]; options?: { input?: string; signal?: AbortSignal } }[] = [], migrations = "20260320_init\n20260322_ingestion_sprint1\n20260322_price_history_avg_idx\n20260322_staging_unlogged\n20260605_direct_refresh_run_ledger\n20260606_discovery_prewrite_foundation\n20260823_production_readiness_state\n20260824_catalog_publication_verification\n";
   const command = async (program: string, args: string[], options: { input?: string; signal?: AbortSignal } = {}) => { calls.push({ program, args, options }); const sql = options.input || args.at(-1) || "";
-    if (args[0] === "version") return { stdout: "rclone v1.75.0\n" }; if (args[0] === "cat" && args[1].startsWith("crypt:")) return { stdout: JSON.stringify(manifest) }; if (args[0] === "cryptdecode") return { stdout: "crypt:backups/postgres-r2-20260301T020304Z-abcdef123456.dump\tenc/archive\n" }; if (args[0] === "copyto") { writeFileSync(args.at(-1)!, "raw"); return { stdout: "" }; }
+    if (args[0] === "version") return { stdout: "rclone v1.75.0\n" }; if (args[0] === "cat" && args[1].startsWith("crypt:")) return { stdout: JSON.stringify(manifest) }; if (args[0] === "cryptdecode") return { stdout: " ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump \t enc/archive \n" }; if (args[0] === "copyto") { writeFileSync(args.at(-1)!, "raw"); return { stdout: "" }; }
     if (args.includes("inspect")) return { stdout: "", status: option.collision ? 0 : 1 }; if (args.includes("pg_isready")) return { stdout: "", status: option.ready ? 1 : 0 }; if (option.grant && options.input?.includes("CREATE ROLE")) throw new Error("grant failed"); if (sql.includes("server_version")) return { stdout: "17.6\n" }; if (sql.includes("migration_name")) return { stdout: String(option.migrations ?? migrations) }; if (sql.includes("finished_at IS NULL")) return { stdout: `${option.unfinished || 0}\n` }; if (sql.includes("information_schema")) return { stdout: "price_history\nproducts\nsupermarket_products\nsupermarkets\n" }; if (sql.includes("pg_indexes")) return { stdout: String(option.indexes ?? "price_history_supermarket_product_id_scraped_at_idx\nproducts_category_idx\nsupermarket_products_product_ean_supermarket_id_key\nsupermarkets_slug_key\n") }; if (sql.includes("UNION")) return { stdout: String(option.counts ?? "products|1\nsupermarkets|1\nsupermarket_products|1\nprice_history|1\n") }; if (option.app && options.input?.includes("SET ROLE")) throw new Error("app read failed"); return { stdout: "" };
   };
   return { calls, runtime: { command, pipeline: async (_left: unknown, _right: unknown, options: { signal?: AbortSignal }) => { if (option.abort) (options.signal as AbortSignal).dispatchEvent(new Event("abort")); if (option.archive) throw new Error("archive failed"); return {}; } } };

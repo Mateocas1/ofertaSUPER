@@ -38,12 +38,13 @@ async function migrations() {
 const docker = (runtime, env, args, options = {}) => runtime.command("docker", args, { env, ...options });
 const psql = (runtime, env, container, sql, input) => docker(runtime, env, ["exec", "-i", container, "psql", "-X", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", OWNER, "-d", DATABASE, ...(input ? ["-f", "-"] : ["-c", sql])], input ? { input: sql } : {}).then((result) => result.stdout.trim());
 async function download(runtime, env, plan, manifest, workspace, signal) {
-  const logical = `${plan.remote}/${manifest.archive}`, decoded = (await phase(signal, () => runtime.command("rclone", ["cryptdecode", "--reverse", logical], { env }))).stdout.trim().split("\t");
-  if (decoded.length !== 2 || decoded[0] !== logical || !safeKey(decoded[1]) || decoded[1] !== manifest.ciphertext.key) fail("ciphertext verification failed");
-  const path = join(workspace, decoded[1]); await mkdir(dirname(path), { recursive: true });
-  await phase(signal, () => runtime.command("rclone", ["copyto", `${env.RCLONE_CONFIG_CRYPT_REMOTE}/${decoded[1]}`, path], { env }));
+  const logical = `${plan.remote.slice(plan.remote.indexOf(":") + 1)}/${manifest.archive}`, lines = (await phase(signal, () => runtime.command("rclone", ["cryptdecode", "--reverse", "crypt:", logical], { env }))).stdout.trim().split("\n"), fields = lines.length === 1 ? lines[0].split("\t") : [];
+  const [decodedLogical, key] = fields.length === 2 ? fields.map((field) => field.trim()) : [];
+  if (decodedLogical !== logical || !safeKey(key) || key !== manifest.ciphertext.key) fail("ciphertext verification failed");
+  const path = join(workspace, key); await mkdir(dirname(path), { recursive: true });
+  await phase(signal, () => runtime.command("rclone", ["copyto", `${env.RCLONE_CONFIG_CRYPT_REMOTE}/${key}`, path], { env }));
   if (await hash(path) !== manifest.ciphertext.sha256) fail("ciphertext verification failed");
-  return { logical: logical.slice(6), path };
+  return { logical, path };
 }
 async function ready(runtime, env, container, signal, options) {
   const attempts = options.attempts ?? 10, pause = options.pause ?? (() => new Promise((done) => setTimeout(done, 250)));
