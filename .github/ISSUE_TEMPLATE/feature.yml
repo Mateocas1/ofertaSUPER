@@ -1,0 +1,66 @@
+name: Feature Request
+description: Propose an evidence-based product or engineering improvement.
+title: "[Feature]: "
+labels:
+  - type:feature
+body:
+  - type: textarea
+    id: problem-current-gap
+    attributes:
+      label: Problem or Current Gap
+      description: Describe the observed problem, limitation, or unmet need and who it affects.
+      placeholder: What is happening today, and why is it insufficient?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-outcome
+    attributes:
+      label: Proposed Outcome
+      description: Describe the intended result and the user or business value it should provide.
+      placeholder: What should be true after this feature is delivered?
+    validations:
+      required: true
+
+  - type: textarea
+    id: in-scope-work
+    attributes:
+      label: In-Scope Work
+      description: List the work, systems, regions, or behaviors that this request includes.
+      placeholder: Specify the boundaries of the requested work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: List observable conditions that must be met for this request to be complete.
+      placeholder: "- Given ...\n  When ...\n  Then ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification-plan
+    attributes:
+      label: Verification Plan
+      description: Explain how the outcome will be tested, observed, or otherwise verified.
+      placeholder: Include relevant test cases, probes, or success signals.
+    validations:
+      required: true
+
+  - type: textarea
+    id: non-goals-risks
+    attributes:
+      label: Non-Goals, Risks, or Additional Context
+      description: Optionally identify excluded work, dependencies, risks, assumptions, or supporting context.
+      placeholder: Add any information that will help scope or evaluate the request.
+
+  - type: checkboxes
+    id: duplicate-search
+    attributes:
+      label: Duplicate Search
+      description: Confirm that existing issues were checked before submitting this request.
+      options:
+        - label: Existing open and closed issues have been searched, and no duplicate was found.
+          required: true
