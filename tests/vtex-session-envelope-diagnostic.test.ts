@@ -23,17 +23,17 @@ const fakeHttp = (responses: ProbeSessionResult[]): RegionalProbeHttp => ({
 });
 
 test("diagnostic makes only two sequential sessions and emits the ordered fixed envelope facts", async () => {
-  const calls: string[] = [];
+  const calls: string[] = []; let proofCalls = 0;
   const http: RegionalProbeHttp = { async openSession({ postalCode, timeoutMs }) {
     calls.push(`${postalCode}:${timeoutMs}`);
     return {
       kind: "payload", payload: payload(postalCode, postalCode === "1425" ? "north" : "south"),
       requiredCookiesPresent: false,
-      readCatalog: async () => { throw new Error("catalog must not be read"); },
+      readSessionProof: async () => { proofCalls += 1; throw new Error("proof must not be read"); },
     };
   } };
   const report = await diagnoseJumboSessionEnvelopes({ http });
-  assert.deepEqual(calls, ["1425:10000", "5000:10000"]);
+  assert.deepEqual(calls, ["1425:10000", "5000:10000"]); assert.equal(proofCalls, 0);
   assert.deepEqual(report, { schemaVersion: 1, targets: [
     { postalCode: "CP1425", rootKind: "object", facts: {
       namespacesKind: "object", namespacesPublicKind: "object", namespacesPublicPostalCodeKind: "object",
@@ -62,7 +62,7 @@ test("diagnostic fails closed for missing payloads and records only literal expe
   const secret = "unread-unknown-session-value";
   const report = await diagnoseJumboSessionEnvelopes({ http: fakeHttp([
     { kind: "transport_error" },
-    { kind: "payload", payload: { namespaces: { public: { postalCode: { value: "wrong" } }, checkout: { regionId: { value: "" } }, [secret]: secret } }, requiredCookiesPresent: true, readCatalog: null },
+    { kind: "payload", payload: { namespaces: { public: { postalCode: { value: "wrong" } }, checkout: { regionId: { value: "" } }, [secret]: secret } }, requiredCookiesPresent: true, readSessionProof: null },
   ]) });
   assert.deepEqual(report.targets[0], { postalCode: "CP1425", rootKind: null, facts: null });
   assert.deepEqual(report.targets[1], { postalCode: "CP5000", rootKind: "object", facts: {
@@ -78,19 +78,19 @@ test("diagnostic reports finite JSON kinds and cancellation before a later sessi
   const controller = new AbortController(); let calls = 0;
   const http: RegionalProbeHttp = { async openSession() {
     calls += 1; controller.abort();
-    return { kind: "payload", payload: Number.POSITIVE_INFINITY, requiredCookiesPresent: false, readCatalog: null };
+    return { kind: "payload", payload: Number.POSITIVE_INFINITY, requiredCookiesPresent: false, readSessionProof: null };
   } };
   await assert.rejects(diagnoseJumboSessionEnvelopes({ http, signal: controller.signal }));
   assert.equal(calls, 1);
   const finite = await diagnoseJumboSessionEnvelopes({ http: fakeHttp([
-    { kind: "payload", payload: 7, requiredCookiesPresent: false, readCatalog: null },
-    { kind: "payload", payload: null, requiredCookiesPresent: false, readCatalog: null },
+    { kind: "payload", payload: 7, requiredCookiesPresent: false, readSessionProof: null },
+    { kind: "payload", payload: null, requiredCookiesPresent: false, readSessionProof: null },
   ]) });
   assert.deepEqual(finite.targets.map((target) => target.rootKind), ["number", "null"]);
   assert.deepEqual(finite.targets.map((target) => target.facts?.namespacesKind), ["missing", "missing"]);
   const nonJsonNumber = await diagnoseJumboSessionEnvelopes({ http: fakeHttp([
-    { kind: "payload", payload: Number.POSITIVE_INFINITY, requiredCookiesPresent: false, readCatalog: null },
-    { kind: "payload", payload: Number.NaN, requiredCookiesPresent: false, readCatalog: null },
+    { kind: "payload", payload: Number.POSITIVE_INFINITY, requiredCookiesPresent: false, readSessionProof: null },
+    { kind: "payload", payload: Number.NaN, requiredCookiesPresent: false, readSessionProof: null },
   ]) });
   assert.deepEqual(nonJsonNumber.targets.map((target) => target.rootKind), [null, null]);
 });
@@ -116,8 +116,8 @@ test("diagnostic rejects non-JSON and reflective root values with exact null tar
   ];
   for (const [name, value] of samples) {
     const report = await diagnoseJumboSessionEnvelopes({ http: fakeHttp([
-      { kind: "payload", payload: value, requiredCookiesPresent: false, readCatalog: null },
-      { kind: "payload", payload: value, requiredCookiesPresent: false, readCatalog: null },
+      { kind: "payload", payload: value, requiredCookiesPresent: false, readSessionProof: null },
+      { kind: "payload", payload: value, requiredCookiesPresent: false, readSessionProof: null },
     ]) });
     assert.deepEqual(report.targets, [invalidDiagnosticTarget("CP1425"), invalidDiagnosticTarget("CP5000")], name);
   }
@@ -129,8 +129,8 @@ test("diagnostic fails closed when approved-path descriptors throw", async () =>
     getOwnPropertyDescriptor: (_target, property) => { if (property === key) throw new Error(secret); return undefined; } });
   const nested = { namespaces: descriptorTrap("public") };
   const report = await diagnoseJumboSessionEnvelopes({ http: fakeHttp([
-    { kind: "payload", payload: descriptorTrap("namespaces"), requiredCookiesPresent: false, readCatalog: null },
-    { kind: "payload", payload: nested, requiredCookiesPresent: false, readCatalog: null },
+    { kind: "payload", payload: descriptorTrap("namespaces"), requiredCookiesPresent: false, readSessionProof: null },
+    { kind: "payload", payload: nested, requiredCookiesPresent: false, readSessionProof: null },
   ]) });
   assert.deepEqual(report.targets, [invalidDiagnosticTarget("CP1425"), invalidDiagnosticTarget("CP5000")]);
   assert.equal(JSON.stringify(report).includes(secret), false);
@@ -141,22 +141,22 @@ test("diagnostic reads only own data descriptors and fails closed for repeated e
   const accessorRoot = {};
   Object.defineProperty(accessorRoot, "namespaces", { enumerable: true, get: () => { getterReads += 1; throw new Error("getter"); } });
   const accessorReport = await diagnoseJumboSessionEnvelopes({ http: fakeHttp([
-    { kind: "payload", payload: accessorRoot, requiredCookiesPresent: false, readCatalog: null },
-    { kind: "payload", payload: accessorRoot, requiredCookiesPresent: false, readCatalog: null },
+    { kind: "payload", payload: accessorRoot, requiredCookiesPresent: false, readSessionProof: null },
+    { kind: "payload", payload: accessorRoot, requiredCookiesPresent: false, readSessionProof: null },
   ]) });
   assert.equal(getterReads, 0);
   assert.deepEqual(accessorReport.targets.map((target) => target.facts), [missingFacts, missingFacts]);
 
   const cyclic: { namespaces?: unknown } = {}; cyclic.namespaces = cyclic;
   const cycleReport = await diagnoseJumboSessionEnvelopes({ http: fakeHttp([
-    { kind: "payload", payload: cyclic, requiredCookiesPresent: false, readCatalog: null },
-    { kind: "payload", payload: cyclic, requiredCookiesPresent: false, readCatalog: null },
+    { kind: "payload", payload: cyclic, requiredCookiesPresent: false, readSessionProof: null },
+    { kind: "payload", payload: cyclic, requiredCookiesPresent: false, readSessionProof: null },
   ]) });
   assert.deepEqual(cycleReport.targets.map((target) => target.facts), [missingFacts, missingFacts]);
 
   const repeatedReport = await diagnoseJumboSessionEnvelopes({ http: { async openSession({ postalCode }) {
     const value = { value: postalCode }; const namespaces = { public: { postalCode: value }, checkout: { regionId: value } };
-    return { kind: "payload", payload: { namespaces }, requiredCookiesPresent: false, readCatalog: null };
+    return { kind: "payload", payload: { namespaces }, requiredCookiesPresent: false, readSessionProof: null };
   } } });
   assert.deepEqual(repeatedReport.targets.map((target) => target.facts?.namespacesCheckoutRegionIdKind), ["missing", "missing"]);
   assert.deepEqual(repeatedReport.targets.map((target) => target.facts?.namespacesCheckoutRegionIdValueKind), ["missing", "missing"]);
