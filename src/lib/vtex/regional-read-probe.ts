@@ -376,3 +376,120 @@ export async function probeJumboRegionalEan(options: { ean: string; signal?: Abo
     warningCodes: ordered(targets.flatMap((item) => item.warningCodes), warningOrder),
     failureCodes: ordered([...targets.flatMap((item) => item.failureCodes), ...aggregateFailures], failureOrder), targets };
 }
+
+export type JsonKind = "object" | "array" | "string" | "number" | "boolean" | "null";
+export type ExpectedPathKind = JsonKind | "missing";
+export type SessionEnvelopeFacts = {
+  namespacesKind: ExpectedPathKind;
+  namespacesPublicKind: ExpectedPathKind;
+  namespacesPublicPostalCodeKind: ExpectedPathKind;
+  namespacesPublicPostalCodeValueKind: ExpectedPathKind;
+  namespacesPublicPostalCodeValueMatchesTarget: boolean | null;
+  namespacesCheckoutKind: ExpectedPathKind;
+  namespacesCheckoutRegionIdKind: ExpectedPathKind;
+  namespacesCheckoutRegionIdValueKind: ExpectedPathKind;
+  namespacesCheckoutRegionIdValueIsNonEmptyString: boolean | null;
+};
+export type SessionEnvelopeDiagnosticTarget = {
+  postalCode: "CP1425" | "CP5000";
+  rootKind: JsonKind | null;
+  facts: SessionEnvelopeFacts | null;
+};
+export type SessionEnvelopeDiagnosticReport = {
+  schemaVersion: 1;
+  targets: [SessionEnvelopeDiagnosticTarget, SessionEnvelopeDiagnosticTarget];
+};
+const primitiveJsonKinds: Readonly<Record<string, JsonKind>> = { string: "string", boolean: "boolean" };
+type Inspection<T> = { kind: "value"; value: T } | { kind: "failed" };
+type DiagnosticField = Inspection<unknown> | { kind: "missing" };
+function inspectedJsonKind(value: unknown): Inspection<JsonKind | null> {
+  try {
+    if (value === null) return { kind: "value", value: "null" };
+    const type = typeof value;
+    if (type === "number") return { kind: "value", value: Number.isFinite(value) ? "number" : null };
+    if (type !== "object") return { kind: "value", value: primitiveJsonKinds[type] ?? null };
+    if (Array.isArray(value)) return { kind: "value", value: "array" };
+    const prototype = Object.getPrototypeOf(value);
+    return { kind: "value", value: prototype === Object.prototype || prototype === null ? "object" : null };
+  } catch { return { kind: "failed" }; }
+}
+function jsonKind(value: unknown): JsonKind | null {
+  const result = inspectedJsonKind(value);
+  return result.kind === "value" ? result.value : null;
+}
+function expectedKind(value: unknown): ExpectedPathKind | null {
+  const result = inspectedJsonKind(value);
+  return result.kind === "value" ? result.value ?? "missing" : null;
+}
+function rememberExpectedObject(value: unknown, seen: WeakSet<object>): Inspection<boolean> {
+  const kind = inspectedJsonKind(value);
+  if (kind.kind === "failed") return kind;
+  if (kind.value !== "object") return { kind: "value", value: true };
+  try {
+    const object = value as object;
+    if (seen.has(object)) return { kind: "value", value: false };
+    seen.add(object);
+    return { kind: "value", value: true };
+  } catch { return { kind: "failed" }; }
+}
+function diagnosticField(parent: unknown, key: string, seen: WeakSet<object>): DiagnosticField {
+  const parentKind = inspectedJsonKind(parent);
+  if (parentKind.kind === "failed") return parentKind;
+  if (parentKind.value !== "object") return { kind: "missing" };
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(parent, key);
+    if (!descriptor || !("value" in descriptor)) return { kind: "missing" };
+    const remembered = rememberExpectedObject(descriptor.value, seen);
+    if (remembered.kind === "failed") return remembered;
+    return remembered.value ? { kind: "value", value: descriptor.value } : { kind: "missing" };
+  } catch { return { kind: "failed" }; }
+}
+function fieldValue(field: DiagnosticField): unknown { return field.kind === "value" ? field.value : undefined; }
+function inspectSessionEnvelope(payload: unknown, postalCode: "1425" | "5000"): SessionEnvelopeDiagnosticTarget["facts"] {
+  const seen = new WeakSet<object>(); const remembered = rememberExpectedObject(payload, seen);
+  if (remembered.kind === "failed" || !remembered.value) return null;
+  const namespaces = diagnosticField(payload, "namespaces", seen);
+  const publicNamespace = diagnosticField(fieldValue(namespaces), "public", seen);
+  const postalCodeField = diagnosticField(fieldValue(publicNamespace), "postalCode", seen);
+  const postalCodeValue = diagnosticField(fieldValue(postalCodeField), "value", seen);
+  const checkoutNamespace = diagnosticField(fieldValue(namespaces), "checkout", seen);
+  const regionIdField = diagnosticField(fieldValue(checkoutNamespace), "regionId", seen);
+  const regionIdValue = diagnosticField(fieldValue(regionIdField), "value", seen);
+  const fields = [namespaces, publicNamespace, postalCodeField, postalCodeValue, checkoutNamespace, regionIdField, regionIdValue];
+  if (fields.some((field) => field.kind === "failed")) return null;
+  const values = fields.map(fieldValue);
+  const kinds = values.map(expectedKind);
+  if (kinds.some((kind) => kind === null)) return null;
+  return {
+    namespacesKind: kinds[0]!, namespacesPublicKind: kinds[1]!, namespacesPublicPostalCodeKind: kinds[2]!,
+    namespacesPublicPostalCodeValueKind: kinds[3]!, namespacesPublicPostalCodeValueMatchesTarget: typeof values[3] === "string" ? values[3] === postalCode : null,
+    namespacesCheckoutKind: kinds[4]!, namespacesCheckoutRegionIdKind: kinds[5]!,
+    namespacesCheckoutRegionIdValueKind: kinds[6]!,
+    namespacesCheckoutRegionIdValueIsNonEmptyString: typeof values[6] === "string" ? values[6].length > 0 : null,
+  };
+}
+async function diagnoseSessionEnvelopeTarget(
+  http: RegionalProbeHttp, postalCode: "1425" | "5000", signal: AbortSignal,
+): Promise<SessionEnvelopeDiagnosticTarget> {
+  const label = `CP${postalCode}` as "CP1425" | "CP5000";
+  if (signal.aborted) abort();
+  const session = await http.openSession({ postalCode, timeoutMs: 10000, signal });
+  if (signal.aborted) abort();
+  if (session.kind !== "payload") return { postalCode: label, rootKind: null, facts: null };
+  const rootKind = jsonKind(session.payload);
+  if (rootKind === null) return { postalCode: label, rootKind: null, facts: null };
+  const facts = inspectSessionEnvelope(session.payload, postalCode);
+  return facts === null
+    ? { postalCode: label, rootKind: null, facts: null }
+    : { postalCode: label, rootKind, facts };
+}
+export async function diagnoseJumboSessionEnvelopes(
+  options: { signal?: AbortSignal; http?: RegionalProbeHttp } = {},
+): Promise<SessionEnvelopeDiagnosticReport> {
+  const signal = options.signal ?? new AbortController().signal;
+  const http = options.http ?? defaultRegionalProbeHttp;
+  const first = await diagnoseSessionEnvelopeTarget(http, "1425", signal);
+  const second = await diagnoseSessionEnvelopeTarget(http, "5000", signal);
+  if (signal.aborted) abort();
+  return { schemaVersion: 1, targets: [first, second] };
+}
