@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createRegionalProbeHttp } from "@/lib/vtex/regional-read-probe";
+import {
+  createRegionalProbeHttp, probeJumboRegionalEan,
+  type ProbeSessionResult, type RegionalProbeHttp,
+} from "@/lib/vtex/regional-read-probe";
 const bytes = (value: string) => new TextEncoder().encode(value);
 const ok = (headers: Readonly<Record<string, unknown>> = {}) => ({
   status: 200, data: bytes('{"safe":true}'), headers,
@@ -189,4 +192,194 @@ test("safe values exclude cookie, header, non-2xx body, and rejection URL sentin
   const result = await catalog({ status: 503, data: bytes(secrets[3]), headers: { location: secrets[4] } });
   assert.deepEqual(result, { kind: "transport_error" });
   assert.equal(secrets.includes(result.kind), false);
+});
+const sessionPayload = (postalCode: string, regionId: unknown) => ({ namespaces: {
+  public: { postalCode: { value: postalCode } }, checkout: { regionId: { value: regionId } },
+} });
+const highHttp = (make: (postalCode: "1425" | "5000") => ProbeSessionResult | Promise<ProbeSessionResult>): RegionalProbeHttp => ({
+  openSession: ({ postalCode }) => Promise.resolve(make(postalCode)),
+});
+const usable = (postalCode: "1425" | "5000", region: string, payload: unknown): ProbeSessionResult => ({
+  kind: "payload", payload: sessionPayload(postalCode, region), requiredCookiesPresent: true,
+  readCatalog: async () => ({ kind: "payload", payload }),
+});
+test("core validates once and evaluates fixed targets sequentially with literal timeout", async () => {
+  const calls: string[] = []; let clocks = 0;
+  const http: RegionalProbeHttp = { async openSession(input) {
+    calls.push(`s${input.postalCode}:${input.timeoutMs}`);
+    return { kind: "payload", payload: sessionPayload(input.postalCode, `r${input.postalCode}`), requiredCookiesPresent: true,
+      readCatalog: async (catalogInput) => { calls.push(`c${input.postalCode}:${catalogInput.ean}:${catalogInput.timeoutMs}`); return { kind: "payload", payload: [] }; } };
+  } };
+  const report = await probeJumboRegionalEan({ ean: "00123456", http, now: () => { clocks += 1; return new Date("2026-01-02T03:04:05Z"); } });
+  assert.equal(clocks, 1); assert.deepEqual(calls, ["s1425:10000", "c1425:00123456:10000", "s5000:10000", "c5000:00123456:10000"]);
+  assert.deepEqual([report.schemaVersion, report.observedAt, report.retailer, report.ean, report.outcome], [1, "2026-01-02T03:04:05.000Z", "jumbo", "00123456", "confirmed_absent"]);
+  assert.deepEqual(report.targets.map((target) => target.postalCode), ["CP1425", "CP5000"]);
+  for (const ean of ["1234567", "123456789012345", "１２３４５６７８", "1234567x"]) await assert.rejects(probeJumboRegionalEan({ ean, http }));
+});
+test("recognized session proofs fail independently and suppress only their catalog", async () => {
+  const cases = [
+    [sessionPayload("wrong", "r1"), true, "context_unresolved", "postal_code_unconfirmed"],
+    [sessionPayload("1425", "r1"), false, "context_unresolved", "required_cookies_unconfirmed"],
+    [sessionPayload("1425", null), true, "context_unresolved", "region_id_unconfirmed"],
+    [{ unknown: true }, true, "parse_error", "session_payload_uninspectable"],
+  ] as const;
+  for (const [payload, requiredCookiesPresent, outcome, code] of cases) {
+    let catalogs = 0;
+    const readCatalog = async () => { catalogs += 1; return { kind: "payload" as const, payload: [] }; };
+    const report = await probeJumboRegionalEan({ ean: "12345678", http: highHttp((postalCode) => postalCode === "1425"
+      ? { kind: "payload", payload, requiredCookiesPresent, readCatalog }
+      : { ...usable("5000", "r2", []), readCatalog }) });
+    assert.equal(catalogs, 1); assert.equal(report.targets[0].outcome, outcome);
+    assert.deepEqual(report.targets[0].failureCodes, [code]); assert.equal(report.targets[1].outcome, "confirmed_absent");
+  }
+});
+test("closed session failures map by stage and both targets continue", async () => {
+  const cases = [["rate_limited", "rate_limited", "session_rate_limited"], ["timeout", "transport_error", "session_timeout"],
+    ["transport_error", "transport_error", "session_transport_failed"], ["parse_error", "parse_error", "session_payload_uninspectable"]] as const;
+  for (const [kind, outcome, code] of cases) {
+    let calls = 0; const report = await probeJumboRegionalEan({ ean: "12345678", http: highHttp(() => { calls += 1; return { kind }; }) });
+    assert.equal(calls, 2); assert.equal(report.outcome, outcome); assert.deepEqual(report.targets[0].failureCodes, [code]);
+  }
+  await assert.rejects(probeJumboRegionalEan({ ean: "12345678", http: highHttp(() => ({ kind: "aborted" })) }));
+  const controller = new AbortController(); controller.abort(); await assert.rejects(probeJumboRegionalEan({ ean: "12345678", http: highHttp(() => usable("1425", "r", [])), signal: controller.signal }));
+});
+const sku = (ean: unknown, price: unknown = 10, listPrice: unknown = 20, extra: Record<string, unknown> = {}) => ({
+  itemId: `sku-${String(ean)}`, ean, sellers: [{ sellerDefault: true, commertialOffer: { Price: price, ListPrice: listPrice } }], ...extra,
+});
+const product = (ean: unknown, items: unknown, productId = "product") => ({ productId, ean, items });
+const probePayloads = (first: unknown, second: unknown = []) => probeJumboRegionalEan({ ean: "00123456", http: highHttp((postalCode) =>
+  usable(postalCode, postalCode === "1425" ? "north" : "south", postalCode === "1425" ? first : second)),
+  now: () => new Date("2026-02-03T04:05:06Z"),
+});
+test("catalog traverses every exact candidate and retains found over malformed siblings", async () => {
+  const report = await probePayloads([
+    product("other", [sku("other"), sku("00123456", 10, 50)], "p1"),
+    { productId: "p2", referenceId: [{ value: "00123456" }], items: [sku("different")] },
+    { productId: "p3", EAN: "different", items: [{ itemId: "s3", referenceId: [{ Value: "00123456" }], sellers: [{ sellerDefault: true, commercialOffer: { Price: 7, ListPrice: 7 } }] }] },
+    null,
+  ]);
+  assert.equal(report.outcome, "found");
+  assert.deepEqual(report.targets[0].exactMatches, [
+    { productId: "p1", skuId: "sku-00123456", ean: "00123456", price: 10, listPrice: 50, warningCodes: [] },
+    { productId: "p2", skuId: null, ean: "00123456", price: null, listPrice: null, warningCodes: ["exact_ean_without_sku_match"] },
+    { productId: "p3", skuId: "s3", ean: "00123456", price: 7, listPrice: 7, warningCodes: [] },
+  ]);
+  assert.deepEqual(report.targets[0].failureCodes, ["catalog_payload_uninspectable"]);
+  assert.deepEqual(report.warningCodes, ["exact_ean_without_sku_match"]);
+});
+test("price evidence uses one default seller and closed warning rules", async () => {
+  const cases = [
+    [sku("00123456", 3050, 252066), 3050, null, "list_price_unusable"],
+    [sku("00123456", 5, 25), 5, 25, null],
+    [sku("00123456", 5, 4), 5, null, "list_price_unusable"],
+    [sku("00123456", 0, 2), null, null, "selling_price_unusable"],
+    [sku("00123456", 5, 10, { sellers: [] }), null, null, "primary_default_seller_unavailable"],
+    [sku("00123456", 5, 10, { sellers: [{ sellerDefault: true, commertialOffer: { Price: 5, ListPrice: 10 } }, { sellerDefault: true, commertialOffer: { Price: 6, ListPrice: 12 } }] }), null, null, "primary_default_seller_unavailable"],
+  ] as const;
+  for (const [item, price, listPrice, warning] of cases) {
+    const report = await probePayloads([product("other", [item])]); const match = report.targets[0].exactMatches[0];
+    assert.equal(report.outcome, "found"); assert.deepEqual([match.price, match.listPrice], [price, listPrice]);
+    assert.deepEqual(match.warningCodes, warning ? [warning] : []);
+  }
+});
+test("trustworthy absence and malformed envelopes fail closed", async () => {
+  const inspectable = [product("other-product", [sku("other-sku")])];
+  assert.equal((await probePayloads(inspectable, inspectable)).outcome, "confirmed_absent");
+  for (const payload of [{ products: [] }, [null], [product("other", null)], [product("other", [{ itemId: "x", ean: 7 }])],
+    [{ productId: "p", referenceId: {}, items: [sku("other")] }], [product("other", [{ itemId: "s", referenceId: {} }])],
+    [{ productId: "p", referenceId: [null], items: [sku("other")] }], [product("other", [{ itemId: "s", referenceId: [null] }])],
+    [{ productId: "p", referenceId: [{ Value: 7 }], items: [sku("other")] }], [product("other", [{ itemId: "s", referenceId: [{ value: 7 }] }])]]) {
+    const report = await probePayloads(payload); assert.equal(report.targets[0].outcome, "parse_error");
+    assert.deepEqual(report.targets[0].failureCodes, ["catalog_payload_uninspectable"]);
+  }
+  const hostile = new Proxy({}, { getPrototypeOf() { throw new Error("opaque"); } });
+  assert.equal((await probePayloads([hostile])).targets[0].outcome, "parse_error");
+});
+test("aggregation is found-first, distinct-region strict, and precedence ordered", async () => {
+  const found = [product("other", [sku("00123456")])];
+  for (const kind of ["rate_limited", "timeout", "parse_error", "context"] as const) {
+    const report = await probeJumboRegionalEan({ ean: "00123456", http: highHttp((postalCode) => postalCode === "1425" ? usable("1425", "same", found)
+      : kind === "context" ? { kind: "payload", payload: sessionPayload("5000", "other"), requiredCookiesPresent: false, readCatalog: null } : { kind }) });
+    assert.equal(report.outcome, "found");
+  }
+  const sameFound = await probeJumboRegionalEan({ ean: "00123456", http: highHttp((postalCode) => usable(postalCode, "same", postalCode === "1425" ? found : [])) });
+  assert.equal(sameFound.outcome, "found"); assert.deepEqual(sameFound.targets.map((target) => target.outcome), ["found", "confirmed_absent"]);
+  const same = await probeJumboRegionalEan({ ean: "00123456", http: highHttp((postalCode) => usable(postalCode, "same", [])) });
+  assert.equal(same.outcome, "context_unresolved"); assert.deepEqual(same.failureCodes, ["regions_not_distinct"]);
+  assert.deepEqual(same.targets.map((target) => target.failureCodes), [[], []]);
+  const precedence = [["rate_limited", "timeout", "rate_limited"], ["rate_limited", "parse_error", "rate_limited"],
+    ["rate_limited", "context", "rate_limited"], ["timeout", "parse_error", "transport_error"],
+    ["timeout", "context", "transport_error"], ["parse_error", "context", "parse_error"]] as const;
+  for (const [left, right, expected] of precedence) for (const reverse of [false, true]) {
+    const report = await probeJumboRegionalEan({ ean: "00123456", http: highHttp((postalCode) => {
+      const kind = (postalCode === "1425") !== reverse ? left : right;
+      return kind === "context" ? { kind: "payload", payload: sessionPayload(postalCode, `r${postalCode}`), requiredCookiesPresent: false, readCatalog: null } : { kind };
+    }) }); assert.equal(report.outcome, expected);
+  }
+});
+test("report schema and factory-backed serialization exclude generated sentinels", async () => {
+  const secrets = ["cookie", "segment", "header", "payload", "error", "transport"].map((part, index) => `${part}-stack2-${index}-${"q".repeat(index + 1)}`);
+  let calls = 0;
+  const http = createRegionalProbeHttp(async (config) => {
+    calls += 1;
+    if (calls === 1) return { status: 200, data: bytes(JSON.stringify({ ...sessionPayload("1425", "region-a"), unrelated: secrets[3] })),
+      headers: { ...cookies(secrets[0], secrets[1]), "x-generated": secrets[2] } };
+    if (calls === 2) return { status: 200, data: bytes(JSON.stringify([product("other", [sku("00123456"), { itemId: secrets[5], ean: "other" }])])), headers: {} };
+    const error = Object.defineProperty({ message: secrets[4], url: secrets[5] }, "code", { value: "NETWORK" }); throw error;
+  });
+  const report = await probeJumboRegionalEan({ ean: "00123456", http, now: () => new Date("2026-03-04T05:06:07Z") });
+  assert.equal(report.outcome, "found"); assert.equal(calls, 3);
+  assert.deepEqual(Object.keys(report), ["schemaVersion", "observedAt", "retailer", "ean", "outcome", "warningCodes", "failureCodes", "targets"]);
+  assert.deepEqual(Object.keys(report.targets[0]), ["postalCode", "outcome", "acceptedPostalCode", "requiredCookiesPresent", "regionId", "exactMatches", "warningCodes", "failureCodes"]);
+  assert.deepEqual(Object.keys(report.targets[0].exactMatches[0]), ["productId", "skuId", "ean", "price", "listPrice", "warningCodes"]);
+  const serialized = JSON.stringify(report); for (const secret of secrets) { assert.equal(serialized.includes(secret), false); assert.equal(JSON.stringify(report).includes(secret), false); }
+  assert.equal(/stock|availability|sellerId|url/i.test(serialized), false);
+});
+test("catalog failures retain context proof and use stage-specific closed codes", async () => {
+  const cases = [
+    ["rate_limited", "rate_limited", "catalog_rate_limited"],
+    ["timeout", "transport_error", "catalog_timeout"],
+    ["transport_error", "transport_error", "catalog_transport_failed"],
+    ["parse_error", "parse_error", "catalog_payload_uninspectable"],
+  ] as const;
+  for (const [kind, outcome, code] of cases) {
+    const report = await probeJumboRegionalEan({ ean: "00123456", http: highHttp((postalCode) => ({
+      kind: "payload", payload: sessionPayload(postalCode, `region-${postalCode}`), requiredCookiesPresent: true,
+      readCatalog: async () => ({ kind }),
+    })) });
+    assert.equal(report.outcome, outcome);
+    assert.deepEqual(report.targets[0], {
+      postalCode: "CP1425", outcome, acceptedPostalCode: true, requiredCookiesPresent: true,
+      regionId: "region-1425", exactMatches: [], warningCodes: [], failureCodes: [code],
+    });
+  }
+});
+test("warning and failure unions are closed, ordered, and duplicate-free", async () => {
+  const payload = [product("other", [
+    sku("00123456", 0, 1),
+    sku("00123456", 1, 99),
+    sku("00123456", 1, 2, { sellers: [] }),
+  ]), { productId: "only-product", ean: "00123456", items: [sku("other")] }, null];
+  const report = await probePayloads(payload, payload);
+  assert.deepEqual(report.warningCodes, [
+    "exact_ean_without_sku_match", "primary_default_seller_unavailable",
+    "selling_price_unusable", "list_price_unusable",
+  ]);
+  assert.deepEqual(report.failureCodes, ["catalog_payload_uninspectable"]);
+  assert.equal(new Set(report.warningCodes).size, report.warningCodes.length);
+  assert.equal(new Set(report.failureCodes).size, report.failureCodes.length);
+});
+test("session allowlist rejects alternate paths and clock validation makes no request", async () => {
+  let calls = 0;
+  const alternate = { public: { postalCode: { value: "1425" } }, namespaces: {
+    public: {}, checkout: { postalCode: { value: "1425" }, regionId: { value: "region" } },
+  } };
+  const report = await probeJumboRegionalEan({ ean: "12345678", http: highHttp(() => {
+    calls += 1; return { kind: "payload", payload: alternate, requiredCookiesPresent: true, readCatalog: null };
+  }) });
+  assert.equal(calls, 2); assert.equal(report.targets[0].outcome, "context_unresolved");
+  assert.deepEqual(report.targets[0].failureCodes, ["postal_code_unconfirmed"]);
+  calls = 0;
+  await assert.rejects(probeJumboRegionalEan({ ean: "12345678", now: () => new Date(Number.NaN), http: highHttp(() => { calls += 1; return { kind: "transport_error" }; }) }));
+  assert.equal(calls, 0);
 });
