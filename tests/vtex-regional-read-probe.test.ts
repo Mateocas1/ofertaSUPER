@@ -23,12 +23,14 @@ const open = async (
 ) => createRegionalProbeHttp(request).openSession({ postalCode, timeoutMs: 10000, signal });
 const catalog = async (response: unknown) => {
   let calls = 0;
-  const session = await open(async () => ++calls === 1 ? ok(cookies("session", "segment")) : response as never);
+  const session = await open(async () => ++calls === 1 ? ok(cookies("session", "segment")) : calls === 2 ? ok() : response as never);
   assert.equal(session.kind, "payload");
-  if (session.kind !== "payload" || !session.readCatalog) throw new Error("catalog closure missing");
-  return session.readCatalog({ ean: "00123456", timeoutMs: 10000, signal: new AbortController().signal });
+  if (session.kind !== "payload" || !session.readSessionProof) throw new Error("proof closure missing");
+  const proof = await session.readSessionProof({ timeoutMs: 10000, signal: new AbortController().signal });
+  if (proof.kind !== "payload" || !proof.readCatalog) throw new Error("catalog closure missing");
+  return proof.readCatalog({ ean: "00123456", timeoutMs: 10000, signal: new AbortController().signal });
 };
-test("factory emits exact session and catalog configs with one request per operation", async () => {
+test("factory emits exact POST, proof GET, and catalog configs with one request per operation", async () => {
   const configs: Array<Record<string, unknown>> = [];
   const signal = new AbortController().signal;
   const http = createRegionalProbeHttp(async (config) => {
@@ -39,10 +41,14 @@ test("factory emits exact session and catalog configs with one request per opera
   assert.equal(session.kind, "payload");
   if (session.kind !== "payload") return;
   assert.equal(session.requiredCookiesPresent, true);
-  assert.ok(session.readCatalog);
-  const catalog = await session.readCatalog({ ean: "0012345678901", timeoutMs: 10000, signal });
+  assert.ok(session.readSessionProof);
+  const proof = await session.readSessionProof({ timeoutMs: 10000, signal });
+  assert.equal(proof.kind, "payload");
+  if (proof.kind !== "payload") return;
+  assert.ok(proof.readCatalog);
+  const catalog = await proof.readCatalog({ ean: "0012345678901", timeoutMs: 10000, signal });
   assert.deepEqual(catalog, { kind: "payload", payload: { safe: true } });
-  assert.equal(configs.length, 2);
+  assert.equal(configs.length, 3);
   const common = {
     timeout: 10000,
     signal,
@@ -67,16 +73,17 @@ test("factory emits exact session and catalog configs with one request per opera
   assert.equal((configs[0].validateStatus as (status: number) => boolean)(599), true);
   assert.deepEqual(configs[1], {
     method: "GET",
+    url: "https://www.jumbo.com.ar/api/sessions?items=public.postalCode,checkout.regionId",
+    headers: { accept: "application/json", origin: "https://www.jumbo.com.ar", referer: "https://www.jumbo.com.ar/",
+      "user-agent": "Mozilla/5.0 (compatible; ofertaSUPER regional read probe/1.0)", cookie: "vtex_session=session=part" },
+    ...common, validateStatus: configs[1].validateStatus,
+  });
+  assert.deepEqual(configs[2], {
+    method: "GET",
     url: "https://www.jumbo.com.ar/api/catalog_system/pub/products/search?fq=alternateIds_Ean:0012345678901",
-    headers: {
-      accept: "application/json",
-      origin: "https://www.jumbo.com.ar",
-      referer: "https://www.jumbo.com.ar/",
-      "user-agent": "Mozilla/5.0 (compatible; ofertaSUPER regional read probe/1.0)",
-      cookie: "vtex_session=session=part; vtex_segment=segment",
-    },
-    ...common,
-    validateStatus: configs[1].validateStatus,
+    headers: { accept: "application/json", origin: "https://www.jumbo.com.ar", referer: "https://www.jumbo.com.ar/",
+      "user-agent": "Mozilla/5.0 (compatible; ofertaSUPER regional read probe/1.0)", cookie: "vtex_session=session=part; vtex_segment=segment" },
+    ...common, validateStatus: configs[2].validateStatus,
   });
 });
 test("cookie parsing fails closed for ineligible separate-header forms", async () => {
@@ -94,7 +101,7 @@ test("cookie parsing fails closed for ineligible separate-header forms", async (
     assert.equal(result.kind, "payload");
     if (result.kind === "payload") {
       assert.equal(result.requiredCookiesPresent, false);
-      assert.equal(result.readCatalog, null);
+      assert.equal(result.readSessionProof, null);
     }
   }
 });
@@ -131,29 +138,36 @@ test("invalid runtime response and header shapes fail closed", async () => {
   assert.deepEqual(await open(async () => hostile as never), { kind: "transport_error" });
   for (const headers of [null, hostile, { "set-cookie": new Proxy([], { get() { throw new Error("hostile lines"); } }) }])
     assert.deepEqual(await open(async () => ({ status: 200, data: bytes("{}"), headers }) as never), {
-      kind: "payload", payload: {}, requiredCookiesPresent: false, readCatalog: null,
+      kind: "payload", payload: {}, requiredCookiesPresent: false, readSessionProof: null,
     });
 });
-test("catalog closures retain only their own final cookie pair", async () => {
-  const catalogCookies: string[] = [];
+const cookieRetentionHttp = (requestCookies: string[]) => {
   let sessions = 0;
-  const http = createRegionalProbeHttp(async (config) => {
-    if (config.method === "POST") {
-      sessions += 1;
-      assert.equal(config.data, `{"public":{"country":{"value":"ARG"},"postalCode":{"value":"${sessions === 1 ? "1425" : "5000"}"}}}`);
-      return ok(cookies(`session${sessions}=tail`, `segment${sessions}`));
+  return createRegionalProbeHttp(async (config) => {
+    if (config.method !== "POST") {
+      requestCookies.push(config.headers.cookie);
+      return ok();
     }
-    catalogCookies.push(config.headers.cookie);
-    return ok();
+    sessions += 1;
+    const postalCode = sessions === 1 ? "1425" : "5000";
+    assert.equal(config.data, `{"public":{"country":{"value":"ARG"},"postalCode":{"value":"${postalCode}"}}}`);
+    return ok(cookies(`session${sessions}=tail`, `segment${sessions}`));
   });
+};
+test("catalog closures retain only their own final cookie pair", async () => {
+  const requestCookies: string[] = [];
+  const http = cookieRetentionHttp(requestCookies);
   const signal = new AbortController().signal;
   const first = await http.openSession({ postalCode: "1425", timeoutMs: 10000, signal });
   const second = await http.openSession({ postalCode: "5000", timeoutMs: 10000, signal });
   assert.equal(first.kind, "payload"); assert.equal(second.kind, "payload");
   if (first.kind !== "payload" || second.kind !== "payload") return;
-  await first.readCatalog?.({ ean: "00123456", timeoutMs: 10000, signal });
-  await second.readCatalog?.({ ean: "00123456", timeoutMs: 10000, signal });
-  assert.deepEqual(catalogCookies, [
+  const firstProof = await first.readSessionProof?.({ timeoutMs: 10000, signal });
+  const secondProof = await second.readSessionProof?.({ timeoutMs: 10000, signal });
+  if (firstProof?.kind === "payload") await firstProof.readCatalog({ ean: "00123456", timeoutMs: 10000, signal });
+  if (secondProof?.kind === "payload") await secondProof.readCatalog({ ean: "00123456", timeoutMs: 10000, signal });
+  assert.deepEqual(requestCookies, [
+        "vtex_session=session1=tail", "vtex_session=session2=tail",
     "vtex_session=session1=tail; vtex_segment=segment1",
     "vtex_session=session2=tail; vtex_segment=segment2",
   ]);
@@ -189,7 +203,7 @@ test("safe values exclude cookie, header, non-2xx body, and rejection URL sentin
   assert.equal(session.kind, "payload");
   if (session.kind !== "payload") return;
   for (const value of [session.kind, (session.payload as { safe: boolean }).safe,
-    session.requiredCookiesPresent, session.readCatalog === null]) assert.equal(secrets.includes(String(value)), false);
+    session.requiredCookiesPresent, session.readSessionProof === null]) assert.equal(secrets.includes(String(value)), false);
   const result = await catalog({ status: 503, data: bytes(secrets[3]), headers: { location: secrets[4] } });
   assert.deepEqual(result, { kind: "transport_error" });
   assert.equal(secrets.includes(result.kind), false);
@@ -201,18 +215,22 @@ const highHttp = (make: (postalCode: "1425" | "5000") => ProbeSessionResult | Pr
   openSession: ({ postalCode }) => Promise.resolve(make(postalCode)),
 });
 const usable = (postalCode: "1425" | "5000", region: string, payload: unknown): ProbeSessionResult => ({
-  kind: "payload", payload: sessionPayload(postalCode, region), requiredCookiesPresent: true,
-  readCatalog: async () => ({ kind: "payload", payload }),
+  kind: "payload", payload: {}, requiredCookiesPresent: true,
+  readSessionProof: async () => ({ kind: "payload", payload: sessionPayload(postalCode, region),
+    readCatalog: async () => ({ kind: "payload", payload }) }),
 });
 test("core validates once and evaluates fixed targets sequentially with literal timeout", async () => {
   const calls: string[] = []; let clocks = 0;
   const http: RegionalProbeHttp = { async openSession(input) {
     calls.push(`s${input.postalCode}:${input.timeoutMs}`);
-    return { kind: "payload", payload: sessionPayload(input.postalCode, `r${input.postalCode}`), requiredCookiesPresent: true,
-      readCatalog: async (catalogInput) => { calls.push(`c${input.postalCode}:${catalogInput.ean}:${catalogInput.timeoutMs}`); return { kind: "payload", payload: [] }; } };
+    return { kind: "payload", payload: {}, requiredCookiesPresent: true,
+      readSessionProof: async (proofInput) => { calls.push(`p${input.postalCode}:${proofInput.timeoutMs}`); return {
+        kind: "payload", payload: sessionPayload(input.postalCode, `r${input.postalCode}`),
+        readCatalog: async (catalogInput) => { calls.push(`c${input.postalCode}:${catalogInput.ean}:${catalogInput.timeoutMs}`); return { kind: "payload", payload: [] }; },
+      }; } };
   } };
   const report = await probeJumboRegionalEan({ ean: "00123456", http, now: () => { clocks += 1; return new Date("2026-01-02T03:04:05Z"); } });
-  assert.equal(clocks, 1); assert.deepEqual(calls, ["s1425:10000", "c1425:00123456:10000", "s5000:10000", "c5000:00123456:10000"]);
+  assert.equal(clocks, 1); assert.deepEqual(calls, ["s1425:10000", "p1425:10000", "c1425:00123456:10000", "s5000:10000", "p5000:10000", "c5000:00123456:10000"]);
   assert.deepEqual([report.schemaVersion, report.observedAt, report.retailer, report.ean, report.outcome], [1, "2026-01-02T03:04:05.000Z", "jumbo", "00123456", "confirmed_absent"]);
   assert.deepEqual(report.targets.map((target) => target.postalCode), ["CP1425", "CP5000"]);
   for (const ean of ["1234567", "123456789012345", "１２３４５６７８", "1234567x"]) await assert.rejects(probeJumboRegionalEan({ ean, http }));
@@ -228,13 +246,32 @@ test("recognized session proofs fail independently and suppress only their catal
     let catalogs = 0;
     const readCatalog = async () => { catalogs += 1; return { kind: "payload" as const, payload: [] }; };
     const report = await probeJumboRegionalEan({ ean: "12345678", http: highHttp((postalCode) => postalCode === "1425"
-      ? { kind: "payload", payload, requiredCookiesPresent, readCatalog }
-      : { ...usable("5000", "r2", []), readCatalog }) });
-    assert.equal(catalogs, 1); assert.equal(report.targets[0].outcome, outcome);
+      ? { kind: "payload", payload: {}, requiredCookiesPresent, readSessionProof: requiredCookiesPresent ? async () => ({ kind: "payload", payload, readCatalog }) : null }
+      : usable("5000", "r2", [])) });
+    assert.equal(catalogs, 0); assert.equal(report.targets[0].outcome, outcome);
     assert.deepEqual(report.targets[0].failureCodes, [code]); assert.equal(report.targets[1].outcome, "confirmed_absent");
   }
 });
-test("closed session failures map by stage and both targets continue", async () => {
+test("proof failures retain session vocabulary and cancellation stops before catalog", async () => {
+   for (const [kind, outcome, code] of [["rate_limited", "rate_limited", "session_rate_limited"],
+     ["timeout", "transport_error", "session_timeout"], ["transport_error", "transport_error", "session_transport_failed"],
+     ["parse_error", "parse_error", "session_payload_uninspectable"]] as const) {
+     let proofs = 0;
+     const report = await probeJumboRegionalEan({ ean: "12345678", http: highHttp(() => ({
+       kind: "payload", payload: {}, requiredCookiesPresent: true,
+       readSessionProof: async () => { proofs += 1; return { kind }; },
+     })) });
+     assert.equal(proofs, 2); assert.equal(report.outcome, outcome); assert.deepEqual(report.targets[0].failureCodes, [code]);
+   }
+   const controller = new AbortController(); let catalogs = 0;
+   await assert.rejects(probeJumboRegionalEan({ ean: "12345678", signal: controller.signal, http: highHttp(() => ({
+     kind: "payload", payload: {}, requiredCookiesPresent: true,
+     readSessionProof: async () => { controller.abort(); return { kind: "payload", payload: sessionPayload("1425", "r"),
+       readCatalog: async () => { catalogs += 1; return { kind: "payload", payload: [] }; } }; },
+   })) }));
+   assert.equal(catalogs, 0);
+ });
+ test("closed session failures map by stage and both targets continue", async () => {
   const cases = [["rate_limited", "rate_limited", "session_rate_limited"], ["timeout", "transport_error", "session_timeout"],
     ["transport_error", "transport_error", "session_transport_failed"], ["parse_error", "parse_error", "session_payload_uninspectable"]] as const;
   for (const [kind, outcome, code] of cases) {
@@ -300,7 +337,7 @@ test("aggregation is found-first, distinct-region strict, and precedence ordered
   const found = [product("other", [sku("00123456")])];
   for (const kind of ["rate_limited", "timeout", "parse_error", "context"] as const) {
     const report = await probeJumboRegionalEan({ ean: "00123456", http: highHttp((postalCode) => postalCode === "1425" ? usable("1425", "same", found)
-      : kind === "context" ? { kind: "payload", payload: sessionPayload("5000", "other"), requiredCookiesPresent: false, readCatalog: null } : { kind }) });
+      : kind === "context" ? { kind: "payload", payload: {}, requiredCookiesPresent: false, readSessionProof: null } : { kind }) });
     assert.equal(report.outcome, "found");
   }
   const sameFound = await probeJumboRegionalEan({ ean: "00123456", http: highHttp((postalCode) => usable(postalCode, "same", postalCode === "1425" ? found : [])) });
@@ -314,7 +351,7 @@ test("aggregation is found-first, distinct-region strict, and precedence ordered
   for (const [left, right, expected] of precedence) for (const reverse of [false, true]) {
     const report = await probeJumboRegionalEan({ ean: "00123456", http: highHttp((postalCode) => {
       const kind = (postalCode === "1425") !== reverse ? left : right;
-      return kind === "context" ? { kind: "payload", payload: sessionPayload(postalCode, `r${postalCode}`), requiredCookiesPresent: false, readCatalog: null } : { kind };
+      return kind === "context" ? { kind: "payload", payload: {}, requiredCookiesPresent: false, readSessionProof: null } : { kind };
     }) }); assert.equal(report.outcome, expected);
   }
 });
@@ -323,13 +360,14 @@ test("report schema and factory-backed serialization exclude generated sentinels
   let calls = 0;
   const http = createRegionalProbeHttp(async (config) => {
     calls += 1;
-    if (calls === 1) return { status: 200, data: bytes(JSON.stringify({ ...sessionPayload("1425", "region-a"), unrelated: secrets[3] })),
+    if (calls === 1) return { status: 200, data: bytes(JSON.stringify({ bootstrap: secrets[3] })),
       headers: { ...cookies(secrets[0], secrets[1]), "x-generated": secrets[2] } };
-    if (calls === 2) return { status: 200, data: bytes(JSON.stringify([product("other", [sku("00123456"), { itemId: secrets[5], ean: "other" }])])), headers: {} };
+    if (calls === 2) return { status: 200, data: bytes(JSON.stringify(sessionPayload("1425", "region-a"))), headers: {} };
+     if (calls === 3) return { status: 200, data: bytes(JSON.stringify([product("other", [sku("00123456"), { itemId: secrets[5], ean: "other" }])])), headers: {} };
     const error = Object.defineProperty({ message: secrets[4], url: secrets[5] }, "code", { value: "NETWORK" }); throw error;
   });
   const report = await probeJumboRegionalEan({ ean: "00123456", http, now: () => new Date("2026-03-04T05:06:07Z") });
-  assert.equal(report.outcome, "found"); assert.equal(calls, 3);
+  assert.equal(report.outcome, "found"); assert.equal(calls, 4);
   assert.deepEqual(Object.keys(report), ["schemaVersion", "observedAt", "retailer", "ean", "outcome", "warningCodes", "failureCodes", "targets"]);
   assert.deepEqual(Object.keys(report.targets[0]), ["postalCode", "outcome", "acceptedPostalCode", "requiredCookiesPresent", "regionId", "exactMatches", "warningCodes", "failureCodes"]);
   assert.deepEqual(Object.keys(report.targets[0].exactMatches[0]), ["productId", "skuId", "ean", "price", "listPrice", "warningCodes"]);
@@ -348,8 +386,8 @@ test("catalog failures retain context proof and use stage-specific closed codes"
   ] as const;
   for (const [kind, outcome, code] of cases) {
     const report = await probeJumboRegionalEan({ ean: "00123456", http: highHttp((postalCode) => ({
-      kind: "payload", payload: sessionPayload(postalCode, `region-${postalCode}`), requiredCookiesPresent: true,
-      readCatalog: async () => ({ kind }),
+      kind: "payload", payload: {}, requiredCookiesPresent: true,
+      readSessionProof: async () => ({ kind: "payload", payload: sessionPayload(postalCode, `region-${postalCode}`), readCatalog: async () => ({ kind }) }),
     })) });
     assert.equal(report.outcome, outcome);
     assert.deepEqual(report.targets[0], {
@@ -379,7 +417,8 @@ test("session allowlist rejects alternate paths and clock validation makes no re
     public: {}, checkout: { postalCode: { value: "1425" }, regionId: { value: "region" } },
   } };
   const report = await probeJumboRegionalEan({ ean: "12345678", http: highHttp(() => {
-    calls += 1; return { kind: "payload", payload: alternate, requiredCookiesPresent: true, readCatalog: null };
+    calls += 1; return { kind: "payload", payload: {}, requiredCookiesPresent: true,
+       readSessionProof: async () => ({ kind: "payload", payload: alternate, readCatalog: async () => ({ kind: "payload", payload: [] }) }) };
   }) });
   assert.equal(calls, 2); assert.equal(report.targets[0].outcome, "context_unresolved");
   assert.deepEqual(report.targets[0].failureCodes, ["postal_code_unconfirmed"]);

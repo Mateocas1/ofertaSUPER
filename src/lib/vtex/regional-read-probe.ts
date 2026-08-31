@@ -44,12 +44,15 @@ export type RegionalProbeReport = {
 };
 type ClosedFailure = { kind: "rate_limited" | "timeout" | "transport_error" | "parse_error" | "aborted" };
 export type ProbePayloadResult = { kind: "payload"; payload: unknown } | ClosedFailure;
+export type ProbeProofResult =
+  | ({ kind: "payload"; payload: unknown; readCatalog: (input: { ean: string; timeoutMs: 10000; signal: AbortSignal }) => Promise<ProbePayloadResult> })
+  | ClosedFailure;
 export type ProbeSessionResult =
   | {
       kind: "payload";
       payload: unknown;
       requiredCookiesPresent: boolean;
-      readCatalog: null | ((input: { ean: string; timeoutMs: 10000; signal: AbortSignal }) => Promise<ProbePayloadResult>);
+      readSessionProof: null | ((input: { timeoutMs: 10000; signal: AbortSignal }) => Promise<ProbeProofResult>);
     }
   | ClosedFailure;
 export interface RegionalProbeHttp {
@@ -195,14 +198,25 @@ export function createRegionalProbeHttp(request: AxiosCompatibleRequest): Region
       return {
         ...result,
         requiredCookiesPresent: cookiePair !== null,
-        readCatalog: cookiePair === null ? null : async ({ ean, signal: catalogSignal }) => {
-          const lookup = buildVtexCatalogSearchRequest({ kind: "ean", value: ean });
-          return perform({
+        readSessionProof: cookiePair === null ? null : async ({ signal: proofSignal }) => {
+          const proof = await perform({
             method: "GET",
-            url: `${origin}${lookup.pathname}?${lookup.search}`,
-            headers: { ...commonHeaders, cookie: `vtex_session=${cookiePair[0]}; vtex_segment=${cookiePair[1]}` },
-            ...commonConfig(catalogSignal),
+            url: `${origin}/api/sessions?items=public.postalCode,checkout.regionId`,
+            headers: { ...commonHeaders, cookie: `vtex_session=${cookiePair[0]}` },
+            ...commonConfig(proofSignal),
           });
+          return proof.kind !== "payload" ? proof : {
+            ...proof,
+            readCatalog: async ({ ean, signal: catalogSignal }) => {
+              const lookup = buildVtexCatalogSearchRequest({ kind: "ean", value: ean });
+              return perform({
+                method: "GET",
+                url: `${origin}${lookup.pathname}?${lookup.search}`,
+                headers: { ...commonHeaders, cookie: `vtex_session=${cookiePair[0]}; vtex_segment=${cookiePair[1]}` },
+                ...commonConfig(catalogSignal),
+              });
+            },
+          };
         },
       };
     },
@@ -346,10 +360,16 @@ async function target(http: RegionalProbeHttp, ean: string, postalCode: "1425" |
   if (signal.aborted) abort();
   const session = await http.openSession({ postalCode, timeoutMs: 10000, signal });
   if (session.kind !== "payload") return failure(session.kind, "session", label);
-  const context = targetContext(session.payload, session.requiredCookiesPresent, postalCode, label);
-  if (!context.canReadCatalog || !session.readCatalog) return context.report;
+  if (!session.requiredCookiesPresent || !session.readSessionProof) return {
+    ...failedTarget(label, "context_unresolved", "required_cookies_unconfirmed"), requiredCookiesPresent: false,
+  };
   if (signal.aborted) abort();
-  const catalog = await session.readCatalog({ ean, timeoutMs: 10000, signal });
+  const proof = await session.readSessionProof({ timeoutMs: 10000, signal });
+  if (proof.kind !== "payload") return failure(proof.kind, "session", label);
+  const context = targetContext(proof.payload, true, postalCode, label);
+  if (!context.canReadCatalog) return context.report;
+  if (signal.aborted) abort();
+  const catalog = await proof.readCatalog({ ean, timeoutMs: 10000, signal });
   if (catalog.kind !== "payload") return { ...failure(catalog.kind, "catalog", label), acceptedPostalCode: true, requiredCookiesPresent: true, regionId: context.report.regionId };
   return inspectCatalog(catalog.payload, ean, context.report);
 }

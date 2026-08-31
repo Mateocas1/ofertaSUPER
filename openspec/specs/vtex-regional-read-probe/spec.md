@@ -33,14 +33,14 @@ The system MUST probe only retailer `jumbo`, exactly the targets `CP1425` and `C
 
 ### Requirement: Bounded Two-Target Execution
 
-Every valid probe invocation MUST evaluate both fixed targets, including after an earlier target is found or fails. For each target, the system MUST make at most one anonymous session request and MUST make at most one exact-EAN catalog request only when that target's context is individually usable. Each live request MUST have a fixed 10-second timeout. The system MUST NOT retry, back off, accept a timeout override, or make more than four live requests in one invocation.
+Every valid probe invocation MUST evaluate both fixed targets, including after an earlier target is found or fails. For each target, the system MUST make at most one anonymous session POST, one session-proof GET, and one exact-EAN catalog GET only after that target's proof is individually usable, in that exact order. Each live request MUST have a fixed 10-second timeout. The system MUST NOT retry, back off, accept a timeout override, or make more than six live requests in one invocation.
 
 #### Scenario: Both usable targets are evaluated
 
 - GIVEN both target session contexts are individually usable
 - WHEN a valid probe completes
-- THEN exactly one session request and one catalog request MAY be made for each target
-- AND no more than four live requests MUST be made
+- THEN exactly one session POST, one session-proof GET, and one catalog GET MAY be made for each target
+- AND no more than six live requests MUST be made
 
 #### Scenario: One target fails or finds the EAN
 
@@ -58,31 +58,32 @@ Every valid probe invocation MUST evaluate both fixed targets, including after a
 
 ### Requirement: Regional Context Proof and Cookie Boundary
 
-A target context MUST be individually usable only when a recognized successful anonymous session response explicitly proves that the submitted postal code was accepted, proves presence of non-empty `vtex_session` and `vtex_segment` cookies, and supplies a non-null, non-empty `checkout.regionId`. Postal-code and region proof MUST come from recognized session evidence; fuzzy, recursive, or unrelated occurrences of the submitted digits MUST NOT qualify. A recognized session envelope lacking any required proof MUST be `context_unresolved`; invalid JSON or a structurally unrecognized successful session envelope MUST be `parse_error`.
+A successful session POST payload is opaque and MUST NOT prove context; it remains available only to the structural diagnostic. A target context MUST be individually usable only when the POST supplies non-empty `vtex_session` and `vtex_segment` cookies and the invocation-local proof closure returns recognized JSON from exactly `GET /api/sessions?items=public.postalCode,checkout.regionId` that explicitly proves the submitted postal code and a non-null, non-empty `checkout.regionId`. The proof GET MUST send only `vtex_session`; the later catalog GET MUST send both cookies. Fuzzy, recursive, or unrelated occurrences MUST NOT qualify. An unrecognized successful proof envelope MUST be `parse_error`; POST and proof failures both use the existing session-stage outcomes and codes.
 
-Cookie values MUST remain invocation-local transport secrets. They MUST be used only for the corresponding target's catalog request and MUST NOT be reused across targets, logged, hashed, reported, persisted, placed in fixtures, included in serializable errors, or retained after the invocation.
+Cookie values MUST remain invocation-local transport secrets. For the corresponding target only, `vtex_session` MAY be used for the proof GET and both `vtex_session` and `vtex_segment` MAY be used for the catalog GET. Neither cookie MAY be reused across targets, logged, hashed, reported, persisted, placed in fixtures, included in serializable errors, or retained after the invocation.
 
 #### Scenario: Complete context proof
 
-- GIVEN a recognized session response explicitly accepts the submitted target
-- AND non-empty `vtex_session` and `vtex_segment` cookies are present
+- GIVEN the session POST supplies non-empty `vtex_session` and `vtex_segment` cookies
+- AND the session-proof GET returns a recognized envelope that explicitly accepts the submitted target
 - AND `checkout.regionId` is non-null and non-empty
 - WHEN the target is classified
 - THEN the context MUST be individually usable
 - AND its exact-EAN catalog request MAY proceed with only that target's ephemeral cookies
 
-#### Scenario: Recognized but incomplete context
+#### Scenario: Recognized but incomplete proof
 
-- GIVEN the session envelope is recognized
-- BUT the submitted postal code is not explicitly confirmed, either required cookie is absent or empty, or `checkout.regionId` is null or empty
+- GIVEN the session POST supplies both required cookies
+- AND the session-proof GET returns a recognized envelope
+- BUT the submitted postal code is not explicitly confirmed or `checkout.regionId` is null or empty
 - WHEN the target is classified
 - THEN its outcome MUST be `context_unresolved`
 - AND its catalog request MUST NOT be made
 
-#### Scenario: Unknown successful session structure
+#### Scenario: Unknown successful proof structure
 
-- GIVEN session transport succeeds
-- BUT its JSON is invalid or its structure is not a recognized session envelope
+- GIVEN session-proof GET transport succeeds
+- BUT its JSON is invalid or its structure is not a recognized proof envelope
 - WHEN the target is classified
 - THEN its outcome MUST be `parse_error`
 - AND the response MUST NOT prove regional context
@@ -234,7 +235,7 @@ HTTP 429 at either session or catalog stage MUST unconditionally be `rate_limite
 
 Body inspection for this classification MUST remain ephemeral and non-serialized. The raw body, inspected body text, and matched bytes or excerpts MUST NOT be reported, logged, hashed, persisted, retained after classification, copied into fixtures, or included in errors. A qualifying response MUST expose only the existing stage-specific `session_rate_limited` or `catalog_rate_limited` failure code; the system MUST NOT add a body-marker-specific warning or failure code.
 
-A request timeout, DNS/TLS/network failure, or non-success HTTP status that does not satisfy the preceding closed rate-limit rule MUST be `transport_error`. Successful transport with invalid JSON, an unexpected session or catalog envelope, or catalog evidence that cannot be structurally inspected MUST be `parse_error`. A recognized session envelope that lacks required context proof, plus nondistinct regions when absence would otherwise qualify, MUST be `context_unresolved`.
+A request timeout, DNS/TLS/network failure, or non-success HTTP status that does not satisfy the preceding closed rate-limit rule MUST be `transport_error`. Successful bootstrap, proof, or catalog transport with invalid JSON MUST be `parse_error`. A successful session-proof GET with an unrecognized proof envelope, or catalog evidence that cannot be structurally inspected, MUST also be `parse_error`. A recognized proof envelope that lacks required context proof, plus nondistinct regions when absence would otherwise qualify, MUST be `context_unresolved`.
 
 #### Scenario: HTTP 429 is unconditionally rate limited
 
@@ -294,11 +295,21 @@ Report failure codes MUST be limited to the following ordered vocabulary:
 
 The system MUST emit every applicable code, MUST NOT emit free-form warning or failure text, and MUST order codes according to these vocabularies after removing duplicates. Stage-specific rate, timeout, transport, and payload codes MUST correspond to the stage that failed. Context proof codes MAY coexist when multiple proofs are absent. `regions_not_distinct` MUST be aggregate-only.
 
-#### Scenario: Multiple context proofs are absent
+#### Scenario: Missing bootstrap cookies block context proof
 
-- GIVEN a recognized session confirms neither the submitted postal code nor both required cookies nor a non-null region identifier
+- GIVEN either required bootstrap cookie is absent or empty
 - WHEN the report is produced
-- THEN `postal_code_unconfirmed`, `required_cookies_unconfirmed`, and `region_id_unconfirmed` MUST all be reported for that target
+- THEN proof MUST NOT run and `required_cookies_unconfirmed` MUST be reported for that target
+- AND `postal_code_unconfirmed` and `region_id_unconfirmed` MUST NOT be reported because their proof is unavailable
+- AND no code outside the closed failure vocabulary MUST appear
+
+#### Scenario: Recognized proof lacks postal and region confirmation
+
+- GIVEN both required bootstrap cookies are confirmed
+- AND the recognized proof confirms neither the submitted postal code nor a non-null region identifier
+- WHEN the report is produced
+- THEN `postal_code_unconfirmed` and `region_id_unconfirmed` MUST be reported for that target
+- AND `required_cookies_unconfirmed` MUST NOT be reported
 - AND no code outside the closed failure vocabulary MUST appear
 
 #### Scenario: Timeout has a stable stage code
@@ -414,7 +425,7 @@ Conformance MUST be demonstrated with deterministic fake-HTTP tests under strict
 
 ### Requirement: Session Envelope Diagnostic
 
-The system MUST provide a separate manually invoked Jumbo session-envelope diagnostic with no input arguments. It MUST issue exactly two sequential anonymous session POSTs in the fixed order CP1425 then CP5000, with the existing safe regional transport and 10-second timeout, and MUST make no catalog request, retry, or other request. It MUST inspect only the literal paths `namespaces`, `public`, `postalCode`, `value`, `checkout`, `regionId`, and `value`, without enumerating keys or retaining unknown values.
+The system MUST provide a separate manually invoked Jumbo session-envelope diagnostic with no input arguments. It MUST issue exactly two sequential anonymous session POSTs in the fixed order CP1425 then CP5000, with the existing safe regional transport and 10-second timeout, and MUST remain bootstrap-only: it MUST NOT invoke a session-proof closure or make any catalog request, retry, or other request. It MUST inspect only the literal paths `namespaces`, `public`, `postalCode`, `value`, `checkout`, `regionId`, and `value`, without enumerating keys or retaining unknown values.
 
 The diagnostic MUST emit only `{ schemaVersion: 1, targets: [Target, Target] }`, ordered as `schemaVersion,targets`; each target MUST be ordered `postalCode,rootKind,facts`; and facts MUST be ordered `namespacesKind,namespacesPublicKind,namespacesPublicPostalCodeKind,namespacesPublicPostalCodeValueKind,namespacesPublicPostalCodeValueMatchesTarget,namespacesCheckoutKind,namespacesCheckoutRegionIdKind,namespacesCheckoutRegionIdValueKind,namespacesCheckoutRegionIdValueIsNonEmptyString`. Kinds are limited to JSON object, array, string, finite number, boolean, null, or missing for paths. A target without a parsed payload MUST have `rootKind: null` and `facts: null`.
 
