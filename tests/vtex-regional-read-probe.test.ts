@@ -4,6 +4,7 @@ import {
   createRegionalProbeHttp, probeJumboRegionalEan,
   type ProbeSessionResult, type RegionalProbeHttp,
 } from "@/lib/vtex/regional-read-probe";
+import { executeRegionalProbeCli, runRegionalProbeCli } from "../scripts/probe-vtex-regional-read";
 const bytes = (value: string) => new TextEncoder().encode(value);
 const ok = (headers: Readonly<Record<string, unknown>> = {}) => ({
   status: 200, data: bytes('{"safe":true}'), headers,
@@ -334,6 +335,9 @@ test("report schema and factory-backed serialization exclude generated sentinels
   assert.deepEqual(Object.keys(report.targets[0].exactMatches[0]), ["productId", "skuId", "ean", "price", "listPrice", "warningCodes"]);
   const serialized = JSON.stringify(report); for (const secret of secrets) { assert.equal(serialized.includes(secret), false); assert.equal(JSON.stringify(report).includes(secret), false); }
   assert.equal(/stock|availability|sellerId|url/i.test(serialized), false);
+  const cli = await runRegionalProbeCli(["--ean=00123456"], async () => report, new AbortController().signal);
+  assert.equal(cli.stdout, `${JSON.stringify(report, null, 2)}\n`);
+  for (const secret of secrets) assert.equal(cli.stdout.includes(secret), false);
 });
 test("catalog failures retain context proof and use stage-specific closed codes", async () => {
   const cases = [
@@ -382,4 +386,62 @@ test("session allowlist rejects alternate paths and clock validation makes no re
   calls = 0;
   await assert.rejects(probeJumboRegionalEan({ ean: "12345678", now: () => new Date(Number.NaN), http: highHttp(() => { calls += 1; return { kind: "transport_error" }; }) }));
   assert.equal(calls, 0);
+});
+const help = "Usage: npx tsx scripts/probe-vtex-regional-read.ts --ean=<8-14 ASCII digits>\n       npx tsx scripts/probe-vtex-regional-read.ts --help\n";
+test("CLI accepts only its exact help or EAN grammar without unnecessary probes", async () => {
+  let calls = 0;
+  const operation = async () => { calls += 1; return probePayloads([], []); };
+  assert.deepEqual(await runRegionalProbeCli(["--help"], operation, new AbortController().signal),
+    { stdout: help, stderr: "", exitCode: 0 });
+  const invalid = [[], ["12345678"], ["--ean", "12345678"], ["--ean=1234567"], ["--ean=123456789012345"],
+    ["--ean=１２３４５６７８"], ["--ean=12345678", "--ean=12345678"], ["--help", "--ean=12345678"], ["--unknown"],
+    ["--retailer=jumbo"], ["--postal=1425"], ["--sku=x"], ["--category=x"], ["--output=x"], ["--write"], ["--timeout=1"]];
+  for (const argv of invalid) assert.deepEqual(await runRegionalProbeCli(argv, operation, new AbortController().signal),
+    { stdout: "", stderr: "Invalid usage. Run with --help.\n", exitCode: 2 });
+  assert.equal(calls, 0);
+});
+test("CLI buffers supported reports and maps trustworthy evidence to success", async () => {
+  const report = await probePayloads([], []);
+  const result = await runRegionalProbeCli(["--ean=00123456"], async ({ ean }) => {
+    assert.equal(ean, "00123456"); return report;
+  }, new AbortController().signal);
+  assert.deepEqual(result, { stdout: `${JSON.stringify(report, null, 2)}\n`, stderr: "", exitCode: 0 });
+});
+test("CLI cancellation waits for settlement and discards every output buffer", async () => {
+  const before = new AbortController(); before.abort(); let calls = 0;
+  assert.deepEqual(await runRegionalProbeCli(["--ean=12345678"], async () => { calls += 1; return probePayloads([], []); }, before.signal),
+    { stdout: "", stderr: "", exitCode: 130 });
+  const during = new AbortController(); let settled = false;
+  const result = await runRegionalProbeCli(["--ean=12345678"], async () => {
+    during.abort(); await Promise.resolve(); settled = true; return probePayloads([], []);
+  }, during.signal);
+  assert.equal(settled, true); assert.deepEqual(result, { stdout: "", stderr: "", exitCode: 130 }); assert.equal(calls, 0);
+});
+test("CLI sanitizes unexpected secret-bearing thrown values", async () => {
+  const secret = `secret-${Math.random()}-cookie`;
+  const result = await runRegionalProbeCli(["--ean=12345678"], async () => { throw new Error(secret); }, new AbortController().signal);
+  assert.deepEqual(result, { stdout: "", stderr: "Regional probe failed internally.\n", exitCode: 3 });
+  assert.equal(JSON.stringify(result).includes(secret), false);
+});
+test("CLI maps all six supported outcomes without stderr or extra newlines", async () => {
+  const base = await probePayloads([], []);
+  for (const [outcome, exitCode] of [["found", 0], ["confirmed_absent", 0], ["rate_limited", 1],
+    ["transport_error", 1], ["parse_error", 1], ["context_unresolved", 1]] as const) {
+    const report = { ...base, outcome };
+    assert.deepEqual(await runRegionalProbeCli(["--ean=12345678"], async () => report, new AbortController().signal),
+      { stdout: `${JSON.stringify(report, null, 2)}\n`, stderr: "", exitCode });
+  }
+});
+test("executable wrapper owns temporary SIGINT wiring and complete buffered writes", async () => {
+  const events: string[] = []; const writes: string[] = []; let interrupt = () => {};
+  const runtime = {
+    argv: ["node", "script", "--ean=12345678"], exitCode: undefined as number | undefined,
+    once: (_event: "SIGINT", handler: () => void) => { events.push("once"); interrupt = handler; },
+    off: (_event: "SIGINT", _handler: () => void) => { events.push("off"); },
+    stdout: { write: (value: string) => { writes.push(`out:${value}`); return true; } },
+    stderr: { write: (value: string) => { writes.push(`err:${value}`); return true; } },
+  };
+  let settled = false;
+  await executeRegionalProbeCli(runtime, async () => { interrupt(); await Promise.resolve(); settled = true; return probePayloads([], []); });
+  assert.equal(settled, true); assert.deepEqual(events, ["once", "off"]); assert.deepEqual(writes, []); assert.equal(runtime.exitCode, 130);
 });
