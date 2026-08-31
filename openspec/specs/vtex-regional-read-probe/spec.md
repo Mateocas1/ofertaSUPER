@@ -411,3 +411,19 @@ Conformance MUST be demonstrated with deterministic fake-HTTP tests under strict
 - WHEN Stack 3 CLI behavior is delivered
 - THEN it MUST target Stack 2 after Stack 1 targeted `master` and Stack 2 targeted Stack 1
 - AND every stack MUST remain at or below 400 authored changed lines with no size exception
+
+### Requirement: Session Envelope Diagnostic
+
+The system MUST provide a separate manually invoked Jumbo session-envelope diagnostic with no input arguments. It MUST issue exactly two sequential anonymous session POSTs in the fixed order CP1425 then CP5000, with the existing safe regional transport and 10-second timeout, and MUST make no catalog request, retry, or other request. It MUST inspect only the literal paths `namespaces`, `public`, `postalCode`, `value`, `checkout`, `regionId`, and `value`, without enumerating keys or retaining unknown values.
+
+The diagnostic MUST emit only `{ schemaVersion: 1, targets: [Target, Target] }`, ordered as `schemaVersion,targets`; each target MUST be ordered `postalCode,rootKind,facts`; and facts MUST be ordered `namespacesKind,namespacesPublicKind,namespacesPublicPostalCodeKind,namespacesPublicPostalCodeValueKind,namespacesPublicPostalCodeValueMatchesTarget,namespacesCheckoutKind,namespacesCheckoutRegionIdKind,namespacesCheckoutRegionIdValueKind,namespacesCheckoutRegionIdValueIsNonEmptyString`. Kinds are limited to JSON object, array, string, finite number, boolean, null, or missing for paths. A target without a parsed payload MUST have `rootKind: null` and `facts: null`.
+
+The dedicated CLI MUST accept no arguments or exactly `--help`; all other arguments MUST produce fixed usage and exit 2. A completed diagnostic MUST emit one buffered two-space JSON document and exit 0; an internal failure MUST emit only a fixed message and exit 3; Ctrl-C MUST emit nothing, exit 130, and remove its SIGINT handler. The report MUST NOT contain bodies, excerpts, headers, cookies or their presence, hashes, URLs, errors, categories, statuses, IDs, timestamps, EAN, retailer, counts, or timings.
+
+#### Scenario: Fixed, secret-free diagnostic output
+
+- GIVEN injected fake session operations for both fixed targets
+- WHEN the diagnostic completes
+- THEN it MUST make exactly two session operations in CP1425 then CP5000 order
+- AND it MUST make no catalog operation
+- AND serialized output MUST contain only the ordered diagnostic schema and literal-path facts
