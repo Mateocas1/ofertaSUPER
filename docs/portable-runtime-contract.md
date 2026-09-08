@@ -22,7 +22,7 @@ npm run smoke:compose
 
 The command uses only explicit local credentials, publishes only the web service on `127.0.0.1:${COMPOSE_WEB_PORT:-3300}`, and automatically runs `down --volumes --remove-orphans`, including after assertion failures. If interrupted before cleanup, recover with `docker compose --project-name ofertasuper-compose-smoke --file compose.yml down --volumes --remove-orphans`.
 
-This proves fresh-database migrations as owner, generated app grants, fixture insertion through the least-privileged role, database provenance and freshness from `/api/search`, and conventional Redis cache/rate-limit writes. It does not prove production security, durability, backup/restore, external services, admin auth, ingestion, or orchestration readiness.
+This proves fresh-database migrations as owner, generated app grants, fixture insertion through the least-privileged role, health readiness, and that non-Vercel public catalog requests fail closed without Redis writes. Earlier versions also proved catalog provenance and cache/rate-limit writes through `/api/search`; that claim no longer applies after Vercel-only strict admission. It does not prove production security, durability, backup/restore, external services, admin auth, ingestion, or orchestration readiness.
 
 The default Dockerfile runner packages only the Next.js web server. During development, its contract and build passed, and the non-root container served `/` in an isolated no-network, read-only smoke test without configured dependencies. This proves packaging and dependency-free degraded startup—not DB/Redis-backed behavior, durable storage, backup/restore, or production operations.
 
@@ -44,12 +44,12 @@ Supply the `web` names below at runtime; no environment file or secret is copied
 
 | Role or mode | Required names | Optional names and behavior |
 |---|---|---|
-| `web` | `DATABASE_URL` | `NEXT_PUBLIC_SITE_URL`; `REDIS_URL` or Upstash pair; public paths degrade when cache is absent |
+| `web` | `DATABASE_URL` | `NEXT_PUBLIC_SITE_URL`; `REDIS_URL` or Upstash pair; strict public catalog routes additionally require the Vercel trust boundary |
 | `web` with admin routes | `DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | Requires the signed Clerk claim configured below; missing or stale claims fail closed |
 | `job` | `DATABASE_URL`, `VTEX_SHA256_HASH` | `REDIS_URL` or Upstash pair; `SCRAPER_ALERT_WEBHOOK_URL`; VTEX delay/user-agent tuning |
 | `migration` | `DIRECT_URL` | None |
 
-Configure exactly one Redis provider: conventional Redis through `REDIS_URL`, or Upstash through both Upstash names. `REDIS_URL` wins deterministically at runtime, while preflight rejects conflicts. Without a complete provider, cache misses and rate limiting fail open. The conventional limiter uses an atomic Lua fixed window (60 requests/60 seconds), connects lazily with a one-second bound, and does not reconnect automatically; it does not claim sliding-window parity. Errors and probes expose names or reason codes, never values.
+Configure exactly one Redis provider: conventional Redis through `REDIS_URL`, or Upstash through both Upstash names. `REDIS_URL` wins deterministically at runtime, while preflight rejects conflicts. Legacy cache and limiter callers remain fail-open without a complete provider; the two strict public catalog routes fail closed before cache access. The conventional limiter uses an atomic Lua fixed window (60 requests/60 seconds), connects lazily with a one-second bound, and does not reconnect automatically; it does not claim sliding-window parity. Errors and probes expose names or reason codes, never values.
 
 ## Clerk admin claim
 
@@ -103,9 +103,9 @@ pg_restore --exit-on-error --no-owner --no-acl --dbname "$DISPOSABLE_URL" backup
 
 Inspect an archive first, restore only into a disposable empty database, then run application integrity checks. This rehearsal proves local PostgreSQL logical dump/restore mechanics only. It does not prove production automation, scheduling, retention, encryption, remote storage, RPO/RTO, production-scale duration, or platform-specific recovery procedures.
 
-## Future public catalog serving identity
+## Public catalog serving identity
 
-`PUBLIC_CATALOG_SERVING_IDENTITY_JSON` is a server-only JSON contract for a future public catalog handler integration. This bootstrap module is inactive in this unit: existing handlers and runtime role validation remain unchanged.
+`PUBLIC_CATALOG_SERVING_IDENTITY_JSON` is a server-only JSON contract consumed locally by the public search and product-detail GET handlers. Deployment and operator identity injection remain separate and are not performed by this unit; runtime role validation remains unchanged.
 
 The required version-1 fields are:
 
@@ -120,9 +120,9 @@ The required version-1 fields are:
 }
 ```
 
-This is a shape-only placeholder, not a deployment input. Do not put secrets or real private identity values in documentation or examples. The bootstrap reads this variable once when its module initializes; changing the environment does not rebind it until a new module instance starts. A missing or invalid value resolves to no authority and future integrated handlers must map that result to `503`.
+This is a shape-only placeholder, not a deployment input. Do not put secrets or real private identity values in documentation or examples. The bootstrap reads this variable once when its module initializes; changing the environment does not rebind it until a new module instance starts. A missing or invalid value resolves to no authority, and the local public search and product-detail handlers map that result to `503`.
 
-The value is operator configuration, not cryptographic attestation. Configure and validate it before the future production-rollout gate; this unit neither configures a deployment nor activates a public route.
+The value is operator configuration, not cryptographic attestation. On Vercel, each public search or product-detail request now requires strict Redis admission before PostgreSQL authority, cache, or catalog access: a per-route global limit is consumed before the client-IP limit, and exhausted capacity returns `429` while missing identity or unavailable admission returns `503`. The client identity is accepted only when `VERCEL=1` and the Vercel-overwritten `X-Forwarded-For` contains one valid IP; missing or chained values fail closed without falling back to `X-Real-IP`. Portable local or self-hosted web execution therefore keeps these public catalog routes fail-closed until a future explicit trusted-proxy contract exists. Legacy callers retain their fail-open limiter behavior. This unit neither configures a deployment nor performs operator identity injection, and local implementation does not prove production activation.
 
 ## Pinned Vercel promotion guard
 

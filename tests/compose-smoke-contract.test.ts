@@ -17,10 +17,13 @@ test("Compose orders healthy dependencies, owner migration, grants, fixture, the
   assert.doesNotMatch(compose, /env_file|platform:|5432:5432|6379:6379/);
 });
 
-test("smoke verifies runtime evidence and always removes state", () => {
-  for (const claim of ["/api/health/live", "/api/health/ready", "dataSource", "degraded", "latestCheckedAt", "x-ratelimit-limit", "search:v3:", "ofertas-super:api:search:"]) {
+test("smoke verifies health, fixture, and strict portable rejection before cleanup", () => {
+  for (const claim of ["/api/health/live", "/api/health/ready", "SELECT ean", "Compose Smoke Saffron", "/api/search", "redis-cli", "DBSIZE"]) {
     assert.ok(smoke.includes(claim), `missing assertion for ${claim}`);
   }
+  assert.match(smoke, /assert\.equal\(fixture, "7799999000001:Compose Smoke Saffron"\)/);
+  assert.match(smoke, /assert\.equal\(response\.status, 503\)/);
+  assert.match(smoke, /assert\.equal\(Number\(docker\([^\n]*"DBSIZE"[^\n]*\)\), 0\)/);
   assert.match(smoke, /finally \{[\s\S]*down.*--volumes.*--remove-orphans/);
 });
 

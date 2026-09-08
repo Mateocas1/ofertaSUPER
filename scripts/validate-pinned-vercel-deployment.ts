@@ -46,12 +46,12 @@ function validateInputs(options: GuardOptions, secret: string | undefined) {
 }
 
 function immutableHostname(raw: unknown) {
-  if (typeof raw !== "string" || raw.includes(":") || raw.includes("/") || raw.includes("@")) return null;
+  if (typeof raw !== "string" || [":", "/", "@"].some((token) => raw.includes(token))) return null;
   try {
     const url = new URL(`https://${raw}`);
-    if (url.protocol !== "https:" || url.hostname !== raw || !url.hostname.endsWith(".vercel.app")
-      || url.username || url.password || url.port || url.pathname !== "/" || url.search || url.hash) return null;
-    return url.hostname;
+    const invalidParts = [url.username, url.password, url.port, url.search, url.hash];
+    const validAuthority = url.protocol === "https:" && url.hostname === raw && url.hostname.endsWith(".vercel.app");
+    return validAuthority && url.pathname === "/" && invalidParts.every((part) => !part) ? url.hostname : null;
   } catch {
     return null;
   }
@@ -64,25 +64,42 @@ function exactFingerprint(actual: unknown, expected: PublicCatalogAuthorityFinge
     && Object.keys(actual).length === keys.length;
 }
 
+function parseObject(stdout: string, errorMessage: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(stdout);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new Error(errorMessage);
+  }
+}
+
+function validMetadata(result: CommandResult, metadata: Record<string, unknown>, options: GuardOptions, hostname: string | null) {
+  const meta = metadata.meta && typeof metadata.meta === "object" && !Array.isArray(metadata.meta)
+    ? metadata.meta as Record<string, unknown> : undefined;
+  return [result.code === 0, metadata.id === options.deploymentId, metadata.projectId === options.projectId,
+    metadata.readyState === "READY", meta?.githubCommitSha === options.commitSha, Boolean(hostname)].every(Boolean);
+}
+
+function validProof(result: CommandResult, proof: Record<string, unknown>, nonce: string, expected: PublicCatalogAuthorityFingerprint) {
+  return [
+    result.code === 0,
+    result.httpStatus !== undefined && result.httpStatus >= 200 && result.httpStatus < 300,
+    proof.active === true,
+    proof.nonce === nonce,
+    exactFingerprint(proof.fingerprint, expected),
+  ].every(Boolean);
+}
+
 export async function validatePinnedDeployment(options: GuardOptions, dependencies: Dependencies) {
   validateInputs(options, dependencies.secret);
   const metadataResult = await dependencies.run({
     kind: "metadata",
     args: ["api", `/v13/deployments/${options.deploymentId}`, "--scope", options.scope, "--raw", "--non-interactive"],
   });
-  let metadata: Record<string, unknown>;
-  try {
-    const parsed: unknown = JSON.parse(metadataResult.stdout);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
-    metadata = parsed as Record<string, unknown>;
-  } catch { throw new Error("Deployment validation failed"); }
-  const meta = metadata.meta && typeof metadata.meta === "object" && !Array.isArray(metadata.meta)
-    ? metadata.meta as Record<string, unknown> : undefined;
+  const metadata = parseObject(metadataResult.stdout, "Deployment validation failed");
   const hostname = immutableHostname(metadata.url);
-  if (metadataResult.code !== 0 || metadata.id !== options.deploymentId || metadata.projectId !== options.projectId
-    || metadata.readyState !== "READY" || meta?.githubCommitSha !== options.commitSha || !hostname) {
-    throw new Error("Deployment validation failed");
-  }
+  if (!validMetadata(metadataResult, metadata, options, hostname)) throw new Error("Deployment validation failed");
 
   const nonce = dependencies.nonce?.() ?? randomBytes(24).toString("base64url");
   const proofResult = await dependencies.run({
@@ -92,11 +109,8 @@ export async function validatePinnedDeployment(options: GuardOptions, dependenci
       "--write-out", "\\nVERCEL_GUARD_HTTP_STATUS:%{http_code}"],
     stdin: `Authorization: Bearer ${dependencies.secret}\nCache-Control: no-store\n`,
   });
-  let proof: Record<string, unknown>;
-  try { proof = JSON.parse(proofResult.stdout) as Record<string, unknown>; } catch { throw new Error("Proof validation failed"); }
-  if (proofResult.code !== 0 || proofResult.httpStatus === undefined || proofResult.httpStatus < 200 || proofResult.httpStatus >= 300
-    || proof.active !== true || proof.nonce !== nonce
-    || !exactFingerprint(proof.fingerprint, options.fingerprint)) throw new Error("Proof validation failed");
+  const proof = parseObject(proofResult.stdout, "Proof validation failed");
+  if (!validProof(proofResult, proof, nonce, options.fingerprint)) throw new Error("Proof validation failed");
 
   if (!options.promote) return { status: "validated" as const, promotionAttempts: 0 };
   const promoted = await dependencies.run({

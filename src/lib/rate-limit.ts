@@ -76,30 +76,52 @@ async function strictLimit(limiter: Pick<RateLimiter, "limit">, identifier: stri
  * establishing that the identity is trustworthy remains the caller's duty.
  * This API intentionally does not inspect request headers.
  */
+const unavailable = (): StrictAdmissionResult => ({ status: "unavailable", httpStatus: 503 });
+
+async function consumeStrictCapacity(
+  limiter: Pick<RateLimiter, "limit">,
+  identifier: string,
+  level: "global" | "client",
+): Promise<RateLimitState | StrictAdmissionResult> {
+  const state = await strictLimit(limiter, identifier);
+  if (state === STRICT_TIMEOUT || state.reason === "timeout") return unavailable();
+  if (!state.success) return { status: "exhausted", httpStatus: 429, level, state };
+  return state;
+}
+
+function isAdmissionResult(value: RateLimitState | StrictAdmissionResult): value is StrictAdmissionResult {
+  return "status" in value;
+}
+
 export async function admitStrictRateLimit(
   limiter: Pick<RateLimiter, "limit"> | null,
   input: Readonly<{ routeScope: string; trustedClientIp: string }>,
 ): Promise<StrictAdmissionResult> {
   const clientIp = normalizeClientIp(input.trustedClientIp);
-  if (!limiter || !/^[a-z0-9][a-z0-9:-]{0,63}$/.test(input.routeScope) || !clientIp) {
-    return { status: "unavailable", httpStatus: 503 };
-  }
+  if (!limiter || !/^[a-z0-9][a-z0-9:-]{0,63}$/.test(input.routeScope) || !clientIp) return unavailable();
 
   try {
-    const global = await strictLimit(limiter, `strict:${input.routeScope}:global`);
-    if (global === STRICT_TIMEOUT || global.reason === "timeout") return { status: "unavailable", httpStatus: 503 };
-    if (!global.success) return { status: "exhausted", httpStatus: 429, level: "global", state: global };
-
-    const client = await strictLimit(limiter, `strict:${input.routeScope}:client:${clientIp}`);
-    if (client === STRICT_TIMEOUT || client.reason === "timeout") return { status: "unavailable", httpStatus: 503 };
-    if (!client.success) return { status: "exhausted", httpStatus: 429, level: "client", state: client };
-    return { status: "admitted", global, client };
+    const global = await consumeStrictCapacity(limiter, `strict:${input.routeScope}:global`, "global");
+    if (isAdmissionResult(global)) return global;
+    const client = await consumeStrictCapacity(limiter, `strict:${input.routeScope}:client:${clientIp}`, "client");
+    return isAdmissionResult(client) ? client : { status: "admitted", global, client };
   } catch {
-    return { status: "unavailable", httpStatus: 503 };
+    return unavailable();
   }
 }
 
 const rateLimiter = createRateLimiter(process.env);
+
+export async function admitStrictPublicRoute(
+  request: Pick<NextRequest, "headers">,
+  routeScope: string,
+): Promise<StrictAdmissionResult> {
+  const forwardedFor = request.headers.get("x-forwarded-for")?.trim();
+  const trustedClientIp = process.env.VERCEL === "1" && forwardedFor && !forwardedFor.includes(",")
+    ? forwardedFor
+    : "";
+  return admitStrictRateLimit(rateLimiter, { routeScope, trustedClientIp });
+}
 
 function getClientIp(request: NextRequest) {
   const forwardedFor = request.headers.get("x-forwarded-for");
