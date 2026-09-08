@@ -14,9 +14,10 @@ const fingerprint = {
 };
 const options: GuardOptions = {
   deploymentId: "dpl_immutable123", projectId: "prj_expected", scope: "team-slug",
-  commitSha: fingerprint.commitSha, fingerprint, promote: false,
+  commitSha: fingerprint.commitSha, repoId: "123456789", ref: "release/security/fix", fingerprint, promote: false,
 };
-const metadata = { id: options.deploymentId, projectId: options.projectId, readyState: "READY", url: "app-abc123.vercel.app", meta: { githubCommitSha: options.commitSha } };
+const gitSource = { type: "github", repoId: 123456789, ref: options.ref, sha: options.commitSha };
+const metadata = { id: options.deploymentId, projectId: options.projectId, readyState: "READY", target: "production", url: "app-abc123.vercel.app", gitSource, meta: { githubCommitSha: options.commitSha } };
 
 function harness(overrides: Partial<{ metadata: unknown; proof: unknown; proofCode: number; promoteCode: number }> = {}) {
   const calls: GuardCommand[] = [];
@@ -31,7 +32,7 @@ function harness(overrides: Partial<{ metadata: unknown; proof: unknown; proofCo
 
 describe("pinned Vercel deployment guard", () => {
   it("validates only by default and keeps the bearer secret out of argv", async () => {
-    const h = harness();
+    const h = harness({ metadata: { ...metadata, gitSource: { ...gitSource, repoId: options.repoId } } });
     const result = await validatePinnedDeployment(options, { run: h.run, secret: "machine-secret" });
     assert.deepEqual(result, { status: "validated", promotionAttempts: 0 });
     assert.equal(h.calls.length, 2);
@@ -41,21 +42,39 @@ describe("pinned Vercel deployment guard", () => {
     assert.match(proof.stdin ?? "", /Bearer machine-secret/);
   });
 
-  it("fails closed on metadata project, deployment, commit, readiness, and URL violations", async () => {
+  it("fails closed on metadata identity, state, URL, and trusted Git source violations", async () => {
     const cases = [
       { ...metadata, id: "dpl_other" }, { ...metadata, projectId: "prj_other" },
       { ...metadata, meta: {} }, { ...metadata, meta: { githubCommitSha: "c".repeat(40) } },
-      { ...metadata, readyState: "BUILDING" }, { ...metadata, url: "https://user@evil.example/path?q=1#x" }, null, [],
+      { ...metadata, readyState: "BUILDING" }, { ...metadata, url: "https://user@evil.example/path?q=1#x" },
+      { ...metadata, gitSource: undefined }, { ...metadata, gitSource: { ...gitSource, type: "gitlab" } },
+      ...(["repoId", "ref", "sha"] as const).map((key) => ({ ...metadata, gitSource: { ...gitSource, [key]: "wrong" } })),
+      { ...metadata, target: null }, { ...metadata, target: undefined }, null, [],
     ];
     for (const value of cases) {
       const h = harness({ metadata: value });
       await assert.rejects(validatePinnedDeployment(options, { run: h.run, secret: "machine-secret" }), /Deployment validation failed/);
-      assert.equal(h.calls.filter((call) => call.kind === "promote").length, 0);
+      assert.deepEqual(h.calls.map((call) => call.kind), ["metadata"]);
+    }
+  });
+
+  it("rejects coercible and unsafe repository IDs before proof", async () => {
+    const cases = [
+      { expected: options.repoId, actual: [123456789] },
+      { expected: "9007199254740992", actual: JSON.parse('{"repoId":9007199254740993}').repoId },
+    ];
+    for (const { expected, actual } of cases) {
+      const h = harness({ metadata: { ...metadata, gitSource: { ...gitSource, repoId: actual } } });
+      await assert.rejects(validatePinnedDeployment({ ...options, repoId: expected }, { run: h.run, secret: "machine-secret" }), /Deployment validation failed/);
+      assert.deepEqual(h.calls.map((call) => call.kind), ["metadata"]);
     }
   });
 
   it("rejects invalid inputs and missing secret before any process call", async () => {
-    for (const [candidate, secret] of [[{ ...options, commitSha: "expected" }, "machine-secret"], [options, undefined]] as const) {
+    for (const [candidate, secret] of [
+      [{ ...options, commitSha: "expected" }, "machine-secret"], [{ ...options, repoId: "not-numeric" }, "machine-secret"],
+      [{ ...options, ref: "https://evil.example/repo" }, "machine-secret"], [options, undefined],
+    ] as const) {
       const h = harness();
       await assert.rejects(validatePinnedDeployment(candidate, { run: h.run, secret }), /Invalid guard input/);
       assert.equal(h.calls.length, 0);

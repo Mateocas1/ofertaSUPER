@@ -9,6 +9,8 @@ export type GuardOptions = {
   projectId: string;
   scope: string;
   commitSha: string;
+  repoId: string;
+  ref: string;
   fingerprint: PublicCatalogAuthorityFingerprint;
   promote: boolean;
 };
@@ -27,6 +29,8 @@ type Dependencies = {
 
 const identifier = /^[A-Za-z0-9_-]{1,128}$/;
 const sha = /^[a-f0-9]{40}$/;
+const repoId = /^[1-9]\d{0,19}$/;
+const gitRef = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/;
 const digest = /^sha256:[a-f0-9]{64}$/;
 
 function validFingerprint(value: PublicCatalogAuthorityFingerprint) {
@@ -36,9 +40,21 @@ function validFingerprint(value: PublicCatalogAuthorityFingerprint) {
     && !Number.isNaN(Date.parse(value.verifiedAt)) && !Number.isNaN(Date.parse(value.expiresAt));
 }
 
+function canonicalRepoId(value: unknown) {
+  if (typeof value === "string") return repoId.test(value) ? value : null;
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? String(value) : null;
+}
+
+function validSourceExpectation(options: GuardOptions) {
+  return canonicalRepoId(options.repoId) !== null && gitRef.test(options.ref) && !options.ref.includes("..");
+}
+
+function validGuardIdentifiers(options: GuardOptions) {
+  return identifier.test(options.deploymentId) && identifier.test(options.projectId) && identifier.test(options.scope);
+}
+
 function validateInputs(options: GuardOptions, secret: string | undefined) {
-  if (!identifier.test(options.deploymentId) || !identifier.test(options.projectId)
-    || !identifier.test(options.scope) || !sha.test(options.commitSha)
+  if (!validGuardIdentifiers(options) || !sha.test(options.commitSha) || !validSourceExpectation(options)
     || options.commitSha !== options.fingerprint.commitSha || !validFingerprint(options.fingerprint)
     || !secret || secret.length > 4096 || /[\r\n]/.test(secret)) {
     throw new Error("Invalid guard input");
@@ -74,11 +90,19 @@ function parseObject(stdout: string, errorMessage: string): Record<string, unkno
   }
 }
 
+function validGitSource(value: unknown, options: GuardOptions) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const source = value as Record<string, unknown>;
+  return source.type === "github" && canonicalRepoId(source.repoId) === options.repoId
+    && source.ref === options.ref && source.sha === options.commitSha;
+}
+
 function validMetadata(result: CommandResult, metadata: Record<string, unknown>, options: GuardOptions, hostname: string | null) {
   const meta = metadata.meta && typeof metadata.meta === "object" && !Array.isArray(metadata.meta)
     ? metadata.meta as Record<string, unknown> : undefined;
   return [result.code === 0, metadata.id === options.deploymentId, metadata.projectId === options.projectId,
-    metadata.readyState === "READY", meta?.githubCommitSha === options.commitSha, Boolean(hostname)].every(Boolean);
+    metadata.readyState === "READY", metadata.target === "production", meta?.githubCommitSha === options.commitSha,
+    validGitSource(metadata.gitSource, options), Boolean(hostname)].every(Boolean);
 }
 
 function validProof(result: CommandResult, proof: Record<string, unknown>, nonce: string, expected: PublicCatalogAuthorityFingerprint) {
@@ -152,7 +176,8 @@ function parseArguments(argv: string[]): GuardOptions {
   }
   const required = (name: string) => values.get(`--${name}`) ?? "";
   return {
-    deploymentId: required("deployment-id"), projectId: required("project-id"), scope: required("scope"), commitSha: required("commit-sha"), promote,
+    deploymentId: required("deployment-id"), projectId: required("project-id"), scope: required("scope"), commitSha: required("commit-sha"),
+    repoId: required("repo-id"), ref: required("ref"), promote,
     fingerprint: {
       publicationId: required("publication-id"), promotionId: required("promotion-id"), target: "production",
       deploymentId: required("domain-deployment-id"), commitSha: required("commit-sha"), candidateDigest: required("candidate-digest"),
