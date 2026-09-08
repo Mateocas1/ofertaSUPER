@@ -122,7 +122,25 @@ The required version-1 fields are:
 
 This is a shape-only placeholder, not a deployment input. Do not put secrets or real private identity values in documentation or examples. The bootstrap reads this variable once when its module initializes; changing the environment does not rebind it until a new module instance starts. A missing or invalid value resolves to no authority and future integrated handlers must map that result to `503`.
 
-The value is operator configuration, not cryptographic attestation. Configure and validate it before the future production-rollout gate; this unit neither configures a deployment nor activates a route.
+The value is operator configuration, not cryptographic attestation. Configure and validate it before the future production-rollout gate; this unit neither configures a deployment nor activates a public route.
+
+## Pinned Vercel promotion guard
+
+The internal proof route is authenticated with the server-only `CATALOG_PROMOTION_GUARD_SECRET`. Configure the same secret in the deployment and the operator environment through separately authorized platform operations; never pass it as a command argument. Stage deployment protection before creating a candidate because the production alias remains public and application authentication is still mandatory.
+
+Run validation without promotion by passing the pinned Vercel deployment ID, project ID, scope, exact Git commit SHA, and every field of the expected catalog authority fingerprint:
+
+```bash
+./node_modules/.bin/tsx scripts/validate-pinned-vercel-deployment.ts \
+  --deployment-id <dpl-id> --project-id <project-id> --scope <team-scope> \
+  --commit-sha <40-hex-sha> --publication-id <publication-id> --promotion-id <promotion-id> \
+  --domain-deployment-id <domain-id> --candidate-digest <sha256:digest> \
+  --verified-at <iso-time> --expires-at <iso-time>
+```
+
+Add `--promote` only for an explicitly authorized promotion. Promotion reruns metadata and live proof checks in the same invocation, then executes `vercel promote <same-dpl-id>` without rebuilding. Deployments without `meta.githubCommitSha`, non-ready deployments, mismatched projects, and untrusted generated URLs fail closed.
+
+The proof endpoint checks the startup-bound `PUBLIC_CATALOG_SERVING_IDENTITY_JSON` against live PostgreSQL authority and returns only active state, the safe authority fingerprint, and the bounded request nonce with `private, no-store`. The operator does not need PostgreSQL credentials. Validation does not prove protection against privileged Vercel bypass, later platform configuration changes, or changes occurring after the final proof request. Secret configuration, deployment, and promotion remain separate manual authorizations. Public catalog routes remain inactive in this unit.
 
 ## Parity and deferred work
 

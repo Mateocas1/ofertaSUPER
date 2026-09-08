@@ -1,0 +1,160 @@
+import { randomBytes } from "node:crypto";
+import { spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
+
+import type { PublicCatalogAuthorityFingerprint } from "../src/lib/public-catalog-authority";
+
+export type GuardOptions = {
+  deploymentId: string;
+  projectId: string;
+  scope: string;
+  commitSha: string;
+  fingerprint: PublicCatalogAuthorityFingerprint;
+  promote: boolean;
+};
+export type GuardCommand = {
+  kind: "metadata" | "proof" | "promote";
+  args: string[];
+  stdin?: string;
+  nonce?: string;
+};
+type CommandResult = { code: number; stdout: string; httpStatus?: number };
+type Dependencies = {
+  run: (command: GuardCommand) => Promise<CommandResult>;
+  secret: string | undefined;
+  nonce?: () => string;
+};
+
+const identifier = /^[A-Za-z0-9_-]{1,128}$/;
+const sha = /^[a-f0-9]{40}$/;
+const digest = /^sha256:[a-f0-9]{64}$/;
+
+function validFingerprint(value: PublicCatalogAuthorityFingerprint) {
+  return identifier.test(value.publicationId) && identifier.test(value.promotionId)
+    && value.target === "production" && identifier.test(value.deploymentId)
+    && sha.test(value.commitSha) && digest.test(value.candidateDigest)
+    && !Number.isNaN(Date.parse(value.verifiedAt)) && !Number.isNaN(Date.parse(value.expiresAt));
+}
+
+function validateInputs(options: GuardOptions, secret: string | undefined) {
+  if (!identifier.test(options.deploymentId) || !identifier.test(options.projectId)
+    || !identifier.test(options.scope) || !sha.test(options.commitSha)
+    || options.commitSha !== options.fingerprint.commitSha || !validFingerprint(options.fingerprint)
+    || !secret || secret.length > 4096 || /[\r\n]/.test(secret)) {
+    throw new Error("Invalid guard input");
+  }
+}
+
+function immutableHostname(raw: unknown) {
+  if (typeof raw !== "string" || raw.includes(":") || raw.includes("/") || raw.includes("@")) return null;
+  try {
+    const url = new URL(`https://${raw}`);
+    if (url.protocol !== "https:" || url.hostname !== raw || !url.hostname.endsWith(".vercel.app")
+      || url.username || url.password || url.port || url.pathname !== "/" || url.search || url.hash) return null;
+    return url.hostname;
+  } catch {
+    return null;
+  }
+}
+
+function exactFingerprint(actual: unknown, expected: PublicCatalogAuthorityFingerprint) {
+  if (!actual || typeof actual !== "object") return false;
+  const keys = ["publicationId", "promotionId", "target", "deploymentId", "commitSha", "candidateDigest", "verifiedAt", "expiresAt"] as const;
+  return keys.every((key) => (actual as Record<string, unknown>)[key] === expected[key])
+    && Object.keys(actual).length === keys.length;
+}
+
+export async function validatePinnedDeployment(options: GuardOptions, dependencies: Dependencies) {
+  validateInputs(options, dependencies.secret);
+  const metadataResult = await dependencies.run({
+    kind: "metadata",
+    args: ["api", `/v13/deployments/${options.deploymentId}`, "--scope", options.scope, "--raw", "--non-interactive"],
+  });
+  let metadata: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(metadataResult.stdout);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+    metadata = parsed as Record<string, unknown>;
+  } catch { throw new Error("Deployment validation failed"); }
+  const meta = metadata.meta && typeof metadata.meta === "object" && !Array.isArray(metadata.meta)
+    ? metadata.meta as Record<string, unknown> : undefined;
+  const hostname = immutableHostname(metadata.url);
+  if (metadataResult.code !== 0 || metadata.id !== options.deploymentId || metadata.projectId !== options.projectId
+    || metadata.readyState !== "READY" || meta?.githubCommitSha !== options.commitSha || !hostname) {
+    throw new Error("Deployment validation failed");
+  }
+
+  const nonce = dependencies.nonce?.() ?? randomBytes(24).toString("base64url");
+  const proofResult = await dependencies.run({
+    kind: "proof", nonce,
+    args: ["curl", `/api/internal/catalog-serving-identity-proof?nonce=${nonce}`, "--deployment", options.deploymentId,
+      "--scope", options.scope, "--", "--header", "@-", "--max-redirs", "0", "--fail-with-body",
+      "--write-out", "\\nVERCEL_GUARD_HTTP_STATUS:%{http_code}"],
+    stdin: `Authorization: Bearer ${dependencies.secret}\nCache-Control: no-store\n`,
+  });
+  let proof: Record<string, unknown>;
+  try { proof = JSON.parse(proofResult.stdout) as Record<string, unknown>; } catch { throw new Error("Proof validation failed"); }
+  if (proofResult.code !== 0 || proofResult.httpStatus === undefined || proofResult.httpStatus < 200 || proofResult.httpStatus >= 300
+    || proof.active !== true || proof.nonce !== nonce
+    || !exactFingerprint(proof.fingerprint, options.fingerprint)) throw new Error("Proof validation failed");
+
+  if (!options.promote) return { status: "validated" as const, promotionAttempts: 0 };
+  const promoted = await dependencies.run({
+    kind: "promote",
+    args: ["promote", options.deploymentId, "--scope", options.scope, "--non-interactive"],
+  });
+  if (promoted.code !== 0) throw new Error("Promotion failed after one attempt; remote outcome is uncertain");
+  return { status: "promoted" as const, promotionAttempts: 1 };
+}
+
+export async function runGuardCommand(command: GuardCommand): Promise<CommandResult> {
+  return new Promise((resolve) => {
+    const child = spawn("vercel", command.args, { stdio: ["pipe", "pipe", "pipe"], timeout: 30_000, killSignal: "SIGKILL" });
+    let stdout = "";
+    let settled = false;
+    const finish = (result: CommandResult) => { if (!settled) { settled = true; resolve(result); } };
+    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); if (stdout.length > 1_000_000) { child.kill("SIGKILL"); finish({ code: 1, stdout: "" }); } });
+    child.stderr.resume();
+    child.stdin.on("error", () => { child.kill("SIGKILL"); finish({ code: 1, stdout: "" }); });
+    child.on("error", () => finish({ code: 1, stdout: "" }));
+    child.on("close", (code) => {
+      if (code !== 0) return finish({ code: code ?? 1, stdout: "" });
+      if (command.kind !== "proof") return finish({ code: 0, stdout });
+      const match = stdout.match(/\nVERCEL_GUARD_HTTP_STATUS:(\d{3})$/);
+      finish(match ? { code: 0, httpStatus: Number(match[1]), stdout: stdout.slice(0, match.index) } : { code: 1, stdout: "" });
+    });
+    child.stdin.end(command.stdin);
+  });
+}
+
+function parseArguments(argv: string[]): GuardOptions {
+  const values = new Map<string, string>();
+  let promote = false;
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] === "--promote") { promote = true; continue; }
+    const value = argv[index + 1];
+    if (!argv[index].startsWith("--") || !value || value.startsWith("--") || values.has(argv[index])) throw new Error("Invalid guard input");
+    values.set(argv[index], value); index += 1;
+  }
+  const required = (name: string) => values.get(`--${name}`) ?? "";
+  return {
+    deploymentId: required("deployment-id"), projectId: required("project-id"), scope: required("scope"), commitSha: required("commit-sha"), promote,
+    fingerprint: {
+      publicationId: required("publication-id"), promotionId: required("promotion-id"), target: "production",
+      deploymentId: required("domain-deployment-id"), commitSha: required("commit-sha"), candidateDigest: required("candidate-digest"),
+      verifiedAt: required("verified-at"), expiresAt: required("expires-at"),
+    },
+  };
+}
+
+async function main() {
+  try {
+    const result = await validatePinnedDeployment(parseArguments(process.argv.slice(2)), { run: runGuardCommand, secret: process.env.CATALOG_PROMOTION_GUARD_SECRET });
+    process.stdout.write(`${result.status}\n`);
+  } catch (error) {
+    process.stderr.write(`${error instanceof Error ? error.message : "Guard failed"}\n`);
+    process.exitCode = 1;
+  }
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) void main();
