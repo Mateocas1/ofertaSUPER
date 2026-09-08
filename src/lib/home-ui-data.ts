@@ -7,15 +7,18 @@ export const HOME_HEADER_NAV = [
 
 export const HOME_HERO = {
 	heading: "Compará precios. Armá tu canasta. Comprá mejor.",
-	body: "Buscá productos de supermercados argentinos, compará precios por EAN y descubrí dónde conviene resolver tu compra.",
+	body: "Buscá productos y compará precios registrados por EAN cuando el catálogo esté disponible.",
 	searchPlaceholder: "Buscar leche, yerba, arroz, aceite...",
 	quickSearches: ["leche", "yerba", "arroz", "aceite"],
-	signals: ["6 fuentes configuradas", "EAN normalizado", "Frescura visible"],
+	signals: ["Comparación por EAN", "Fecha del registro", "Cobertura por supermercado"],
 } as const;
 
 export const SMART_BASKET = {
-	title: "Canasta inteligente",
-	summary: "4 productos",
+	title: "Canasta ilustrativa",
+	summary: "Ejemplo · 4 productos",
+	basketLabel: "Ejemplo de canasta",
+	comparisonLabel: "Comparación ilustrativa de canastas",
+	totalsLabel: "Totales ilustrativos; no representan una canasta actual.",
 	products: [
 		{
 			name: "Leche entera 1L",
@@ -49,7 +52,7 @@ export const SMART_BASKET = {
 			total: "$ 10.847",
 			coverage: "4/4 productos",
 			status: "Completa",
-			badge: "Mejor canasta completa",
+			badge: "Ejemplo · mejor canasta completa",
 			accent: "green",
 		},
 		{
@@ -80,7 +83,7 @@ export const SMART_BASKET = {
 			badge: null,
 		},
 	],
-	note: "Vista ilustrativa con últimos registros disponibles. Verificá fecha y fuente en cada producto.",
+	note: "Ejemplo ilustrativo: verificá fecha y fuente antes de comparar precios registrados.",
 } as const;
 
 export const HOME_PRODUCT_ROWS = [
@@ -92,8 +95,8 @@ export const HOME_PRODUCT_ROWS = [
 		minPrice: "$ 1.099",
 		supermarket: "Vea",
 		range: "$ 1.099 - $ 1.349",
-		updatedAt: "Último registro disponible",
-		action: "Agregar",
+		updatedAt: "Ejemplo ilustrativo",
+		action: "Buscar producto",
 	},
 	{
 		product: "Yerba mate 1kg",
@@ -103,8 +106,8 @@ export const HOME_PRODUCT_ROWS = [
 		minPrice: "$ 2.150",
 		supermarket: "Carrefour",
 		range: "$ 2.150 - $ 2.599",
-		updatedAt: "Último registro disponible",
-		action: "Agregar",
+		updatedAt: "Ejemplo ilustrativo",
+		action: "Buscar producto",
 	},
 	{
 		product: "Arroz largo fino 1kg",
@@ -114,8 +117,8 @@ export const HOME_PRODUCT_ROWS = [
 		minPrice: "$ 1.699",
 		supermarket: "Vea",
 		range: "$ 1.699 - $ 2.299",
-		updatedAt: "Último registro disponible",
-		action: "Agregar",
+		updatedAt: "Ejemplo ilustrativo",
+		action: "Buscar producto",
 	},
 	{
 		product: "Aceite girasol 1,5L",
@@ -125,29 +128,29 @@ export const HOME_PRODUCT_ROWS = [
 		minPrice: "$ 2.849",
 		supermarket: "Vea",
 		range: "$ 2.849 - $ 3.599",
-		updatedAt: "Último registro disponible",
-		action: "Agregar",
+		updatedAt: "Ejemplo ilustrativo",
+		action: "Buscar producto",
 	},
 ] as const;
 
 export const MARKET_PULSE_ITEMS = [
 	{
-		title: "Yerba con registro reciente",
-		description: "Referencia guardada con fecha visible para comparar.",
+		title: "Referencia de yerba",
+		description: "Lectura ilustrativa de un registro para comparar.",
 		value: "Registro",
 		tone: "green",
 		points: "4,14 16,20 28,12 40,28 52,18 64,34 76,38",
 	},
 	{
-		title: "Aceite con diferencias registradas",
-		description: "Rango observado entre supermercados con datos disponibles.",
+		title: "Rango de aceite",
+		description: "Lectura ilustrativa de una diferencia entre supermercados.",
 		value: "Rango",
 		tone: "amber",
 		points: "4,12 16,24 28,18 40,32 52,20 64,28 76,16",
 	},
 	{
-		title: "Leche con cobertura completa",
-		description: "Comparación por EAN entre fuentes configuradas.",
+		title: "Cobertura de leche",
+		description: "Lectura ilustrativa de una comparación por EAN.",
 		value: "Cobertura",
 		tone: "green",
 		points: "4,28 16,22 28,26 40,18 52,24 64,20 76,24",
@@ -164,6 +167,10 @@ export function getApprovedHomeCopy() {
 		...HOME_HERO.signals,
 		SMART_BASKET.title,
 		SMART_BASKET.summary,
+		SMART_BASKET.basketLabel,
+		SMART_BASKET.comparisonLabel,
+		SMART_BASKET.totalsLabel,
+		SMART_BASKET.note,
 		...SMART_BASKET.products.flatMap((item) => [item.name, item.brand]),
 		...SMART_BASKET.ranking.flatMap((item) => [
 			item.supermarket,
@@ -172,9 +179,10 @@ export function getApprovedHomeCopy() {
 			item.status,
 			item.badge ?? "",
 		]),
-		"Precios por producto",
-		"Mostrando 4 de 4 productos",
-		"Ver todos los productos",
+		"Ejemplo de precios por producto",
+		"4 productos de ejemplo",
+		"Estos precios son ejemplos ilustrativos; no son precios actuales.",
+		"Abrir búsqueda de productos",
 		...HOME_PRODUCT_ROWS.flatMap((item) => [
 			item.product,
 			item.brand,
@@ -184,8 +192,9 @@ export function getApprovedHomeCopy() {
 			item.updatedAt,
 			item.action,
 		]),
-		"Lecturas del catálogo",
-		"Ver más",
+		"Ejemplos de lectura del catálogo",
+		"Las líneas son ilustrativas y no representan una serie observada.",
+		"Ver ofertas disponibles",
 		...MARKET_PULSE_ITEMS.flatMap((item) => [
 			item.title,
 			item.description,
