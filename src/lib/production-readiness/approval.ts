@@ -27,17 +27,10 @@ type ApprovalInput = { origin: string; fetchSite: string | null; csrfToken: stri
 export function createApprovalService(repository: ApprovalRepository, now = () => new Date()) {
   async function admission(id: string) {
     const value = await repository.resolveAdmission(id);
-    const manifest = JSON.parse(value.candidateManifestBytes) as { release?: Record<string, string>; policy?: { digest?: string; permittedMutations?: string[]; bytes?: string }; baseline?: { dataDigest?: string; coverage?: { unit?: string; expectedUniverse?: string; observedCount?: string }; watermarks?: Record<string, string>; provenance?: Record<string, string> } };
-    const release = manifest.release, baseline = manifest.baseline, policy = manifest.policy;
-    const policyDetails = policy?.bytes ? JSON.parse(policy.bytes) : undefined;
-    if (!release?.releaseId || !release.deploymentId || !release.fullSha || !release.domain || !release.target || !release.scope || !release.expiresAt || !policy?.digest || !baseline?.dataDigest || !baseline.coverage?.unit || !baseline.coverage.expectedUniverse || !baseline.coverage.observedCount || !completeTextRecord(baseline.watermarks) || !completeTextRecord(baseline.provenance) || !policyDetails || typeof policyDetails !== "object" || Array.isArray(policyDetails)) throw new Error("complete reviewed consent context required");
-    return { value, reviewed: { candidateAdmissionId: value.candidateAdmissionId, releaseId: release.releaseId, deploymentId: release.deploymentId, fullSha: release.fullSha, domain: release.domain, target: release.target, scope: release.scope, expiresAt: release.expiresAt, candidateDigest: value.candidateManifestDigest, policyDigest: policy.digest, baselineDigest: baseline.dataDigest, technicalVerificationId: value.verificationId, allowedMutations: policy.permittedMutations ?? ["review server-owned policy"], coverage: baseline.coverage as { unit: string; expectedUniverse: string; observedCount: string }, sourceAges: baseline.watermarks, degradation: baseline.provenance, verificationResult: "PASS", policyDetails: policyDetails as Record<string, unknown>, revocationBoundary: "Authority revocation only; governed source data remains retained.", retentionBoundary: "Evidence is retained for 180 days after its final authority reference expires." } satisfies ReviewedAuthority };
+    return { value, reviewed: reviewedAuthority(value) };
   }
   async function authorize(principal: ClerkPrincipal | null, reviewed: ReviewedAuthority) {
-    if (!principal?.userId || !principal.sessionId) throw new Error("authenticated Clerk session required");
-    const grant = await repository.findGrant(principal, reviewed);
-    if (!grant || grant.userId !== principal.userId || grant.action !== "approve" || grant.scope !== reviewed.scope || grant.target !== reviewed.target || grant.policyDigest !== reviewed.policyDigest || grant.expiresAt <= now()) throw new Error("scoped publication grant required");
-    return { principal, grant };
+    return authorizeApproval(repository, now, principal, reviewed);
   }
   return {
     async prepare(principal: ClerkPrincipal | null, candidateAdmissionId: string) {
@@ -51,23 +44,111 @@ export function createApprovalService(repository: ApprovalRepository, now = () =
       return { id: challenge.id, nonce, csrfToken, expiresAt: challenge.expiresAt.toISOString(), reviewed };
     },
     async approve(principal: ClerkPrincipal | null, input: ApprovalInput) {
-      if (!input.fetchSite || input.fetchSite === "cross-site" || !input.csrfToken || !input.idempotencyKey || input.consent !== true) throw new Error("request origin validation failed");
+      assertApprovalInput(input);
       const requested = await repository.findChallenge(input.challengeId);
-      if (!requested || requested.expiresAt <= now()) throw new Error("approval challenge is invalid");
+      assertRequestedChallenge(requested, now());
       const { value, reviewed } = await admission(requested.candidateAdmissionId);
-      if (input.origin !== `https://${reviewed.domain}`) throw new Error("request origin validation failed");
+      assertApprovalOrigin(input, reviewed);
       const authorized = await authorize(principal, reviewed);
       const requestDigest = approvalRequestDigest(value, authorized.grant, authorized.principal, requested.nonceHash, requested.csrfHash);
-      const validChallenge = requested.userId === authorized.principal.userId && requested.sessionId === authorized.principal.sessionId && requested.requestDigest === requestDigest && requested.grantExpiresAt.valueOf() === authorized.grant.expiresAt.valueOf() && same(requested.nonceHash, digest(input.nonce)) && same(requested.csrfHash, digest(input.csrfToken));
-      if (!validChallenge) throw new Error(requested.consumedAt ? "idempotency conflict" : "approval challenge is invalid");
-      const existing = await repository.findReceipt?.(input.idempotencyKey, requestDigest, authorized.principal.userId, requested.grantExpiresAt);
-      if (existing) return existing;
-      const challenge = await repository.consumeChallenge(input.challengeId);
-      if (!challenge || challenge.userId !== authorized.principal.userId || challenge.sessionId !== authorized.principal.sessionId || challenge.requestDigest !== requestDigest || challenge.grantExpiresAt.valueOf() !== authorized.grant.expiresAt.valueOf() || !same(challenge.nonceHash, digest(input.nonce)) || !same(challenge.csrfHash, digest(input.csrfToken))) throw new Error("approval challenge is invalid");
-      return repository.saveReceipt({ idempotencyKey: input.idempotencyKey, requestDigest, actorId: authorized.principal.userId, approvedAt: now(), grantExpiresAt: challenge.grantExpiresAt, challengeId: challenge.id });
+      assertChallengeBinding(requested, authorized, requestDigest, input);
+      return completeApproval(repository, now, input, authorized, requestDigest);
     },
   };
 }
+
+type ReviewedManifest = { release?: Record<string, string>; policy?: { digest?: string; permittedMutations?: string[]; bytes?: string }; baseline?: { dataDigest?: string; coverage?: { unit?: string; expectedUniverse?: string; observedCount?: string }; watermarks?: Record<string, string>; provenance?: Record<string, string> } };
+
+type AuthorizedApproval = { principal: ClerkPrincipal; grant: Grant };
+
+function reviewedAuthority(value: Admission): ReviewedAuthority {
+  const manifest = JSON.parse(value.candidateManifestBytes) as ReviewedManifest;
+  const policyDetails = manifest.policy?.bytes ? JSON.parse(manifest.policy.bytes) : undefined;
+  const context = reviewedContext(manifest, policyDetails);
+  if (!context) throw new Error("complete reviewed consent context required");
+  const { release, baseline, policy } = context;
+  return {
+    candidateAdmissionId: value.candidateAdmissionId, releaseId: release.releaseId, deploymentId: release.deploymentId,
+    fullSha: release.fullSha, domain: release.domain, target: release.target, scope: release.scope, expiresAt: release.expiresAt,
+    candidateDigest: value.candidateManifestDigest, policyDigest: policy.digest, baselineDigest: baseline.dataDigest,
+    technicalVerificationId: value.verificationId, allowedMutations: policy.permittedMutations ?? ["review server-owned policy"],
+    coverage: baseline.coverage, sourceAges: baseline.watermarks, degradation: baseline.provenance, verificationResult: "PASS",
+    policyDetails: context.policyDetails, revocationBoundary: "Authority revocation only; governed source data remains retained.",
+    retentionBoundary: "Evidence is retained for 180 days after its final authority reference expires.",
+  };
+}
+
+type CompleteReviewedContext = {
+  release: Record<string, string> & { releaseId: string; deploymentId: string; fullSha: string; domain: string; target: string; scope: string; expiresAt: string };
+  policy: { digest: string; permittedMutations?: string[]; bytes?: string };
+  baseline: { dataDigest: string; coverage: { unit: string; expectedUniverse: string; observedCount: string }; watermarks: Record<string, string>; provenance: Record<string, string> };
+  policyDetails: Record<string, unknown>;
+};
+
+function reviewedContext(manifest: ReviewedManifest, policyDetails: unknown): CompleteReviewedContext | null {
+  if (!hasCompleteRelease(manifest.release) || !hasCompleteBaseline(manifest.baseline)
+    || !hasCompletePolicy(manifest.policy, policyDetails)) return null;
+  return { release: manifest.release, baseline: manifest.baseline, policy: manifest.policy, policyDetails };
+}
+
+function hasCompleteRelease(release: ReviewedManifest["release"]): release is CompleteReviewedContext["release"] {
+  return Boolean(release?.releaseId && release.deploymentId && release.fullSha && release.domain && release.target && release.scope && release.expiresAt);
+}
+
+function hasCompleteBaseline(baseline: ReviewedManifest["baseline"]): baseline is CompleteReviewedContext["baseline"] {
+  return Boolean(baseline?.dataDigest && baseline.coverage?.unit && baseline.coverage.expectedUniverse && baseline.coverage.observedCount
+    && completeTextRecord(baseline.watermarks) && completeTextRecord(baseline.provenance));
+}
+
+function hasCompletePolicy(policy: ReviewedManifest["policy"], policyDetails: unknown): policy is CompleteReviewedContext["policy"] {
+  return Boolean(policy?.digest && policyDetails && typeof policyDetails === "object" && !Array.isArray(policyDetails));
+}
+
+async function authorizeApproval(repository: ApprovalRepository, now: () => Date, principal: ClerkPrincipal | null, reviewed: ReviewedAuthority): Promise<AuthorizedApproval> {
+  if (!principal?.userId || !principal.sessionId) throw new Error("authenticated Clerk session required");
+  const grant = await repository.findGrant(principal, reviewed);
+  if (!validApprovalGrant(grant, principal, reviewed, now())) throw new Error("scoped publication grant required");
+  return { principal, grant };
+}
+
+function validApprovalGrant(grant: Grant | null, principal: ClerkPrincipal, reviewed: ReviewedAuthority, now: Date) {
+  return Boolean(grant && grant.userId === principal.userId && grant.action === "approve" && grant.scope === reviewed.scope
+    && grant.target === reviewed.target && grant.policyDigest === reviewed.policyDigest && grant.expiresAt > now);
+}
+
+function assertApprovalInput(input: ApprovalInput) {
+  if (!input.fetchSite || input.fetchSite === "cross-site" || !input.csrfToken || !input.idempotencyKey || input.consent !== true) throw new Error("request origin validation failed");
+}
+
+function assertRequestedChallenge(challenge: Challenge | null, now: Date): asserts challenge is Challenge {
+  if (!challenge || challenge.expiresAt <= now) throw new Error("approval challenge is invalid");
+}
+
+function assertApprovalOrigin(input: ApprovalInput, reviewed: ReviewedAuthority) {
+  if (input.origin !== `https://${reviewed.domain}`) throw new Error("request origin validation failed");
+}
+
+function assertChallengeBinding(challenge: Challenge, authorized: AuthorizedApproval, requestDigest: string, input: ApprovalInput) {
+  const valid = challenge.userId === authorized.principal.userId && challenge.sessionId === authorized.principal.sessionId
+    && challenge.requestDigest === requestDigest && challenge.grantExpiresAt.valueOf() === authorized.grant.expiresAt.valueOf()
+    && same(challenge.nonceHash, digest(input.nonce)) && same(challenge.csrfHash, digest(input.csrfToken));
+  if (!valid) throw new Error(challenge.consumedAt ? "idempotency conflict" : "approval challenge is invalid");
+}
+
+async function completeApproval(repository: ApprovalRepository, now: () => Date, input: ApprovalInput, authorized: AuthorizedApproval, requestDigest: string) {
+  const existing = await repository.findReceipt?.(input.idempotencyKey, requestDigest, authorized.principal.userId, authorized.grant.expiresAt);
+  if (existing) return existing;
+  const challenge = await repository.consumeChallenge(input.challengeId);
+  assertConsumedChallenge(challenge, authorized, requestDigest, input);
+  return repository.saveReceipt({ idempotencyKey: input.idempotencyKey, requestDigest, actorId: authorized.principal.userId, approvedAt: now(), grantExpiresAt: challenge.grantExpiresAt, challengeId: challenge.id });
+}
+
+function assertConsumedChallenge(challenge: Challenge | null, authorized: AuthorizedApproval, requestDigest: string, input: ApprovalInput): asserts challenge is Challenge {
+  if (!challenge || challenge.userId !== authorized.principal.userId || challenge.sessionId !== authorized.principal.sessionId
+    || challenge.requestDigest !== requestDigest || challenge.grantExpiresAt.valueOf() !== authorized.grant.expiresAt.valueOf()
+    || !same(challenge.nonceHash, digest(input.nonce)) || !same(challenge.csrfHash, digest(input.csrfToken))) throw new Error("approval challenge is invalid");
+}
+
 function approvalRequestDigest(admission: Admission, grant: Grant, principal: ClerkPrincipal, nonceHash: string, csrfHash: string) {
   return digest(`${admission.candidateAdmissionId}:${admission.candidateManifestDigest}:${admission.verificationId}:${grant.expiresAt.toISOString()}:${principal.userId}:${principal.sessionId}:${nonceHash}:${csrfHash}`);
 }
