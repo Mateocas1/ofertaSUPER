@@ -92,6 +92,19 @@ test("scoped IPv6 identities fail closed before consuming capacity", async () =>
   assert.equal(calls, 0);
 });
 
+test("timeout results fail closed and do not consume client capacity", async () => {
+  const keys: string[] = [];
+  const limiter: RateLimiter = {
+    limit: async (key) => {
+      keys.push(key);
+      return state(true, "timeout");
+    },
+  };
+
+  assert.deepEqual(await admitStrictRateLimit(limiter, { routeScope: "search", trustedClientIp: "203.0.113.8" }), { status: "unavailable", httpStatus: 503 });
+  assert.deepEqual(keys, ["strict:search:global"]);
+});
+
 test("client backend errors occur after global admission and fail closed", async () => {
   const keys: string[] = [];
   const limiter: RateLimiter = {
