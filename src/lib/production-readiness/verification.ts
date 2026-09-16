@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { canonicalize, canonicalProof, sha256, sha256Canonical } from "./canonical";
 
@@ -97,6 +98,94 @@ export function verifyGovernedDelta(input: unknown) {
   verifiedEnvelopes.set(handle, canonicalProof(payload));
   return handle;
 }
+
+/** U14a prepares and immediately independently verifies one Vea correction; promotion stays separate. */
+export function prepareForwardCorrection(input: unknown) {
+  if (!plain(input) || !only(input, ["original", "current", "intent", "verify"])) correctionFail();
+  const { original, current, intent, verify } = input as Record<string, unknown>;
+  if (typeof verify !== "function") correctionFail();
+  if (!deepFrozen(original) || !plain(original) || !only(original, ["source", "items"]) || original.source !== "vea"
+    || !Array.isArray(original.items) || original.items.length !== 1) correctionFail();
+  if (!plain(current) || !only(current, ["source", "items"]) || current.source !== original.source
+    || !Array.isArray(current.items) || current.items.length !== 1) correctionFail();
+  if (!plain(intent) || !only(intent, ["type", "source", "entity", "key", "fields"])
+    || intent.type !== "governed-forward-correction/v1" || intent.source !== original.source
+    || !Array.isArray(intent.fields) || !intent.fields.length || new Set(intent.fields).size !== intent.fields.length
+    || intent.fields.some((field) => typeof field !== "string")) correctionFail();
+  const originalItem = original.items[0];
+  const currentItem = current.items[0];
+  if (!correctionItem(originalItem) || !currentCorrectionItem(currentItem)
+    || originalItem.entity !== intent.entity || originalItem.key !== intent.key
+    || currentItem.entity !== originalItem.entity || currentItem.key !== originalItem.key) correctionFail();
+  const changed = Object.keys(originalItem.after).filter((field) => canonicalize(originalItem.before[field]) !== canonicalize(originalItem.after[field])).sort();
+  if (!changed.length || canonicalize(changed) !== canonicalize([...intent.fields].sort())) correctionFail();
+  if (changed.some((field) => !(field in currentItem.facts) || canonicalize(currentItem.facts[field]) !== canonicalize(originalItem.after[field]))) correctionFail();
+  const before = detachedFacts(currentItem.facts);
+  const after = { ...before, ...Object.fromEntries(changed.map((field) => [field, detachedFact(originalItem.before[field])])) };
+  const candidate = freezeCorrection({ operationKey: `source-capture/v1:${sha256(randomUUID())}`, source: original.source, current: [{ entity: originalItem.entity, key: originalItem.key, facts: before }],
+    items: [{ entity: originalItem.entity, key: originalItem.key, before, after }] });
+  const verified = verify(candidate);
+  const proof = verified && typeof verified === "object" ? verifiedEnvelopes.get(verified) : undefined;
+  if (!proof || !matchesCorrectionProof(proof, candidate)) correctionFail();
+  return verified;
+}
+
+function detachedFacts(value: Facts) {
+  return Object.fromEntries(Object.entries(value).map(([key, fact]) => [key, detachedFact(fact)]));
+}
+
+function detachedFact(value: unknown): unknown {
+  try { return structuredClone(value); } catch { correctionFail(); }
+}
+
+function matchesCorrectionProof(proof: Readonly<{ bytes: string }>, candidate: { operationKey: string; source: string; items: unknown[] }) {
+  try {
+    const envelope = JSON.parse(proof.bytes) as { capture?: { operationKey?: unknown; source?: unknown; items?: unknown } };
+    return envelope.capture?.operationKey === candidate.operationKey && envelope.capture.source === candidate.source && canonicalize(envelope.capture.items) === canonicalize(candidate.items);
+  } catch { return false; }
+}
+
+function correctionItem(value: unknown): value is { entity: "product" | "offer" | "history"; key: string; before: Facts; after: Facts } {
+  return plain(value) && only(value, ["entity", "key", "before", "after"]) && correctionIdentity(value.entity, value.key)
+    && plain(value.before) && plain(value.after) && canonicalize(Object.keys(value.before).sort()) === canonicalize(Object.keys(value.after).sort());
+}
+
+function currentCorrectionItem(value: unknown): value is { entity: "product" | "offer" | "history"; key: string; facts: Facts } {
+  return plain(value) && only(value, ["entity", "key", "facts"]) && correctionIdentity(value.entity, value.key) && plain(value.facts);
+}
+
+function correctionIdentity(entity: unknown, key: unknown): entity is "product" | "offer" | "history" {
+  if ((entity !== "product" && entity !== "offer" && entity !== "history") || typeof key !== "string") return false;
+  try {
+    const parsed = JSON.parse(key);
+    const names = entity === "product" ? ["ean"] : entity === "offer" ? ["product_ean", "supermarket_id"] : ["id"];
+    return plain(parsed) && canonicalize(parsed) === key && canonicalize(Object.keys(parsed).sort()) === canonicalize(names)
+      && names.every((name) => typeof parsed[name] === "string" && /^[0-9]+$/.test(parsed[name]));
+  } catch { return false; }
+}
+
+function plain(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function only(value: Record<string, unknown>, names: string[]) {
+  return canonicalize(Object.keys(value).sort()) === canonicalize(names.slice().sort());
+}
+
+function deepFrozen(value: unknown): boolean {
+  return !value || typeof value !== "object" || Object.isFrozen(value)
+    && Object.values(value).every((item) => deepFrozen(item));
+}
+
+function freezeCorrection<T>(value: T): T {
+  if (value && typeof value === "object") {
+    Object.values(value).forEach(freezeCorrection);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+function correctionFail(): never { throw new Error("forward correction rejected"); }
 
 /** Only a handle issued by the verifier above is accepted; copied JSON is not verified proof. */
 export function createPromotionReadyEnvelope(verified: unknown) {
