@@ -70,6 +70,18 @@ async function strictLimit(limiter: Pick<RateLimiter, "limit">, identifier: stri
   }
 }
 
+const strictUnavailable = (): StrictAdmissionResult => ({ status: "unavailable", httpStatus: 503 });
+
+function strictLimitOutcome(
+  result: RateLimitState | typeof STRICT_TIMEOUT,
+  level: "global" | "client",
+): { state: RateLimitState } | { failure: StrictAdmissionResult } {
+  if (result === STRICT_TIMEOUT || result.reason === "timeout") return { failure: strictUnavailable() };
+  return result.success
+    ? { state: result }
+    : { failure: { status: "exhausted", httpStatus: 429, level, state: result } };
+}
+
 /**
  * Strict callers must supply an IP derived at a trusted deployment boundary.
  * Syntax normalization prevents equivalent IPs from creating distinct keys;
@@ -81,21 +93,23 @@ export async function admitStrictRateLimit(
   input: Readonly<{ routeScope: string; trustedClientIp: string }>,
 ): Promise<StrictAdmissionResult> {
   const clientIp = normalizeClientIp(input.trustedClientIp);
-  if (!limiter || !/^[a-z0-9][a-z0-9:-]{0,63}$/.test(input.routeScope) || !clientIp) {
-    return { status: "unavailable", httpStatus: 503 };
-  }
+  if (!limiter || !/^[a-z0-9][a-z0-9:-]{0,63}$/.test(input.routeScope) || !clientIp) return strictUnavailable();
 
   try {
-    const global = await strictLimit(limiter, `strict:${input.routeScope}:global`);
-    if (global === STRICT_TIMEOUT || global.reason === "timeout") return { status: "unavailable", httpStatus: 503 };
-    if (!global.success) return { status: "exhausted", httpStatus: 429, level: "global", state: global };
+    const globalResult = strictLimitOutcome(
+      await strictLimit(limiter, `strict:${input.routeScope}:global`),
+      "global",
+    );
+    if ("failure" in globalResult) return globalResult.failure;
 
-    const client = await strictLimit(limiter, `strict:${input.routeScope}:client:${clientIp}`);
-    if (client === STRICT_TIMEOUT || client.reason === "timeout") return { status: "unavailable", httpStatus: 503 };
-    if (!client.success) return { status: "exhausted", httpStatus: 429, level: "client", state: client };
-    return { status: "admitted", global, client };
+    const clientResult = strictLimitOutcome(
+      await strictLimit(limiter, `strict:${input.routeScope}:client:${clientIp}`),
+      "client",
+    );
+    if ("failure" in clientResult) return clientResult.failure;
+    return { status: "admitted", global: globalResult.state, client: clientResult.state };
   } catch {
-    return { status: "unavailable", httpStatus: 503 };
+    return strictUnavailable();
   }
 }
 
