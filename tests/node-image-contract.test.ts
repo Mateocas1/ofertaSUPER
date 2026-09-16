@@ -11,7 +11,8 @@ test("builds a pinned standalone web runner deterministically", async () => {
 	assert.match(dockerfile, /^FROM node:22\.19\.0-bookworm-slim AS openssl-node$/m);
 	assert.match(dockerfile, /^FROM openssl-node AS dependencies$/m);
 	assert.match(dockerfile, /^FROM .* AS builder$/m);
-	assert.match(dockerfile, /^FROM node:22\.19\.0-bookworm-slim AS runner$/m);
+	assert.match(dockerfile, /^FROM openssl-node AS runner$/m);
+	assert.doesNotMatch(dockerfile, /^FROM node:22\.19\.0-bookworm-slim AS runner$/m);
 	assert.match(dockerfile, /npm ci --ignore-scripts --no-audit --no-fund/);
 	assert.ok(dockerfile.indexOf("npm run db:generate") < dockerfile.indexOf("npm run build"));
 	assert.match(dockerfile, /\/app\/\.next\/standalone \.\//);
