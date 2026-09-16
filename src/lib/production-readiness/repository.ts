@@ -1,3 +1,5 @@
+import { createPromotionReadyEnvelope } from "./verification";
+
 type CreateDelegate = {
 	create(args: { data: Record<string, unknown> }): Promise<unknown>;
 };
@@ -156,6 +158,31 @@ export function createDeltaRecoveryRepository(sql: {
       const result = await sql.execute("SELECT public.inspect_delta_promotion($1::jsonb) AS result", [JSON.stringify(input)]);
       if (!result.rows[0]?.result) throw new Error("delta promotion outcome is unknown; do not replay or compensate");
       return result.rows[0].result;
+    },
+  };
+}
+
+export type ForwardCorrectionPromotionRequest = DeltaPromotionRequest & {
+  verified: unknown; admissionId: string; envelopeDigest: string; badOperationId: string; badGenerationRecordId: string; expectedLineage: string;
+};
+
+/** U14b links a fresh verifier envelope before delegating its only public effect to U12b2 promote_delta. */
+export function createForwardCorrectionRepository(sql: {
+  execute(query: string, values: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
+}) {
+  const promotions = createDeltaPromotionRepository(sql);
+  return {
+    async promote(request: ForwardCorrectionPromotionRequest) {
+      assertText(request.key, "forward correction key");
+      if (createPromotionReadyEnvelope(request.verified).digest !== request.envelopeDigest) throw new ProductionReadinessInputError("fresh correction envelope digest is required");
+      for (const [label, value] of Object.entries({ admissionId: request.admissionId, badOperationId: request.badOperationId, badGenerationRecordId: request.badGenerationRecordId })) assertUuid(value, label.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`));
+      for (const [label, value] of Object.entries({ envelopeDigest: request.envelopeDigest, expectedLineage: request.expectedLineage })) assertDigest(value, label.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`));
+      const linkage = { key: request.key, admissionId: request.admissionId, envelopeDigest: request.envelopeDigest, badOperationId: request.badOperationId,
+        badGenerationRecordId: request.badGenerationRecordId, expectedGeneration: request.expectedGeneration, expectedLineage: request.expectedLineage };
+      const result = await sql.execute("SELECT public.link_forward_correction($1::jsonb) AS result", [JSON.stringify(linkage)]);
+      const linked = result.rows[0]?.result as { state?: string } | undefined;
+      if (linked?.state !== "LINKED") throw new Error("forward correction is restricted; do not promote or compensate");
+      return promotions.promote({ key: request.key, manifestId: request.manifestId, expectedGeneration: request.expectedGeneration, expectedHealthVersion: request.expectedHealthVersion });
     },
   };
 }
