@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && tsx scripts/build-catalog-contract.ts prebuild && next build && serwist build && tsx scripts/build-catalog-contract.ts package",
+    "build": "prisma generate && tsx scripts/build-catalog-contract.ts prebuild && next build --webpack && serwist build && tsx scripts/build-catalog-contract.ts package",
     "start": "next start",
     "test": "tsx --conditions=react-server --test tests/**/*.test.ts",
     "lint": "eslint .",
