@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "evidenceKind": "u11b4-budget-blocked",
+  "change": "os03-authority-publication-workflow",
+  "workUnit": "U11b4 Existing-LIVE adoption and lifecycle closure",
+  "status": "blocked-before-implementation",
+  "scope": {
+    "included": [
+      "trusted existing-LIVE adoption from U11a g0 activation/baseline proof or U12b immutable generation records",
+      "denial of policy, generation, lineage, health, build, stale, drift, and late-ineligible revival cases",
+      "lifecycle PostgreSQL and guarded-route proof",
+      "adoption-boundary refactor and quality-proof task"
+    ],
+    "excluded": [
+      "second publication",
+      "generation reset",
+      "inherited authority",
+      "in-place revival",
+      "source rescan",
+      "approval or expiry renewal",
+      "permission, dependency, .next, or configuration changes"
+    ]
+  },
+  "budget": {
+    "authorizedChangedLines": 390,
+    "forecastMinimumChangedLines": 440,
+    "result": "blocked",
+    "reason": "The smallest cohesive candidate combines the guarded adoption/recovery transaction and immutable proof, repository and guarded-route handling, strict-TDD lifecycle and route tests, task completion updates, cumulative progress, and required settlement evidence. Splitting it would separate the atomic adoption contract from its mandatory PostgreSQL/routes proof."
+  },
+  "sourceArtifacts": {
+    "tasks": "openspec/changes/os03-authority-publication-workflow/tasks.md",
+    "proposal": "openspec/changes/os03-authority-publication-workflow/proposal.md",
+    "design": "openspec/changes/os03-authority-publication-workflow/design.md",
+    "specs": [
+      "openspec/changes/os03-authority-publication-workflow/specs/atomic-authority-publication/spec.md",
+      "openspec/changes/os03-authority-publication-workflow/specs/candidate-evidence/spec.md",
+      "openspec/changes/os03-authority-publication-workflow/specs/runtime-enforcement-recovery/spec.md",
+      "openspec/changes/os03-authority-publication-workflow/specs/scoped-approval/spec.md"
+    ],
+    "currentSeams": [
+      "src/lib/production-readiness/repository.ts",
+      "src/lib/production-readiness/operations.ts",
+      "tests/production-readiness/authority-lifecycle.test.ts",
+      "tests/production-readiness/delta-promotion.test.ts",
+      "prisma/migrations/20260903_atomic_authority_lifecycle/migration.sql",
+      "prisma/migrations/20260906_atomic_verified_delta_promotion/migration.sql",
+      "prisma/migrations/20260907_delta_recovery_observation/migration.sql"
+    ]
+  },
+  "observedWork": {
+    "reads": [
+      "The supplied work-unit skill, OpenSpec configuration, proposal, design, all four specs, tasks, and prior apply progress were read.",
+      "The U11/U12 repository, operations, routes, migrations, and PostgreSQL lifecycle/promotion tests were read.",
+      "Installed Next.js 16.3.1 authentication and Route Handler documentation was read."
+    ],
+    "commands": [
+      {
+        "command": "git rev-parse --show-toplevel && test -d .codegraph && echo CODEGRAPH_PRESENT || echo CODEGRAPH_MISSING && git status --short",
+        "exitCode": 0,
+        "result": "Resolved the repository root and confirmed .codegraph is present."
+      },
+      {
+        "command": "git diff --numstat -- . ':!openspec/changes/os03-authority-publication-workflow' | awk '{a+=$1; d+=$2} END {print \"existing tracked working diff\",a+d,\"lines\"}'",
+        "exitCode": 0,
+        "result": "Observed an existing tracked working diff of 1013 lines; it was not attributed to U11b4."
+      },
+      {
+        "command": "git diff --check -- openspec/changes/os03-authority-publication-workflow/apply-progress.md && git diff --numstat -- openspec/changes/os03-authority-publication-workflow/apply-progress.md",
+        "exitCode": 0,
+        "result": "Read-only artifact integrity check completed after the pre-implementation block record; it did not run application implementation or quality verification."
+      }
+    ],
+    "codegraph": "CodeGraph exploration was used to locate U11/U12 lifecycle, repository, route, migration, and test seams before targeted reads."
+  },
+  "nonExecution": {
+    "implementationEdited": false,
+    "testsRun": false,
+    "qualityCommandsRun": false,
+    "runtimeOrPostgreSQLProofRun": false,
+    "deploymentOrExternalOperationRun": false,
+    "lifecycleCommandRun": false,
+    "taskCheckboxChanged": false,
+    "statement": "No U11b4 implementation, test, runtime proof, quality verification, or lifecycle command ran before the budget block."
+  },
+  "provenance": {
+    "workspace": "/home/picala/code/ofertaSUPER-worktrees/os-03-cache-authority",
+    "artifactStore": "openspec",
+    "deliveryStrategy": "ask-on-risk",
+    "chainBoundary": "feature-branch-chain",
+    "strictTdd": true
+  },
+  "nativeSettlement": "This evidence records a real pre-implementation budget block only. It contains no attempt token, self-hash, or native acceptance claim."
+}

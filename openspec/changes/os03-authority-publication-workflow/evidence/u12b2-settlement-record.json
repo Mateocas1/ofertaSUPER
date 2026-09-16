@@ -1,0 +1,64 @@
+{
+  "schema": "ofertasuper.sdd-settlement-record/v1",
+  "recorded_at": "2026-09-15T04:03:53.079681+00:00",
+  "change": "os03-authority-publication-workflow",
+  "work_unit": "U12b2 PostgreSQL proof gaps",
+  "accepted_payload": {
+    "request_id": "u12b2-remediation-settle-01c16cb1-20260915-b",
+    "remediation_evidence_json_exact": "{\"schema\":\"gentle-ai.remediation-evidence/v1\",\"failed_evidence_revision\":\"sha256:7ec36f861aeb92c04d21cb4bfca1460e7e21a2048e00e462e45577fb5d5941d1\",\"commands\":[{\"command\":\"U12B2_PG_CONTAINER=os03-u12b2-proof-pg-1789443246-237019 npx tsx --conditions=react-server --test tests/production-readiness/delta-promotion.test.ts\",\"exit_code\":0,\"result\":\"9 passed, 0 failed, 0 skipped; proved owner rejection, final DB-clock expiry rollback, source-read denial after divergence, sealed after-image, audit rollback, replay conflict, CAS, repeatable-read old/old, and post-commit new visibility.\"},{\"command\":\"npm test\",\"exit_code\":0,\"result\":\"85 passed, 12 skipped, 0 failed.\"},{\"command\":\"npm run lint\",\"exit_code\":0,\"result\":\"0 errors and 204 warnings.\"},{\"command\":\"npm run typecheck\",\"exit_code\":0,\"result\":\"Typecheck completed successfully.\"},{\"command\":\"npm run build\",\"exit_code\":0,\"result\":\"After generated .next normalization, Prisma generation, Next compilation, TypeScript, static generation, and trace collection completed successfully.\"},{\"command\":\"git diff --check\",\"exit_code\":0,\"result\":\"No whitespace diagnostics before or after verification.\"}],\"runtime_harness\":{\"status\":\"passed\",\"command\":\"Docker PostgreSQL 16 disposable container os03-u12b2-proof-pg-1789443246-237019 with migration image os03-u12b2-migrate-1789410134; npm run db:migrate:deploy; focused delta-promotion test.\",\"result\":\"No published ports or mounts; all 21 ordered migrations applied; authority-only promote_delta ACL verified; container and network were absent after exact-name cleanup.\",\"na_reason\":\"\"},\"rollback\":{\"boundary\":\"PostgreSQL U12b2 template database in disposable container os03-u12b2-proof-pg-1789443246-237019.\",\"evidence\":\"Focused proof exit 0 verified audit rollback and final DB-clock expiry rollback with no generation or projection effect; exact-name cleanup confirmed container and network absence.\"}}",
+    "remediation_evidence": {
+      "schema": "gentle-ai.remediation-evidence/v1",
+      "failed_evidence_revision": "sha256:7ec36f861aeb92c04d21cb4bfca1460e7e21a2048e00e462e45577fb5d5941d1",
+      "commands": [
+        {"command": "U12B2_PG_CONTAINER=os03-u12b2-proof-pg-1789443246-237019 npx tsx --conditions=react-server --test tests/production-readiness/delta-promotion.test.ts", "exit_code": 0, "result": "9 passed, 0 failed, 0 skipped; proved owner rejection, final DB-clock expiry rollback, source-read denial after divergence, sealed after-image, audit rollback, replay conflict, CAS, repeatable-read old/old, and post-commit new visibility."},
+        {"command": "npm test", "exit_code": 0, "result": "85 passed, 12 skipped, 0 failed."},
+        {"command": "npm run lint", "exit_code": 0, "result": "0 errors and 204 warnings."},
+        {"command": "npm run typecheck", "exit_code": 0, "result": "Typecheck completed successfully."},
+        {"command": "npm run build", "exit_code": 0, "result": "After generated .next normalization, Prisma generation, Next compilation, TypeScript, static generation, and trace collection completed successfully."},
+        {"command": "git diff --check", "exit_code": 0, "result": "No whitespace diagnostics before or after verification."}
+      ],
+      "runtime_harness": {"status": "passed", "command": "Docker PostgreSQL 16 disposable container os03-u12b2-proof-pg-1789443246-237019 with migration image os03-u12b2-migrate-1789410134; npm run db:migrate:deploy; focused delta-promotion test.", "result": "No published ports or mounts; all 21 ordered migrations applied; authority-only promote_delta ACL verified; container and network were absent after exact-name cleanup.", "na_reason": ""},
+      "rollback": {"boundary": "PostgreSQL U12b2 template database in disposable container os03-u12b2-proof-pg-1789443246-237019.", "evidence": "Focused proof exit 0 verified audit rollback and final DB-clock expiry rollback with no generation or projection effect; exact-name cleanup confirmed container and network absence."}
+    },
+    "evidence_revision_flag_omitted": true,
+    "remediates_evidence_revision": "sha256:7ec36f861aeb92c04d21cb4bfca1460e7e21a2048e00e462e45577fb5d5941d1"
+  },
+  "sources": {
+    "verification_runs": [
+      {"task_id": "mu247qig-3-b3ko", "session_reference": "2026-09-15T03-31-32-503Z_01a0a31e-b016-7712-8e67-6d7af08e2a4b", "observations": "PostgreSQL 16 proof 9 passed, quality gate command exits, worktree provenance, container/network cleanup."},
+      {"task_id": "mu24dzf0-4-1hzg", "session_reference": "2026-09-15T03-36-23-725Z_01a0a323-21ac-77c9-b593-d72cce2a491e", "observations": "Generated .next normalization followed by npm run build exit 0 and final unchanged repository inventory."}
+    ],
+    "native_status_before_settlement": {"objective_generation": 69, "begin_candidate_identity": "sha256:8104815082c774895295d4b88067727b380be956c1ddedfe378688193969b11b", "begin_candidate_tree": "a6aaf8f0f8d0b319d0c0d24fdded27e1dec45c04", "eligible_untracked_inventory": "sha256:04f0c771d4904032634b3d3de20cb8a13716ef1b8095089e47ded419b945ea22", "intended_untracked_count": 66},
+    "provenance_caveat": "Git records worktree provenance only. Native settlement validated the active live candidate and untracked selection."
+  },
+  "rejected_prevalidation_version": {
+    "request_id": "u12b2-remediation-settle-01c16cb1-20260915",
+    "status": "rejected before ledger settlement",
+    "payload_difference": "It included the generated-output cleanup command whose literal text contained braces.",
+    "native_error": "sdd-attempt settle: remediation evidence command \"find .next -mindepth 1 -maxdepth 1 ! -name dev -exec rm -rf -- {} +\" is not concrete passing evidence; correct it and rerun `gentle-ai sdd-attempt settle` with the fixed --remediation-evidence",
+    "preservation": "The rejected version remains documented in the original non-authoritative assembly trace; it was not accepted and did not alter native state."
+  },
+  "accepted_payload_difference": {
+    "change": "Excluded the auxiliary generated-output cleanup command from the remediation-evidence commands array.",
+    "basis": "No alternative cleanup execution was substituted. The accepted build observation is the separate real execution of npm run build after that auxiliary cleanup, reported by verification task mu24dzf0-4-1hzg.",
+    "retained_context": "The accepted npm run build result explicitly states that it ran after generated .next normalization; the auxiliary cleanup remains documented above and in the assembly trace."
+  },
+  "settlement_response_stdout_exact": "{\n  \"state\": \"complete\",\n  \"exit\": \"this change's runtime objective (U12b2 PostgreSQL proof gaps) is complete; to continue with the next ordered work unit, run `gentle-ai sdd-attempt acquire --cwd \\u003crepo\\u003e --change \\u003cchange\\u003e --request-id \\\"\\u003cunique-request-id\\u003e\\\" --work-unit \\\"\\u003ca different label\\u003e\\\" --evidence-goal \\\"\\u003cstable-goal\\u003e\\\" --max-attempts \\u003ccount\\u003e --max-changed-lines \\u003ccount\\u003e`; rescope applies only to an objective that is not complete, and reset discards this scope instead of succeeding it\",\n  \"detail\": \"this change's runtime objective (U12b2 PostgreSQL proof gaps) is complete; to continue with the next ordered work unit, run `gentle-ai sdd-attempt acquire --cwd \\u003crepo\\u003e --change \\u003cchange\\u003e --request-id \\\"\\u003cunique-request-id\\u003e\\\" --work-unit \\\"\\u003ca different label\\u003e\\\" --evidence-goal \\\"\\u003cstable-goal\\u003e\\\" --max-attempts \\u003ccount\\u003e --max-changed-lines \\u003ccount\\u003e`; rescope applies only to an objective that is not complete, and reset discards this scope instead of succeeding it\"\n}\n",
+  "post_settlement_native_status": {
+    "runtime_revision": "sha256:786bd5dffe4041f9398e976cb38cad0882d5ad3533a70e281fffb7599d7c32cc",
+    "active_attempt": null,
+    "attempt_ordinal": 98,
+    "outcome": "passed",
+    "finish_candidate_identity": "sha256:65fe48ca6b5671ceede59342d5ab1765e0504947ca585a5e415fb55fc4bf5a83",
+    "finish_candidate_tree": "655e5bc4d3d1939052be73c2d27a12c02f38a5ef",
+    "evidence_revision": "sha256:50bd27633c311fabdeed228609af456e7f8bbd4f2a10d930011c791224d2a758",
+    "remediates_evidence_revision": "sha256:7ec36f861aeb92c04d21cb4bfca1460e7e21a2048e00e462e45577fb5d5941d1",
+    "changed_lines": 223
+  },
+  "acceptance_notes": {
+    "test_skips": "npm test reported 12 skipped and 0 failed. They are recorded as skips, not passing tests; the focused U12b2 PostgreSQL proof passed 9/9.",
+    "lint_warnings": "npm run lint reported 204 warnings and 0 errors. They do not fail the configured lint command and were not expanded into unrelated scope.",
+    "assembly_trace_location": "/tmp/os03-u12b2-remediation-evidence-assembly.json",
+    "token_handling": "No attempt token is stored in this artifact."
+  }
+}
