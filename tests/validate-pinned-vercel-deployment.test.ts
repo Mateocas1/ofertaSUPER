@@ -45,7 +45,8 @@ describe("pinned Vercel deployment guard", () => {
     const cases = [
       { ...metadata, id: "dpl_other" }, { ...metadata, projectId: "prj_other" },
       { ...metadata, meta: {} }, { ...metadata, meta: { githubCommitSha: "c".repeat(40) } },
-      { ...metadata, readyState: "BUILDING" }, { ...metadata, url: "https://user@evil.example/path?q=1#x" }, null, [],
+      { ...metadata, readyState: "BUILDING" }, { ...metadata, url: "https://user@evil.example/path?q=1#x" },
+      { ...metadata, url: "app-abc123.vercel.app:443" }, null, [],
     ];
     for (const value of cases) {
       const h = harness({ metadata: value });
