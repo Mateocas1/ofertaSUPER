@@ -360,6 +360,18 @@ ofertasSUPER/
 
 ---
 
+## Prioridades de integración competitiva
+
+La ventaja sostenible es variedad útil para supermercados, con búsqueda, comparación y canasta rápidas y cuidadas; no una copia de conectores ajenos.
+
+| Prioridad | Dueño existente |
+|---|---|
+| Comparar sólo el producto vendible exacto: EAN, pack, cantidad neta y variante distinguibles; sin matching no exacto ni merge automático. | Modelo de datos y [PRD de discovery](docs/direct-refresh-discovery-prod-final-prd.md). |
+| Publicar frescura real por oferta y degradar la UI de forma consistente; la cache optimiza lecturas, no certifica actualidad. | [Plan operacional de direct-refresh](docs/direct-refresh-production-operations-plan.md) y especificación UI. |
+| Medir la experiencia en el recorrido búsqueda → comparación → canasta ya planificado, sin prometer nuevos presupuestos. | [Especificación de canasta inteligente](docs/design/canasta-inteligente-ui-spec.md). |
+
+La [FAQ de Comparaya](https://comparaya.net/faq) es evidencia externa de producto, no autoridad interna. La referencia pública a una integración Apify/Mercado Libre no prueba runtime activo ni autoriza Apify o un conector equivalente. Cualquier enriquecimiento futuro requiere primero una brecha demostrada en EAN o identificadores actuales; esta integración no modifica el triage de Vea.
+
 ## Decisiones clave (NO re-litigar)
 
 - Disco = supermercado maestro; el resto solo agrega precios si el EAN ya existe

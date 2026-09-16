@@ -102,6 +102,13 @@ Freshness debt examples:
 
 Freshness debt may trigger an evidence-only recovery plan when safety is PASS. It must not bypass manifest/prewrite, human confirmation, postwrite audit, or baseline requirements.
 
+## Publication truth and identity guardrails
+
+- Current offer freshness derives from `SupermarketProduct.last_checked_at`; do not add a duplicate `last_scraped_at` field. `PriceHistory.scraped_at` records historical/write-audit evidence that should align with refresh writes, not authority for current offer freshness.
+- Cache can optimize read latency, but cannot certify publication truth, advance freshness, or make a stale price appear current. Degraded public states must remain consistent with the evidence.
+- `Product.ean` remains the exact sellable identity. Direct refresh and discovery must not automatically nonexact-match or merge packs, net amounts, or variants.
+- The existing recovery targets and direct-refresh gates remain the operational measure; this clarification creates no crawl-cadence promise, new SLO, or Vea status change.
+
 ## Required artifact lineage
 
 Every future planner or orchestrator artifact must be lineage-safe:

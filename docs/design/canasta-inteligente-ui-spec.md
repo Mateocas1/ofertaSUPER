@@ -121,6 +121,13 @@ Copy:
 - `Mostrando 4 de 4 productos`
 - `Ver todos los productos`
 
+### Criterio de aceptación del recorrido
+
+- El recorrido búsqueda → comparación → canasta debe ser rápido y pulido sin ocultar cobertura, variantes o datos degradados.
+- Cada precio debe conservar su producto vendible exacto; no presentar packs, cantidades netas o variantes distintas como equivalentes.
+- Si una oferta está vieja, parcial, no disponible o sin verificar, usar señales consistentes en resultados, comparación y canasta; nunca mostrarla como actual.
+- Medir la performance en el recorrido público ya definido en [PLANIFICACION.md](../../PLANIFICACION.md), sin introducir un presupuesto no medido en esta especificación.
+
 ## Lecturas del catálogo
 
 Rol: capa secundaria.
