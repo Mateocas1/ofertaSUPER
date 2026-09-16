@@ -36,18 +36,29 @@ function validCandidateEnvelope(candidate: AuthorityCandidate) {
 }
 
 function validManifest(manifest: Record<string, unknown>, candidate: AuthorityCandidate) {
-	if (Object.keys(manifest).sort().join(",") !== "baseline,canonicalizationVersion,generatorVersion,policy,release,version"
-		|| manifest.version !== AUTHORITY_CANDIDATE_VERSION || manifest.generatorVersion !== "authority-candidate-generator/v1"
-		|| manifest.canonicalizationVersion !== "os03-c14n/v1") return false;
-	try {
-		const release = manifest.release as Release;
-		const baseline = manifest.baseline as Baseline;
-		const policy = manifest.policy as { version?: "refresh-policy/v1"; bytes?: string; digest?: string };
-		assertRelease(release); assertBaseline(baseline);
-		if (!exactKeys(policy, ["bytes", "digest", "version"]) || typeof policy.bytes !== "string" || policy.digest !== candidate.policyDigest || !SHA256.test(policy.digest)
-			|| createRefreshPolicy({ version: policy.version!, bytes: JSON.parse(policy.bytes) }).digest !== policy.digest) return false;
-		return baseline.dataDigest === candidate.baselineDataDigest && SHA256.test(candidate.baselineDataDigest);
-	} catch { return false; }
+	if (!validManifestHeader(manifest)) return false;
+	try { return validManifestContents(manifest, candidate); } catch { return false; }
+}
+
+function validManifestHeader(manifest: Record<string, unknown>) {
+	return Object.keys(manifest).sort().join(",") === "baseline,canonicalizationVersion,generatorVersion,policy,release,version"
+		&& manifest.version === AUTHORITY_CANDIDATE_VERSION && manifest.generatorVersion === "authority-candidate-generator/v1"
+		&& manifest.canonicalizationVersion === "os03-c14n/v1";
+}
+
+function validManifestContents(manifest: Record<string, unknown>, candidate: AuthorityCandidate) {
+	const release = manifest.release as Release;
+	const baseline = manifest.baseline as Baseline;
+	const policy = manifest.policy as { version?: "refresh-policy/v1"; bytes?: string; digest?: string };
+	assertRelease(release); assertBaseline(baseline);
+	return validManifestPolicy(policy, candidate) && baseline.dataDigest === candidate.baselineDataDigest
+		&& SHA256.test(candidate.baselineDataDigest);
+}
+
+function validManifestPolicy(policy: { version?: "refresh-policy/v1"; bytes?: string; digest?: string }, candidate: AuthorityCandidate) {
+	return exactKeys(policy, ["bytes", "digest", "version"]) && typeof policy.bytes === "string"
+		&& policy.digest === candidate.policyDigest && SHA256.test(policy.digest)
+		&& createRefreshPolicy({ version: policy.version!, bytes: JSON.parse(policy.bytes) }).digest === policy.digest;
 }
 
 function assertRelease(release: Release) {
@@ -59,11 +70,23 @@ function assertRelease(release: Release) {
 }
 
 function assertBaseline(baseline: Baseline) {
+	assertBaselineShape(baseline);
+	assertBaselineDigests(baseline);
+	assertBaselineCompleteness(baseline);
+}
+
+function assertBaselineShape(baseline: Baseline) {
 	if (!exactKeys(baseline, ["canonicalizationVersion", "coverage", "dataDigest", "evidence", "kind", "provenance", "snapshotDigest", "watermarks"])
 		|| !exactKeys(baseline.evidence, ["artifactDigest", "kind", "provenance"])
 		|| !exactKeys(baseline.coverage, ["expectedUniverse", "observedCount", "unit"])
 		|| baseline.kind !== "real-baseline/v1" || baseline.canonicalizationVersion !== "os03-c14n/v1" || baseline.evidence?.kind !== "independent-baseline-evidence/v1") throw new Error("fixture or unsupported baseline evidence");
+}
+
+function assertBaselineDigests(baseline: Baseline) {
 	for (const digest of [baseline.snapshotDigest, baseline.dataDigest, baseline.evidence.artifactDigest]) if (!SHA256.test(digest)) throw new Error("baseline requires retained SHA-256 evidence");
+}
+
+function assertBaselineCompleteness(baseline: Baseline) {
 	if (!baseline.evidence.provenance?.trim() || !baseline.coverage.unit?.trim() || !baseline.coverage.expectedUniverse?.trim()
 		|| !/^(?:0|[1-9]\d*)$/.test(baseline.coverage.observedCount)
 		|| !completeTextRecord(baseline.watermarks) || !completeTextRecord(baseline.provenance)) throw new Error("baseline coverage or provenance is incomplete");

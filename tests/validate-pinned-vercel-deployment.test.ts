@@ -19,7 +19,7 @@ const options: GuardOptions = {
 const gitSource = { type: "github", repoId: 123456789, ref: options.ref, sha: options.commitSha };
 const metadata = { id: options.deploymentId, projectId: options.projectId, readyState: "READY", target: "production", url: "app-abc123.vercel.app", gitSource, meta: { githubCommitSha: options.commitSha } };
 
-function harness(overrides: Partial<{ metadata: unknown; proof: unknown; proofCode: number; promoteCode: number }> = {}) {
+function harness(overrides: Partial<{ metadata: unknown; proof: unknown; proofCode: number; proofStatus: number; promoteCode: number }> = {}) {
   const calls: GuardCommand[] = [];
   const run = async (command: GuardCommand) => {
     calls.push(command);
@@ -47,7 +47,8 @@ describe("pinned Vercel deployment guard", () => {
       { ...metadata, id: "dpl_other" }, { ...metadata, projectId: "prj_other" },
       { ...metadata, meta: {} }, { ...metadata, meta: { githubCommitSha: "c".repeat(40) } },
       { ...metadata, readyState: "BUILDING" }, { ...metadata, url: "https://user@evil.example/path?q=1#x" },
-      { ...metadata, gitSource: undefined }, { ...metadata, gitSource: { ...gitSource, type: "gitlab" } },
+      { ...metadata, url: "app-abc123.vercel.app:443" }, { ...metadata, gitSource: undefined },
+      { ...metadata, gitSource: { ...gitSource, type: "gitlab" } },
       ...(["repoId", "ref", "sha"] as const).map((key) => ({ ...metadata, gitSource: { ...gitSource, [key]: "wrong" } })),
       { ...metadata, target: null }, { ...metadata, target: undefined }, null, [],
     ];

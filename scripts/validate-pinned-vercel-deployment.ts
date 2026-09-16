@@ -62,16 +62,50 @@ function validateInputs(options: GuardOptions, secret: string | undefined) {
   }
 }
 
+function isBareHostname(raw: unknown): raw is string {
+  return typeof raw === "string" && !/[\/:@]/.test(raw);
+}
+
+function isCanonicalVercelHostname(url: URL, raw: string) {
+  return url.protocol === "https:" && url.hostname === raw && url.hostname.endsWith(".vercel.app")
+    && !url.username && !url.password && !url.port && url.pathname === "/" && !url.search && !url.hash;
+}
+
 function immutableHostname(raw: unknown) {
-  if (typeof raw !== "string" || [":", "/", "@"].some((token) => raw.includes(token))) return null;
+  if (!isBareHostname(raw)) return null;
   try {
     const url = new URL(`https://${raw}`);
-    const invalidParts = [url.username, url.password, url.port, url.search, url.hash];
-    const validAuthority = url.protocol === "https:" && url.hostname === raw && url.hostname.endsWith(".vercel.app");
-    return validAuthority && url.pathname === "/" && invalidParts.every((part) => !part) ? url.hostname : null;
+    return isCanonicalVercelHostname(url, raw) ? url.hostname : null;
   } catch {
     return null;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseRecord(json: string): Record<string, unknown> | undefined {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return isRecord(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function validGitSource(value: unknown, options: GuardOptions) {
+  if (!isRecord(value)) return false;
+  return value.type === "github" && canonicalRepoId(value.repoId) === options.repoId
+    && value.ref === options.ref && value.sha === options.commitSha;
+}
+
+function metadataMatches(metadata: Record<string, unknown>, options: GuardOptions) {
+  const meta = isRecord(metadata.meta) ? metadata.meta : undefined;
+  return metadata.id === options.deploymentId && metadata.projectId === options.projectId
+    && metadata.readyState === "READY" && metadata.target === "production"
+    && meta?.githubCommitSha === options.commitSha && validGitSource(metadata.gitSource, options)
+    && Boolean(immutableHostname(metadata.url));
 }
 
 function exactFingerprint(actual: unknown, expected: PublicCatalogAuthorityFingerprint) {
@@ -81,39 +115,9 @@ function exactFingerprint(actual: unknown, expected: PublicCatalogAuthorityFinge
     && Object.keys(actual).length === keys.length;
 }
 
-function parseObject(stdout: string, errorMessage: string): Record<string, unknown> {
-  try {
-    const parsed: unknown = JSON.parse(stdout);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
-    return parsed as Record<string, unknown>;
-  } catch {
-    throw new Error(errorMessage);
-  }
-}
-
-function validGitSource(value: unknown, options: GuardOptions) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const source = value as Record<string, unknown>;
-  return source.type === "github" && canonicalRepoId(source.repoId) === options.repoId
-    && source.ref === options.ref && source.sha === options.commitSha;
-}
-
-function validMetadata(result: CommandResult, metadata: Record<string, unknown>, options: GuardOptions, hostname: string | null) {
-  const meta = metadata.meta && typeof metadata.meta === "object" && !Array.isArray(metadata.meta)
-    ? metadata.meta as Record<string, unknown> : undefined;
-  return [result.code === 0, metadata.id === options.deploymentId, metadata.projectId === options.projectId,
-    metadata.readyState === "READY", metadata.target === "production", meta?.githubCommitSha === options.commitSha,
-    validGitSource(metadata.gitSource, options), Boolean(hostname)].every(Boolean);
-}
-
-function validProof(result: CommandResult, proof: Record<string, unknown>, nonce: string, expected: PublicCatalogAuthorityFingerprint) {
-  return [
-    result.code === 0,
-    result.httpStatus !== undefined && result.httpStatus >= 200 && result.httpStatus < 300,
-    proof.active === true,
-    proof.nonce === nonce,
-    exactFingerprint(proof.fingerprint, expected),
-  ].every(Boolean);
+function proofMatches(result: CommandResult, proof: Record<string, unknown>, nonce: string, fingerprint: PublicCatalogAuthorityFingerprint) {
+  return result.code === 0 && result.httpStatus !== undefined && result.httpStatus >= 200 && result.httpStatus < 300
+    && proof.active === true && proof.nonce === nonce && exactFingerprint(proof.fingerprint, fingerprint);
 }
 
 /** Separate read-only bootstrap path: never invokes active proof, promotion, or configuration. */
@@ -124,37 +128,47 @@ export async function inspectBootstrapDeployment(
   if (!immutableHostname(options.url) || !identifier.test(options.scope)) throw new Error("Invalid bootstrap target");
   const result = await run({ kind: "metadata", args: ["inspect", options.url, "--scope", options.scope, "--json", "--non-interactive"] });
   if (result.code !== 0) throw new Error("Bootstrap inspection failed");
-  return validateBootstrapContract({ ...options, metadata: parseObject(result.stdout, "Invalid bootstrap metadata") });
+  const metadata = parseRecord(result.stdout);
+  if (!metadata) throw new Error("Invalid bootstrap metadata");
+  return validateBootstrapContract({ ...options, metadata });
 }
 
-export async function validatePinnedDeployment(options: GuardOptions, dependencies: Dependencies) {
-  validateInputs(options, dependencies.secret);
-  const metadataResult = await dependencies.run({
+async function validateMetadata(options: GuardOptions, run: Dependencies["run"]) {
+  const result = await run({
     kind: "metadata",
     args: ["api", `/v13/deployments/${options.deploymentId}`, "--scope", options.scope, "--raw", "--non-interactive"],
   });
-  const metadata = parseObject(metadataResult.stdout, "Deployment validation failed");
-  const hostname = immutableHostname(metadata.url);
-  if (!validMetadata(metadataResult, metadata, options, hostname)) throw new Error("Deployment validation failed");
+  const metadata = parseRecord(result.stdout);
+  if (result.code !== 0 || !metadata || !metadataMatches(metadata, options)) throw new Error("Deployment validation failed");
+}
 
+async function validateProof(options: GuardOptions, dependencies: Dependencies) {
   const nonce = dependencies.nonce?.() ?? randomBytes(24).toString("base64url");
-  const proofResult = await dependencies.run({
+  const result = await dependencies.run({
     kind: "proof", nonce,
     args: ["curl", `/api/internal/catalog-serving-identity-proof?nonce=${nonce}`, "--deployment", options.deploymentId,
       "--scope", options.scope, "--", "--header", "@-", "--max-redirs", "0", "--fail-with-body",
       "--write-out", "\\nVERCEL_GUARD_HTTP_STATUS:%{http_code}"],
     stdin: `Authorization: Bearer ${dependencies.secret}\nCache-Control: no-store\n`,
   });
-  const proof = parseObject(proofResult.stdout, "Proof validation failed");
-  if (!validProof(proofResult, proof, nonce, options.fingerprint)) throw new Error("Proof validation failed");
+  const proof = parseRecord(result.stdout);
+  if (!proof || !proofMatches(result, proof, nonce, options.fingerprint)) throw new Error("Proof validation failed");
+}
 
-  if (!options.promote) return { status: "validated" as const, promotionAttempts: 0 };
-  const promoted = await dependencies.run({
+async function promote(options: GuardOptions, run: Dependencies["run"]) {
+  const result = await run({
     kind: "promote",
     args: ["promote", options.deploymentId, "--scope", options.scope, "--non-interactive"],
   });
-  if (promoted.code !== 0) throw new Error("Promotion failed after one attempt; remote outcome is uncertain");
+  if (result.code !== 0) throw new Error("Promotion failed after one attempt; remote outcome is uncertain");
   return { status: "promoted" as const, promotionAttempts: 1 };
+}
+
+export async function validatePinnedDeployment(options: GuardOptions, dependencies: Dependencies) {
+  validateInputs(options, dependencies.secret);
+  await validateMetadata(options, dependencies.run);
+  await validateProof(options, dependencies);
+  return options.promote ? promote(options, dependencies.run) : { status: "validated" as const, promotionAttempts: 0 };
 }
 
 export async function runGuardCommand(command: GuardCommand): Promise<CommandResult> {

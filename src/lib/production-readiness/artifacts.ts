@@ -16,22 +16,39 @@ type CustodyInput = {
 };
 
 export function assessCustody(input: CustodyInput) {
-	const digest = createHash("sha256").update(input.bytes).digest("hex");
-	const corrupt = Boolean(input.expectedSha256 && input.expectedSha256 !== digest);
-	const latestExpiry = input.references?.reduce<Date | undefined>((latest, reference) =>
-		!latest || reference.expiresAt > latest ? reference.expiresAt : latest, undefined);
-	const retainUntil = latestExpiry
-		? new Date(latestExpiry.getTime() + RETENTION_DAYS * 86_400_000)
-		: input.now;
-	const held = Boolean(input.holdUntil && input.holdUntil > input.now);
-	const measured = new Set((input.measurements ?? []).filter(({ owner }) => owner.trim()).map(({ name }) => name));
-	const restoreProven = !input.restore || (input.restore.integrity && input.restore.privileges);
+	const corrupt = isCorrupt(input);
+	const retainUntil = retentionBoundary(input);
 	return {
 		retainUntil,
-		restrictions: corrupt ? [...new Set(input.dependencies ?? [])].sort() : [],
-		deleteable: !corrupt && !held && input.now > retainUntil,
-		enablementBlocked: corrupt || !restoreProven || REQUIRED_MEASUREMENTS.some((name) => !measured.has(name)),
+		restrictions: custodyRestrictions(input, corrupt),
+		deleteable: isDeleteable(input, corrupt, retainUntil),
+		enablementBlocked: enablementBlocked(input, corrupt),
 	};
+}
+
+function isCorrupt(input: CustodyInput) {
+	const digest = createHash("sha256").update(input.bytes).digest("hex");
+	return Boolean(input.expectedSha256 && input.expectedSha256 !== digest);
+}
+
+function retentionBoundary(input: CustodyInput) {
+	const latestExpiry = input.references?.reduce<Date | undefined>((latest, reference) =>
+		!latest || reference.expiresAt > latest ? reference.expiresAt : latest, undefined);
+	return latestExpiry ? new Date(latestExpiry.getTime() + RETENTION_DAYS * 86_400_000) : input.now;
+}
+
+function custodyRestrictions(input: CustodyInput, corrupt: boolean) {
+	return corrupt ? [...new Set(input.dependencies ?? [])].sort() : [];
+}
+
+function isDeleteable(input: CustodyInput, corrupt: boolean, retainUntil: Date) {
+	return !corrupt && !(input.holdUntil && input.holdUntil > input.now) && input.now > retainUntil;
+}
+
+function enablementBlocked(input: CustodyInput, corrupt: boolean) {
+	const measured = new Set((input.measurements ?? []).filter(({ owner }) => owner.trim()).map(({ name }) => name));
+	const restoreProven = !input.restore || (input.restore.integrity && input.restore.privileges);
+	return corrupt || !restoreProven || REQUIRED_MEASUREMENTS.some((name) => !measured.has(name));
 }
 
 export function createCustodySchemaSql() {
