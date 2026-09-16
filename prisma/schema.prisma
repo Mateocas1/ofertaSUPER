@@ -753,6 +753,20 @@ model GenerationPublishingAdoption {
   @@map("generation_publishing_adoptions")
 }
 
+model ForwardCorrectiveGenerationLink {
+  admission_id             String   @id @db.Uuid
+  request_key              String   @unique
+  bad_operation_id         String   @db.Uuid
+  bad_generation_record_id String   @db.Uuid
+  predecessor_generation   BigInt
+  predecessor_lineage      String
+  envelope_digest          String
+  audit_digest             String
+  created_at               DateTime @default(now()) @db.Timestamptz
+
+  @@map("forward_corrective_generation_links")
+}
+
 model ExistingLiveAdoption {
   id                     String   @id @default(uuid()) @db.Uuid
   request_key            String   @unique
