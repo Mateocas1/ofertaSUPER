@@ -27,11 +27,27 @@ export function verifyCommittedSourceDelta(input: Input) {
 }
 
 function validateSeal(input: Input) {
+	validateVerifierSeal(input);
+	validateEvidenceSeal(input);
+	validateLineageSeal(input);
+	validateSourceAgeSeal(input);
+}
+
+function validateVerifierSeal(input: Input) {
 	if (input.producerPass || input.verifierFailure) fail("producer assertion or verifier failure");
 	if (input.verifier.credential !== "verifier/read-only") fail("separate read-only credential is required");
 	if (!input.verifier.snapshot.startsWith("committed:")) fail("committed snapshot is required");
+}
+
+function validateEvidenceSeal(input: Input) {
 	if (!input.evidence || sha256(input.evidence.bytes) !== input.evidence.sha256) fail("evidence verification failed");
+}
+
+function validateLineageSeal(input: Input) {
 	if (input.lineage.predecessor !== input.predecessor.digest || !input.lineage.result.startsWith("sha256:")) fail("lineage verification failed");
+}
+
+function validateSourceAgeSeal(input: Input) {
 	const observed = date(input.capture.observedAt, "observation");
 	const verified = date(input.verifiedAt, "verification");
 	if (verified.getTime() - observed.getTime() > input.policy.maximumSourceAgeMs || verified < observed) fail("source age verification failed");
@@ -73,6 +89,34 @@ type GovernedInput = z.infer<typeof governedInput>;
 type CapturedItem = z.infer<typeof captureItem>;
 const verifiedEnvelopes = new WeakMap<object, Readonly<{ bytes: string; digest: string }>>();
 
+function validateGovernedBindings(data: GovernedInput) {
+  const { deltaDigest, ...binding } = data.binding;
+  if (canonicalize(binding) !== canonicalize(data.current.binding)) fail("predecessor binding conflict");
+  if (data.policy.source !== data.capture.source || sha256Canonical(data.policy) !== binding.policyDigest) fail("policy binding conflict");
+  return deltaDigest;
+}
+
+function canonicalCapture(data: GovernedInput, captured: Map<string, CapturedItem>, deltaDigest: string) {
+  const capture = { ...data.capture, items: [...captured.values()] };
+  if (sha256Canonical(capture) !== deltaDigest) fail("delta binding conflict");
+  return capture;
+}
+
+function validateGovernedEvidence(data: GovernedInput) {
+  if (sha256(data.evidence.bytes) !== data.evidence.sha256) fail("evidence mismatch");
+}
+
+function validateGovernedObservation(data: GovernedInput, observedAt: string) {
+  if ([data.verifiedAt, observedAt].some((value) => new Date(value).toISOString() !== value)) fail("noncanonical observation time");
+  const elapsed = Date.parse(data.verifiedAt) - Date.parse(observedAt);
+  if (elapsed < 0 || elapsed > data.policy.maximumSourceAgeMs) fail("source age invalid");
+}
+
+function validateCompleteKeyObservations(captured: Map<string, CapturedItem>, current: Map<string, z.infer<typeof observation>>, actual: Map<string, z.infer<typeof observation>>) {
+  if (canonicalize([...captured.keys()]) !== canonicalize([...current.keys()])
+    || canonicalize([...captured.keys()]) !== canonicalize([...actual.keys()])) fail("complete key observations required");
+}
+
 /** Trusted verifier entry: adapters supply complete current rows and independent observations.
  * Credential labels/hashes are not authentication. This pure seam performs no I/O or durable admission. */
 export function verifyGovernedDelta(input: unknown) {
@@ -80,17 +124,11 @@ export function verifyGovernedDelta(input: unknown) {
   const captured = keyed(data.capture.items);
   const current = keyed(data.current.items);
   const actual = keyed(data.actual);
-  const { deltaDigest, ...binding } = data.binding;
-  if (canonicalize(binding) !== canonicalize(data.current.binding)) fail("predecessor binding conflict");
-  if (data.policy.source !== data.capture.source || sha256Canonical(data.policy) !== binding.policyDigest) fail("policy binding conflict");
-  const capture = { ...data.capture, items: [...captured.values()] };
-  if (sha256Canonical(capture) !== deltaDigest) fail("delta binding conflict");
-  if (sha256(data.evidence.bytes) !== data.evidence.sha256) fail("evidence mismatch");
-  if ([data.verifiedAt, capture.observedAt].some((value) => new Date(value).toISOString() !== value)) fail("noncanonical observation time");
-  const elapsed = Date.parse(data.verifiedAt) - Date.parse(capture.observedAt);
-  if (elapsed < 0 || elapsed > data.policy.maximumSourceAgeMs) fail("source age invalid");
-  if (canonicalize([...captured.keys()]) !== canonicalize([...current.keys()])
-    || canonicalize([...captured.keys()]) !== canonicalize([...actual.keys()])) fail("complete key observations required");
+  const deltaDigest = validateGovernedBindings(data);
+  const capture = canonicalCapture(data, captured, deltaDigest);
+  validateGovernedEvidence(data);
+  validateGovernedObservation(data, capture.observedAt);
+  validateCompleteKeyObservations(captured, current, actual);
   const items = [...captured].map(([key, item]) => deriveGovernedItem(item, current.get(key)!.facts, actual.get(key)!.facts, data.policy));
   const payload = { version: "promotion-ready-envelope/v1", binding: data.binding, verifier: data.verifier,
     observedAt: capture.observedAt, verifiedAt: data.verifiedAt, evidenceDigest: data.evidence.sha256, capture, items };
@@ -218,23 +256,65 @@ function keyed<T extends { entity: z.infer<typeof entity>; key: string }>(rows: 
   }));
 }
 
-function deriveGovernedItem(item: CapturedItem, before: Facts | null, actual: Facts | null, policy: GovernedInput["policy"]) {
-  const mutation = item.before === null ? "insert" : item.after === null ? "delete" : "update";
+function governedMutation(item: CapturedItem) {
+  if (item.before === null) return "insert" as const;
+  return item.after === null ? "delete" as const : "update" as const;
+}
+
+function validateMutation(item: CapturedItem, before: Facts | null, mutation: "insert" | "delete" | "update", policy: GovernedInput["policy"]) {
   if (!policy.mutations.includes(mutation)) fail("policy mutation denied");
   if ((mutation === "insert") !== (before === null) || (mutation === "insert" && item.after === null)) fail("predecessor existence conflict");
+}
+
+function validateActualImage(item: CapturedItem, actual: Facts | null) {
   if (item.after === null ? actual !== null : actual === null || Object.keys(item.after).some((key) => !(key in actual) || canonicalize(actual[key]) !== canonicalize(item.after![key]))) fail("committed source drift");
+}
+
+function validateCaptureFields(item: CapturedItem, mutation: "insert" | "delete" | "update") {
   if (mutation !== "insert" && canonicalize(Object.keys(item.before!).sort()) !== canonicalize(Object.keys(item.after ?? item.before!).sort())) fail("incomplete source fields");
-  const fields = mutation === "update" ? Object.keys(item.after!).filter((key) => canonicalize(item.before![key]) !== canonicalize(item.after![key])).sort() : Object.keys(item.after ?? item.before!).sort();
+}
+
+function governedFields(item: CapturedItem, mutation: "insert" | "delete" | "update") {
+  if (mutation !== "update") return Object.keys(item.after ?? item.before!).sort();
+  return Object.keys(item.after!).filter((key) => canonicalize(item.before![key]) !== canonicalize(item.after![key])).sort();
+}
+
+function validateGovernedFields(item: CapturedItem, mutation: "insert" | "delete" | "update", fields: string[], policy: GovernedInput["policy"]) {
   if (!fields.length || (mutation !== "delete" && fields.some((key) => !policy.fields[item.entity].includes(key)))) fail("unverifiable field");
+}
+
+function validateGovernedPredecessor(item: CapturedItem, before: Facts | null, mutation: "insert" | "delete" | "update", fields: string[]) {
   if (mutation === "delete" ? canonicalize(before) !== canonicalize(item.before) : mutation === "update" && fields.some((key) => !before || !(key in before) || canonicalize(before[key]) !== canonicalize(item.before![key]))) fail("governed predecessor conflict");
-  const after = mutation === "delete" ? null : { ...before, ...Object.fromEntries(fields.map((key) => [key, actual![key]])) };
+}
+
+function validateImageKey(image: Facts, item: CapturedItem) {
+  if (Object.entries(JSON.parse(item.key)).some(([key, value]) => image[key] !== value)) fail("image key conflict");
+}
+
+function validateImageDecimals(image: Facts) {
+  for (const key of Object.keys(image)) {
+    if (/^(price|list_price|reference_price|discount_value)$/.test(key) && image[key] !== null
+      && (typeof image[key] !== "string" || !/^-?(0|[1-9][0-9]*)\.[0-9]{2}$/.test(image[key] as string))) fail("noncanonical decimal");
+  }
+}
+
+function validateGovernedImages(item: CapturedItem, before: Facts | null, after: Facts | null) {
   for (const image of [before, after]) {
     if (image === null) continue;
-    if (Object.entries(JSON.parse(item.key)).some(([key, value]) => image[key] !== value)) fail("image key conflict");
-    for (const key of Object.keys(image)) {
-      if (/^(price|list_price|reference_price|discount_value)$/.test(key) && image[key] !== null
-        && (typeof image[key] !== "string" || !/^-?(0|[1-9][0-9]*)\.[0-9]{2}$/.test(image[key] as string))) fail("noncanonical decimal");
-    }
+    validateImageKey(image, item);
+    validateImageDecimals(image);
   }
+}
+
+function deriveGovernedItem(item: CapturedItem, before: Facts | null, actual: Facts | null, policy: GovernedInput["policy"]) {
+  const mutation = governedMutation(item);
+  validateMutation(item, before, mutation, policy);
+  validateActualImage(item, actual);
+  validateCaptureFields(item, mutation);
+  const fields = governedFields(item, mutation);
+  validateGovernedFields(item, mutation, fields, policy);
+  validateGovernedPredecessor(item, before, mutation, fields);
+  const after = mutation === "delete" ? null : { ...before, ...Object.fromEntries(fields.map((key) => [key, actual![key]])) };
+  validateGovernedImages(item, before, after);
   return { entity: item.entity, key: item.key, before, after, tombstone: after === null, fields };
 }
