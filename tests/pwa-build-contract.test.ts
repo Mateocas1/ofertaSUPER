@@ -19,7 +19,7 @@ test("builds and registers a production Serwist worker without caching catalog r
 
   assert.equal(
     packageData.scripts.build,
-    "prisma generate && tsx scripts/build-catalog-contract.ts prebuild && next build && serwist build && tsx scripts/build-catalog-contract.ts package",
+    "prisma generate && tsx scripts/build-catalog-contract.ts prebuild && next build --webpack && serwist build && tsx scripts/build-catalog-contract.ts package",
   );
   assert.deepEqual(
     Object.fromEntries(["@serwist/next", "@serwist/cli", "serwist", "esbuild"].map((name) => [name, packageData.devDependencies[name]])),
