@@ -124,6 +124,20 @@ This is a shape-only placeholder, not a deployment input. Do not put secrets or 
 
 The value is operator configuration, not cryptographic attestation. On Vercel, each public search or product-detail request now requires strict Redis admission before PostgreSQL authority, cache, or catalog access: a per-route global limit is consumed before the client-IP limit, and exhausted capacity returns `429` while missing identity or unavailable admission returns `503`. The client identity is accepted only when `VERCEL=1` and the Vercel-overwritten `X-Forwarded-For` contains one valid IP; missing or chained values fail closed without falling back to `X-Real-IP`. Portable local or self-hosted web execution therefore keeps these public catalog routes fail-closed until a future explicit trusted-proxy contract exists. Legacy callers retain their fail-open limiter behavior. This unit neither configures a deployment nor performs operator identity injection, and local implementation does not prove production activation.
 
+## Governed selector v2 build boundary
+
+The governed publication workflow rejects selector v1; the legacy runtime described above is not silently upgraded by U10. Runtime adoption remains a later fail-closed work unit.
+
+A separately authorized prebuild reservation contains exactly `{version:2, domain, target, scope, deploymentId, publicationId, incarnation}`. The last three fields are preallocated domain UUIDs; `deploymentId` is never Vercel's later `dpl_*` ID. No candidate digest, full SHA, provenance, or active flag belongs in the selector.
+
+`npm run build` captures the selector before Next runs, then packages `.next/catalog-build-contract.json` after compilation (also copied into standalone output). An absent selector produces a non-authorizing null selector. The manifest hashes actual `.next/server` bytes, the lockfile, and installed Next/React/Prisma package metadata; its own output is excluded. No runtime environment value or caller SHA generates release provenance. An independently retrieved artifact must match its expected digest and exact reservation.
+
+`inspectBootstrapDeployment` is a separate read-only library path, never a promotion option. It requires platform-origin GitHub repository/ref/full SHA plus exact platform deployment/project, target, and READY state; caller-controlled `meta.githubCommitSha` cannot substitute. Even a successful result is always `active:false`. Bootstrap validation establishes neither approval nor publication nor runtime authority.
+
+For an explicitly authorized preview proof, confirm the positional project and scope, list with `--environment preview --status READY`, then hand `deployments[0].url` to `vercel inspect <url> --scope <scope> --json`. CLI59.11.7 sends the authoritative server-side preview filter; raw list `target:null` is normal, while inspect normalizes it to `preview`. Never infer preview from an unfiltered null target. Current inspect JSON lacks packaged contract and `gitSource`: these omissions block enablement, not permission to invent evidence or fall back to caller metadata. The generated local sidecar is not proof that an existing remote deployment contains it.
+
+Config injection, artifact retrieval/authenticated bootstrap transport, publication, runtime adoption, and traffic changes remain separately authorized work. This unit adds no remote proof route, deployment provisioning, aliasing, or activation.
+
 ## Pinned Vercel promotion guard
 
 The internal proof route is authenticated with the server-only `CATALOG_PROMOTION_GUARD_SECRET`. Configure the same secret in the deployment and the operator environment through separately authorized platform operations; never pass it as a command argument. Stage deployment protection before creating a candidate because the production alias remains public and application authentication is still mandatory.

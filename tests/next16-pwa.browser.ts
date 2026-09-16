@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("registers an updatable Workbox service worker and exposes the install manifest", async ({ page }) => {
+test("registers an updatable Serwist service worker and exposes the install manifest", async ({ page }) => {
   await page.goto("/");
 
   const manifest = await page.request.get("/manifest.json");
@@ -28,7 +28,7 @@ test("registers an updatable Workbox service worker and exposes the install mani
     return caches.keys();
   });
 
-  expect(cacheNames.some((name: string) => name.includes("workbox-precache"))).toBe(true);
+  expect(cacheNames.some((name: string) => name.includes("serwist-precache"))).toBe(true);
 });
 
 test("does not retain catalog navigation in a service-worker cache", async ({ page }) => {

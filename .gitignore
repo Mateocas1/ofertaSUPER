@@ -33,6 +33,7 @@ tmp-dev-server*.log
 
 # generated PWA/workbox assets
 /public/sw.js
+/public/sw.js.map
 /public/workbox-*.js
 /public/fallback-*.js
 /public/swe-worker-*.js
@@ -58,3 +59,10 @@ progress.md
 
 # local Supabase CLI link/cache
 supabase/.temp/
+
+# local agent and test-runner state
+.codegraph/
+test-results/
+*:Zone.Identifier
+
+certificates

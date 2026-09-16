@@ -48,3 +48,13 @@ export async function requireAdminPageAccess() {
 export async function requireAdminApiAccess() {
   return evaluateAdminApiAccess(await getClerkAuth());
 }
+
+export async function requirePublicationApprovalAccess() {
+  const authState = await getClerkAuth();
+  const denied = evaluateAdminApiAccess(authState);
+  if (denied) return { denied };
+  if (!authState.userId || !authState.sessionId) {
+    return { denied: NextResponse.json({ error: "Authenticated Clerk session required" }, { status: 401 }) };
+  }
+  return { principal: { userId: authState.userId, sessionId: authState.sessionId } };
+}
