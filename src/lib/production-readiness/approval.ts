@@ -86,9 +86,13 @@ type CompleteReviewedContext = {
 };
 
 function reviewedContext(manifest: ReviewedManifest, policyDetails: unknown): CompleteReviewedContext | null {
-  if (!hasCompleteRelease(manifest.release) || !hasCompleteBaseline(manifest.baseline)
-    || !hasCompletePolicy(manifest.policy, policyDetails)) return null;
+  if (!isPolicyDetails(policyDetails) || !hasCompleteRelease(manifest.release)
+    || !hasCompleteBaseline(manifest.baseline) || !hasCompletePolicy(manifest.policy)) return null;
   return { release: manifest.release, baseline: manifest.baseline, policy: manifest.policy, policyDetails };
+}
+
+function isPolicyDetails(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function hasCompleteRelease(release: ReviewedManifest["release"]): release is CompleteReviewedContext["release"] {
@@ -100,20 +104,20 @@ function hasCompleteBaseline(baseline: ReviewedManifest["baseline"]): baseline i
     && completeTextRecord(baseline.watermarks) && completeTextRecord(baseline.provenance));
 }
 
-function hasCompletePolicy(policy: ReviewedManifest["policy"], policyDetails: unknown): policy is CompleteReviewedContext["policy"] {
-  return Boolean(policy?.digest && policyDetails && typeof policyDetails === "object" && !Array.isArray(policyDetails));
+function hasCompletePolicy(policy: ReviewedManifest["policy"]): policy is CompleteReviewedContext["policy"] {
+  return Boolean(policy?.digest);
 }
 
 async function authorizeApproval(repository: ApprovalRepository, now: () => Date, principal: ClerkPrincipal | null, reviewed: ReviewedAuthority): Promise<AuthorizedApproval> {
   if (!principal?.userId || !principal.sessionId) throw new Error("authenticated Clerk session required");
   const grant = await repository.findGrant(principal, reviewed);
-  if (!validApprovalGrant(grant, principal, reviewed, now())) throw new Error("scoped publication grant required");
+  assertApprovalGrant(grant, principal, reviewed, now());
   return { principal, grant };
 }
 
-function validApprovalGrant(grant: Grant | null, principal: ClerkPrincipal, reviewed: ReviewedAuthority, now: Date) {
-  return Boolean(grant && grant.userId === principal.userId && grant.action === "approve" && grant.scope === reviewed.scope
-    && grant.target === reviewed.target && grant.policyDigest === reviewed.policyDigest && grant.expiresAt > now);
+function assertApprovalGrant(grant: Grant | null, principal: ClerkPrincipal, reviewed: ReviewedAuthority, now: Date): asserts grant is Grant {
+  if (!grant || grant.userId !== principal.userId || grant.action !== "approve" || grant.scope !== reviewed.scope
+    || grant.target !== reviewed.target || grant.policyDigest !== reviewed.policyDigest || grant.expiresAt <= now) throw new Error("scoped publication grant required");
 }
 
 function assertApprovalInput(input: ApprovalInput) {
