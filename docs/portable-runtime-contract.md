@@ -103,6 +103,27 @@ pg_restore --exit-on-error --no-owner --no-acl --dbname "$DISPOSABLE_URL" backup
 
 Inspect an archive first, restore only into a disposable empty database, then run application integrity checks. This rehearsal proves local PostgreSQL logical dump/restore mechanics only. It does not prove production automation, scheduling, retention, encryption, remote storage, RPO/RTO, production-scale duration, or platform-specific recovery procedures.
 
+## Future public catalog serving identity
+
+`PUBLIC_CATALOG_SERVING_IDENTITY_JSON` is a server-only JSON contract for a future public catalog handler integration. This bootstrap module is inactive in this unit: existing handlers and runtime role validation remain unchanged.
+
+The required version-1 fields are:
+
+```json
+{
+  "version": 1,
+  "target": "production",
+  "publicationId": "<non-working-publication-id>",
+  "deploymentId": "<non-working-deployment-id>",
+  "commitSha": "<40-lowercase-hex-characters>",
+  "candidateDigest": "sha256:<64-lowercase-hex-characters>"
+}
+```
+
+This is a shape-only placeholder, not a deployment input. Do not put secrets or real private identity values in documentation or examples. The bootstrap reads this variable once when its module initializes; changing the environment does not rebind it until a new module instance starts. A missing or invalid value resolves to no authority and future integrated handlers must map that result to `503`.
+
+The value is operator configuration, not cryptographic attestation. Configure and validate it before the future production-rollout gate; this unit neither configures a deployment nor activates a route.
+
 ## Parity and deferred work
 
 This contract does not make every external service portable: VTEX acquisition still calls VTEX and admin mode still uses Clerk. Production orchestration policy, scheduling, auth migration, durable production operations, and Upstash-coupled alert deduplication remain deferred.
