@@ -648,100 +648,178 @@ async function executeActiveWrite({
 			now: startedAt,
 		});
 	}
-	return repository.withTransaction(async (tx) => {
-		if (!(await tx.acquireAdvisoryLock(config.lockKey)))
-			throw new Error(
-				`${config.displayName} active write advisory lock unavailable`,
-			);
-		const beforeCounts = await tx.readNoCreateCounts();
-		const identities = prewriteReport.rows.map((row) => ({
-			rowId: row.rowId,
-			productEan: row.currentDb.supermarketProduct.productEan ?? "",
-			skuId: row.lookup.value ?? "",
-		}));
-		const selectedRows = await tx.readSelectedRowsByExactIdentity(
-			config.source,
-			identities,
-		);
-		if (selectedRows.length !== options.count)
-			throw new Error("selected rows missing before write");
-		const appliedRows: AppliedRow[] = [];
-		for (const row of prewriteReport.rows) {
-			const productCount =
-				row.expectedChanges.product.length > 0
-					? await tx.updateProductByEan(
-							row.currentDb.supermarketProduct.productEan ?? "",
-							row.expectedChanges.product,
-						)
-					: 0;
-			if (productCount !== (row.expectedChanges.product.length > 0 ? 1 : 0))
-				throw new Error(
-					`product update count for ${row.rowId} was ${productCount}`,
-				);
-			const spCount = await tx.updateSupermarketProductByExactIdentity(
-				config.source,
-				row.rowId,
-				row.currentDb.supermarketProduct.productEan ?? "",
-				row.lookup.value ?? "",
-				row.expectedChanges.supermarketProduct,
-			);
-			if (spCount !== 1)
-				throw new Error(
-					`supermarketProduct update count for ${row.rowId} was ${spCount}`,
-				);
-			const insertedPriceHistoryId = row.expectedChanges.priceHistory
-				.wouldInsert
-				? await tx.insertPriceHistory(
-						row.rowId,
-						row.expectedChanges.priceHistory.price,
-						row.expectedChanges.priceHistory.listPrice,
-						startedAt.toISOString(),
-					)
-				: null;
-			appliedRows.push({
-				rowId: row.rowId,
-				productEan: row.currentDb.supermarketProduct.productEan ?? "",
-				skuId: row.lookup.value ?? "",
-				before: row.currentDb,
-				live: row.live,
-				appliedChanges: {
-					product: row.expectedChanges.product,
-					supermarketProduct: row.expectedChanges.supermarketProduct,
-				},
-				insertedPriceHistoryId,
-			});
-		}
-		const afterRows = await tx.readSelectedRowsByExactIdentity(
-			config.source,
-			identities,
-		);
-		if (afterRows.length !== options.count) throw new Error("selected rows missing after write");
-		const capture = tx.captureSourceDelta
-			? await tx.captureSourceDelta(createSourceCapture({
-				operationKey: sourceCaptureOperationKey({ source: config.source, rowIds: identities.map(({ rowId }) => rowId), prewriteReportHash: options.prewriteReportHash }),
-				source: config.source,
-				observedAt: new Date().toISOString(),
-				items: sourceCaptureItems(config.source, selectedRows, afterRows, appliedRows),
-			}))
-			: undefined;
-		const afterCounts = await tx.readNoCreateCounts();
-		if (
-			afterCounts.productCount !== beforeCounts.productCount ||
-			afterCounts.supermarketProductCount !==
-				beforeCounts.supermarketProductCount
-		)
-			throw new Error("no-create assertion failed");
-		return buildActiveWriteReport({
-			prewriteReport,
-			options,
-			beforeCounts,
-			afterCounts,
-			rows: appliedRows,
-			capture,
-			startedAt,
-			committedAt: startedAt,
-		});
+	return repository.withTransaction((tx) =>
+		runActiveWriteTransaction({ tx, config, prewriteReport, options, startedAt }),
+	);
+}
+
+type ActiveWriteIdentity = { rowId: string; productEan: string; skuId: string };
+
+async function runActiveWriteTransaction({
+	tx,
+	config,
+	prewriteReport,
+	options,
+	startedAt,
+}: {
+	tx: ActiveWriteTransaction;
+	config: SourceConfig;
+	prewriteReport: CarrefourDirectRefreshPrewriteGate;
+	options: ActiveWriteCliOptions;
+	startedAt: Date;
+}): Promise<ActiveWriteReport> {
+	const { beforeCounts, identities, selectedRows } = await loadSelectedRowsForActiveWrite(
+		tx,
+		config,
+		prewriteReport,
+		options.count,
+	);
+	const appliedRows = await applyPrewriteRows(
+		tx,
+		config.source,
+		prewriteReport.rows,
+		startedAt,
+	);
+	const { capture } = await capturePostwriteSourceDelta(
+		tx,
+		config.source,
+		identities,
+		selectedRows,
+		appliedRows,
+		options.prewriteReportHash,
+	);
+	const afterCounts = await tx.readNoCreateCounts();
+	assertNoCreateCounts(beforeCounts, afterCounts);
+	return buildActiveWriteReport({
+		prewriteReport,
+		options,
+		beforeCounts,
+		afterCounts,
+		rows: appliedRows,
+		capture,
+		startedAt,
+		committedAt: startedAt,
 	});
+}
+
+async function loadSelectedRowsForActiveWrite(
+	tx: ActiveWriteTransaction,
+	config: SourceConfig,
+	prewriteReport: CarrefourDirectRefreshPrewriteGate,
+	count: DirectRefreshAllowedBatchCount,
+) {
+	if (!(await tx.acquireAdvisoryLock(config.lockKey)))
+		throw new Error(`${config.displayName} active write advisory lock unavailable`);
+	const beforeCounts = await tx.readNoCreateCounts();
+	const identities = prewriteReport.rows.map(activeWriteIdentity);
+	const selectedRows = await tx.readSelectedRowsByExactIdentity(
+		config.source,
+		identities,
+	);
+	if (selectedRows.length !== count)
+		throw new Error("selected rows missing before write");
+	return { beforeCounts, identities, selectedRows };
+}
+
+function activeWriteIdentity(row: CarrefourDirectRefreshPrewriteGate["rows"][number]): ActiveWriteIdentity {
+	return {
+		rowId: row.rowId,
+		productEan: row.currentDb.supermarketProduct.productEan ?? "",
+		skuId: row.lookup.value ?? "",
+	};
+}
+
+async function applyPrewriteRows(
+	tx: ActiveWriteTransaction,
+	source: ActiveWriteSource,
+	rows: CarrefourDirectRefreshPrewriteGate["rows"],
+	startedAt: Date,
+): Promise<AppliedRow[]> {
+	const appliedRows: AppliedRow[] = [];
+	for (const row of rows)
+		appliedRows.push(await applyPrewriteRow(tx, source, row, startedAt));
+	return appliedRows;
+}
+
+async function applyPrewriteRow(
+	tx: ActiveWriteTransaction,
+	source: ActiveWriteSource,
+	row: CarrefourDirectRefreshPrewriteGate["rows"][number],
+	startedAt: Date,
+): Promise<AppliedRow> {
+	const productEan = row.currentDb.supermarketProduct.productEan ?? "";
+	const skuId = row.lookup.value ?? "";
+	const hasProductChanges = row.expectedChanges.product.length > 0;
+	const productCount = hasProductChanges
+		? await tx.updateProductByEan(productEan, row.expectedChanges.product)
+		: 0;
+	if (productCount !== (hasProductChanges ? 1 : 0))
+		throw new Error(`product update count for ${row.rowId} was ${productCount}`);
+	const spCount = await tx.updateSupermarketProductByExactIdentity(
+		source,
+		row.rowId,
+		productEan,
+		skuId,
+		row.expectedChanges.supermarketProduct,
+	);
+	if (spCount !== 1)
+		throw new Error(`supermarketProduct update count for ${row.rowId} was ${spCount}`);
+	const insertedPriceHistoryId = row.expectedChanges.priceHistory.wouldInsert
+		? await tx.insertPriceHistory(
+				row.rowId,
+				row.expectedChanges.priceHistory.price,
+				row.expectedChanges.priceHistory.listPrice,
+				startedAt.toISOString(),
+			)
+		: null;
+	return {
+		rowId: row.rowId,
+		productEan,
+		skuId,
+		before: row.currentDb,
+		live: row.live,
+		appliedChanges: {
+			product: row.expectedChanges.product,
+			supermarketProduct: row.expectedChanges.supermarketProduct,
+		},
+		insertedPriceHistoryId,
+	};
+}
+
+async function capturePostwriteSourceDelta(
+	tx: ActiveWriteTransaction,
+	source: ActiveWriteSource,
+	identities: ActiveWriteIdentity[],
+	selectedRows: TxRow[],
+	appliedRows: AppliedRow[],
+	prewriteReportHash: string,
+) {
+	const afterRows = await tx.readSelectedRowsByExactIdentity(source, identities);
+	if (afterRows.length !== identities.length)
+		throw new Error("selected rows missing after write");
+	const capture = tx.captureSourceDelta
+		? await tx.captureSourceDelta(
+				createSourceCapture({
+					operationKey: sourceCaptureOperationKey({
+						source,
+						rowIds: identities.map(({ rowId }) => rowId),
+						prewriteReportHash,
+					}),
+					source,
+					observedAt: new Date().toISOString(),
+					items: sourceCaptureItems(source, selectedRows, afterRows, appliedRows),
+				}),
+			)
+		: undefined;
+	return { capture };
+}
+
+function assertNoCreateCounts(beforeCounts: Counts, afterCounts: Counts) {
+	if (
+		afterCounts.productCount !== beforeCounts.productCount ||
+		afterCounts.supermarketProductCount !== beforeCounts.supermarketProductCount
+	)
+		throw new Error("no-create assertion failed");
 }
 
 function buildActiveWriteReport({
