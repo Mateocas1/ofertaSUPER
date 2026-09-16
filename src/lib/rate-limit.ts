@@ -115,6 +115,17 @@ export async function admitStrictRateLimit(
 
 const rateLimiter = createRateLimiter(process.env);
 
+export async function admitStrictPublicRoute(
+  request: Pick<NextRequest, "headers">,
+  routeScope: string,
+): Promise<StrictAdmissionResult> {
+  const forwardedFor = request.headers.get("x-forwarded-for")?.trim();
+  const trustedClientIp = process.env.VERCEL === "1" && forwardedFor && !forwardedFor.includes(",")
+    ? forwardedFor
+    : "";
+  return admitStrictRateLimit(rateLimiter, { routeScope, trustedClientIp });
+}
+
 function getClientIp(request: NextRequest) {
   const forwardedFor = request.headers.get("x-forwarded-for");
   return forwardedFor ? forwardedFor.split(",")[0]?.trim() || "unknown" : request.headers.get("x-real-ip") ?? "unknown";
