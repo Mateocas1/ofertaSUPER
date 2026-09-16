@@ -1,14 +1,28 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 import { NextResponse, type NextRequest } from "next/server";
+import { isIP } from "node:net";
 import { createClient } from "redis";
 
 import { selectCacheProvider } from "@/lib/redis";
 
-export type RateLimitState = { success: boolean; limit: number; remaining: number; reset: number; pending: Promise<unknown> };
+export type RateLimitState = {
+  success: boolean;
+  limit: number;
+  remaining: number;
+  reset: number;
+  pending: Promise<unknown>;
+  reason?: string;
+};
 export type RateLimiter = { limit(identifier: string): Promise<RateLimitState> };
+export type StrictAdmissionResult =
+  | { status: "admitted"; global: RateLimitState; client: RateLimitState }
+  | { status: "exhausted"; httpStatus: 429; level: "global" | "client"; state: RateLimitState }
+  | { status: "unavailable"; httpStatus: 503 };
 const LIMIT = 60;
 const WINDOW_MS = 60_000;
+const STRICT_OPERATION_TIMEOUT_MS = 1_000;
+const STRICT_TIMEOUT = Symbol("strict-rate-limit-timeout");
 
 const fallback = (): RateLimitState => ({ success: true, limit: LIMIT, remaining: LIMIT, reset: Date.now() + WINDOW_MS, pending: Promise.resolve() });
 
@@ -33,6 +47,70 @@ export function createRateLimiter(env: Readonly<Record<string, string | undefine
       return { success: count <= LIMIT, limit: LIMIT, remaining: Math.max(0, LIMIT - count), reset, pending: Promise.resolve() };
     },
   };
+}
+
+function normalizeClientIp(value: string): string | null {
+  if (value.includes("%")) return null;
+  const version = isIP(value);
+  if (version === 0) return null;
+  if (version === 4) return value;
+  return new URL(`http://[${value}]/`).hostname.slice(1, -1);
+}
+
+async function strictLimit(limiter: Pick<RateLimiter, "limit">, identifier: string) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof STRICT_TIMEOUT>((resolve) => {
+    timer = setTimeout(() => resolve(STRICT_TIMEOUT), STRICT_OPERATION_TIMEOUT_MS);
+  });
+  try {
+    // Promise.race bounds our response time; it does not cancel the backend call.
+    return await Promise.race([limiter.limit(identifier), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+const strictUnavailable = (): StrictAdmissionResult => ({ status: "unavailable", httpStatus: 503 });
+
+function strictLimitOutcome(
+  result: RateLimitState | typeof STRICT_TIMEOUT,
+  level: "global" | "client",
+): { state: RateLimitState } | { failure: StrictAdmissionResult } {
+  if (result === STRICT_TIMEOUT || result.reason === "timeout") return { failure: strictUnavailable() };
+  return result.success
+    ? { state: result }
+    : { failure: { status: "exhausted", httpStatus: 429, level, state: result } };
+}
+
+/**
+ * Strict callers must supply an IP derived at a trusted deployment boundary.
+ * Syntax normalization prevents equivalent IPs from creating distinct keys;
+ * establishing that the identity is trustworthy remains the caller's duty.
+ * This API intentionally does not inspect request headers.
+ */
+export async function admitStrictRateLimit(
+  limiter: Pick<RateLimiter, "limit"> | null,
+  input: Readonly<{ routeScope: string; trustedClientIp: string }>,
+): Promise<StrictAdmissionResult> {
+  const clientIp = normalizeClientIp(input.trustedClientIp);
+  if (!limiter || !/^[a-z0-9][a-z0-9:-]{0,63}$/.test(input.routeScope) || !clientIp) return strictUnavailable();
+
+  try {
+    const globalResult = strictLimitOutcome(
+      await strictLimit(limiter, `strict:${input.routeScope}:global`),
+      "global",
+    );
+    if ("failure" in globalResult) return globalResult.failure;
+
+    const clientResult = strictLimitOutcome(
+      await strictLimit(limiter, `strict:${input.routeScope}:client:${clientIp}`),
+      "client",
+    );
+    if ("failure" in clientResult) return clientResult.failure;
+    return { status: "admitted", global: globalResult.state, client: clientResult.state };
+  } catch {
+    return strictUnavailable();
+  }
 }
 
 const rateLimiter = createRateLimiter(process.env);
