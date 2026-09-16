@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import {
   createServerPublicCatalogAuthorityResolver,
 } from "../src/lib/public-catalog-authority.server";
-import type { PublicCatalogAuthorityRecord } from "../src/lib/public-catalog-authority";
+import type { PublicCatalogAuthorityRecord, PublicCatalogReaderEligibility } from "../src/lib/public-catalog-authority";
 
 const identity = {
   version: 1,
@@ -15,6 +15,15 @@ const identity = {
   candidateDigest: `sha256:${"b".repeat(64)}`,
 };
 const rawIdentity = JSON.stringify(identity);
+const readerEligibility: PublicCatalogReaderEligibility = {
+  readerId: identity.deploymentId,
+  generation: "1",
+  lineage: `sha256:${"c".repeat(64)}`,
+  policyDigest: `sha256:${"d".repeat(64)}`,
+  healthVersion: "2",
+  buildDigest: `sha256:${"e".repeat(64)}`,
+  expiresAt: new Date("2026-08-13T13:00:00.000Z"),
+};
 
 type PublicationQuery = {
   where: { id: string };
@@ -38,6 +47,7 @@ type PublicationQuery = {
 };
 
 type FindUnique = (query: PublicationQuery) => Promise<PublicCatalogAuthorityRecord | null>;
+type QueryRaw = <T>(query: TemplateStringsArray, ...values: unknown[]) => Promise<T>;
 
 function authority(): PublicCatalogAuthorityRecord {
   return {
@@ -57,9 +67,13 @@ function authority(): PublicCatalogAuthorityRecord {
   };
 }
 
-function dependencies(findUnique: FindUnique, now = () => new Date("2026-08-13T12:00:00.000Z")) {
+function dependencies(
+  findUnique: FindUnique,
+  now = () => new Date("2026-08-13T12:00:00.000Z"),
+  queryRaw: QueryRaw = async () => [readerEligibility] as never,
+) {
   return {
-    database: { productionReadinessPublication: { findUnique } },
+    database: { productionReadinessPublication: { findUnique }, $queryRaw: queryRaw },
     now,
   };
 }
@@ -67,10 +81,18 @@ function dependencies(findUnique: FindUnique, now = () => new Date("2026-08-13T1
 describe("server public catalog authority", () => {
   it("queries the exact publication once with the full authority selection", async () => {
     const queries: PublicationQuery[] = [];
-    const resolve = createServerPublicCatalogAuthorityResolver(rawIdentity, dependencies(async (query) => {
-      queries.push(query);
-      return authority();
-    }));
+    const readerQueries: Array<{ query: TemplateStringsArray; values: unknown[] }> = [];
+    const resolve = createServerPublicCatalogAuthorityResolver(rawIdentity, dependencies(
+      async (query) => {
+        queries.push(query);
+        return authority();
+      },
+      undefined,
+      async (query, ...values) => {
+        readerQueries.push({ query, values });
+        return [readerEligibility] as never;
+      },
+    ));
 
     assert.deepEqual(await resolve(), {
       publicationId: identity.publicationId,
@@ -92,6 +114,29 @@ describe("server public catalog authority", () => {
         } },
       },
     }]);
+    assert.deepEqual(readerQueries[0]?.values, [identity.deploymentId, new Date("2026-08-13T12:00:00.000Z"), identity.publicationId]);
+    const readerQuery = readerQueries[0]?.query.join("?") ?? "";
+    for (const clause of [
+      "reader.surface = 'catalog'", "reader.generation = publisher.generation",
+      "catalog.authority_adoption->>'policyDigest' = reader.policy_digest",
+      "authority_revoke_outcomes", "catalog_restriction_facts", "surface.fact IS NULL OR surface.surface = 'catalog'",
+    ]) assert.match(readerQuery, new RegExp(clause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  });
+
+  it("fails closed for missing, stale, revoked, or restricted reader eligibility", async () => {
+    for (const status of ["missing", "stale", "revoked", "restricted"] as const) {
+      let readerQueries = 0;
+      const resolve = createServerPublicCatalogAuthorityResolver(rawIdentity, dependencies(
+        async () => authority(),
+        undefined,
+        async () => {
+          readerQueries += 1;
+          return [] as never;
+        },
+      ));
+      assert.equal(await resolve(), null, status);
+      assert.equal(readerQueries, 1, status);
+    }
   });
 
   it("rejects missing, invalid JSON, and invalid identities without a query", async () => {

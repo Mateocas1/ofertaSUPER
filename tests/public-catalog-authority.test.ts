@@ -17,7 +17,7 @@ const identity = {
   candidateDigest: `sha256:${"b".repeat(64)}`,
 } as const;
 
-function authority(): PublicCatalogAuthorityRecord {
+function authority(withReaderEligibility = true): PublicCatalogAuthorityRecord {
   return {
     id: identity.publicationId,
     target: identity.target,
@@ -32,6 +32,17 @@ function authority(): PublicCatalogAuthorityRecord {
       candidate_digest: identity.candidateDigest,
       expires_at: new Date("2026-08-13T13:00:00.000Z"),
     },
+    ...(withReaderEligibility ? {
+      readerEligibility: {
+        readerId: identity.deploymentId,
+        generation: "1",
+        lineage: `sha256:${"c".repeat(64)}`,
+        policyDigest: `sha256:${"d".repeat(64)}`,
+        healthVersion: "2",
+        buildDigest: `sha256:${"e".repeat(64)}`,
+        expiresAt: new Date("2026-08-13T13:00:00.000Z"),
+      },
+    } : {}),
   };
 }
 
@@ -44,6 +55,10 @@ async function resolve(record: unknown, input: unknown = identity) {
 }
 
 describe("public catalog authority", () => {
+  it("rejects authority without an independently guarded deployment reader eligibility result", async () => {
+    assert.equal(await resolve(authority(false)), null);
+  });
+
   it("returns a minimal fingerprint after one exact publication lookup", async () => {
     const requestedIds: string[] = [];
     const result = await resolvePublicCatalogAuthority(

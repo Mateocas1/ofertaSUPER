@@ -2,6 +2,11 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import {
+	createSourceCapture,
+	sourceCaptureOperationKey,
+	type SourceCapture,
+} from "../../src/lib/production-readiness/operations";
+import {
 	buildPrewriteReportHash,
 	type CarrefourDirectRefreshPrewriteGate,
 	type DirectRefreshPrewriteChange,
@@ -192,6 +197,10 @@ export type ActiveWriteTransaction = {
 		listPrice: number | null,
 		scrapedAt: string,
 	): Promise<number>;
+	captureSourceDelta?(capture: SourceCapture): Promise<{
+		operationId: string;
+		observedAt: string;
+	}>;
 };
 export type ActiveWriteRepository = {
 	withTransaction<T>(
@@ -240,6 +249,7 @@ export type ActiveWriteReport = {
 		priceHistoryInserted: number;
 	};
 	rollbackSnapshot: CarrefourDirectRefreshPrewriteGate["rollbackSnapshot"];
+	capture?: { operationId: string; observedAt: string };
 	rows: AppliedRow[];
 };
 
@@ -701,6 +711,19 @@ async function executeActiveWrite({
 				insertedPriceHistoryId,
 			});
 		}
+		const afterRows = await tx.readSelectedRowsByExactIdentity(
+			config.source,
+			identities,
+		);
+		if (afterRows.length !== options.count) throw new Error("selected rows missing after write");
+		const capture = tx.captureSourceDelta
+			? await tx.captureSourceDelta(createSourceCapture({
+				operationKey: sourceCaptureOperationKey({ source: config.source, rowIds: identities.map(({ rowId }) => rowId), prewriteReportHash: options.prewriteReportHash }),
+				source: config.source,
+				observedAt: new Date().toISOString(),
+				items: sourceCaptureItems(config.source, selectedRows, afterRows, appliedRows),
+			}))
+			: undefined;
 		const afterCounts = await tx.readNoCreateCounts();
 		if (
 			afterCounts.productCount !== beforeCounts.productCount ||
@@ -714,6 +737,7 @@ async function executeActiveWrite({
 			beforeCounts,
 			afterCounts,
 			rows: appliedRows,
+			capture,
 			startedAt,
 			committedAt: startedAt,
 		});
@@ -726,6 +750,7 @@ function buildActiveWriteReport({
 	beforeCounts,
 	afterCounts,
 	rows,
+	capture,
 	startedAt,
 	committedAt,
 }: {
@@ -734,6 +759,7 @@ function buildActiveWriteReport({
 	beforeCounts: Counts;
 	afterCounts: Counts;
 	rows: AppliedRow[];
+	capture?: { operationId: string; observedAt: string };
 	startedAt: Date;
 	committedAt: Date;
 }): ActiveWriteReport {
@@ -786,8 +812,78 @@ function buildActiveWriteReport({
 			).length,
 		},
 		rollbackSnapshot: prewriteReport.rollbackSnapshot,
+		...(capture ? { capture } : {}),
 		rows,
 	};
+}
+
+export function createAdapterSourceCaptureItems({
+	source,
+	before,
+	after,
+	changes,
+}: {
+	source: ActiveWriteSource;
+	before: { rowId: string; productKey?: string; product: Record<string, unknown>; offer: Record<string, unknown>; history?: Record<string, unknown> | null };
+	after: { rowId: string; product: Record<string, unknown>; offer: Record<string, unknown>; history?: Record<string, unknown> | null };
+	changes: { product: string[]; offer: string[]; historyId: number | null };
+}): SourceCapture["items"] {
+	if (before.rowId !== after.rowId) throw new Error(`${source} returned identity mismatch`);
+	const product = maskedFacts(before.product, after.product, changes.product, "product");
+	const offer = maskedFacts(before.offer, after.offer, changes.offer, "offer");
+	const history = changes.historyId === null
+		? []
+		: (() => {
+			if (after.history?.id !== changes.historyId)
+				throw new Error("missing returned history identity");
+			return [{ entity: "history" as const, key: String(changes.historyId), before: before.history ?? null, after: after.history }];
+		})();
+	const productEan = before.productKey ?? String(before.product.ean ?? "");
+	const offerProductEan = String(before.offer.productEan ?? "");
+	const offerSupermarketId = String(before.offer.supermarketId ?? "");
+	return [
+		...(Object.keys(product.before).length ? [{ entity: "product" as const, key: JSON.stringify({ ean: productEan }), ...product }] : []),
+		...(Object.keys(offer.before).length ? [{ entity: "offer" as const, key: JSON.stringify({ product_ean: offerProductEan, supermarket_id: offerSupermarketId }), ...offer }] : []),
+		...history.map((item) => ({ ...item, key: JSON.stringify({ id: item.key }) })),
+	];
+}
+
+function maskedFacts(
+	before: Record<string, unknown>,
+	after: Record<string, unknown>,
+	fields: string[],
+	entity: "product" | "offer",
+) {
+	const allowed = entity === "product"
+		? ["name", "brand", "description", "imageUrl", "images", "category"]
+		: ["price", "listPrice", "referencePrice", "referenceUnit", "isAvailable", "skuId", "sellerId", "productUrl", "lastCheckedAt"];
+	if (new Set(fields).size !== fields.length || fields.some((field) => !allowed.includes(field) || !(field in before) || !(field in after)))
+		throw new Error(`${entity} field mask is invalid`);
+	return {
+		before: Object.fromEntries(fields.map((field) => [field, before[field]])),
+		after: Object.fromEntries(fields.map((field) => [field, after[field]])),
+	};
+}
+
+function sourceCaptureItems(source: ActiveWriteSource, before: TxRow[], after: TxRow[], applied: AppliedRow[]): SourceCapture["items"] {
+	const afterByRowId = new Map(after.map((row) => [row.rowId, row]));
+	return applied.flatMap((row) => {
+		const prior = before.find((candidate) => candidate.rowId === row.rowId);
+		const next = afterByRowId.get(row.rowId);
+		if (!prior || !next) throw new Error(`capture identity missing for ${row.rowId}`);
+		if (row.insertedPriceHistoryId !== null && next.latestPriceHistory?.id !== row.insertedPriceHistoryId)
+			throw new Error(`missing returned history identity for ${row.rowId}`);
+		return createAdapterSourceCaptureItems({
+			source,
+			before: { rowId: prior.rowId, productKey: row.productEan, product: prior.product, offer: prior.supermarketProduct, history: prior.latestPriceHistory },
+			after: { rowId: next.rowId, product: next.product, offer: next.supermarketProduct, history: next.latestPriceHistory },
+			changes: {
+				product: row.appliedChanges.product.map((change) => change.field),
+				offer: row.appliedChanges.supermarketProduct.map((change) => change.field),
+				historyId: row.insertedPriceHistoryId,
+			},
+		});
+	});
 }
 
 function exactList(argv: string[], flag: string, expectedCount: number) {

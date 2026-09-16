@@ -7,6 +7,16 @@ export type PublicCatalogServingIdentity = {
   candidateDigest: string;
 };
 
+export type PublicCatalogReaderEligibility = {
+  readerId: string;
+  generation: string;
+  lineage: string;
+  policyDigest: string;
+  healthVersion: string;
+  buildDigest: string;
+  expiresAt: unknown;
+};
+
 export type PublicCatalogAuthorityRecord = {
   id: string;
   target: string;
@@ -21,6 +31,7 @@ export type PublicCatalogAuthorityRecord = {
     candidate_digest: string;
     expires_at: unknown;
   };
+  readerEligibility?: unknown;
 };
 
 export type PublicCatalogAuthorityFingerprint = {
@@ -42,6 +53,7 @@ type ExactAuthorityRecord = Record<string, unknown> & {
 type EligibleAuthorityRecord = ExactAuthorityRecord & {
   verified_at: Date;
   promotion: ExactAuthorityRecord["promotion"] & { expires_at: Date };
+  readerEligibility: PublicCatalogReaderEligibility & { expiresAt: Date };
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -92,13 +104,34 @@ function matchesPromotionIdentity(record: ExactAuthorityRecord, identity: Public
     && record.promotion.candidate_digest === identity.candidateDigest;
 }
 
-function isEligibleAuthority(record: ExactAuthorityRecord, now: Date): record is EligibleAuthorityRecord {
+function hasEligibleReader(
+  record: ExactAuthorityRecord,
+  identity: PublicCatalogServingIdentity,
+  now: Date,
+): record is ExactAuthorityRecord & { readerEligibility: PublicCatalogReaderEligibility & { expiresAt: Date } } {
+  const reader = record.readerEligibility;
+  if (!isRecord(reader) || !validDate(reader.expiresAt)) return false;
+  return reader.readerId === identity.deploymentId
+    && isText(reader.generation)
+    && isText(reader.lineage)
+    && isText(reader.policyDigest)
+    && isText(reader.healthVersion)
+    && isText(reader.buildDigest)
+    && reader.expiresAt > now;
+}
+
+function isEligibleAuthority(
+  record: ExactAuthorityRecord,
+  identity: PublicCatalogServingIdentity,
+  now: Date,
+): record is EligibleAuthorityRecord {
   const { promotion } = record;
   if (!validDate(record.verified_at) || !validDate(promotion.expires_at)) return false;
   return record.state === "PROMOTED"
     && promotion.state === "PROMOTED"
     && record.verified_at <= now
-    && promotion.expires_at > now;
+    && promotion.expires_at > now
+    && hasEligibleReader(record, identity, now);
 }
 
 export async function resolvePublicCatalogAuthority(
@@ -117,7 +150,7 @@ export async function resolvePublicCatalogAuthority(
   }
   if (!hasExactPublicationIdentity(record, identity)
     || !matchesPromotionIdentity(record, identity)
-    || !isEligibleAuthority(record, now)) return null;
+    || !isEligibleAuthority(record, identity, now)) return null;
 
   return {
     publicationId: identity.publicationId,

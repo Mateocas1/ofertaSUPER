@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 import type { PublicCatalogAuthorityFingerprint } from "../src/lib/public-catalog-authority";
+import { validateBootstrapContract, type BootstrapInput } from "../src/lib/production-readiness/build-contract";
 
 export type GuardOptions = {
   deploymentId: string;
@@ -113,6 +114,17 @@ function validProof(result: CommandResult, proof: Record<string, unknown>, nonce
     proof.nonce === nonce,
     exactFingerprint(proof.fingerprint, expected),
   ].every(Boolean);
+}
+
+/** Separate read-only bootstrap path: never invokes active proof, promotion, or configuration. */
+export async function inspectBootstrapDeployment(
+  options: Omit<BootstrapInput, "metadata"> & { url: string; scope: string },
+  run: Dependencies["run"] = runGuardCommand,
+) {
+  if (!immutableHostname(options.url) || !identifier.test(options.scope)) throw new Error("Invalid bootstrap target");
+  const result = await run({ kind: "metadata", args: ["inspect", options.url, "--scope", options.scope, "--json", "--non-interactive"] });
+  if (result.code !== 0) throw new Error("Bootstrap inspection failed");
+  return validateBootstrapContract({ ...options, metadata: parseObject(result.stdout, "Invalid bootstrap metadata") });
 }
 
 export async function validatePinnedDeployment(options: GuardOptions, dependencies: Dependencies) {

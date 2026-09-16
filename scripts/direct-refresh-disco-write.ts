@@ -78,15 +78,25 @@ function createActiveWriteRepository(): ActiveWriteRepository {
 	return {
 		withTransaction: (fn) =>
 			db.$transaction(
-				async (tx) => fn(createActiveWriteTransaction(tx)),
+				async (tx) => fn(createDiscoActiveWriteTransaction(tx)),
 				DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS,
 			),
 	};
 }
-function createActiveWriteTransaction(
+export function createDiscoActiveWriteTransaction(
 	tx: Prisma.TransactionClient,
 ): ActiveWriteTransaction {
 	return {
+		async captureSourceDelta(capture) {
+			if (capture.source !== "disco") throw new Error("Disco capture source policy mismatch");
+			if (!capture.items.length) throw new Error("source capture items are required");
+			const rows = await tx.$queryRaw<Array<{ operationId: string; observedAt: Date }>>`
+				select operation_id as "operationId", observed_at as "observedAt"
+				from public.capture_source_delta(${capture.operationKey}, ${capture.source}, ${JSON.stringify(capture.items)}::jsonb)`;
+			const result = rows[0];
+			if (!result?.operationId || !result.observedAt) throw new Error("capture result is required");
+			return { operationId: result.operationId, observedAt: result.observedAt.toISOString() };
+		},
 		async acquireAdvisoryLock(lockKey) {
 			const rows = await tx.$queryRaw<
 				Array<{ locked: boolean }>
