@@ -29,16 +29,18 @@ type PublicationQuery = {
   };
 };
 
-type AuthorityDatabase = {
+export type AuthorityDatabase = {
   productionReadinessPublication: {
     findUnique(query: PublicationQuery): Promise<PublicCatalogAuthorityRecord | null>;
   };
   $queryRaw<T>(query: TemplateStringsArray, ...values: unknown[]): Promise<T>;
 };
 
-type ServerAuthorityDependencies = {
+type TrustedClock = (database: AuthorityDatabase) => Promise<Date>;
+
+export type ServerAuthorityDependencies = {
   database?: AuthorityDatabase;
-  now?: () => Date;
+  trustedClock?: TrustedClock;
 };
 
 const authoritySelection = {
@@ -58,6 +60,19 @@ const authoritySelection = {
     },
   },
 } as const;
+
+function validDate(value: unknown): value is Date {
+  return value instanceof Date && !Number.isNaN(value.getTime());
+}
+
+export async function queryPublicCatalogTrustedClock(database: AuthorityDatabase): Promise<Date> {
+  const rows = await database.$queryRaw<Array<{ now: unknown }>>`
+    SELECT pg_catalog.clock_timestamp() AS "now"
+  `;
+  const now = rows[0]?.now;
+  if (!validDate(now)) throw new Error("trusted database clock unavailable");
+  return now;
+}
 
 function parseFactoryIdentity(rawIdentityJson: unknown) {
   if (typeof rawIdentityJson !== "string") return null;
@@ -126,6 +141,57 @@ async function loadReaderEligibility(
           LEFT JOIN public.catalog_restriction_surfaces surface ON surface.fact = fact.fact
           WHERE surface.fact IS NULL OR surface.surface = 'catalog'
         )
+        AND (
+          (
+            publisher.generation = 0
+            AND publisher.generation_record_id IS NULL
+            AND EXISTS (
+              SELECT 1
+              FROM public.authority_lifecycle_outcomes authority
+              JOIN public.production_readiness_publications publication ON publication.id = authority.publication_id
+              JOIN public.production_readiness_promotions promotion ON promotion.id = publication.promotion_id
+              JOIN public.authority_candidates candidate ON candidate.manifest_digest = promotion.candidate_digest
+              JOIN public.baseline_manifests baseline ON baseline.id = candidate.baseline_manifest_id
+              JOIN public.refresh_policies policy ON policy.id = candidate.policy_id
+              WHERE authority.operation_id = publisher.authority_operation_id
+                AND authority.publication_id = publisher.publication_id
+                AND publication.state = 'PROMOTED'
+                AND promotion.state = 'PROMOTED'
+                AND candidate.deployment_id = promotion.deployment_id
+                AND candidate.full_sha = promotion.commit_sha
+                AND candidate.target = publication.target
+                AND policy.digest = publisher.policy_digest
+                AND authority.final_checked_at < authority.expires_at
+                AND baseline.root_digest = publisher.lineage
+                AND authority.proof->'adoption'->>'generation' = publisher.generation::text
+                AND authority.proof->'adoption'->>'lineage' = baseline.root_digest
+                AND authority.proof->'adoption'->>'policyDigest' = publisher.policy_digest
+                AND authority.proof->'adoption'->>'healthVersion' = publisher.health_version::text
+                AND authority.proof->'adoption'->>'buildDigest' = publisher.build_digest
+                AND authority.proof->'adoption'->>'incarnation' = publisher.incarnation::text
+            )
+          )
+          OR (
+            publisher.generation > 0
+            AND EXISTS (
+              SELECT 1
+              FROM public.governed_generation_records record
+              JOIN public.sealed_generation_manifests manifest ON manifest.id = record.manifest_id
+              JOIN public.generation_promotion_operations operation ON operation.generation_record_id = record.id
+              WHERE record.id = publisher.generation_record_id
+                AND record.generation = publisher.generation
+                AND record.result_lineage = publisher.lineage
+                AND record.policy_digest = publisher.policy_digest
+                AND record.health_version = publisher.health_version
+                AND record.build_digest = publisher.build_digest
+                AND manifest.publication_id = publisher.publication_id
+                AND operation.outcome->>'generation' = publisher.generation::text
+                AND operation.outcome->>'lineage' = publisher.lineage
+                AND publisher.expires_at <= (operation.outcome->>'expiresAt')::timestamptz
+                AND (operation.outcome->>'expiresAt')::timestamptz > ${now}
+            )
+          )
+        )
       LIMIT 1
     `;
     return rows[0] ?? null;
@@ -141,30 +207,30 @@ export function createServerPublicCatalogAuthorityResolver(
   const identity = parseFactoryIdentity(rawIdentityJson);
   if (!identity) return async () => null;
 
-  const now = dependencies.now ?? (() => new Date());
+  const trustedClock = dependencies.trustedClock ?? queryPublicCatalogTrustedClock;
   return async () => {
-    let currentTime: Date;
     try {
-      currentTime = now();
+      const database = dependencies.database ?? (await import("@/lib/db")).db;
+      const currentTime = await trustedClock(database);
+      return resolvePublicCatalogAuthority(
+        identity,
+        async (publicationId) => {
+          const publication = await loadPublication(publicationId, database);
+          if (!publication) return null;
+          return {
+            ...publication,
+            readerEligibility: await loadReaderEligibility(
+              publicationId,
+              identity.deploymentId,
+              currentTime,
+              database,
+            ),
+          };
+        },
+        currentTime,
+      );
     } catch {
       return null;
     }
-    return resolvePublicCatalogAuthority(
-      identity,
-      async (publicationId) => {
-        const publication = await loadPublication(publicationId, dependencies.database);
-        if (!publication) return null;
-        return {
-          ...publication,
-          readerEligibility: await loadReaderEligibility(
-            publicationId,
-            identity.deploymentId,
-            currentTime,
-            dependencies.database,
-          ),
-        };
-      },
-      currentTime,
-    );
   };
 }

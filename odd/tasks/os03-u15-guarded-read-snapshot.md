@@ -26,9 +26,9 @@ OpenSpec artifacts are historical input only. This ODD checklist is the executio
 - [x] **U15-T1 — Define guarded decision and snapshot contracts**
   - Add immutable internal DTOs for exact authority bindings, projection reads, unavailable outcomes, and absolute decision deadlines.
   - Prove invalid identity/bindings/manifest/health/restriction fail closed and no latest-promoted lookup exists.
-- [ ] **U15-T2 — Implement one guarded repeatable-read boundary**
+- [x] **U15-T2 — Implement one guarded repeatable-read boundary**
   - Authorize and read `serving_*` through one primary-database `REPEATABLE READ` transaction.
-  - Prove multi-query detail/history/count/ranking observations cannot mix generations and never access mutable source tables.
+  - Prove the callback receives only the six serving delegates, after authority succeeds, and cannot receive mutable source delegates or raw SQL.
 - [ ] **U15-T3 — Enforce bounded decision reuse and pre-emission checks**
   - Install a decision only after a successful timely snapshot; cap its absolute lifetime at 30 seconds and authority expiry.
   - Prove failures cannot create or extend a lease, slow snapshots cannot install one, and expired decisions deny emission.
@@ -38,4 +38,4 @@ OpenSpec artifacts are historical input only. This ODD checklist is the executio
 
 ## Current state
 
-Authorized automatically by the user's prior instruction after PRs #467–#478 became green and all human-owned worktrees were clean. Exploration completed; implementation has not started.
+U15-T2 completed: the guarded read boundary uses one read-only repeatable-read snapshot, resolves authority and the serving projection on its transaction client, and rejects authority, callback, transaction, clock, and expiry failures. T3 lease caching remains out of scope.

@@ -69,12 +69,12 @@ function authority(): PublicCatalogAuthorityRecord {
 
 function dependencies(
   findUnique: FindUnique,
-  now = () => new Date("2026-08-13T12:00:00.000Z"),
+  trustedClock = async () => new Date("2026-08-13T12:00:00.000Z"),
   queryRaw: QueryRaw = async () => [readerEligibility] as never,
 ) {
   return {
     database: { productionReadinessPublication: { findUnique }, $queryRaw: queryRaw },
-    now,
+    trustedClock,
   };
 }
 
@@ -121,12 +121,19 @@ describe("server public catalog authority", () => {
         } },
       },
     }]);
-    assert.deepEqual(readerQueries[0]?.values, [identity.deploymentId, new Date("2026-08-13T12:00:00.000Z"), identity.publicationId]);
+    assert.deepEqual(readerQueries[0]?.values, [
+      identity.deploymentId, new Date("2026-08-13T12:00:00.000Z"), identity.publicationId, new Date("2026-08-13T12:00:00.000Z"),
+    ]);
     const readerQuery = readerQueries[0]?.query.join("?") ?? "";
     for (const clause of [
       "reader.surface = 'catalog'", "reader.generation = publisher.generation",
       "catalog.authority_adoption->>'policyDigest' = reader.policy_digest",
       "authority_revoke_outcomes", "catalog_restriction_facts", "surface.fact IS NULL OR surface.surface = 'catalog'",
+      "publisher.generation = 0", "baseline.root_digest = publisher.lineage",
+      "authority.proof->'adoption'->>'incarnation' = publisher.incarnation::text",
+      "publisher.generation > 0", "record.id = publisher.generation_record_id",
+      "sealed_generation_manifests", "manifest.publication_id = publisher.publication_id",
+      "generation_promotion_operations", "operation.outcome->>'expiresAt'", "record.policy_digest = publisher.policy_digest",
     ]) assert.match(readerQuery, new RegExp(clause.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
 
@@ -158,25 +165,25 @@ describe("server public catalog authority", () => {
     }
   });
 
-  it("does not query when the injected clock is invalid or throws", async () => {
-    for (const now of [() => new Date("invalid"), () => { throw new Error("clock unavailable"); }]) {
+  it("does not query when the injected trusted clock is invalid or throws", async () => {
+    for (const trustedClock of [async () => new Date("invalid"), async () => { throw new Error("clock unavailable"); }]) {
       let calls = 0;
       const resolve = createServerPublicCatalogAuthorityResolver(rawIdentity, dependencies(async () => {
         calls += 1;
         return authority();
-      }, now));
+      }, trustedClock));
       assert.equal(await resolve(), null);
       assert.equal(calls, 0);
     }
   });
 
-  it("binds identity at creation while evaluating its clock for each resolution", async () => {
+  it("binds identity at creation while evaluating its trusted clock for each resolution", async () => {
     const times = [new Date("2026-08-13T12:00:00.000Z"), new Date("2026-08-13T13:00:00.000Z")];
     let calls = 0;
     const resolve = createServerPublicCatalogAuthorityResolver(rawIdentity, dependencies(async () => {
       calls += 1;
       return authority();
-    }, () => times.shift()!));
+    }, async () => times.shift()!));
 
     assert.equal((await resolve())?.publicationId, identity.publicationId);
     assert.equal(await resolve(), null);
