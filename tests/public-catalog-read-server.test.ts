@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { createPublicCatalogGuardedRead } from "../src/lib/public-catalog-read.server";
+import { createPublicCatalogDecisionLeaseStore } from "../src/lib/public-catalog-decision-lease";
 import type { PublicCatalogAuthorityRecord, PublicCatalogReaderEligibility } from "../src/lib/public-catalog-authority";
 
 const identity = JSON.stringify({
@@ -30,7 +31,7 @@ function publication(): PublicCatalogAuthorityRecord {
   };
 }
 
-function database(events: string[], authority = publication()) {
+function database(events: string[], authority = publication(), rejectAfterCallback = false) {
   const transaction = {
     $executeRaw: async <T>(query: TemplateStringsArray) => { events.push(query.join("")); return 0 as T; },
     $queryRaw: async <T>(query: TemplateStringsArray) => {
@@ -54,7 +55,9 @@ function database(events: string[], authority = publication()) {
   return {
     $transaction: async <T>(callback: (tx: typeof transaction) => Promise<T>, options: { isolationLevel: "RepeatableRead" }) => {
       events.push(`transaction:${options.isolationLevel}`);
-      return callback(transaction);
+      const result = await callback(transaction);
+      if (rejectAfterCallback) throw new Error("commit failed");
+      return result;
     },
   } as never;
 }
@@ -92,6 +95,38 @@ describe("public catalog guarded read", () => {
       assert.deepEqual(result.available ? result.value : undefined, value);
       assert.equal(result.available, true);
     }
+  });
+
+  it("installs only timely snapshots, evicts confirmed ineligibility, and preserves leases on outages", async () => {
+    const leases = createPublicCatalogDecisionLeaseStore();
+    const first = await createPublicCatalogGuardedRead(identity, { database: database([]), trustedClock: async () => now, leases })(async () => "value");
+    assert.equal(first.available, true);
+    if (!first.available) return;
+    const parsed = JSON.parse(identity);
+    assert.ok(leases.get(parsed, first.decision, now));
+
+    const slow = await createPublicCatalogGuardedRead(identity, {
+      database: database([]), leases,
+      trustedClock: (() => { let calls = 0; return async () => new Date(now.getTime() + (calls++ ? 31_000 : 0)); })(),
+    })(async () => "value");
+    assert.equal(slow.available, false);
+    assert.equal(leases.get(parsed, first.decision, now)?.decisionDeadline, first.decision.decisionDeadline);
+
+    const outage = await createPublicCatalogGuardedRead(identity, {
+      database: { $transaction: async () => { throw new Error("outage"); } } as never, trustedClock: async () => now, leases,
+    })(async () => "value");
+    assert.equal(outage.available, false);
+    assert.ok(leases.get(parsed, first.decision, now));
+
+    const rolledBackIneligible = await createPublicCatalogGuardedRead(identity, {
+      database: database([], { ...publication(), state: "REVOKED" }, true), trustedClock: async () => now, leases,
+    })(async () => "value");
+    assert.equal(rolledBackIneligible.available, false);
+    assert.ok(leases.get(parsed, first.decision, now));
+
+    const revoked = await createPublicCatalogGuardedRead(identity, { database: database([], { ...publication(), state: "REVOKED" }), trustedClock: async () => now, leases })(async () => "value");
+    assert.equal(revoked.available, false);
+    assert.equal(leases.get(parsed, first.decision, now), null);
   });
 
   it("fails closed before callback on authority failure and after callback on expiry or errors", async () => {

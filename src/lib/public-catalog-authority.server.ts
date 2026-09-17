@@ -2,8 +2,9 @@ import "server-only";
 
 import {
   parsePublicCatalogServingIdentity,
-  resolvePublicCatalogAuthority,
+  resolvePublicCatalogAuthorityOutcome,
   type PublicCatalogAuthorityDecision,
+  type PublicCatalogAuthorityOutcome,
   type PublicCatalogAuthorityRecord,
   type PublicCatalogReaderEligibility,
 } from "./public-catalog-authority";
@@ -101,8 +102,7 @@ async function loadReaderEligibility(
   database?: AuthorityDatabase,
 ): Promise<PublicCatalogReaderEligibility | null> {
   const client = database ?? (await import("@/lib/db")).db;
-  try {
-    const rows = await client.$queryRaw<PublicCatalogReaderEligibility[]>`
+  const rows = await client.$queryRaw<PublicCatalogReaderEligibility[]>`
       SELECT
         reader.reader_id AS "readerId",
         reader.generation::text AS "generation",
@@ -194,43 +194,38 @@ async function loadReaderEligibility(
         )
       LIMIT 1
     `;
-    return rows[0] ?? null;
-  } catch {
-    return null;
-  }
+  return rows[0] ?? null;
+}
+
+export function createServerPublicCatalogAuthorityOutcomeResolver(
+  rawIdentityJson: unknown,
+  dependencies: ServerAuthorityDependencies = {},
+): () => Promise<PublicCatalogAuthorityOutcome> {
+  const identity = parseFactoryIdentity(rawIdentityJson);
+  if (!identity) return async () => ({ status: "ineligible" });
+  const trustedClock = dependencies.trustedClock ?? queryPublicCatalogTrustedClock;
+  return async () => {
+    try {
+      const database = dependencies.database ?? (await import("@/lib/db")).db;
+      const currentTime = await trustedClock(database);
+      return resolvePublicCatalogAuthorityOutcome(identity, async (publicationId) => {
+        const publication = await loadPublication(publicationId, database);
+        if (!publication) return null;
+        return { ...publication, readerEligibility: await loadReaderEligibility(publicationId, identity.deploymentId, currentTime, database) };
+      }, currentTime);
+    } catch {
+      return { status: "unavailable" };
+    }
+  };
 }
 
 export function createServerPublicCatalogAuthorityResolver(
   rawIdentityJson: unknown,
   dependencies: ServerAuthorityDependencies = {},
 ): () => Promise<PublicCatalogAuthorityDecision | null> {
-  const identity = parseFactoryIdentity(rawIdentityJson);
-  if (!identity) return async () => null;
-
-  const trustedClock = dependencies.trustedClock ?? queryPublicCatalogTrustedClock;
+  const resolve = createServerPublicCatalogAuthorityOutcomeResolver(rawIdentityJson, dependencies);
   return async () => {
-    try {
-      const database = dependencies.database ?? (await import("@/lib/db")).db;
-      const currentTime = await trustedClock(database);
-      return resolvePublicCatalogAuthority(
-        identity,
-        async (publicationId) => {
-          const publication = await loadPublication(publicationId, database);
-          if (!publication) return null;
-          return {
-            ...publication,
-            readerEligibility: await loadReaderEligibility(
-              publicationId,
-              identity.deploymentId,
-              currentTime,
-              database,
-            ),
-          };
-        },
-        currentTime,
-      );
-    } catch {
-      return null;
-    }
+    const outcome = await resolve();
+    return outcome.status === "eligible" ? outcome.decision : null;
   };
 }

@@ -2,9 +2,10 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 
-import { canEmitPublicCatalogDecision, type PublicCatalogAuthorityDecision, type PublicCatalogAuthorityRecord } from "./public-catalog-authority";
+import { canEmitPublicCatalogDecision, parsePublicCatalogServingIdentity, type PublicCatalogAuthorityDecision, type PublicCatalogAuthorityRecord } from "./public-catalog-authority";
+import { publicCatalogDecisionLeases, type PublicCatalogDecisionLeaseStore } from "./public-catalog-decision-lease";
 import {
-  createServerPublicCatalogAuthorityResolver,
+  createServerPublicCatalogAuthorityOutcomeResolver,
   queryPublicCatalogTrustedClock,
 } from "./public-catalog-authority.server";
 
@@ -47,6 +48,7 @@ export type PublicCatalogReadResult<T> =
 type GuardedReadDependencies = {
   database?: GuardedReadDatabase;
   trustedClock?: (transaction: GuardedReadTransaction) => Promise<Date>;
+  leases?: PublicCatalogDecisionLeaseStore;
 };
 
 function projectionOf(transaction: GuardedReadTransaction): PublicCatalogProjection {
@@ -68,24 +70,32 @@ export function createPublicCatalogGuardedRead(
   rawIdentityJson: unknown,
   dependencies: GuardedReadDependencies = {},
 ): <T>(callback: (projection: PublicCatalogProjection) => T | Promise<T>) => Promise<PublicCatalogReadResult<T>> {
+  const identity = typeof rawIdentityJson === "string" ? (() => { try { return parsePublicCatalogServingIdentity(JSON.parse(rawIdentityJson)); } catch { return null; } })() : null;
+  const leases = dependencies.leases ?? publicCatalogDecisionLeases;
   const trustedClock = dependencies.trustedClock ?? (async (transaction: GuardedReadTransaction) => queryPublicCatalogTrustedClock(transaction));
   return async <T,>(callback: (projection: PublicCatalogProjection) => T | Promise<T>) => {
     try {
       const database = dependencies.database ?? await defaultDatabase();
-      return await database.$transaction(async (transaction) => {
+      const result = await database.$transaction(async (transaction) => {
         await transaction.$executeRaw`SET TRANSACTION READ ONLY`;
-        const resolveAuthority = createServerPublicCatalogAuthorityResolver(rawIdentityJson, {
-          database: transaction,
-          trustedClock: async () => trustedClock(transaction),
-        });
-        const decision = await resolveAuthority();
-        if (!decision) return { available: false };
+        const outcome = await createServerPublicCatalogAuthorityOutcomeResolver(rawIdentityJson, {
+          database: transaction, trustedClock: async () => trustedClock(transaction),
+        })();
+        if (outcome.status !== "eligible") return {
+          available: false as const, confirmedIneligible: outcome.status === "ineligible",
+        };
         const value = await callback(projectionOf(transaction));
         const emissionTime = await trustedClock(transaction);
-        return canEmitPublicCatalogDecision(decision, emissionTime)
-          ? { available: true, decision, value }
-          : { available: false };
+        return canEmitPublicCatalogDecision(outcome.decision, emissionTime)
+          ? { available: true as const, decision: outcome.decision, value, emissionTime }
+          : { available: false as const };
       }, { isolationLevel: "RepeatableRead" });
+      if (!result.available) {
+        if (result.confirmedIneligible && identity) leases.evict(identity);
+        return { available: false };
+      }
+      if (identity) leases.install(identity, result.decision, result.emissionTime);
+      return { available: true, decision: result.decision, value: result.value };
     } catch {
       return { available: false };
     }

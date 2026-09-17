@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  createServerPublicCatalogAuthorityOutcomeResolver,
   createServerPublicCatalogAuthorityResolver,
 } from "../src/lib/public-catalog-authority.server";
 import type { PublicCatalogAuthorityRecord, PublicCatalogReaderEligibility } from "../src/lib/public-catalog-authority";
@@ -188,6 +189,11 @@ describe("server public catalog authority", () => {
     assert.equal((await resolve())?.publicationId, identity.publicationId);
     assert.equal(await resolve(), null);
     assert.equal(calls, 2);
+  });
+
+  it("distinguishes confirmed ineligibility from database unavailability internally", async () => {
+    assert.deepEqual(await createServerPublicCatalogAuthorityOutcomeResolver(rawIdentity, dependencies(async () => null))(), { status: "ineligible" });
+    assert.deepEqual(await createServerPublicCatalogAuthorityOutcomeResolver(rawIdentity, dependencies(async () => { throw new Error("down"); }))(), { status: "unavailable" });
   });
 
   it("returns null for absent, revoked, or failed exact queries without fallback", async () => {

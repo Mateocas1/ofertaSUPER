@@ -29,7 +29,7 @@ OpenSpec artifacts are historical input only. This ODD checklist is the executio
 - [x] **U15-T2 — Implement one guarded repeatable-read boundary**
   - Authorize and read `serving_*` through one primary-database `REPEATABLE READ` transaction.
   - Prove the callback receives only the six serving delegates, after authority succeeds, and cannot receive mutable source delegates or raw SQL.
-- [ ] **U15-T3 — Enforce bounded decision reuse and pre-emission checks**
+- [x] **U15-T3 — Enforce bounded decision reuse and pre-emission checks**
   - Install a decision only after a successful timely snapshot; cap its absolute lifetime at 30 seconds and authority expiry.
   - Prove failures cannot create or extend a lease, slow snapshots cannot install one, and expired decisions deny emission.
 - [ ] **U15-T4 — Verify and close the unit**
