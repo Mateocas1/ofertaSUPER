@@ -103,6 +103,13 @@ describe("server public catalog authority", () => {
       candidateDigest: identity.candidateDigest,
       verifiedAt: "2026-08-13T11:00:00.000Z",
       expiresAt: "2026-08-13T13:00:00.000Z",
+      generation: "1",
+      lineage: `sha256:${"c".repeat(64)}`,
+      policyDigest: `sha256:${"d".repeat(64)}`,
+      healthVersion: "2",
+      buildDigest: `sha256:${"e".repeat(64)}`,
+      readerExpiresAt: "2026-08-13T13:00:00.000Z",
+      decisionDeadline: "2026-08-13T12:00:30.000Z",
     });
     assert.deepEqual(queries, [{
       where: { id: identity.publicationId },

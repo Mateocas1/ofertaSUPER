@@ -35,14 +35,24 @@ export type PublicCatalogAuthorityRecord = {
 };
 
 export type PublicCatalogAuthorityFingerprint = {
-  publicationId: string;
-  promotionId: string;
-  target: "production";
-  deploymentId: string;
-  commitSha: string;
-  candidateDigest: string;
-  verifiedAt: string;
-  expiresAt: string;
+  readonly publicationId: string;
+  readonly promotionId: string;
+  readonly target: "production";
+  readonly deploymentId: string;
+  readonly commitSha: string;
+  readonly candidateDigest: string;
+  readonly verifiedAt: string;
+  readonly expiresAt: string;
+};
+
+export type PublicCatalogAuthorityDecision = PublicCatalogAuthorityFingerprint & {
+  readonly generation: string;
+  readonly lineage: string;
+  readonly policyDigest: string;
+  readonly healthVersion: string;
+  readonly buildDigest: string;
+  readonly readerExpiresAt: string;
+  readonly decisionDeadline: string;
 };
 
 type ExactAuthorityRecord = Record<string, unknown> & {
@@ -134,11 +144,40 @@ function isEligibleAuthority(
     && hasEligibleReader(record, identity, now);
 }
 
+function hasTextFields(record: Record<string, unknown>, fields: readonly string[]): boolean {
+  return fields.every((field) => isText(record[field]));
+}
+
+function hasValidDecisionTimes(record: Record<string, unknown>): boolean {
+  return [record.verifiedAt, record.expiresAt, record.readerExpiresAt, record.decisionDeadline]
+    .every((value) => typeof value === "string" && validDate(new Date(value)));
+}
+
+function isValidDecision(decision: unknown): decision is PublicCatalogAuthorityDecision {
+  if (!isRecord(decision) || decision.target !== "production") return false;
+  if (!hasTextFields(decision, [
+    "publicationId", "promotionId", "deploymentId", "generation", "lineage", "policyDigest", "healthVersion", "buildDigest",
+  ])) return false;
+  return typeof decision.commitSha === "string"
+    && /^[a-f0-9]{40}$/.test(decision.commitSha)
+    && typeof decision.candidateDigest === "string"
+    && /^sha256:[a-f0-9]{64}$/.test(decision.candidateDigest)
+    && hasValidDecisionTimes(decision);
+}
+
+export function canEmitPublicCatalogDecision(decision: unknown, now: Date): boolean {
+  if (!validDate(now) || !isValidDecision(decision)) return false;
+  const expiry = new Date(decision.expiresAt);
+  const readerExpiry = new Date(decision.readerExpiresAt);
+  const deadline = new Date(decision.decisionDeadline);
+  return deadline <= expiry && deadline <= readerExpiry && now < deadline && now < expiry && now < readerExpiry;
+}
+
 export async function resolvePublicCatalogAuthority(
   input: unknown,
   loadPublication: (publicationId: string) => Promise<PublicCatalogAuthorityRecord | null>,
   now: Date,
-): Promise<PublicCatalogAuthorityFingerprint | null> {
+): Promise<PublicCatalogAuthorityDecision | null> {
   const identity = parsePublicCatalogServingIdentity(input);
   if (!identity || !validDate(now)) return null;
 
@@ -152,6 +191,12 @@ export async function resolvePublicCatalogAuthority(
     || !matchesPromotionIdentity(record, identity)
     || !isEligibleAuthority(record, identity, now)) return null;
 
+  const readerExpiry = record.readerEligibility.expiresAt;
+  const decisionDeadline = new Date(Math.min(
+    now.getTime() + 30_000,
+    record.promotion.expires_at.getTime(),
+    readerExpiry.getTime(),
+  ));
   return {
     publicationId: identity.publicationId,
     promotionId: record.promotion_id,
@@ -161,5 +206,12 @@ export async function resolvePublicCatalogAuthority(
     candidateDigest: identity.candidateDigest,
     verifiedAt: record.verified_at.toISOString(),
     expiresAt: record.promotion.expires_at.toISOString(),
+    generation: record.readerEligibility.generation,
+    lineage: record.readerEligibility.lineage,
+    policyDigest: record.readerEligibility.policyDigest,
+    healthVersion: record.readerEligibility.healthVersion,
+    buildDigest: record.readerEligibility.buildDigest,
+    readerExpiresAt: readerExpiry.toISOString(),
+    decisionDeadline: decisionDeadline.toISOString(),
   };
 }

@@ -3,7 +3,7 @@ import "server-only";
 import {
   parsePublicCatalogServingIdentity,
   resolvePublicCatalogAuthority,
-  type PublicCatalogAuthorityFingerprint,
+  type PublicCatalogAuthorityDecision,
   type PublicCatalogAuthorityRecord,
   type PublicCatalogReaderEligibility,
 } from "./public-catalog-authority";
@@ -137,7 +137,7 @@ async function loadReaderEligibility(
 export function createServerPublicCatalogAuthorityResolver(
   rawIdentityJson: unknown,
   dependencies: ServerAuthorityDependencies = {},
-): () => Promise<PublicCatalogAuthorityFingerprint | null> {
+): () => Promise<PublicCatalogAuthorityDecision | null> {
   const identity = parseFactoryIdentity(rawIdentityJson);
   if (!identity) return async () => null;
 

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  canEmitPublicCatalogDecision,
   parsePublicCatalogServingIdentity,
   resolvePublicCatalogAuthority,
   type PublicCatalogAuthorityRecord,
+  type PublicCatalogReaderEligibility,
 } from "../src/lib/public-catalog-authority";
 
 const NOW = new Date("2026-08-13T12:00:00.000Z");
@@ -59,7 +61,7 @@ describe("public catalog authority", () => {
     assert.equal(await resolve(authority(false)), null);
   });
 
-  it("returns a minimal fingerprint after one exact publication lookup", async () => {
+  it("binds the exact reader authority record with a 30-second decision cap", async () => {
     const requestedIds: string[] = [];
     const result = await resolvePublicCatalogAuthority(
       identity,
@@ -80,7 +82,36 @@ describe("public catalog authority", () => {
       candidateDigest: identity.candidateDigest,
       verifiedAt: "2026-08-13T11:00:00.000Z",
       expiresAt: "2026-08-13T13:00:00.000Z",
+      generation: "1",
+      lineage: `sha256:${"c".repeat(64)}`,
+      policyDigest: `sha256:${"d".repeat(64)}`,
+      healthVersion: "2",
+      buildDigest: `sha256:${"e".repeat(64)}`,
+      readerExpiresAt: "2026-08-13T13:00:00.000Z",
+      decisionDeadline: "2026-08-13T12:00:30.000Z",
     });
+  });
+
+  it("uses the earlier reader eligibility expiry as the decision deadline", async () => {
+    const record = authority();
+    (record.readerEligibility as PublicCatalogReaderEligibility).expiresAt = new Date("2026-08-13T12:00:20.000Z");
+
+    assert.equal((await resolve(record))?.decisionDeadline, "2026-08-13T12:00:20.000Z");
+  });
+
+  it("fails closed for malformed reader authority bindings", async () => {
+    for (const field of ["generation", "lineage", "policyDigest", "healthVersion", "buildDigest"] as const) {
+      const record = authority();
+      (record.readerEligibility as Record<string, unknown>)[field] = " ";
+      assert.equal(await resolve(record), null, field);
+    }
+  });
+
+  it("permits emission only before valid decision deadlines and authority expiries", async () => {
+    const decision = await resolve(authority());
+    assert.equal(canEmitPublicCatalogDecision(decision, new Date("2026-08-13T12:00:29.999Z")), true);
+    assert.equal(canEmitPublicCatalogDecision(decision, new Date("2026-08-13T12:00:30.000Z")), false);
+    assert.equal(canEmitPublicCatalogDecision({ ...decision!, expiresAt: "2026-08-13T12:00:29.000Z" }, NOW), false);
   });
 
   it("rejects invalid or missing supplied identity without consulting authority", async () => {
