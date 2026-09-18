@@ -25,6 +25,7 @@ import {
 import { classifyPriceFreshness, type PriceFreshnessStatus } from "@/lib/price-freshness";
 import { DETAILED_CATEGORIES } from "@/lib/vtex/categories";
 import { resolveProductDetail } from "@/lib/portfolio-catalog";
+import type { PublicCatalogProjection } from "@/lib/public-catalog-read.server";
 
 type PriceEntryRecord = {
   supermarket: {
@@ -499,6 +500,106 @@ export async function listProducts(filters: ProductListFilters = {}) {
   };
 }
 
+type PublicCatalogListProjection = Pick<
+  PublicCatalogProjection,
+  "servingProduct" | "servingOffer" | "servingSupermarket"
+>;
+
+function buildServingProductWhere(filters: ProductListFilters): Prisma.ServingProductWhereInput {
+  return {
+    AND: [
+      filters.query
+        ? {
+            OR: [
+              { ean: { equals: filters.query } },
+              { name: { contains: filters.query, mode: "insensitive" } },
+              { brand: { contains: filters.query, mode: "insensitive" } },
+            ],
+          }
+        : {},
+      filters.category ? { category: { equals: filters.category, mode: "insensitive" } } : {},
+    ],
+  };
+}
+
+export async function loadPublicProductList(
+  client: PublicCatalogListProjection,
+  filters: ProductListFilters = {},
+) {
+  const page = filters.page ?? 1;
+  const limit = filters.limit ?? 24;
+  const matchingProducts = await client.servingProduct.findMany({
+    where: buildServingProductWhere(filters),
+    select: { ean: true },
+  });
+  const matchingEans = matchingProducts.map((product) => product.ean);
+  const supermarketIds = filters.supermarket
+    ? (await client.servingSupermarket.findMany({
+        where: { slug: filters.supermarket },
+        select: { id: true },
+      })).map((supermarket) => supermarket.id)
+    : undefined;
+  const sourceRows = matchingEans.length === 0 || (supermarketIds && supermarketIds.length === 0)
+    ? []
+    : await client.servingOffer.findMany({
+        where: {
+          product_ean: { in: matchingEans },
+          price: { not: null },
+          is_available: true,
+          supermarket_id: supermarketIds ? { in: supermarketIds } : undefined,
+        },
+        orderBy: [{ last_checked_at: "desc" }, { supermarket_id: "asc" }],
+        take: calculateSourceProductCandidateReadLimit(filters),
+        select: { product_ean: true },
+      });
+  const candidateEans = Array.from(new Set(sourceRows.map((row) => row.product_ean)))
+    .slice(0, calculateProductCandidateReadLimit(filters));
+
+  if (candidateEans.length === 0) {
+    return { items: [], total: 0, page, limit, totalPages: 1 };
+  }
+
+  const [products, offers] = await Promise.all([
+    client.servingProduct.findMany({
+      where: { ean: { in: candidateEans } },
+      select: { ean: true, name: true, brand: true, image_url: true, category: true },
+    }),
+    client.servingOffer.findMany({
+      where: { product_ean: { in: candidateEans }, price: { not: null } },
+      select: {
+        product_ean: true, supermarket_id: true, price: true, list_price: true, reference_price: true,
+        reference_unit: true, is_available: true, product_url: true, last_checked_at: true,
+      },
+    }),
+  ]);
+  const supermarkets = await client.servingSupermarket.findMany({
+    where: { id: { in: Array.from(new Set(offers.map((offer) => offer.supermarket_id))) } },
+    select: { id: true, name: true, slug: true, logo_url: true, freshness_sla_hours: true },
+  });
+  const supermarketsById = new Map(supermarkets.map((supermarket) => [supermarket.id, supermarket]));
+  const offersByEan = new Map<string, PriceEntryRecord[]>();
+  for (const offer of offers) {
+    const supermarket = supermarketsById.get(offer.supermarket_id);
+    if (!supermarket) continue;
+    const entries = offersByEan.get(offer.product_ean) ?? [];
+    entries.push({ ...offer, id: offer.supermarket_id, supermarket });
+    offersByEan.set(offer.product_ean, entries);
+  }
+  const mapped = products
+    .map((product) => mapProductSummary({ ...product, supermarket_products: offersByEan.get(product.ean) ?? [] }, filters))
+    .filter((product): product is ProductSummary => product !== null);
+  const sorted = sortProducts(filterProducts(mapped, filters), filters);
+  const offset = (page - 1) * limit;
+
+  return {
+    items: sorted.slice(offset, offset + limit),
+    total: sorted.length,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(sorted.length / limit)),
+  };
+}
+
 const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail | null> => {
   const product = await db.product.findUnique({
     where: { ean },
@@ -862,6 +963,25 @@ export function getCategories() {
   return getCategoriesCached();
 }
 
+/** Static taxonomy is independent; only its counts are commercial projection facts. */
+export async function loadPublicCategories(client: Pick<PublicCatalogProjection, "servingProduct">) {
+  const productCounts = await client.servingProduct.groupBy({
+    by: ["category"],
+    _count: true,
+    where: { category: { not: null } },
+  });
+  const counts = new Map(productCounts.map((entry) => [slugify(entry.category ?? ""), entry._count]));
+
+  return DETAILED_CATEGORIES.map((category) => ({
+    id: category.slug,
+    name: category.name,
+    slug: category.slug,
+    icon: category.slug,
+    count: counts.get(category.slug) ?? 0,
+    children: [],
+  }));
+}
+
 function findCategoryBySlug(items: CategorySummary[], slug: string): CategorySummary | null {
   for (const item of items) {
     if (item.slug === slug) {
@@ -903,6 +1023,51 @@ export async function getSearchSuggestions(query: string, limit = 8) {
     bestPriceCheckedAt: item.displayPriceCheckedAt,
     freshnessStatus: item.displayPriceFreshnessStatus,
   }));
+}
+
+export async function loadPublicPromotions(
+  client: Pick<PublicCatalogProjection, "servingPromotion" | "servingMembership" | "servingSupermarket">,
+  filters: PromotionFilters = {},
+) {
+  const now = new Date();
+  const promotions = await client.servingPromotion.findMany({
+    where: {
+      is_active: true,
+      AND: [
+        { OR: [{ start_date: null }, { start_date: { lte: now } }] },
+        { OR: [{ end_date: null }, { end_date: { gte: now } }] },
+      ],
+    },
+    orderBy: [{ discount_value: "desc" }, { title: "asc" }],
+  });
+  const supermarkets = await client.servingSupermarket.findMany({
+    where: { id: { in: Array.from(new Set(promotions.map((promotion) => promotion.supermarket_id))) } },
+    select: { id: true, name: true, slug: true, logo_url: true },
+  });
+  const supermarketsById = new Map(supermarkets.map((supermarket) => [supermarket.id, supermarket]));
+  const memberships = await client.servingMembership.findMany({
+    where: { promotion_id: { in: promotions.map((promotion) => promotion.id) } },
+    select: { promotion_id: true, product_ean: true },
+  });
+  const membershipsByPromotion = new Map<bigint, Array<{ product_ean: string }>>();
+  for (const membership of memberships) {
+    const entries = membershipsByPromotion.get(membership.promotion_id) ?? [];
+    entries.push(membership);
+    membershipsByPromotion.set(membership.promotion_id, entries);
+  }
+
+  return promotions.flatMap((promotion) => {
+    const supermarket = supermarketsById.get(promotion.supermarket_id);
+    if (!supermarket || (filters.supermarket && supermarket.slug !== filters.supermarket)) return [];
+    if (filters.wallet && !promotion.wallet_provider?.toLowerCase().includes(filters.wallet.toLowerCase())) return [];
+    if (filters.type && normalizePromotionType(promotion.type) !== filters.type) return [];
+    return [mapPromotionSummary({
+      ...promotion,
+      id: Number(promotion.id),
+      supermarket,
+      promotion_products: membershipsByPromotion.get(promotion.id) ?? [],
+    })];
+  });
 }
 
 export async function getPromotions(filters: PromotionFilters = {}) {
