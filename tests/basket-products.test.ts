@@ -8,7 +8,18 @@ import { fetchBasketProducts } from "../src/lib/basket-products-client";
 
 const ean = (index: number) => String(index).padStart(8, "0");
 const VERIFIED_AT = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-const freshPublication = async () => ({ verified_at: new Date(VERIFIED_AT) });
+const freshPublication = async <T>(load: (projection: never) => T | Promise<T>) => ({
+  available: true as const,
+  decision: {
+    publicationId: "publication-1", promotionId: "promotion-1", target: "production" as const,
+    deploymentId: "deployment-1", commitSha: "a".repeat(40), candidateDigest: `sha256:${"b".repeat(64)}`,
+    verifiedAt: VERIFIED_AT, expiresAt: "2027-01-01T00:00:00.000Z", generation: "1",
+    lineage: `sha256:${"c".repeat(64)}`, policyDigest: `sha256:${"d".repeat(64)}`,
+    healthVersion: "1", buildDigest: `sha256:${"e".repeat(64)}`,
+    readerExpiresAt: "2027-01-01T00:00:00.000Z", decisionDeadline: "2027-01-01T00:00:00.000Z",
+  },
+  value: await load({} as never),
+});
 const product = (code: string) => ({ ean: code, name: code, brand: null, imageUrl: null, minPrice: null,
   freshMinPrice: null, hasFreshPrice: false, priceEntries: [] });
 const envelope = (items: ReturnType<typeof product>[], missing: string[] = [], degraded = false) =>
@@ -67,23 +78,16 @@ describe("basket product endpoint", () => {
     assert.deepEqual(result, { status: 503, body: { error: "Catalog temporarily unavailable" } });
   });
 
-  it("withholds missing, unpromoted, null, and failed database payloads", async () => {
-    for (const publication of [async () => null, async () => ({ verified_at: null })]) {
-      let loaderCalls = 0;
-      const result = await handleBasketProductsRequest(
-        async () => ({ eans: [ean(1)] }), async () => { loaderCalls += 1; return { items: [product(ean(1))], missing: [] }; }, publication,
-      );
-      assert.deepEqual(result, { status: 503, body: { error: "Catalog temporarily unavailable" } });
-      assert.equal(loaderCalls, 0);
-    }
-    const historical = await handleBasketProductsRequest(
-      async () => ({ eans: [ean(1)] }), async () => ({ items: [product(ean(1))], missing: [] }),
-      async () => ({ verified_at: new Date(Date.now() - 24 * 60 * 60 * 1000) }),
+  it("returns unavailable before loading batch data when guarded authority denies access", async () => {
+    let loaderCalls = 0;
+    const result = await handleBasketProductsRequest(
+      async () => ({ eans: [ean(1)] }),
+      async () => { loaderCalls += 1; return { items: [], missing: [ean(1)] }; },
+      async () => ({ available: false as const }),
     );
-    assert.equal(historical.status, 200);
-    if (historical.status !== 200 || !("dataSource" in historical.body)) throw new Error("historical basket should be available");
-    assert.equal(historical.body.degraded, true);
-    assert.equal(historical.body.dataSource, "database");
+
+    assert.deepEqual(result, { status: 503, body: { error: "Catalog temporarily unavailable" } });
+    assert.equal(loaderCalls, 0);
   });
 
   it("rejects malformed route bodies and extra properties", async () => {
@@ -115,12 +119,27 @@ describe("basket product endpoint", () => {
     assert.equal(classifyPriceFreshness("2026-08-12T12:00:00.000Z", { now, maxAgeHours: 72 }).status, "stale");
   });
 
-  it("uses one set query and maps partial results in request order", async () => {
+  it("preserves a zero-priced eligible offer", async () => {
+    const client = {
+      servingProduct: { findMany: async () => [{ ean: ean(1), name: "Zero", brand: null, image_url: null }] },
+      servingOffer: { findMany: async () => [{ product_ean: ean(1), supermarket_id: 1, price: 0, is_available: true, product_url: null, last_checked_at: new Date() }] },
+      servingSupermarket: { findMany: async () => [{ id: 1, name: "Super", slug: "super", logo_url: null, freshness_sla_hours: 24 }] },
+    };
+    const result = await loadBasketProducts([ean(1)], client as never);
+    assert.equal(result.items[0]?.minPrice, 0);
+    assert.equal(result.items[0]?.freshMinPrice, 0);
+  });
+
+  it("uses serving projections and maps partial results in request order", async () => {
     const calls: unknown[] = [];
-    const rows = [ean(2), ean(1)].map((code) => ({ ean: code, name: code, brand: null, image_url: null, supermarket_products: [] }));
-    const client = { product: { findMany: async (query: unknown) => { calls.push(query); return rows; } } };
+    const rows = [ean(2), ean(1)].map((code) => ({ ean: code, name: code, brand: null, image_url: null }));
+    const client = {
+      servingProduct: { findMany: async (query: unknown) => { calls.push(query); return rows; } },
+      servingOffer: { findMany: async (query: unknown) => { calls.push(query); return []; } },
+      servingSupermarket: { findMany: async (query: unknown) => { calls.push(query); return []; } },
+    };
     const result = await loadBasketProducts([ean(1), ean(0), ean(2)], client as never);
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 3);
     assert.deepEqual(result.items.map(({ ean: code }) => code), [ean(1), ean(2)]);
     assert.deepEqual(result.missing, [ean(0)]);
   });
