@@ -1,0 +1,43 @@
+# OS03 U16 — Guarded APIs and Shared Catalog Loaders
+
+## Goal
+
+Route every protected commercial API and shared server loader through the frozen U15 guarded read boundary, while preserving legitimate absence, empty collections, zero counts, batch ordering, and independently static taxonomy.
+
+OpenSpec artifacts are historical input only. This ODD checklist is the execution record.
+
+## Scope
+
+- Search, product list/detail/batch, promotions, categories, catalog health, basket hydration, history, portfolio, and freshness server reads.
+- Authority denial is unavailable, never a false 404, empty history, zero count, or empty commercial collection.
+- Filtering, ranking, discount, freshness, and category-derived commercial claims operate only on guarded DTOs.
+- Static taxonomy may remain available independently but cannot carry protected derived values.
+
+## Non-goals
+
+- U17 pages, metadata, JSON-LD, sitemap, and browser navigation.
+- U18 payload envelope, external cache, client persistence, and PWA enforcement.
+- U19 acceptance harness and operational runbook.
+
+## Tasks
+
+- [ ] **U16-T1 — Map and prove unguarded consumer failures**
+  - Inventory every protected API/shared loader and add focused RED coverage for authority denial versus legitimate absence.
+- [ ] **U16-T2 — Migrate APIs and shared loaders**
+  - Route commercial reads through U15 guarded DTOs; preserve stable API semantics, batch order, and static taxonomy boundaries.
+- [ ] **U16-T3 — Triangulate real built-server/PostgreSQL behavior**
+  - Prove eligible and denied authority for search/list/detail/batch/history/promotions/categories/health without mocked-resolver-only evidence.
+- [ ] **U16-T4 — Refactor, verify, review, and commit**
+  - Consolidate route error/DTO handling, run focused and full gates, complete independent/native review, and record the work-unit commit.
+
+## Current state
+
+U15 is frozen at `ffc8070`. U16 exploration and implementation are in progress.
+
+## Bounded-pass outcomes
+
+- RED observed with `npx tsx --conditions=react-server --test tests/public-catalog-api.test.ts`: the new guarded-denial contract failed because `resolvePublicCatalogDataFromGuardedRead` was not exported (`TypeError: ... is not a function`).
+- GREEN: added the shared guarded-read DTO boundary in `src/lib/public-catalog-api.ts`; the same focused command passed 16 tests, including denial-before-loader and legitimate-empty-collection cases.
+- `npm run typecheck` passed and `git diff --check` passed.
+- T1 remains open: current product list, categories, promotions, basket, history, search, detail, and catalog health consumers still need migration from source/legacy publication reads to U15 serving projections. This bounded work unit deliberately stops before that multi-surface migration.
+- T3 prerequisite: a built Next server configured with a valid `PUBLIC_CATALOG_SERVING_IDENTITY_JSON` and a disposable PostgreSQL database populated with eligible and denied serving authority/projection fixtures. The existing `tests/public-catalog-read-postgres.test.ts` only runs when `PUBLIC_CATALOG_GUARDED_READ_POSTGRES_URL` and the serving identity are supplied; no such proof environment was available in this pass.

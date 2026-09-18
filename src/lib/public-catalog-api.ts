@@ -1,6 +1,11 @@
 import { ZodError } from "zod";
 
 import type { PublicCatalogAuthorityFingerprint } from "@/lib/public-catalog-authority";
+import {
+  createPublicCatalogGuardedRead,
+  type PublicCatalogProjection,
+  type PublicCatalogReadResult,
+} from "@/lib/public-catalog-read.server";
 import { classifyPublicCatalogReadiness } from "@/lib/public-catalog-readiness";
 import { productListQuerySchema } from "@/lib/schemas/product";
 import { promotionListQuerySchema } from "@/lib/schemas/promotion";
@@ -41,6 +46,10 @@ export type PublicCatalogProvenance = {
 export type PublicCatalogData<T> = T & PublicCatalogProvenance;
 
 export class PublicCatalogUnavailableError extends Error {}
+
+export type PublicCatalogGuardedReader = <T>(
+  callback: (projection: PublicCatalogProjection) => T | Promise<T>,
+) => Promise<PublicCatalogReadResult<T>>;
 
 type PublicCatalogCacheEnvelope<T extends object> = {
   version: 1;
@@ -194,6 +203,23 @@ export async function resolvePublicCatalogDataFromAuthority<T extends object>(
 
     throw new PublicCatalogUnavailableError();
   }
+}
+
+export async function resolvePublicCatalogDataFromGuardedRead<T extends object>(
+  loadData: (projection: PublicCatalogProjection) => T | Promise<T>,
+  guardedRead: PublicCatalogGuardedReader = createPublicCatalogGuardedRead(
+    process.env.PUBLIC_CATALOG_SERVING_IDENTITY_JSON,
+  ),
+): Promise<PublicCatalogData<T>> {
+  const result = await guardedRead(loadData);
+  if (!result.available) {
+    throw new PublicCatalogUnavailableError();
+  }
+
+  const readiness = requireAvailablePublicCatalogReadiness(
+    classifyPublicCatalogReadiness({ verified_at: new Date(result.decision.verifiedAt) }),
+  );
+  return publicCatalogData(result.value, readiness);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
