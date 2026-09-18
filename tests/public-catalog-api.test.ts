@@ -147,9 +147,15 @@ describe("public catalog publication gate", () => {
     assert.equal(loadCalls, 0);
   });
 
-  it("keeps empty eligible guarded collections available", async () => {
+  it("passes the guarded transaction projection to the low-level loader", async () => {
+    const projection = { guarded: "transaction projection" } as never;
+    let receivedProjection: unknown;
+
     const result = await resolvePublicCatalogDataFromGuardedRead(
-      async () => ({ items: [] }),
+      async (received) => {
+        receivedProjection = received;
+        return { items: [] };
+      },
       async (loadData) => ({
         available: true,
         decision: {
@@ -162,10 +168,11 @@ describe("public catalog publication gate", () => {
           readerExpiresAt: authority.expiresAt,
           decisionDeadline: authority.expiresAt,
         },
-        value: await loadData({} as never),
+        value: await loadData(projection),
       }),
     );
 
+    assert.equal(receivedProjection, projection);
     assert.deepEqual(result.items, []);
     assert.equal(result.dataSource, "database");
   });

@@ -84,6 +84,15 @@ export const loadPublicCatalogPublication: PublicationLoader = async () => {
 type ProductListLoader = (filters: ProductListFilters) => Promise<ProductPage>;
 type CategoryLoader = () => Promise<CategorySummary[]>;
 type PromotionLoader = (filters: PromotionFilters) => Promise<PromotionSummary[]>;
+type GuardedProductListLoader = (
+  projection: PublicCatalogProjection,
+  filters: ProductListFilters,
+) => Promise<ProductPage>;
+type GuardedCategoryLoader = (projection: PublicCatalogProjection) => Promise<CategorySummary[]>;
+type GuardedPromotionLoader = (
+  projection: PublicCatalogProjection,
+  filters: PromotionFilters,
+) => Promise<PromotionSummary[]>;
 
 function validationErrorResult(error: ZodError): PublicApiResult<never> {
   return {
@@ -374,5 +383,60 @@ export async function resolvePublicPromotions(
     }
 
     throw error;
+  }
+}
+
+export async function resolveGuardedPublicProductList(
+  searchParams: Record<string, string>,
+  loadProducts: GuardedProductListLoader,
+): Promise<PublicApiResult<PublicCatalogData<ProductPage>>> {
+  try {
+    const filters = productFiltersFromSearchParams(searchParams);
+    return {
+      status: 200,
+      body: await resolvePublicCatalogDataFromGuardedRead((projection) => loadProducts(projection, filters)),
+    };
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return validationErrorResult(error);
+    }
+
+    return { status: 503, body: publicCatalogUnavailable() };
+  }
+}
+
+export async function resolveGuardedPublicCategories(
+  loadCategories: GuardedCategoryLoader,
+): Promise<PublicApiResult<PublicCatalogData<{ items: CategorySummary[] }>>> {
+  try {
+    return {
+      status: 200,
+      body: await resolvePublicCatalogDataFromGuardedRead(
+        async (projection) => ({ items: await loadCategories(projection) }),
+      ),
+    };
+  } catch {
+    return { status: 503, body: publicCatalogUnavailable() };
+  }
+}
+
+export async function resolveGuardedPublicPromotions(
+  searchParams: Record<string, string>,
+  loadPromotions: GuardedPromotionLoader,
+): Promise<PublicApiResult<PublicCatalogData<{ items: PromotionSummary[] }>>> {
+  try {
+    const filters = promotionFiltersFromSearchParams(searchParams);
+    return {
+      status: 200,
+      body: await resolvePublicCatalogDataFromGuardedRead(
+        async (projection) => ({ items: await loadPromotions(projection, filters) }),
+      ),
+    };
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return validationErrorResult(error);
+    }
+
+    return { status: 503, body: publicCatalogUnavailable() };
   }
 }
