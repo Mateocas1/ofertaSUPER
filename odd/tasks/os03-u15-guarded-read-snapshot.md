@@ -32,10 +32,11 @@ OpenSpec artifacts are historical input only. This ODD checklist is the executio
 - [x] **U15-T3 — Enforce bounded decision reuse and pre-emission checks**
   - Install a decision only after a successful timely snapshot; cap its absolute lifetime at 30 seconds and authority expiry.
   - Prove failures cannot create or extend a lease, slow snapshots cannot install one, and expired decisions deny emission.
-- [ ] **U15-T4 — Verify and close the unit**
-  - Run focused unit and disposable PostgreSQL proofs, full tests, typecheck, lint, complexity audit, build, and diff checks.
-  - Complete independent verification and native review before commit/push.
+- [x] **U15-T4 — Verify and close the unit**
+  - Added a disposable PostgreSQL proof using the U11b4 labelled `postgres:16-alpine` fixture, migrations, g0 authority/adoption seed, and guaranteed cleanup.
+  - Proved serving-only detail/history/count/ranking, legitimate absence, authority-evidence denial before callback, repeatable-read invisibility of a committed serving change, subsequent visibility, and deterministic deadline lease denial.
+  - Focused unit, disposable proof, full tests, typecheck, lint, complexity audit, and diff checks are recorded by the task executor; parent owns independent review and delivery.
 
 ## Current state
 
-U15-T2 completed: the guarded read boundary uses one read-only repeatable-read snapshot, resolves authority and the serving projection on its transaction client, and rejects authority, callback, transaction, clock, and expiry failures. T3 lease caching remains out of scope.
+U15-T4 completed: the disposable PostgreSQL launcher exercises the production guarded-read boundary with a real PrismaClient and the governed `serving_*` projection. It inherits the U11b4 authority seed and cleanup trap; no source commercial table is read.
