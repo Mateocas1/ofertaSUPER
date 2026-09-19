@@ -44,7 +44,7 @@ OpenSpec artifacts are historical input only. This ODD checklist is the executio
   - Initial validation: `./node_modules/.bin/tsx --conditions=react-server --test tests/u17-built-server-browser-smoke.test.ts` passed (3 tests); `npm run typecheck` and `git diff --check` passed. The first full matrix passed its inherited U15 fixture and completed the eligible browser phase, then found the denied product EAN in serialized Next Flight.
   - Flight authority correction: Next.js 16.3.1 serializes the requested dynamic product route only as `c: ["", "producto", ean]` and `["ean", ean, "d", []]` Flight route-state tuples. The harness removes only those exact raw or JSON-escaped tuples from denied RSC/inline `self.__next_f.push(...)` payloads before EAN absence checks. All other governed facts remain absolute; EAN occurrences in visible HTML, canonical/OG/Twitter markup, product links, JSON-LD, commercial script objects, DTOs, and any non-tuple RSC payload remain rejected. Focused fixtures accept the exact route state and reject a truncated tuple, product DTO, canonical, product link, JSON-LD, visible text, and script-object leaks.
   - Browser correction: denied basket batch now requires 503 and waits for its actual role-alert unavailable copy (rather than the page-shell alert wording).
-  - Final validation: `./node_modules/.bin/tsx --conditions=react-server --test tests/u17-built-server-browser-smoke.test.ts` passed (4 tests); `npm run typecheck` and `git diff --check` passed; `npm run test:u17-built-server-browser` passed the inherited U11b4/U15 fixture and the complete eligible/denied Next server/browser matrix. This slice does not request review or create commits.
+  - Final validation: `./node_modules/.bin/tsx --conditions=react-server --test tests/u17-built-server-browser-smoke.test.ts` passed (4 tests); `npm run typecheck` and `git diff --check` passed; `npm run test:u17-built-server-browser` passed the inherited U11b4/U15 fixture and the complete eligible/denied Next server/browser matrix. Native review `review-4d8f48b2af12b119` was approved and acknowledged; final work-unit commit: `c7709ab`.
 
 ## U17-T5 closure hardening evidence
 
@@ -55,7 +55,7 @@ OpenSpec artifacts are historical input only. This ODD checklist is the executio
 
 ## Current state
 
-U16 is frozen at `c8726c1` with closure ledger `5a2dbbf`. U17-T1 through U17-T4 are committed; U17-T5 implementation and independent built-server/browser verification are complete. The full fixture-backed build and eligible/denied HTML/head/RSC/sitemap/navigation/basket matrix passed with clean teardown. U17 awaits final native review and the work-unit commit.
+U16 is frozen at `c8726c1` with closure ledger `5a2dbbf`. U17 is complete. The full fixture-backed build and eligible/denied HTML/head/RSC/sitemap/navigation/basket matrix passed with clean teardown. Native review `review-4d8f48b2af12b119` was approved and acknowledged; final work-unit commit: `c7709ab`.
 
 ## Initial bounded plan
 
