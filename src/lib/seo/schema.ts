@@ -1,5 +1,6 @@
 import type { ProductDetail } from "@/lib/catalog";
 import { buildAbsoluteUrl } from "@/lib/seo/metadata";
+import type { ProductCatalogPageResult } from "@/lib/seo/public-catalog-page";
 
 type JsonLdNode = Record<string, unknown>;
 
@@ -122,6 +123,14 @@ export function buildProductPageSchema(product: ProductDetail): JsonLdNode {
     "@context": "https://schema.org",
     "@graph": graph,
   };
+}
+
+export function buildGuardedProductPageSchema(page: ProductCatalogPageResult): JsonLdNode | null {
+  if (page.availability === "unavailable" || !page.catalog.product) {
+    return null;
+  }
+
+  return buildProductPageSchema(page.catalog.product);
 }
 
 export function serializeJsonLd(value: JsonLdNode) {
