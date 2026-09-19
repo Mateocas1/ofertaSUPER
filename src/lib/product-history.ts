@@ -1,63 +1,44 @@
 import { ZodError } from "zod";
 
-import { getProductDetail, getProductHistory, type ProductHistory } from "@/lib/catalog";
+import { PublicCatalogUnavailableError } from "@/lib/public-catalog-api";
+import { resolveProductPageData } from "@/lib/portfolio-catalog";
 import { productHistoryQuerySchema } from "@/lib/schemas/product";
 
 const unavailableBody = { error: "Price history temporarily unavailable" } as const;
 
-type HistoryLoaders = {
-  loadDetail: typeof getProductDetail;
-  loadHistory: typeof getProductHistory;
-};
-
-const defaultLoaders: HistoryLoaders = {
-  loadDetail: getProductDetail,
-  loadHistory: getProductHistory,
-};
+type ProductPageLoader = typeof resolveProductPageData;
 
 export async function loadProductPageData(
   ean: string,
   days: number,
-  loaders: HistoryLoaders = defaultLoaders,
+  loadData: ProductPageLoader = resolveProductPageData,
 ) {
-  const product = await loaders.loadDetail(ean);
-  const history = await loaders.loadHistory(ean, days).catch((): ProductHistory => ({
-    ean,
-    days,
-    series: [],
-    points: [],
-  }));
-
-  return { product, history };
+  return loadData(ean, days);
 }
 
 export async function handleProductHistoryRequest(
   ean: string,
   query: Record<string, string>,
-  loaders: HistoryLoaders = defaultLoaders,
+  loadData: ProductPageLoader = resolveProductPageData,
 ) {
   let parsed: { days: number };
-
   try {
     parsed = productHistoryQuerySchema.parse(query);
   } catch (error) {
     if (error instanceof ZodError) {
-      return {
-        status: 400,
-        body: { error: "Invalid query parameters", issues: error.flatten() },
-      } as const;
+      return { status: 400, body: { error: "Invalid query parameters", issues: error.flatten() } } as const;
     }
     throw error;
   }
 
   try {
-    const product = await loaders.loadDetail(ean);
-    if (!product) {
-      return { status: 404, body: { error: "Product not found" } } as const;
+    const data = await loadData(ean, parsed.days);
+    if (!data.product) return { status: 404, body: { error: "Product not found" } } as const;
+    return { status: 200, body: data.history } as const;
+  } catch (error) {
+    if (error instanceof PublicCatalogUnavailableError || error instanceof Error) {
+      return { status: 503, body: unavailableBody } as const;
     }
-
-    return { status: 200, body: await loaders.loadHistory(ean, parsed.days) } as const;
-  } catch {
-    return { status: 503, body: unavailableBody } as const;
+    throw error;
   }
 }

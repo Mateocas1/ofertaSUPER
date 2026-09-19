@@ -10,9 +10,12 @@ const unavailable = { error: "Catalog temporarily unavailable", dataSource: "una
 for (const name of ["search", "product detail"]) {
   const build = <T extends { dataSource?: unknown }>(data: T | null) => buildDatabaseCatalogResponse(data, unavailable);
   describe(`${name} public catalog response`, () => {
-    it("binds the route handler to the database-only response boundary", () => {
+    it("binds the route handler to guarded serving reads without a Redis payload cache", () => {
       const route = name === "search" ? "src/app/api/search/route.ts" : "src/app/api/products/[ean]/route.ts";
-      assert.match(readFileSync(route, "utf8"), /buildDatabaseCatalogResponse\(data, publicCatalogUnavailable\(\)\)/);
+      const source = readFileSync(route, "utf8");
+      if (name === "search") assert.match(source, /resolvePublicCatalogDataFromGuardedRead/);
+      else assert.match(source, /resolveRouteProductDetail\(ean\)/);
+      assert.doesNotMatch(source, /redis|cache/i);
     });
     it("returns fresh and historical database data as 200 with provenance", () => {
       const fresh = build({ items: [], dataSource: "database", degraded: false, verifiedAt, latestCheckedAt: null });
