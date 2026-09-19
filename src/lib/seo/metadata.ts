@@ -12,6 +12,18 @@ export function buildAbsoluteUrl(path = "/") {
   return new URL(path, siteUrl).toString();
 }
 
+export function createUnavailableCatalogMetadata(): Metadata {
+  // Empty nested fields replace inherited commercial metadata in Next.js.
+  return {
+    title: "Catalog temporarily unavailable",
+    description: "Catalog information is temporarily unavailable.",
+    robots: { index: false, follow: true },
+    alternates: {},
+    openGraph: {},
+    twitter: {},
+  };
+}
+
 export function createMetadata({ title, description, path = "/" }: MetadataInput): Metadata {
   const url = buildAbsoluteUrl(path);
 
