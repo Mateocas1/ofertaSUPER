@@ -27,12 +27,12 @@ OpenSpec artifacts are historical input only. This ODD checklist is the executio
   - Route commercial reads through U15 guarded DTOs; preserve stable API semantics, batch order, and static taxonomy boundaries.
 - [x] **U16-T3 — Triangulate real built-server/PostgreSQL behavior**
   - Prove eligible and denied authority for search/list/detail/batch/history/promotions/categories/health without mocked-resolver-only evidence.
-- [ ] **U16-T4 — Refactor, verify, review, and commit**
+- [x] **U16-T4 — Refactor, verify, review, and commit**
   - Consolidate route error/DTO handling, run focused and full gates, complete independent/native review, and record the work-unit commit.
 
 ## Current state
 
-U15 is frozen at `ffc8070`. U16-T1 through U16-T3 are complete. Independent verification passed the focused 30-test suite, typecheck, diff-check, and the full built-server/disposable-PostgreSQL-and-Redis eligible/denied route matrix. U16-T4 awaits native review and the final work-unit commit.
+U15 is frozen at `ffc8070`. U16 is complete. Independent verification passed the focused 30-test suite, typecheck, diff-check, and the full built-server/disposable-PostgreSQL-and-Redis eligible/denied route matrix. Native review `review-ce7e97f855482429` was approved and acknowledged; final work-unit commit: `c8726c1`.
 
 ## Bounded-pass outcomes
 
