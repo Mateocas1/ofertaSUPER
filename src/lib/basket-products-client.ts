@@ -8,6 +8,13 @@ class BasketProvenanceError extends Error {
   constructor() { super("No se pudo cargar la canasta."); }
 }
 
+export class BasketCatalogUnavailableError extends Error {
+  constructor() {
+    super("El catálogo no está disponible en este momento. Intenta nuevamente más tarde.");
+    this.name = "BasketCatalogUnavailableError";
+  }
+}
+
 function assertDatabaseProvenance(value: unknown) {
   if (!value || typeof value !== "object" || (value as { dataSource?: unknown }).dataSource !== "database") {
     throw new BasketProvenanceError();
@@ -28,6 +35,7 @@ export async function fetchBasketProducts(eans: string[], signal?: AbortSignal) 
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ eans: chunk }), signal,
       });
+      if (response.status === 503) throw new BasketCatalogUnavailableError();
       if (!response.ok) throw new Error("Unavailable chunk");
       const payload = await response.json();
       assertDatabaseProvenance(payload);
@@ -42,7 +50,7 @@ export async function fetchBasketProducts(eans: string[], signal?: AbortSignal) 
       provenance ??= { degraded: parsed.degraded, verifiedAt: parsed.verifiedAt };
       provenance.degraded ||= parsed.degraded;
     } catch (error) {
-      if (signal?.aborted || error instanceof BasketProvenanceError) throw error;
+      if (signal?.aborted || error instanceof BasketProvenanceError || error instanceof BasketCatalogUnavailableError) throw error;
       chunk.forEach((ean) => unavailable.add(ean));
     }
   }

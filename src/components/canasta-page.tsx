@@ -11,7 +11,7 @@ import { SupermarketBadge } from "@/components/supermarket-badge";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { useCanasta, type CanastaItem } from "@/hooks/use-canasta";
 import { formatCurrency } from "@/lib/format";
-import { fetchBasketProducts } from "@/lib/basket-products-client";
+import { BasketCatalogUnavailableError, fetchBasketProducts } from "@/lib/basket-products-client";
 import type { BasketProduct as CanastaProduct } from "@/lib/basket-products-contract";
 import { cn } from "@/lib/utils";
 
@@ -90,6 +90,7 @@ export function CanastaPage() {
   const [productsByEan, setProductsByEan] = useState<Record<string, CanastaProduct>>({});
   const [degradedDemo, setDegradedDemo] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [catalogUnavailable, setCatalogUnavailable] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const uniqueEansKey = Array.from(new Set(items.map((item) => item.ean))).sort().join("|");
@@ -99,12 +100,14 @@ export function CanastaPage() {
       setProductsByEan({});
       setDegradedDemo(false);
       setLoadError(null);
+      setCatalogUnavailable(false);
       return;
     }
 
     const controller = new AbortController();
     const eans = uniqueEansKey.split("|").filter(Boolean);
     setDegradedDemo(false);
+    setCatalogUnavailable(false);
 
     void (async () => {
       try {
@@ -115,12 +118,18 @@ export function CanastaPage() {
           setProductsByEan(nextProducts);
           setDegradedDemo(nextDegradedDemo);
           setLoadError(null);
+          setCatalogUnavailable(false);
         });
       } catch (error) {
         if (controller.signal.aborted) {
           return;
         }
 
+        if (error instanceof BasketCatalogUnavailableError) {
+          setProductsByEan({});
+          setDegradedDemo(false);
+          setCatalogUnavailable(true);
+        }
         setLoadError(error instanceof Error ? error.message : "No se pudo cargar la canasta.");
       }
     })();
@@ -157,6 +166,30 @@ export function CanastaPage() {
           <Link href="/buscar" className={cn(buttonVariants({ size: "lg" }), "rounded-full px-5")}>
             Explorar catalogo
           </Link>
+        </div>
+      </section>
+    );
+  }
+
+  if (catalogUnavailable) {
+    return (
+      <section className="surface p-8 md:p-10" role="alert">
+        <div className="mx-auto flex max-w-3xl flex-col gap-5 text-center">
+          <AlertCircle className="mx-auto size-10 text-amber-700" />
+          <div className="space-y-3">
+            <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Canasta</p>
+            <h1 className="text-3xl font-semibold text-foreground md:text-4xl">No podemos mostrar los datos de la canasta en este momento.</h1>
+            <p className="text-base leading-7 text-muted-foreground">
+              El catálogo está temporalmente no disponible. Conservamos tu canasta local, pero ocultamos productos y precios hasta que vuelva a estar disponible.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={clearCanasta}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mx-auto rounded-full")}
+          >
+            Vaciar canasta
+          </button>
         </div>
       </section>
     );
