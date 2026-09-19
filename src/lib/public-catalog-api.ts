@@ -1,5 +1,6 @@
 import { ZodError } from "zod";
 
+import { loadPublicProductList } from "@/lib/catalog";
 import type { PublicCatalogAuthorityFingerprint } from "@/lib/public-catalog-authority";
 import {
   createPublicCatalogGuardedRead,
@@ -82,6 +83,10 @@ export const loadPublicCatalogPublication: PublicationLoader = async () => {
 };
 
 type ProductListLoader = (filters: ProductListFilters) => Promise<ProductPage>;
+type SearchProjection = Pick<
+  PublicCatalogProjection,
+  "servingProduct" | "servingOffer" | "servingSupermarket"
+>;
 type CategoryLoader = () => Promise<CategorySummary[]>;
 type PromotionLoader = (filters: PromotionFilters) => Promise<PromotionSummary[]>;
 type GuardedProductListLoader = (
@@ -343,6 +348,32 @@ async function catalogResult<T extends object>(
   } catch {
     return { status: 503, body: publicCatalogUnavailable() };
   }
+}
+
+export async function loadPublicSearchSuggestions(
+  projection: SearchProjection,
+  query: string,
+  limit: number,
+) {
+  const result = await loadPublicProductList(projection, {
+    query,
+    limit,
+    page: 1,
+    sort: "relevance",
+  });
+
+  return result.items.slice(0, limit).map((item) => ({
+    ean: item.ean,
+    name: item.name,
+    brand: item.brand,
+    imageUrl: item.imageUrl,
+    category: item.category,
+    minPrice: item.displayPrice,
+    displayPrice: item.displayPrice,
+    latestCheckedAt: item.latestCheckedAt,
+    bestPriceCheckedAt: item.displayPriceCheckedAt,
+    freshnessStatus: item.displayPriceFreshnessStatus,
+  }));
 }
 
 export async function resolvePublicProductList(

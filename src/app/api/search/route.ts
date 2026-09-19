@@ -2,46 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { badRequestResponse, searchParamsToObject } from "@/lib/api";
 import { buildDatabaseCatalogResponse } from "@/lib/basket-products-contract";
-import { loadPublicProductList } from "@/lib/catalog";
-import type { PublicCatalogProjection } from "@/lib/public-catalog-read.server";
 import { admitStrictPublicRoute, withRateLimitHeaders } from "@/lib/rate-limit";
 import {
+  loadPublicSearchSuggestions,
   PublicCatalogUnavailableError,
   publicCatalogUnavailable,
   resolvePublicCatalogDataFromGuardedRead,
 } from "@/lib/public-catalog-api";
 import { searchQuerySchema } from "@/lib/schemas/search";
-
-type SearchProjection = Pick<
-  PublicCatalogProjection,
-  "servingProduct" | "servingOffer" | "servingSupermarket"
->;
-
-export async function loadPublicSearchSuggestions(
-  projection: SearchProjection,
-  query: string,
-  limit: number,
-) {
-  const result = await loadPublicProductList(projection, {
-    query,
-    limit,
-    page: 1,
-    sort: "relevance",
-  });
-
-  return result.items.slice(0, limit).map((item) => ({
-    ean: item.ean,
-    name: item.name,
-    brand: item.brand,
-    imageUrl: item.imageUrl,
-    category: item.category,
-    minPrice: item.displayPrice,
-    displayPrice: item.displayPrice,
-    latestCheckedAt: item.latestCheckedAt,
-    bestPriceCheckedAt: item.displayPriceCheckedAt,
-    freshnessStatus: item.displayPriceFreshnessStatus,
-  }));
-}
 
 export async function GET(request: NextRequest) {
   const admission = await admitStrictPublicRoute(request, "search");

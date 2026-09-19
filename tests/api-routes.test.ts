@@ -13,8 +13,10 @@ for (const name of ["search", "product detail"]) {
     it("binds the route handler to guarded serving reads without a Redis payload cache", () => {
       const route = name === "search" ? "src/app/api/search/route.ts" : "src/app/api/products/[ean]/route.ts";
       const source = readFileSync(route, "utf8");
-      if (name === "search") assert.match(source, /resolvePublicCatalogDataFromGuardedRead/);
-      else assert.match(source, /resolveRouteProductDetail\(ean\)/);
+      if (name === "search") {
+        assert.match(source, /resolvePublicCatalogDataFromGuardedRead/);
+        assert.doesNotMatch(source, /export\s+(?:async\s+)?function\s+loadPublicSearchSuggestions/);
+      } else assert.match(source, /resolveRouteProductDetail\(ean\)/);
       assert.doesNotMatch(source, /redis|cache/i);
     });
     it("returns fresh and historical database data as 200 with provenance", () => {

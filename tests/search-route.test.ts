@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { loadPublicSearchSuggestions } from "../src/app/api/search/route";
+import { loadPublicSearchSuggestions } from "../src/lib/public-catalog-api";
 
 test("maps an eligible guarded projection into search suggestions", async () => {
   const projection = {
