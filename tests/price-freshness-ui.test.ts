@@ -38,8 +38,8 @@ describe("public price freshness UI contracts", () => {
     const searchPage = readFileSync("src/app/buscar/page.tsx", "utf8");
     const notice = readFileSync("src/components/catalog-provenance-notice.tsx", "utf8");
 
-    assert.match(searchPage, /CatalogProvenanceNotice/);
-    assert.match(searchPage, /CatalogProvenanceNotice \{\.\.\.result\}/);
+    assert.match(searchPage, /page\.availability === "eligible" && result \? <CatalogProvenanceNotice \{\.\.\.page\.catalog\}/);
+    assert.doesNotMatch(searchPage, /CatalogProvenanceNotice \{\.\.\.result\}/);
     assert.match(notice, /role="status"/);
     assert.match(notice, /Información histórica del catálogo/);
     assert.doesNotMatch(notice, /demostración|ejemplos|actual(?:es|izado)|en vivo/i);
