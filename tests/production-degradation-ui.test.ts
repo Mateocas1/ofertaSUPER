@@ -22,6 +22,16 @@ test("historical catalog data is announced without demo claims", () => {
   assert.doesNotMatch(notice, /demostración|ejemplos/i);
 });
 
+test("the basket denial UI preserves its shell while suppressing commercial facts", () => {
+  const basketPage = readFileSync("src/components/canasta-page.tsx", "utf8");
+
+  assert.match(basketPage, /catalogUnavailable/);
+  assert.match(basketPage, /role="alert"/);
+  assert.match(basketPage, /El catálogo está temporalmente no disponible/);
+  assert.match(basketPage, /ocultamos productos y precios/);
+  assert.match(basketPage, /setProductsByEan\(\{\}\)/);
+});
+
 test("the PWA never caches catalog navigation as a healthy page", () => {
   const pwaConfig = readFileSync("next.config.ts", "utf8");
 

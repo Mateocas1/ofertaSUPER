@@ -1,38 +1,29 @@
-import { getCategories } from "@/lib/catalog";
-import { db } from "@/lib/db";
+import {
+  PublicCatalogUnavailableError,
+  resolvePublicCatalogDataFromGuardedRead,
+} from "@/lib/public-catalog-api";
+import { createPublicCatalogGuardedRead } from "@/lib/public-catalog-read.server";
 import { buildSitemap, type SitemapCatalog } from "@/lib/sitemap";
+import { DETAILED_CATEGORIES } from "@/lib/vtex/categories";
 
-export const revalidate = 21600;
 export const dynamic = "force-dynamic";
 
 async function loadSitemapCatalog(): Promise<SitemapCatalog> {
-  const [products, categories] = await Promise.all([
-    db.product.findMany({
-      select: {
-        ean: true,
-        supermarket_products: {
-          orderBy: {
-            last_checked_at: "desc",
-          },
-          take: 1,
-          select: {
-            last_checked_at: true,
-          },
-        },
-      },
+  const catalog = await resolvePublicCatalogDataFromGuardedRead(
+    (projection) => projection.servingProduct.findMany({
+      select: { ean: true },
+      orderBy: { ean: "asc" },
     }),
-    getCategories(),
-  ]);
+    createPublicCatalogGuardedRead(process.env.PUBLIC_CATALOG_SERVING_IDENTITY_JSON),
+  );
 
-  return {
-    categories,
-    products: products.map((product) => ({
-      ean: product.ean,
-      lastCheckedAt: product.supermarket_products[0]?.last_checked_at ?? null,
-    })),
-  };
+  return { products: catalog.map(({ ean }) => ({ ean })) };
 }
 
 export default function sitemap() {
-  return buildSitemap(loadSitemapCatalog);
+  return buildSitemap(
+    loadSitemapCatalog,
+    DETAILED_CATEGORIES.map(({ slug }) => ({ slug })),
+    (error) => error instanceof PublicCatalogUnavailableError,
+  );
 }

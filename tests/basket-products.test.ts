@@ -235,25 +235,21 @@ describe("basket product client", () => {
     } finally { globalThis.fetch = originalFetch; }
   });
 
-  it("chunks sequentially, forwards request details, and aggregates stable partial results", async () => {
+  it("fails closed when any batch chunk returns 503", async () => {
     const originalFetch = globalThis.fetch;
     const calls: Parameters<typeof fetch>[] = [];
     const controller = new AbortController();
     const requested = Array.from({ length: 26 }, (_, index) => ean(index));
     globalThis.fetch = async (...args) => {
       calls.push(args);
-      const body = JSON.parse(String(args[1]?.body)) as { eans: string[] };
-      if (calls.length === 1) return new Response("down", { status: 503 });
-      return Response.json(envelope(body.eans.slice().reverse().map(product)));
+      return new Response("down", { status: 503 });
     };
     try {
-      const result = await fetchBasketProducts(requested, controller.signal);
-      assert.equal(calls.length, 2);
-      assert.deepEqual(calls.map((call) => JSON.parse(String(call[1]?.body)).eans), [requested.slice(0, 24), requested.slice(24)]);
+      await assert.rejects(fetchBasketProducts(requested, controller.signal), { name: "BasketCatalogUnavailableError" });
+      assert.equal(calls.length, 1);
+      assert.deepEqual(JSON.parse(String(calls[0]?.[1]?.body)).eans, requested.slice(0, 24));
       assert.ok(calls.every((call) => call[0] === "/api/products/batch" && call[1]?.method === "POST" &&
         call[1]?.headers && (call[1].headers as Record<string, string>)["content-type"] === "application/json" && call[1]?.signal === controller.signal));
-      assert.deepEqual(result.items.map(({ ean: code }) => code), requested.slice(24));
-      assert.deepEqual(result.missing, requested.slice(0, 24));
     } finally { globalThis.fetch = originalFetch; }
   });
 
