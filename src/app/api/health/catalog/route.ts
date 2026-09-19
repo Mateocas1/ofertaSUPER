@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { db } from "@/lib/db";
-import { createCatalogHealthChecker } from "@/lib/health";
+import { catalogHealthStatusCode, createCatalogHealthChecker } from "@/lib/health";
+import { createPublicCatalogGuardedRead } from "@/lib/public-catalog-read.server";
 
-const checkCatalogHealth = createCatalogHealthChecker(() => db.productionReadinessPublication.findFirst({
-  where: { target: "production", state: "PROMOTED", verified_at: { not: null }, promotion: { state: "PROMOTED" } },
-  orderBy: { verified_at: "desc" },
-  select: { verified_at: true },
-}));
+const checkCatalogHealth = createCatalogHealthChecker(
+  createPublicCatalogGuardedRead(process.env.PUBLIC_CATALOG_SERVING_IDENTITY_JSON),
+);
 
 export async function GET() {
   const health = await checkCatalogHealth();
-  return NextResponse.json(health, { status: health.status === "current" ? 200 : 503 });
+  return NextResponse.json(health, { status: catalogHealthStatusCode(health) });
 }
