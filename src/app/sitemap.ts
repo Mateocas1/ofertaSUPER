@@ -10,14 +10,16 @@ export const dynamic = "force-dynamic";
 
 async function loadSitemapCatalog(): Promise<SitemapCatalog> {
   const catalog = await resolvePublicCatalogDataFromGuardedRead(
-    (projection) => projection.servingProduct.findMany({
-      select: { ean: true },
-      orderBy: { ean: "asc" },
+    async (projection) => ({
+      products: await projection.servingProduct.findMany({
+        select: { ean: true },
+        orderBy: { ean: "asc" },
+      }),
     }),
     createPublicCatalogGuardedRead(process.env.PUBLIC_CATALOG_SERVING_IDENTITY_JSON),
   );
 
-  return { products: catalog.map(({ ean }) => ({ ean })) };
+  return { products: catalog.products.map(({ ean }) => ({ ean })) };
 }
 
 export default function sitemap() {

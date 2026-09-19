@@ -9,6 +9,7 @@
     "test": "tsx --conditions=react-server --test tests/**/*.test.ts",
     "test:guarded-read-snapshot-postgres": "bash scripts/test-guarded-read-snapshot-postgres.sh",
     "test:u16-built-server-postgres": "bash scripts/test-u16-built-server-postgres.sh",
+    "test:u17-built-server-browser": "bash scripts/test-u17-built-server-browser.sh",
     "lint": "eslint .",
     "audit:complexity": "node scripts/audit-complexity.mjs",
     "typecheck": "tsc --noEmit",
