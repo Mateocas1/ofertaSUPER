@@ -31,8 +31,8 @@ OpenSpec artifacts are historical input only. This ODD checklist is the executio
 
 - [x] **U17-T1 — Establish common guarded page/SEO contracts**
   - Added behavior-first tests and shared helpers for eligible versus unavailable page data and non-commercial denial metadata.
-- [ ] **U17-T2 — Guard product HTML, metadata, and JSON-LD**
-  - Remove the raw `getProductDetail` metadata path; use guarded detail/history data and emit no commercial schema on denial.
+- [x] **U17-T2 — Guard product HTML, metadata, and JSON-LD**
+  - Removed the raw `getProductDetail` metadata path; guarded detail/history data now controls HTML, metadata, and JSON-LD, with denial rendered as a non-commercial accessible alert.
 - [ ] **U17-T3 — Guard search, offers, and category pages**
   - Replace legacy/raw catalog loaders, preserve static taxonomy and shell, and suppress commercial results/SEO claims on denial.
 - [ ] **U17-T4 — Guard sitemap, basket denial UX, and navigation**
@@ -58,3 +58,11 @@ U16 is frozen at `c8726c1` with closure ledger `5a2dbbf`. U17 exploration identi
 - RED: `./node_modules/.bin/tsx --conditions=react-server --test tests/public-catalog-page.test.ts tests/seo-metadata.test.ts` failed because `public-catalog-page` and `createUnavailableCatalogMetadata` did not exist.
 - GREEN: the same focused command passed after implementing the shared contracts.
 - Triangulation: the page result test verifies unavailable results retain only the supplied static shell and have no `catalog` property; the metadata test verifies exact `robots: { index: false, follow: true }` plus empty canonical/OG/Twitter replacements.
+
+## U17-T2 evidence
+
+- RED: `./node_modules/.bin/tsx --conditions=react-server --test tests/product-page.test.ts tests/seo-schema.test.ts tests/product-history.test.ts` failed before implementation because guarded product page/schema helpers did not exist.
+- GREEN: the same focused command passed after product HTML, metadata, and schema all used the guarded result contract.
+- Triangulation: denial metadata uses the shared non-commercial `noindex, follow` contract; denied schema is `null`, while eligible guarded data emits Product/Offer JSON-LD.
+- Coherence correction: Next.js 16.3.1 `generateMetadata` guidance requires React `cache` for this non-fetch load. `createGuardedProductPageLoader` now uses `cache` only to deduplicate one render's identical `(ean, days)` guarded result; it adds no durable or cross-request cache. Both metadata and HTML call that shared loader. RED: `./node_modules/.bin/tsx --conditions=react-server --test tests/product-history.test.ts` failed with `createGuardedProductPageLoader is not a function`. GREEN: `./node_modules/.bin/tsx --conditions=react-server --test tests/product-page.test.ts tests/seo-schema.test.ts tests/product-history.test.ts` passed (10 tests). The new regression test asserts that metadata and HTML consumers receive the same eligible guarded result after exactly one underlying guarded load.
+- Native review escalation `review-c3e7eed8a3e33667` identified `R3-unhandled-authority-rejection`: the guarded page loader let `PublicCatalogUnavailableError` escape before producing its unavailable result. Correction RED: `./node_modules/.bin/tsx --conditions=react-server --test tests/product-page.test.ts` failed the unavailable-conversion regression because the error propagated. Correction GREEN: after catching only `PublicCatalogUnavailableError` and using `createProductPageResult` for the typed unavailable result, `./node_modules/.bin/tsx --conditions=react-server --test tests/product-page.test.ts tests/seo-schema.test.ts tests/product-history.test.ts` passed (12 tests), including unrelated-error propagation and the unchanged history 503 assertion. `npm run typecheck` and `git diff --check` passed.
