@@ -1,12 +1,13 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 
 import { CatalogProvenanceNotice } from "@/components/catalog-provenance-notice";
 import { ProductCard } from "@/components/product-card";
 import { SearchBar } from "@/components/search-bar";
-import { listProducts } from "@/lib/catalog";
+import { loadPublicProductList } from "@/lib/catalog";
 import { getSingleParam } from "@/lib/page-params";
-import { resolvePublicCatalogData } from "@/lib/public-catalog-api";
-import { createMetadata } from "@/lib/seo/metadata";
+import { resolveGuardedCatalogPage } from "@/lib/portfolio-catalog";
+import { createMetadata, createUnavailableCatalogMetadata } from "@/lib/seo/metadata";
 import { SUPERMARKETS } from "@/lib/supermarkets";
 
 export const revalidate = 21600;
@@ -15,34 +16,49 @@ type SearchPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+type SearchFilters = {
+  query: string;
+  supermarket?: string;
+  sort?: "relevance" | "discount" | "price-asc" | "price-desc" | "updated";
+};
+
+const loadSearchPage = cache(async (
+  query: string,
+  supermarket: SearchFilters["supermarket"],
+  sort: SearchFilters["sort"],
+) => resolveGuardedCatalogPage({ query }, async (projection) => ({
+  products: query
+    ? await loadPublicProductList(projection, { query, supermarket, sort, limit: 24, page: 1 })
+    : null,
+})));
+
+function filtersFrom(params: Record<string, string | string[] | undefined>): SearchFilters {
+  return {
+    query: getSingleParam(params.q) ?? "",
+    supermarket: getSingleParam(params.super),
+    sort: getSingleParam(params.sort) as SearchFilters["sort"],
+  };
+}
+
 export async function generateMetadata({ searchParams }: SearchPageProps): Promise<Metadata> {
-  const params = await searchParams;
-  const query = getSingleParam(params.q);
+  const filters = filtersFrom(await searchParams);
+  const page = await loadSearchPage(filters.query, filters.supermarket, filters.sort);
+  if (page.availability === "unavailable") return createUnavailableCatalogMetadata();
 
   return createMetadata({
-    title: query ? `Buscar ${query}` : "Buscar productos",
-    description: query
-      ? `Resultados para ${query} con precios comparados en supermercados argentinos.`
+    title: filters.query ? `Buscar ${filters.query}` : "Buscar productos",
+    description: filters.query
+      ? `Resultados para ${filters.query} con precios comparados en supermercados argentinos.`
       : "Buscador de productos y marcas en supermercados argentinos.",
-    path: query ? `/buscar?q=${encodeURIComponent(query)}` : "/buscar",
+    path: filters.query ? `/buscar?q=${encodeURIComponent(filters.query)}` : "/buscar",
   });
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const params = await searchParams;
-  const query = getSingleParam(params.q) ?? "";
-  const supermarket = getSingleParam(params.super);
-  const sort = getSingleParam(params.sort) as "relevance" | "discount" | "price-asc" | "price-desc" | "updated" | undefined;
-  const filters = {
-    query,
-    supermarket,
-    sort,
-    limit: 24,
-    page: 1,
-  };
-  const result = query
-    ? await resolvePublicCatalogData(() => listProducts(filters)).catch(() => null)
-    : null;
+  const filters = filtersFrom(await searchParams);
+  const page = await loadSearchPage(filters.query, filters.supermarket, filters.sort);
+  const result = page.availability === "eligible" ? page.catalog.products : null;
+  const { query, supermarket, sort } = filters;
 
   return (
     <div className="px-6 py-8 md:py-10">
@@ -83,8 +99,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           </div>
         </section>
 
-        {result ? <CatalogProvenanceNotice {...result} /> : null}
-        {query && !result ? (
+        {page.availability === "eligible" && result ? <CatalogProvenanceNotice {...page.catalog} /> : null}
+        {page.availability === "unavailable" ? (
           <section role="alert" className="rounded-[1.5rem] border border-amber-300 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
             <p className="font-semibold">El catálogo no está disponible.</p>
             <p className="mt-1">No podemos mostrar resultados reales en este momento. Probá de nuevo más tarde.</p>
@@ -98,11 +114,11 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               <ProductCard key={product.ean} product={product} />
             ))}
           </section>
-        ) : (
+        ) : page.availability === "eligible" ? (
           <section className="surface-soft p-6 text-sm text-muted-foreground">
             Probá con marcas, categorías o productos concretos. Ejemplos: Coca Cola, yerba, arroz.
           </section>
-        )}
+        ) : null}
 
         {query && result && result.items.length === 0 ? (
           <section className="surface-soft p-6 text-sm text-muted-foreground">

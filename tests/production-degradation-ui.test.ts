@@ -9,7 +9,8 @@ test("public catalog pages never replace unavailable data with demos", () => {
   assert.doesNotMatch(searchPage, /getDemoProductPage|isCatalogRuntimeAvailable/);
   assert.match(searchPage, /No podemos mostrar resultados reales en este momento/);
   assert.doesNotMatch(offersPage, /getDemoPromotions|getDemoProductPage|const fallback/);
-  assert.match(offersPage, /resolvePublicCatalogData/);
+  assert.match(offersPage, /resolveGuardedCatalogPage/);
+  assert.doesNotMatch(offersPage, /resolvePublicCatalogData/);
   assert.match(offersPage, /No podemos mostrar promociones ni descuentos reales en este momento/);
 });
 
