@@ -33,6 +33,8 @@ test("metadata route is dynamic and only reads guarded serving products", () => 
   assert.match(source, /resolvePublicCatalogDataFromGuardedRead/);
   assert.match(source, /createPublicCatalogGuardedRead/);
   assert.match(source, /servingProduct\.findMany/);
+  assert.match(source, /async \(projection\) => \(\{\s*products: await projection\.servingProduct\.findMany\(/);
+  assert.match(source, /catalog\.products\.map\(\(\{ ean \}\) => \(\{ ean \}\)\)/);
   assert.match(source, /DETAILED_CATEGORIES/);
   assert.doesNotMatch(source, /\bdb\.|getCategories|revalidate/);
 });
