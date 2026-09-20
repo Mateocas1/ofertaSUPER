@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "report": "cmvp-catalog-gate",
+  "readOnly": true,
+  "status": "FAIL",
+  "cycle": {
+    "current": "first-batch-20260920",
+    "prior": null,
+    "targetFingerprint": "d74023488b0525e073a48257116a58a47cdc13810e05fbcdd7385f3439d719dd",
+    "sameFrozenTarget": false,
+    "consecutiveSuccessful": false
+  },
+  "window": {
+    "hours": 24,
+    "start": "2026-09-19T07:37:21.092Z",
+    "end": "2026-09-20T07:37:21.092Z"
+  },
+  "target": {
+    "distinctUsefulProducts": 11
+  },
+  "sources": [
+    {
+      "source": "carrefour",
+      "offers": 5,
+      "represented": true,
+      "available": 5,
+      "priceRankable": 5,
+      "withinWindow": 5
+    },
+    {
+      "source": "disco",
+      "offers": 5,
+      "represented": true,
+      "available": 5,
+      "priceRankable": 5,
+      "withinWindow": 5
+    },
+    {
+      "source": "jumbo",
+      "offers": 5,
+      "represented": true,
+      "available": 5,
+      "priceRankable": 5,
+      "withinWindow": 5
+    }
+  ],
+  "identity": {
+    "model": "normalized-EAN/GTIN",
+    "exactComparableProducts": 4,
+    "eanCandidateOverlap": 4,
+    "missingStructuredEvidenceIsUnproven": false,
+    "attributeConflicts": []
+  },
+  "observations": {
+    "total": 15,
+    "withinWindow": 15,
+    "freshDistinctUsefulProducts": 11,
+    "freshnessPercent": 100,
+    "available": 15,
+    "priceRankable": 15
+  },
+  "exclusions": [],
+  "gates": {
+    "targetSize": false,
+    "threeSourcesRepresented": true,
+    "exactComparableProducts": false,
+    "freshness": true
+  }
+}

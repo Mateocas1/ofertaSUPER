@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-20T18:10:12.189Z",
+  "calls": 36,
+  "failedCalls": 0,
+  "uniqueGtins": 1157,
+  "comparableGtins": 490,
+  "selectedGtins": 500,
+  "selectedComparableGtins": 490,
+  "sourceCoverage": {
+    "disco": 587,
+    "jumbo": 588,
+    "carrefour": 595
+  },
+  "selectionReady": true
+}

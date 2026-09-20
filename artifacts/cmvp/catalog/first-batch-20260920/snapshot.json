@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "cycleId": "first-batch-20260920",
+  "observedAt": "2026-09-20T07:35:48.000Z",
+  "offers": [
+    {
+      "source": "carrefour",
+      "targetId": "7790263119597",
+      "ean": "7790263119597",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 2089,
+      "observedAt": "2026-09-20T07:25:17.072Z"
+    },
+    {
+      "source": "carrefour",
+      "targetId": "7790742358608",
+      "ean": "7790742358608",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 3119,
+      "observedAt": "2026-09-20T07:25:17.072Z"
+    },
+    {
+      "source": "carrefour",
+      "targetId": "7791337007253",
+      "ean": "7791337007253",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 8210,
+      "observedAt": "2026-09-20T07:25:17.072Z"
+    },
+    {
+      "source": "carrefour",
+      "targetId": "7792410008006",
+      "ean": "7792410008006",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 8079,
+      "observedAt": "2026-09-20T07:25:17.072Z"
+    },
+    {
+      "source": "carrefour",
+      "targetId": "7798133500605",
+      "ean": "7798133500605",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 5190,
+      "observedAt": "2026-09-20T07:25:17.072Z"
+    },
+    {
+      "source": "disco",
+      "targetId": "7622300990114",
+      "ean": "7622300990114",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 12500,
+      "observedAt": "2026-09-20T07:23:38.612Z"
+    },
+    {
+      "source": "disco",
+      "targetId": "7790742141101",
+      "ean": "7790742141101",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 5700,
+      "observedAt": "2026-09-20T07:23:38.612Z"
+    },
+    {
+      "source": "disco",
+      "targetId": "7790742141705",
+      "ean": "7790742141705",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 5133,
+      "observedAt": "2026-09-20T07:23:38.612Z"
+    },
+    {
+      "source": "disco",
+      "targetId": "7790742333605",
+      "ean": "7790742333605",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 3400,
+      "observedAt": "2026-09-20T07:23:38.612Z"
+    },
+    {
+      "source": "disco",
+      "targetId": "7891000248799",
+      "ean": "7891000248799",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 3050,
+      "observedAt": "2026-09-20T07:23:38.612Z"
+    },
+    {
+      "source": "jumbo",
+      "targetId": "7790742141101",
+      "ean": "7790742141101",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 5400,
+      "observedAt": "2026-09-20T07:25:06.743Z"
+    },
+    {
+      "source": "jumbo",
+      "targetId": "7790742141705",
+      "ean": "7790742141705",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 5133,
+      "observedAt": "2026-09-20T07:25:06.743Z"
+    },
+    {
+      "source": "jumbo",
+      "targetId": "7790742333605",
+      "ean": "7790742333605",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 3300,
+      "observedAt": "2026-09-20T07:25:06.743Z"
+    },
+    {
+      "source": "jumbo",
+      "targetId": "7792360095262",
+      "ean": "7792360095262",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 2350,
+      "observedAt": "2026-09-20T07:25:06.743Z"
+    },
+    {
+      "source": "jumbo",
+      "targetId": "7891000248799",
+      "ean": "7891000248799",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "available": true,
+      "price": 2800,
+      "observedAt": "2026-09-20T07:25:06.743Z"
+    }
+  ],
+  "readOnly": true,
+  "identity": {
+    "missingStructuredEvidenceIsUnproven": false,
+    "attributeConflicts": []
+  }
+}

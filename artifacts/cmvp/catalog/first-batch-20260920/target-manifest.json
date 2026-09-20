@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "cycleId": "first-batch-20260920",
+  "frozenAt": "2026-09-20T07:26:00.000Z",
+  "products": [
+    {
+      "targetId": "7622300990114",
+      "ean": "7622300990114",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "useful": true
+    },
+    {
+      "targetId": "7790263119597",
+      "ean": "7790263119597",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "useful": true
+    },
+    {
+      "targetId": "7790742141101",
+      "ean": "7790742141101",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "useful": true
+    },
+    {
+      "targetId": "7790742141705",
+      "ean": "7790742141705",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "useful": true
+    },
+    {
+      "targetId": "7790742333605",
+      "ean": "7790742333605",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "useful": true
+    },
+    {
+      "targetId": "7790742358608",
+      "ean": "7790742358608",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "useful": true
+    },
+    {
+      "targetId": "7791337007253",
+      "ean": "7791337007253",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "useful": true
+    },
+    {
+      "targetId": "7792360095262",
+      "ean": "7792360095262",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "useful": true
+    },
+    {
+      "targetId": "7792410008006",
+      "ean": "7792410008006",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "useful": true
+    },
+    {
+      "targetId": "7798133500605",
+      "ean": "7798133500605",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "useful": true
+    },
+    {
+      "targetId": "7891000248799",
+      "ean": "7891000248799",
+      "pack": null,
+      "quantity": null,
+      "measurementUnit": null,
+      "variant": null,
+      "useful": true
+    }
+  ]
+}
