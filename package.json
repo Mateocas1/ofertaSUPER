@@ -47,6 +47,7 @@
     "cleanup:history": "tsx scripts/cleanup-history.ts",
     "ingest": "tsx scripts/ingest.ts",
     "acquire:cmvp-first-batch": "tsx scripts/acquire-cmvp-first-batch.ts",
+    "acquire:cmvp-catalog-batch": "tsx scripts/acquire-cmvp-catalog-batch.ts",
     "cleanup:staging": "tsx scripts/cleanup-staging.ts",
     "audit:ingest-candidates": "tsx scripts/audit-ingest-candidates.ts",
     "audit:ingest-run": "tsx scripts/audit-ingest-run.ts",
