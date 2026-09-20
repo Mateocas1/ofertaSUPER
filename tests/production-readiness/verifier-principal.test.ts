@@ -26,22 +26,24 @@ test("renders one distinct verifier login and verifier-only future admission cap
   assert.doesNotMatch(requiredVerifierSql, /INSERT|UPDATE|DELETE|TRUNCATE/);
 });
 
-test("keeps compose bootstrap aligned with the verifier ACL and creates no admission object", () => {
+test("verifier principal compose bootstrap provides historical migration-role prerequisites", () => {
+  const compose = readFileSync("compose.yml", "utf8");
   const grants = readFileSync("docker/compose/app-grants.sql", "utf8");
   const roleInit = readFileSync("docker/compose/init-app-role.sh", "utf8");
+  assert.match(compose, /role-provision:[\s\S]*init-app-role\.sh/);
+  assert.match(compose, /migrate:[\s\S]*role-provision: \{ condition: service_completed_successfully \}/);
   assert.match(roleInit, /--set=app_user=ofertasuper_app/);
   assert.match(roleInit, /SELECT format\('CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT', :'app_user', :'app_password'\)/);
   assert.match(roleInit, /WHERE NOT EXISTS \(SELECT FROM pg_roles WHERE rolname = :'app_user'\)\n\\gexec/);
   assert.doesNotMatch(roleInit, /DO \$\$[^]*:'app_user'/);
   assert.match(roleInit, /DO \$\$ BEGIN IF NOT EXISTS \(SELECT FROM pg_roles WHERE rolname = 'ofertasuper_runtime'\) THEN CREATE ROLE ofertasuper_runtime NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; END IF; END \$\$;/);
-  assert.match(roleInit, /DO \$\$ BEGIN IF NOT EXISTS \(SELECT FROM pg_roles WHERE rolname = 'ofertasuper_verifier'\) THEN CREATE ROLE ofertasuper_verifier LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; END IF; END \$\$;/);
-  assert.match(grants, /DO \$\$ BEGIN IF NOT EXISTS \(SELECT FROM pg_roles WHERE rolname = 'ofertasuper_verifier'\) THEN CREATE ROLE ofertasuper_verifier LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; END IF; END \$\$;/);
-  assert.match(grants, /GRANT EXECUTE ON FUNCTION public\.capture_source_delta\(text, text, jsonb\) TO ofertasuper_app/);
-  assert.match(grants, /REVOKE EXECUTE ON FUNCTION public\.activate_authority\(jsonb\), public\.inspect_authority\(text, text, text\), public\.revoke_authority\(jsonb\) FROM PUBLIC, ofertasuper_app/);
-  assert.match(grants, /TO ofertasuper_authority/);
-  assert.match(grants, /capture_source_delta\(text, text, jsonb\) SECURITY DEFINER;/);
-  for (const statement of requiredVerifierSql.trim().split("\n")) assert.ok(grants.includes(statement), `missing compose grant: ${statement}`);
-  assert.doesNotMatch(grants, /CREATE (?:TABLE|FUNCTION|PROCEDURE).*promotion_ready/i);
+  for (const role of ["ofertasuper_runtime", "ofertasuper_verifier", "ofertasuper_verifier_definer", "ofertasuper_authority"]) {
+    assert.match(roleInit, new RegExp(`DO \\$\\$ BEGIN IF NOT EXISTS \\(SELECT FROM pg_roles WHERE rolname = '${role}'\\) THEN CREATE ROLE ${role} NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; END IF; END \\$\\$;`));
+  }
+  assert.doesNotMatch(roleInit, /(?:echo|printf)[^\n]*\$APP_PASSWORD/i);
+  assert.match(grants, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public\.products, public\.supermarkets, public\.supermarket_products/);
+  assert.doesNotMatch(grants, /GRANT[^\n]* TO ofertasuper_(?:runtime|verifier|verifier_definer)\b|governed_catalog|serving_|promotion_ready/i);
+  assert.doesNotMatch(grants, /CREATE (?:TABLE|FUNCTION|PROCEDURE)/i);
 });
 
 test("rejects verifier aliases and documents session_user as the only caller provenance", () => {
