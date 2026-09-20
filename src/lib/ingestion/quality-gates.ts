@@ -1,3 +1,5 @@
+import { normalizeGtin } from "../identity/gtin";
+
 type QualityGateSeverity = "BLOCK" | "WARN";
 
 export type StageValidationCandidate = {
@@ -26,7 +28,7 @@ const QUALITY_GATES: QualityGate[] = [
   {
     id: "valid_ean",
     severity: "BLOCK",
-    passes: (candidate) => /^\d{8,14}$/.test(candidate.ean),
+    passes: (candidate) => normalizeGtin(candidate.ean) !== null,
   },
   {
     id: "has_name",
