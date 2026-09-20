@@ -52,6 +52,13 @@ next-env.d.ts
 # local agent/runtime artifacts
 .atl/
 .pi/
+
+# CMVP operational exhaust (curated manifests/reports remain versioned)
+artifacts/cmvp/first-batch/
+artifacts/cmvp/catalog/expansion-20260920-discovery/calls/
+artifacts/cmvp/catalog/expansion-20260920-discovery-25/calls/
+artifacts/cmvp/catalog/expansion-20260920-cycle1/batches/
+artifacts/cmvp/catalog/expansion-20260920-cycle2/batches/
 .pi-lens/
 .lighthouseci/
 audit/

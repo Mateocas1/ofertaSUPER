@@ -4,6 +4,8 @@ ofertasSUPER is a supermarket price and offer comparison app for Argentina. It h
 
 > Current public-catalog boundary: fresh published data is served normally, older valid publications are explicitly labelled historical, and no valid publication means unavailable—never demo rows. The home is illustrative UI, not catalog evidence. See [issue #460](https://github.com/Mateocas1/ofertaSUPER/issues/460).
 
+> Consumer MVP: the accepted path from the portfolio baseline to a small consumer MVP is documented in the [consumer MVP roadmap](docs/consumer-mvp-roadmap.md). It is a planned execution contract, not evidence of live-catalog or public-pilot readiness.
+
 ## Demo
 
 - Public endpoint: https://ofertas-super.vercel.app (not a live-data, production, or operations acceptance claim).
