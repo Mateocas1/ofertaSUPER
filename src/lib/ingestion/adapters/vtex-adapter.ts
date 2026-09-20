@@ -10,6 +10,7 @@ import type { NormalizedProduct } from "@/lib/vtex/normalize";
 import type {
 	DirectLookup,
 	FetchOptions,
+	FetchProductsResult,
 	HealthResult,
 	SourceAdapter,
 } from "./types";
@@ -41,29 +42,34 @@ export class VtexSourceAdapter implements SourceAdapter {
 	async fetchProducts(
 		terms: string[],
 		options: FetchOptions = {},
-	): Promise<NormalizedProduct[]> {
+	): Promise<FetchProductsResult> {
     const count = options.count ?? 50;
     const uniqueProducts = new Map<string, NormalizedProduct>();
+    let fallbackUsed = false;
 
     for (const term of terms) {
       const products = await fetchVtexProducts({
         baseUrl: this.supermarket.baseUrl,
         query: term,
         count,
+        retries: options.retries,
       });
+      fallbackUsed ||= products.fallbackUsed === true;
 
       for (const product of products) {
         uniqueProducts.set(product.ean, product);
       }
     }
 
-    return Array.from(uniqueProducts.values());
+    const result = Array.from(uniqueProducts.values()) as FetchProductsResult;
+    if (fallbackUsed) result.fallbackUsed = true;
+    return result;
   }
 
 	async fetchDirectProducts(
 		lookup: DirectLookup,
 		options: FetchOptions = {},
-	): Promise<NormalizedProduct[]> {
+	): Promise<FetchProductsResult> {
 		return fetchVtexDirectProducts({
 			baseUrl: this.supermarket.baseUrl,
 			lookup,

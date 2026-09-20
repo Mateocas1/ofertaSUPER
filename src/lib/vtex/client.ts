@@ -9,19 +9,52 @@ import { normalizeProduct, type NormalizedProduct } from "./normalize";
 
 type LooseRecord = Record<string, unknown>;
 
+export type VtexProductsResult = NormalizedProduct[] & {
+  fallbackUsed?: boolean;
+};
+
+type VtexHttpResponse = {
+  data: unknown;
+  headers: { "content-type"?: unknown };
+};
+
+type VtexHttpRequest = {
+  headers: {
+    "user-agent": string;
+    "accept-language": string;
+    referer: string;
+    origin: string;
+  };
+  transformResponse: [(value: string) => string];
+  responseType: "text";
+};
+
+type VtexHttpClient = {
+  get: (url: string, request: VtexHttpRequest) => Promise<VtexHttpResponse>;
+};
+
+export type VtexClientDependencies = {
+  http?: VtexHttpClient;
+  sleep?: (ms: number) => Promise<void>;
+};
+
 type FetchVtexProductsOptions = {
   baseUrl: string;
   query: string;
   hash?: string;
   count?: number;
   retries?: number;
+  dependencies?: VtexClientDependencies;
 };
 
 type FetchVtexDirectProductsOptions = {
 	baseUrl: string;
 	lookup: VtexCatalogLookup;
 	retries?: number;
+  dependencies?: VtexClientDependencies;
 };
+
+const MAX_VTEX_SEARCH_COUNT = 50;
 
 type VtexProbeErrorType =
 	| "hash_invalid"
@@ -231,26 +264,27 @@ function extractProductRecords(payload: unknown): LooseRecord[] {
 
 async function requestVtexCatalogPayload({
 	baseUrl,
-	lookup,
+	request,
+  dependencies = {},
 }: {
 	baseUrl: string;
-	lookup: VtexCatalogLookup;
+	request: { pathname: string; search: string };
+  dependencies?: VtexClientDependencies;
 }) {
-	const request = buildVtexCatalogSearchRequest(lookup);
 	const url = new URL(request.pathname, baseUrl);
 	url.search = request.search;
 	const startedAt = Date.now();
 
 	try {
-		await sleep(getRequestDelayMs());
-		const response = await http.get(url.toString(), {
+		await (dependencies.sleep ?? sleep)(getRequestDelayMs());
+		const response = await (dependencies.http ?? http).get(url.toString(), {
 			headers: {
 				"user-agent": pickUserAgent(),
 				"accept-language": "es-AR,es;q=0.9,en;q=0.7",
 				referer: `${new URL(baseUrl).origin}/`,
 				origin: new URL(baseUrl).origin,
 			},
-			transformResponse: [(value) => value],
+			transformResponse: [(value: string) => value],
 			responseType: "text",
 		});
 		const responseTimeMs = Date.now() - startedAt;
@@ -319,11 +353,13 @@ async function requestVtexPayload({
   query,
   hash,
   count,
+  dependencies = {},
 }: {
   baseUrl: string;
   query: string;
   hash: string;
   count: number;
+  dependencies?: VtexClientDependencies;
 }) {
   const request = buildVtexRequest(query, hash, count);
   const url = new URL(request.pathname, baseUrl);
@@ -331,15 +367,15 @@ async function requestVtexPayload({
   const startedAt = Date.now();
 
   try {
-    await sleep(getRequestDelayMs());
-    const response = await http.get(url.toString(), {
+    await (dependencies.sleep ?? sleep)(getRequestDelayMs());
+    const response = await (dependencies.http ?? http).get(url.toString(), {
       headers: {
         "user-agent": pickUserAgent(),
         "accept-language": "es-AR,es;q=0.9,en;q=0.7",
         referer: `${new URL(baseUrl).origin}/`,
         origin: new URL(baseUrl).origin,
       },
-      transformResponse: [(value) => value],
+      transformResponse: [(value: string) => value],
       responseType: "text",
     });
     const responseTimeMs = Date.now() - startedAt;
@@ -467,21 +503,23 @@ export async function fetchVtexDirectProducts({
 	baseUrl,
 	lookup,
 	retries = 3,
-}: FetchVtexDirectProductsOptions): Promise<NormalizedProduct[]> {
+  dependencies = {},
+}: FetchVtexDirectProductsOptions): Promise<VtexProductsResult> {
 	let lastError: unknown;
 
 	for (let attempt = 1; attempt <= retries; attempt += 1) {
 		try {
 			const { payload } = await requestVtexCatalogPayload({
 				baseUrl,
-				lookup,
+				request: buildVtexCatalogSearchRequest(lookup),
+        dependencies,
 			});
 
 			return normalizeVtexCatalogPayload(payload, baseUrl);
 		} catch (error) {
 			lastError = error;
 			if (attempt < retries) {
-				await sleep(400 * attempt);
+				await (dependencies.sleep ?? sleep)(400 * attempt);
 			}
 		}
 	}
@@ -489,17 +527,32 @@ export async function fetchVtexDirectProducts({
 	throw lastError;
 }
 
+function dedupeVtexProducts(payload: unknown, baseUrl: string): VtexProductsResult {
+  return Array.from(
+    new Map(normalizeVtexCatalogPayload(payload, baseUrl).map((product) => [product.ean, product])).values(),
+  );
+}
+
+function markFallbackUsed(products: VtexProductsResult): VtexProductsResult {
+  products.fallbackUsed = true;
+  return products;
+}
+
 export async function fetchVtexProducts({
   baseUrl,
   query,
   hash = process.env.VTEX_SHA256_HASH,
-  count = 50,
+  count = MAX_VTEX_SEARCH_COUNT,
   retries = 3,
-}: FetchVtexProductsOptions): Promise<NormalizedProduct[]> {
+  dependencies = {},
+}: FetchVtexProductsOptions): Promise<VtexProductsResult> {
   if (!hash) {
     throw new Error("VTEX_SHA256_HASH is required");
   }
 
+  const boundedCount = Number.isFinite(count)
+    ? Math.min(Math.max(Math.floor(count), 1), MAX_VTEX_SEARCH_COUNT)
+    : MAX_VTEX_SEARCH_COUNT;
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= retries; attempt += 1) {
@@ -508,20 +561,28 @@ export async function fetchVtexProducts({
         baseUrl,
         query,
         hash,
-        count,
+        count: boundedCount,
+        dependencies,
       });
-      const rawProducts = extractProductRecords(payload);
-      const normalized = rawProducts
-        .map((product) => normalizeProduct(product, baseUrl))
-        .filter((product): product is NormalizedProduct => Boolean(product));
-
-			return Array.from(
-				new Map(normalized.map((product) => [product.ean, product])).values(),
-			);
+      return dedupeVtexProducts(payload, baseUrl);
     } catch (error) {
+      if (error instanceof VtexRequestError && error.errorType === "hash_invalid") {
+        const search = new URLSearchParams({
+          ft: query,
+          _from: "0",
+          _to: String(boundedCount - 1),
+        });
+        const { payload } = await requestVtexCatalogPayload({
+          baseUrl,
+          request: { pathname: "/api/catalog_system/pub/products/search", search: search.toString() },
+          dependencies,
+        });
+        return markFallbackUsed(dedupeVtexProducts(payload, baseUrl));
+      }
+
       lastError = error;
       if (attempt < retries) {
-        await sleep(400 * attempt);
+        await (dependencies.sleep ?? sleep)(400 * attempt);
       }
     }
   }
