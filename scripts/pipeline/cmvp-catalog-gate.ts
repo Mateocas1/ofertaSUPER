@@ -29,59 +29,110 @@ export function buildCmvpCatalogGateReport({ targetManifest, snapshot, priorCycl
 	const evaluationTime = validDate(now, "evaluation time");
 	validateInput(targetManifest, snapshot, priorCycle, evaluationTime);
 	const usefulTargets = targetManifest.products.filter((product) => product.useful).toSorted((left, right) => left.targetId.localeCompare(right.targetId));
-	const targetById = new Map(usefulTargets.map((product) => [product.targetId, product]));
-	const windowEnd = evaluationTime;
-	const windowStart = windowEnd - 24 * 60 * 60 * 1000;
+	const windowStart = evaluationTime - 24 * 60 * 60 * 1000;
+	const evidence = aggregateOfferEvidence(snapshot.offers, usefulTargets, windowStart);
+	const sources = summarizeSources(snapshot.offers, evidence.exactOffers, windowStart);
+	return buildGateReport(targetManifest, snapshot, priorCycle, evaluationTime, windowStart, usefulTargets, evidence, sources);
+}
+
+function buildGateReport(manifest: CmvpTargetManifest, snapshot: CmvpCatalogSnapshot, priorCycle: CmvpPriorCycle | null, evaluationTime: number, windowStart: number, usefulTargets: CmvpTargetManifest["products"], evidence: ReturnType<typeof aggregateOfferEvidence>, sources: ReturnType<typeof summarizeSources>) {
+	const exactComparableProducts = countOverlappingSources(evidence.exactSources);
+	const eanCandidateOverlap = countOverlappingSources(evidence.eanSources);
+	const freshTargetIds = collectFreshTargetIds(evidence.exactOffers, windowStart);
+	const freshnessPercent = usefulTargets.length === 0 ? 0 : roundPercent(freshTargetIds.size, usefulTargets.length);
+	const gates = buildGates(usefulTargets.length, sources, exactComparableProducts, freshnessPercent);
+	const status: GateStatus = Object.values(gates).every(Boolean) ? "PASS" : "FAIL";
 	const targetFingerprint = fingerprint(usefulTargets);
+	const sameFrozenTarget = priorCycle?.targetFingerprint === targetFingerprint;
+	return { schemaVersion: 1 as const, report: "cmvp-catalog-gate" as const, readOnly: true as const, status,
+		cycle: buildCycle(manifest.cycleId, priorCycle, targetFingerprint, sameFrozenTarget, status),
+		window: { hours: 24 as const, start: new Date(windowStart).toISOString(), end: new Date(evaluationTime).toISOString() }, target: { distinctUsefulProducts: usefulTargets.length }, sources,
+		identity: { model: "normalized-EAN/GTIN" as const, exactComparableProducts, eanCandidateOverlap, missingStructuredEvidenceIsUnproven: false as const, attributeConflicts: sortConflicts(snapshot.identity?.attributeConflicts ?? []) },
+		observations: buildObservations(snapshot.offers, sources, freshTargetIds, freshnessPercent),
+		exclusions: evidence.exclusions.toSorted((left, right) => `${left.source}:${left.targetId}`.localeCompare(`${right.source}:${right.targetId}`)), gates };
+}
+
+function buildCycle(current: string, priorCycle: CmvpPriorCycle | null, targetFingerprint: string, sameFrozenTarget: boolean, status: GateStatus) {
+	return { current, prior: priorCycle?.cycleId ?? null, targetFingerprint, sameFrozenTarget, consecutiveSuccessful: Boolean(priorCycle && priorCycle.cycleId !== current && priorCycle.status === "PASS" && sameFrozenTarget && status === "PASS") };
+}
+function buildObservations(offers: CmvpCatalogSnapshot["offers"], sources: ReturnType<typeof summarizeSources>, freshTargetIds: Set<string>, freshnessPercent: number) {
+	return { total: offers.length, withinWindow: sources.reduce((sum, source) => sum + source.withinWindow, 0), freshDistinctUsefulProducts: freshTargetIds.size, freshnessPercent, available: sources.reduce((sum, source) => sum + source.available, 0), priceRankable: sources.reduce((sum, source) => sum + source.priceRankable, 0) };
+}
+
+function aggregateOfferEvidence(offers: CmvpCatalogSnapshot["offers"], usefulTargets: CmvpTargetManifest["products"], windowStart: number) {
+	const targetById = new Map(usefulTargets.map((product) => [product.targetId, product]));
 	const exclusions: Array<{ source: Source; targetId: string; reasons: string[] }> = [];
 	const exactSources = new Map<string, Set<Source>>();
 	const eanSources = new Map<string, Set<Source>>();
 	const exactOfferKeys = new Set<string>();
-
-	for (const offer of snapshot.offers) {
-		const target = targetById.get(offer.targetId);
-		if (!target) throw new Error(`offer targetId ${offer.targetId} is not a useful frozen target`);
-		const reasons = identityReasons(target, offer);
-		const observed = new Date(offer.observedAt).getTime();
-		if (observed < windowStart) reasons.push("outside-24-hour-window");
-		if (reasons.length > 0) exclusions.push({ source: offer.source, targetId: offer.targetId, reasons });
-		const normalizedOfferEan = normalizeEan(offer.ean);
-		if (normalizedOfferEan && normalizedOfferEan === normalizeEan(target.ean)) addSource(eanSources, normalizedOfferEan, offer.source);
-		if (identityReasons(target, offer).length === 0) { addSource(exactSources, offer.targetId, offer.source); exactOfferKeys.add(`${offer.source}:${offer.targetId}`); }
-	}
-	const exactOffers = snapshot.offers.filter((offer) => exactOfferKeys.has(`${offer.source}:${offer.targetId}`));
-	const sources = SOURCES.map((source) => {
-		const offers = snapshot.offers.filter((offer) => offer.source === source);
-		const provenOffers = exactOffers.filter((offer) => offer.source === source);
-		return { source, offers: offers.length, represented: provenOffers.length > 0, available: offers.filter((offer) => offer.available).length, priceRankable: offers.filter((offer) => offer.available && offer.price !== null && offer.price > 0).length, withinWindow: provenOffers.filter((offer) => new Date(offer.observedAt).getTime() >= windowStart).length };
-	});
-	const exactComparableProducts = [...exactSources.values()].filter((values) => values.size >= 2).length;
-	const eanCandidateOverlap = [...eanSources.values()].filter((values) => values.size >= 2).length;
-	const withinWindow = sources.reduce((sum, source) => sum + source.withinWindow, 0);
-	const freshTargetIds = new Set(exactOffers.filter((offer) => new Date(offer.observedAt).getTime() >= windowStart).map((offer) => offer.targetId));
-	const freshnessPercent = usefulTargets.length === 0 ? 0 : roundPercent(freshTargetIds.size, usefulTargets.length);
-	const gates = { targetSize: usefulTargets.length >= 500 && usefulTargets.length <= 1000, threeSourcesRepresented: sources.every((source) => source.represented), exactComparableProducts: exactComparableProducts >= 100, freshness: freshnessPercent >= 90 };
-	const status: GateStatus = Object.values(gates).every(Boolean) ? "PASS" : "FAIL";
-	const sameFrozenTarget = priorCycle?.targetFingerprint === targetFingerprint;
-	return { schemaVersion: 1 as const, report: "cmvp-catalog-gate" as const, readOnly: true as const, status,
-		cycle: { current: targetManifest.cycleId, prior: priorCycle?.cycleId ?? null, targetFingerprint, sameFrozenTarget, consecutiveSuccessful: Boolean(priorCycle && priorCycle.cycleId !== targetManifest.cycleId && priorCycle.status === "PASS" && sameFrozenTarget && status === "PASS") },
-		window: { hours: 24 as const, start: new Date(windowStart).toISOString(), end: new Date(windowEnd).toISOString() }, target: { distinctUsefulProducts: usefulTargets.length }, sources,
-		identity: { model: "normalized-EAN/GTIN" as const, exactComparableProducts, eanCandidateOverlap, missingStructuredEvidenceIsUnproven: false as const, attributeConflicts: sortConflicts(snapshot.identity?.attributeConflicts ?? []) },
-		observations: { total: snapshot.offers.length, withinWindow, freshDistinctUsefulProducts: freshTargetIds.size, freshnessPercent, available: sources.reduce((sum, source) => sum + source.available, 0), priceRankable: sources.reduce((sum, source) => sum + source.priceRankable, 0) },
-		exclusions: exclusions.toSorted((left, right) => `${left.source}:${left.targetId}`.localeCompare(`${right.source}:${right.targetId}`)), gates };
+	for (const offer of offers) observeOffer(offer, targetById, windowStart, exclusions, exactSources, eanSources, exactOfferKeys);
+	return { exclusions, exactSources, eanSources, exactOffers: offers.filter((offer) => exactOfferKeys.has(`${offer.source}:${offer.targetId}`)) };
 }
+
+function observeOffer(offer: CmvpCatalogSnapshot["offers"][number], targetById: Map<string, CmvpTargetManifest["products"][number]>, windowStart: number, exclusions: Array<{ source: Source; targetId: string; reasons: string[] }>, exactSources: Map<string, Set<Source>>, eanSources: Map<string, Set<Source>>, exactOfferKeys: Set<string>) {
+	const target = targetById.get(offer.targetId);
+	if (!target) throw new Error(`offer targetId ${offer.targetId} is not a useful frozen target`);
+	const reasons = identityReasons(target, offer);
+	if (new Date(offer.observedAt).getTime() < windowStart) reasons.push("outside-24-hour-window");
+	if (reasons.length > 0) exclusions.push({ source: offer.source, targetId: offer.targetId, reasons });
+	const normalizedOfferEan = normalizeEan(offer.ean);
+	if (normalizedOfferEan && normalizedOfferEan === normalizeEan(target.ean)) addSource(eanSources, normalizedOfferEan, offer.source);
+	if (identityReasons(target, offer).length === 0) {
+		addSource(exactSources, offer.targetId, offer.source);
+		exactOfferKeys.add(`${offer.source}:${offer.targetId}`);
+	}
+}
+
+function summarizeSources(offers: CmvpCatalogSnapshot["offers"], exactOffers: CmvpCatalogSnapshot["offers"], windowStart: number) {
+	return SOURCES.map((source) => summarizeSource(source, offers, exactOffers, windowStart));
+}
+
+function summarizeSource(source: Source, allOffers: CmvpCatalogSnapshot["offers"], exactOffers: CmvpCatalogSnapshot["offers"], windowStart: number) {
+	const offers = allOffers.filter((offer) => offer.source === source);
+	const provenOffers = exactOffers.filter((offer) => offer.source === source);
+	return { source, offers: offers.length, represented: provenOffers.length > 0, available: offers.filter((offer) => offer.available).length, priceRankable: offers.filter((offer) => offer.available && offer.price !== null && offer.price > 0).length, withinWindow: provenOffers.filter((offer) => new Date(offer.observedAt).getTime() >= windowStart).length };
+}
+
+function countOverlappingSources(sources: Map<string, Set<Source>>) { return [...sources.values()].filter((values) => values.size >= 2).length; }
+function collectFreshTargetIds(offers: CmvpCatalogSnapshot["offers"], windowStart: number) { return new Set(offers.filter((offer) => new Date(offer.observedAt).getTime() >= windowStart).map((offer) => offer.targetId)); }
+function buildGates(targetSize: number, sources: ReturnType<typeof summarizeSources>, exactComparableProducts: number, freshnessPercent: number) { return { targetSize: targetSize >= 500 && targetSize <= 1000, threeSourcesRepresented: sources.every((source) => source.represented), exactComparableProducts: exactComparableProducts >= 100, freshness: freshnessPercent >= 90 }; }
 
 function validateInput(manifest: CmvpTargetManifest, snapshot: CmvpCatalogSnapshot, prior: CmvpPriorCycle | null, evaluationTime: number) {
+	validateSchemaAndCycle(manifest, snapshot);
+	const observedAt = validateSnapshotTimes(manifest, snapshot, evaluationTime);
+	validateUniqueIdentities(manifest, snapshot);
+	validateProducts(manifest.products);
+	validateOffers(snapshot.offers, observedAt, evaluationTime);
+	validatePriorCycle(prior);
+}
+
+function validateSchemaAndCycle(manifest: CmvpTargetManifest, snapshot: CmvpCatalogSnapshot) {
 	if (manifest.schemaVersion !== 1 || snapshot.schemaVersion !== 1) throw new Error("unsupported schema version");
 	if (!manifest.cycleId || snapshot.cycleId !== manifest.cycleId) throw new Error("snapshot cycle must match target manifest cycle");
-	const frozenAt = validDate(manifest.frozenAt, "frozenAt"); const observedAt = validDate(snapshot.observedAt, "snapshot observedAt");
+}
+function validateSnapshotTimes(manifest: CmvpTargetManifest, snapshot: CmvpCatalogSnapshot, evaluationTime: number) {
+	const frozenAt = validDate(manifest.frozenAt, "frozenAt");
+	const observedAt = validDate(snapshot.observedAt, "snapshot observedAt");
 	if (observedAt < frozenAt) throw new Error("snapshot observedAt precedes frozen target");
 	if (observedAt > evaluationTime + MAX_FUTURE_SKEW_MS) throw new Error("future snapshot observation");
-	unique(manifest.products.map((product) => product.targetId), "duplicate targetId"); unique(manifest.products.map((product) => normalizeEan(product.ean)).filter((ean): ean is string => ean !== null), "duplicate normalized target EAN"); unique(snapshot.offers.flatMap((offer) => { const ean = normalizeEan(offer.ean); return ean ? [`${offer.source}:${ean}`] : []; }), "duplicate normalized source identity"); unique(snapshot.offers.map((offer) => `${offer.source}:${offer.targetId}`), "duplicate source+targetId offer");
-	for (const product of manifest.products) if (!product.targetId) throw new Error("targetId is required");
-	for (const offer of snapshot.offers) { if (!SOURCES.includes(offer.source)) throw new Error(`unsupported source ${offer.source}`); const time = validDate(offer.observedAt, "offer observedAt"); if (time > observedAt || time > evaluationTime + MAX_FUTURE_SKEW_MS) throw new Error("future offer observation"); if (offer.price !== null && (!Number.isFinite(offer.price) || offer.price <= 0)) throw new Error("price must be null or positive"); }
-	if (prior && (prior.schemaVersion !== 1 || !prior.cycleId || !["PASS", "FAIL"].includes(prior.status))) throw new Error("invalid prior cycle");
+	return observedAt;
 }
+function validateUniqueIdentities(manifest: CmvpTargetManifest, snapshot: CmvpCatalogSnapshot) {
+	unique(manifest.products.map((product) => product.targetId), "duplicate targetId");
+	unique(manifest.products.map((product) => normalizeEan(product.ean)).filter((ean): ean is string => ean !== null), "duplicate normalized target EAN");
+	unique(snapshot.offers.flatMap((offer) => { const ean = normalizeEan(offer.ean); return ean ? [`${offer.source}:${ean}`] : []; }), "duplicate normalized source identity");
+	unique(snapshot.offers.map((offer) => `${offer.source}:${offer.targetId}`), "duplicate source+targetId offer");
+}
+function validateProducts(products: CmvpTargetManifest["products"]) { for (const product of products) if (!product.targetId) throw new Error("targetId is required"); }
+function validateOffers(offers: CmvpCatalogSnapshot["offers"], observedAt: number, evaluationTime: number) {
+	for (const offer of offers) {
+		if (!SOURCES.includes(offer.source)) throw new Error(`unsupported source ${offer.source}`);
+		const time = validDate(offer.observedAt, "offer observedAt");
+		if (time > observedAt || time > evaluationTime + MAX_FUTURE_SKEW_MS) throw new Error("future offer observation");
+		if (offer.price !== null && (!Number.isFinite(offer.price) || offer.price <= 0)) throw new Error("price must be null or positive");
+	}
+}
+function validatePriorCycle(prior: CmvpPriorCycle | null) { if (prior && (prior.schemaVersion !== 1 || !prior.cycleId || !["PASS", "FAIL"].includes(prior.status))) throw new Error("invalid prior cycle"); }
 
 function identityReasons(target: IdentityFields, offer: IdentityFields) {
 	const normalizedTarget = normalizeEan(target.ean); const normalizedOffer = normalizeEan(offer.ean);

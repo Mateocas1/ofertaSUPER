@@ -259,6 +259,26 @@ describe("CMVP first-batch acquisition", () => {
     }
   });
 
+  it("fails a rejected reconciliation before checkpointing a deterministic recovery artifact", async () => {
+    const checkpoint: { value: Awaited<ReturnType<typeof runCmvpFirstBatch>>["artifact"] | null } = { value: null };
+    const rejected = dependencies({
+      saveArtifact: async (artifact) => { checkpoint.value = artifact; rejected.calls.push("save"); },
+      reconcile: async () => {
+        rejected.calls.push("reconcile");
+        throw new Error("injected_reconciliation_failure");
+      },
+    });
+
+    await assert.rejects(
+      () => runCmvpFirstBatch(request({ dryRun: false, confirmWrite: true }), rejected),
+      /reconciliation failed: injected_reconciliation_failure/,
+    );
+    assert.deepEqual(rejected.calls, ["save", "acquire", "save", "reconcile", "finalize:FAILED", "save"]);
+    assert.equal(checkpoint.value?.state, "blocked");
+    assert.equal(checkpoint.value?.reconciliationError, "injected_reconciliation_failure");
+    assert.equal(checkpoint.value?.runs[0]?.error, "injected_reconciliation_failure");
+  });
+
   it("replays identical checkpoints, rejects changed contracts, and retains blocked state for resume", async () => {
     const prior = await runCmvpFirstBatch(request(), dependencies());
     const replay = dependencies({ loadArtifact: async () => prior.artifact });
