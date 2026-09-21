@@ -70,7 +70,15 @@ These IDs preserve the existing plan order and acceptance references. Reconcile 
     - [x] **U13p-T1 (RED/BASELINE)** — The focused PWA contract test failed before migration because its stale Workbox contract no longer matched the preserved catalog packaging build stage; this replaced the prior `null.hash` PWA build blocker with an explicit minimal Serwist contract.
     - [x] **U13p-T2 (GREEN)** — Replaced only `@ducanh2912/next-pwa` with the documented Serwist configurator, source worker, and production provider. The worker retains `/~offline`, `/sw.js`, manifest installability, and NetworkOnly catalog navigation/API routes.
     - [x] **U13p-T3 (VERIFY)** — Focused PWA contract, full test, lint, typecheck, production build, browser cache/offline boundaries, and diff-check passed. The build wrote `public/sw.js` and reported 76 precached URLs totaling 1.73 MB. The U13p correction removed only the obsolete `--webpack` forcing: focused PWA contract, typecheck, default-Turbopack production build, browser boundaries, and diff-check all passed; the build wrote `public/sw.js` with 40 precached URLs totaling 1.68 MB. The previously measured logical U13p scope remains 161 lines.
-- [ ] **U14** — Forward corrective generation.
+- [ ] **U14 — Forward corrective generation** — U14a is complete; U14b remains a separate, unstarted ODD unit.
+  - [x] **U14a — Pure correction preparation**
+    - [x] **U14a-T1 (RED)** — Observe fail-closed gaps for historical-pointer/whole-row inverse input, missing retained before-images, overlapping current edits, source-restoration assertions, and unknown correction boundaries.
+    - [x] **U14a-T2 (GREEN)** — Prepare a detached correction only from immutable original images and the exact current predecessor; invoke a fresh verifier callback and return only its matching governed handle, with no persistence or public effect.
+    - [x] **U14a-T3 (VERIFY)** — Focused correction test, `npm test` (98 pass, 12 skips), typecheck, lint (0 errors, 206 warnings), and diff-check passed.
+  - [ ] **U14b — Durable guarded correction lifecycle**
+    - [ ] **U14b-T1 (GREEN)** — Persist immutable correction linkage and route the freshly verified envelope through existing guarded promotion to create `g+1` with new lineage/audit reference; retain catalog restriction on ambiguity.
+    - [ ] **U14b-T2 (TRIANGULATE)** — Prove in disposable PostgreSQL bad delta → unrelated successor → fresh correction, no selectable historical row, and unresolved overlap remaining restricted.
+    - [ ] **U14b-T3 (VERIFY)** — Run focused lifecycle, PostgreSQL, full test, typecheck, lint, build, and diff checks without entering U15.
 - [ ] **U15** — Shared guarded read snapshot and authority decision.
 - [ ] **U16** — APIs and shared catalog loaders.
 - [ ] **U17** — Pages, metadata, JSON-LD, and sitemap enforcement.

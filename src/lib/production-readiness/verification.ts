@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { canonicalize, canonicalProof, sha256, sha256Canonical } from "./canonical";
 
@@ -135,6 +136,147 @@ export function verifyGovernedDelta(input: unknown) {
   verifiedEnvelopes.set(handle, canonicalProof(payload));
   return handle;
 }
+
+/** U14a prepares and immediately independently verifies one Vea correction; promotion stays separate. */
+export function prepareForwardCorrection(input: unknown) {
+  const request = forwardCorrectionRequest(input);
+  const { originalItem, currentItem, changed } = correctionInputs(request);
+  const candidate = correctionCandidate(request.original.source, originalItem, currentItem, changed);
+  const verified = request.verify(candidate);
+  const proof = verified && typeof verified === "object" ? verifiedEnvelopes.get(verified) : undefined;
+  if (!proof || !matchesCorrectionProof(proof, candidate)) correctionFail();
+  return verified;
+}
+
+type ForwardCorrectionRequest = {
+  original: { source: "vea"; items: unknown[] };
+  current: { source: "vea"; items: unknown[] };
+  intent: { entity: unknown; key: unknown; fields: string[] };
+  verify: (candidate: ReturnType<typeof correctionCandidate>) => unknown;
+};
+
+type CorrectionItem = { entity: "product" | "offer" | "history"; key: string; before: Facts; after: Facts };
+type CurrentCorrectionItem = { entity: "product" | "offer" | "history"; key: string; facts: Facts };
+
+function forwardCorrectionRequest(input: unknown): ForwardCorrectionRequest {
+  if (!plain(input) || !only(input, ["original", "current", "intent", "verify"])) correctionFail();
+  const { original, current, intent, verify } = input;
+  if (!isCorrectionVerifier(verify) || !validOriginal(original) || !validCurrent(current, original.source) || !validIntent(intent, original.source)) correctionFail();
+  return { original, current, intent, verify };
+}
+
+function isCorrectionVerifier(value: unknown): value is ForwardCorrectionRequest["verify"] {
+  return typeof value === "function";
+}
+
+function validOriginal(value: unknown): value is ForwardCorrectionRequest["original"] {
+  return deepFrozen(value) && plain(value) && only(value, ["source", "items"])
+    && value.source === "vea" && Array.isArray(value.items) && value.items.length === 1;
+}
+
+function validCurrent(value: unknown, source: string): value is ForwardCorrectionRequest["current"] {
+  return plain(value) && only(value, ["source", "items"]) && value.source === source
+    && Array.isArray(value.items) && value.items.length === 1;
+}
+
+function validIntent(value: unknown, source: string): value is ForwardCorrectionRequest["intent"] {
+  return plain(value) && only(value, ["type", "source", "entity", "key", "fields"])
+    && value.type === "governed-forward-correction/v1" && value.source === source
+    && Array.isArray(value.fields) && value.fields.length > 0 && new Set(value.fields).size === value.fields.length
+    && value.fields.every((field) => typeof field === "string");
+}
+
+function correctionInputs(request: ForwardCorrectionRequest) {
+  const originalItem = request.original.items[0];
+  const currentItem = request.current.items[0];
+  if (!correctionItem(originalItem) || !currentCorrectionItem(currentItem) || !matchingCorrectionIdentity(originalItem, currentItem, request.intent)) correctionFail();
+  const changed = changedFields(originalItem);
+  if (!changed.length || canonicalize(changed) !== canonicalize([...request.intent.fields].sort()) || !currentMatchesCorrection(currentItem, originalItem, changed)) correctionFail();
+  return { originalItem, currentItem, changed };
+}
+
+function matchingCorrectionIdentity(original: CorrectionItem, current: CurrentCorrectionItem, intent: ForwardCorrectionRequest["intent"]) {
+  return original.entity === intent.entity && original.key === intent.key
+    && current.entity === original.entity && current.key === original.key;
+}
+
+function changedFields(item: CorrectionItem) {
+  return Object.keys(item.after).filter((field) => canonicalize(item.before[field]) !== canonicalize(item.after[field])).sort();
+}
+
+function currentMatchesCorrection(current: CurrentCorrectionItem, original: CorrectionItem, changed: string[]) {
+  return changed.every((field) => field in current.facts && canonicalize(current.facts[field]) === canonicalize(original.after[field]));
+}
+
+function correctionCandidate(source: string, original: CorrectionItem, current: CurrentCorrectionItem, changed: string[]) {
+  const before = detachedFacts(current.facts);
+  const after = { ...before, ...Object.fromEntries(changed.map((field) => [field, detachedFact(original.before[field])])) };
+  return freezeCorrection({ operationKey: `source-capture/v1:${sha256(randomUUID())}`, source, current: [{ entity: original.entity, key: original.key, facts: before }],
+    items: [{ entity: original.entity, key: original.key, before, after }] });
+}
+
+function detachedFacts(value: Facts) {
+  return Object.fromEntries(Object.entries(value).map(([key, fact]) => [key, detachedFact(fact)]));
+}
+
+function detachedFact(value: unknown): unknown {
+  try { return structuredClone(value); } catch { correctionFail(); }
+}
+
+function matchesCorrectionProof(proof: Readonly<{ bytes: string }>, candidate: { operationKey: string; source: string; items: unknown[] }) {
+  try {
+    const envelope = JSON.parse(proof.bytes) as { capture?: { operationKey?: unknown; source?: unknown; items?: unknown } };
+    return envelope.capture?.operationKey === candidate.operationKey && envelope.capture.source === candidate.source && canonicalize(envelope.capture.items) === canonicalize(candidate.items);
+  } catch { return false; }
+}
+
+function correctionItem(value: unknown): value is CorrectionItem {
+  return plain(value) && only(value, ["entity", "key", "before", "after"]) && correctionIdentity(value.entity, value.key)
+    && plain(value.before) && plain(value.after) && canonicalize(Object.keys(value.before).sort()) === canonicalize(Object.keys(value.after).sort());
+}
+
+function currentCorrectionItem(value: unknown): value is CurrentCorrectionItem {
+  return plain(value) && only(value, ["entity", "key", "facts"]) && correctionIdentity(value.entity, value.key) && plain(value.facts);
+}
+
+const correctionKeyNames = { product: ["ean"], offer: ["product_ean", "supermarket_id"], history: ["id"] } as const;
+
+function correctionIdentity(entity: unknown, key: unknown): entity is "product" | "offer" | "history" {
+  if (!isCorrectionEntity(entity) || typeof key !== "string") return false;
+  try { return validCorrectionKey(JSON.parse(key), key, correctionKeyNames[entity]); } catch { return false; }
+}
+
+function isCorrectionEntity(value: unknown): value is keyof typeof correctionKeyNames {
+  return typeof value === "string" && value in correctionKeyNames;
+}
+
+function validCorrectionKey(value: unknown, key: string, names: readonly string[]) {
+  return plain(value) && canonicalize(value) === key && canonicalize(Object.keys(value).sort()) === canonicalize(names)
+    && names.every((name) => typeof value[name] === "string" && /^[0-9]+$/.test(value[name]));
+}
+
+function plain(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function only(value: Record<string, unknown>, names: string[]) {
+  return canonicalize(Object.keys(value).sort()) === canonicalize(names.slice().sort());
+}
+
+function deepFrozen(value: unknown): boolean {
+  return !value || typeof value !== "object" || Object.isFrozen(value)
+    && Object.values(value).every((item) => deepFrozen(item));
+}
+
+function freezeCorrection<T>(value: T): T {
+  if (value && typeof value === "object") {
+    Object.values(value).forEach(freezeCorrection);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+function correctionFail(): never { throw new Error("forward correction rejected"); }
 
 /** Only a handle issued by the verifier above is accepted; copied JSON is not verified proof. */
 export function createPromotionReadyEnvelope(verified: unknown) {
