@@ -1,8 +1,21 @@
 # Consumer MVP reset
 
+## Current execution authority — 2026-09-21
+
+This file is the single executable ODD feature document. The roadmap describes stable product direction; audit reports and the historical sections below preserve dated evidence, not current commands or permissions. The latest explicit user scope and observed candidate state take precedence over older handoff wording.
+
+- Base inspected: `master` at `f8d8f4eccf82dfbd35f0c152b42bdb0379747b15`; OS03/CMVP integration is already merged. Do not restart its branch reconciliation.
+- CMVP-01/02/03: historically complete. CMVP-04: planned, not implemented by this documentation change. CMVP-05: not eligible until G04 passes.
+- Current authorized scope: integrate the audit and catalog goal into repository documentation; prepare branch/commits/push/PR and tracking issue. This does not execute application fixes, source acquisition, migrations, deployments, scheduler changes or pilot contact.
+- Next implementation task: **CMVP-04-T01**. On a request to execute CMVP-04, continue the eligible tasks within that authorization; do not re-request permission for already covered routine work.
+- GitHub outcome tracking: [issue #498](https://github.com/Mateocas1/ofertaSUPER/issues/498). Intermediate PRs use `Refs #498`; keep it open until G04 is accepted. The task state remains in this file.
+- Parent orchestrator: **GPT 5.6 Sol**, selected by Mateo. Generic child model/thinking settings remain those of the installed runtime; no model IDs or configuration changes are prescribed here.
+- Engram topic: `odd/consumer-mvp-reset/tasks`. This documentation session did not synchronize the user's Engram. Mirror the full file when the tool is available; pending mirror does not block unrelated work.
+- Product horizon: a near-complete publicly observable catalog per supported source/context. The 500–1,000 cohort is a starting point, not a ceiling; see the [roadmap](../../docs/consumer-mvp-roadmap.md).
+
 ## Objective
 
-Persist and execute the accepted four-milestone reset that turns ofertaSUPER from a portfolio/demo baseline into a small, trustworthy consumer MVP.
+Close the audited consumer journey, enter a cleanly verified pilot, then expand toward near-complete observable supermarket catalogs. Preserve completed work in the four-milestone reset and use outcome evidence to advance.
 
 ## Problem
 
@@ -22,7 +35,7 @@ A person can search for a real product, compare an exact product across supermar
 - Exact cross-source product identity is established by a valid normalized matching EAN/GTIN.
 - Pack, quantity, measurement unit, and variant are independently observed optional attributes: never infer them from names/descriptions or copy canonical target values into source observations.
 - Missing optional attributes do not block EAN representation, freshness, or exact comparison; conflicting explicit attributes remain visible deterministic diagnostics.
-- Initial catalog target: 500–1,000 useful products.
+- Initial validation cohort: 500–1,000 useful products; progressive broad catalog coverage is the product horizon, not an immediate acquisition expansion.
 - At least daily refresh, subject to source capability.
 - Anonymous public usage; basket remains local.
 - Availability is a source observation, not guaranteed quantity or checkout inventory.
@@ -42,12 +55,12 @@ A person can search for a real product, compare an exact product across supermar
 
 ## Delivery strategy
 
-- ODD route: delegated direct for the multi-file documentation unit; later implementation routes are selected per task.
-- Trigger evidence: the durable reset requires multiple non-trivial files and therefore uses one bounded writer.
-- Delivery strategy: `ask-on-risk`.
-- Forecast: under 400 authored lines for this documentation unit; later milestones must be forecast independently.
-- Commit status: pending explicit user authorization; no commit is authorized by this document alone.
-- TDD: not applicable to the documentation-only bootstrap. Future behavior tasks must resolve the repository's effective TDD mode and exact runner before implementation.
+- Method: ODD (Organic Driven Development), using the [current orchestration contract](../orchestration/consumer-mvp-herdr.md). No automatic SDD migration or new workflow engine.
+- Strategy: `ask-on-risk`; existing authorization persists by scope. The parent owns integration and any real user decision. Routine reversible checks are not new permission gates.
+- TDD: on for behavior changes because `openspec/config.yaml` explicitly sets `strict_tdd: true` and prior CMVP work records an explicit user choice. Recheck effective configuration on resume; do not infer TDD solely from tests existing.
+- Documentation-only work uses structural review/link validation/diff checks; code tests are not evidence of prose correctness.
+- Plan coherent work units around outcomes. Forecast the repository's 400-authored-line review budget; keep necessary source/tests/docs together and explain a justified exception or split before implementation. Never split solely to manufacture more approvals.
+- Candidate evidence names exact SHA, runtime, commands, discovered tests, pass/fail/skip counts, and unverified paths. An agent's `done` state or a closed issue is not acceptance.
 
 ## Tasks
 
@@ -108,17 +121,152 @@ A person can search for a real product, compare an exact product across supermar
   - [x] **CMVP-03-D3 — Rebase CMVP checks without history rewriting.** Corrected OS03 ancestry was merged forward through every CMVP head while preserving the original work-unit commits. PR #479 now targets corrected U17 PR #497; #479–#486, #494, #496, and #497 are mergeable and green across complexity, Lighthouse, Vercel, and preview checks. The corrected parser exposed ten CMVP complexity findings across #480–#483; all were refactored below threshold, and independent verification additionally closed rejected-reconciliation, malformed acquired-checkpoint, and dry-run persistence defects. Retarget #479 to `master` only after the OS03 chain lands.
   - Acceptance: complete for preparation. OS03 and CMVP PR diffs remain focused; required checks are green; merges remain explicit human decisions.
 
-- [ ] **CMVP-04 — Complete the real consumer journey.** Replace illustrative public surfaces with live catalog data and verify search → compare → freshness/availability → basket totals.
-  - Route: to be derived after CMVP-03.
-  - Acceptance: no illustrative data presented as real; five-product basket totals and coverage are correct; mobile journey and degraded states are verified in production.
-  - Evidence: pending.
+- [ ] **CMVP-04 — Complete the audited real consumer journey.** Execute T01–T08 below; the parent may mark this complete only when G04 passes on the published candidate.
+  - Acceptance: every applicable audit finding has verified disposition; search → exact comparison → dated availability → correct basket works on one real catalog version; another daily update and controlled degradation are observed.
+  - Evidence: pending. Documentation completion is not implementation completion.
 
-- [ ] **CMVP-05 — Run a controlled public pilot.** Observe 5–15 external users and classify failures as data, trust, or interaction problems before expanding scope.
-  - Route: to be derived after CMVP-04.
-  - Acceptance: at least five users complete the journey; search success, comparison coverage, basket use, abandonment, and trust feedback are recorded; the next product investment is decided from evidence.
-  - Evidence: pending.
+- [ ] **CMVP-05 — Run a controlled public pilot.** Ineligible until CMVP-04 G04 is PASS.
+  - Acceptance: 5–15 participants, at least five complete journeys; record attempted queries, found/not-found, comparison coverage, basket completion/abandonment and trust feedback, including ordinary user-selected shopping lists.
+  - Evidence: pending. Do not count only a cherry-picked five-product test list as product validation. New defects found by pilot are tracked normally; they do not mean the handoff may contain unresolved known release blockers.
 
-## Progress
+## CMVP-04 audit traceability
+
+Source: [dated engineering audit](../../docs/reports/engineering-audit/2026-09-21-consumer-mvp-audit.md), base `f8d8f4e`. Reconfirm affected behavior on the working candidate; do not re-audit unrelated areas. Rows below identify work ownership, not a second progress tracker. Resolution evidence belongs to the corresponding task and G04 receipt.
+
+| ID | Finding / evidence locator | Owner | Required disposition before G04 |
+|---|---|---|---|
+| A01 | `package.json` test glob omits 113 root test files; full run exposes contract drift | T01 | Recursive exact discovery; all intended tests executed; failures classified and resolved against current design. |
+| A02 | Production audit: Next 16.3.1 / Sharp 0.35.3 affected at audit date | T02 | Current compatible patch + lockfile/production audit and candidate build; no stale claim from August security work. |
+| A03 | `public-catalog-read.server.ts` still reads DB; CMVP snapshot lacks UI fields | T04 | One validated public read contract for all exposed catalog surfaces. |
+| A04 | `reconcile.ts:525,548` writes processing time as observation; PROMOTED replay | T03 | Immutable source-observation timestamp; idempotency; older data cannot overwrite newer observation. |
+| A05 | `canasta-page.tsx:76–80,225–227` omits unresolved products from missing count | T06 | Full requested denominator; no false complete basket during partial/error responses. |
+| A06 | Public alias returned demo data and deployed SHA was unknown | T07/T08 | Exact candidate/snapshot identity and real-data behavior proven on final alias. |
+| A07 | Detail loses known availability in `price-comparison.tsx` / product page | T05 | Available/unavailable/unknown visibly distinguished and dated; no false “Disponible en”. |
+| A08 | Search/category/offers fix page 1 with limit 24 | T05 | Accessible pagination preserving search, source and sorting; zero-results state. |
+| A09 | List/detail historical-price policies diverge | T05 | One shared pure selection/label/eligibility policy; historical prices never ranked as current. |
+| A10 | Six UI sources vs three-source MVP | T05 | Filters, home and any exposed offers use actual published source set; decorative examples explicit. |
+| A11 | Normalizer defaults missing availability to true | T03 | Preserve unknown or conservative eligibility, without relabelling unknown as observed out-of-stock. |
+| A12 | Identity gate passes even with all prices null and all offers unavailable | T04 | Distinct usable-comparison gate; mixed per-source freshness/availability tested. |
+| A13 | Two cycles less than eight minutes apart do not prove daily operation | T07 | Two consecutive real daily windows, with declared schedule/tolerance and no missed window, plus failure/recovery evidence. |
+| A14 | Roadmap/Herdr/history instructions conflict; issue closure implies too much | T01/T08 | Current instructions reconciled; intermediate PRs use Refs; final outcome alone closes tracking issue. |
+| A15 | 123 inherited complexity hotspots; parallel legacy/public policy paths | T04/T05/T08 | Consolidate active read/policy path; disposition remaining inherited debt by actual impact, including tested correct active code. No full rewrite required. |
+| A16 | CI green without complete discovery/browser journey; master has no required checks; native reviews not visible in GitHub | T01/T08 | Credible required checks, final journey and attributable review; enforced checks or verified manual candidate control under T08, with any platform limitation still tracked. |
+
+Audit scope notes: 1,022 tests / 992 pass / 13 fail / 17 skip were observed locally under Node 24 with the native tsx loader; CI Node 22 ran 111 / 99 / 0 / 12. Two local failures were tsx IPC restrictions. Do not classify all 13 as product bugs or automatically waive them on the new candidate. The 500-target snapshot had 691 offers, 688 rankable, 167 two-source and 24 three-source identities; these are dated observations, not current freshness or full-source completeness.
+
+## CMVP-04 executable tasks
+
+All tasks start pending. Parent supplies a fresh exact edit allowlist and verification commands before each worker starts. Path lists below are bounded starting surfaces; a necessary new file must be named by the parent, not added through a broad `src/**` grant. Dependencies govern eligibility; T01 is the first implementation task.
+
+An intermediate task may finish with unrelated baseline failures still assigned to later tasks, provided its own acceptance passes and no new regression is hidden. Record the exact remaining failures and owners. This avoids dependency deadlock; G04 still requires all final required checks to pass.
+
+### CMVP-04-T01 — Trustworthy baseline and delivery hygiene
+
+- [ ] Status: pending. Depends on: none. Route: delegated direct; independent verification.
+- Outcome: future agents and CI execute the intended suite and follow one current plan.
+- Starting surfaces: `package.json`, `.github/workflows/lighthouse-ci.yml`, one named test-runner entrypoint, failing files under `tests/`, and the current README/ODD documents.
+- Reconcile runtime Node version with CI; enumerate every intended `.test.ts` recursively, exactly once, without shell-dependent globbing. Compare discovered paths to tracked test inventory; 143 is historical, not a permanent hardcoded count. Distinguish browser and live-Postgres suites from ordinary tests.
+- Triage the observed failures: implementation bug, obsolete contract, or reproduced environment limitation. Update obsolete tests to required behavior; never remove an assertion merely for green. Tests tied solely to a retired runtime may be retired with proof of no active consumer and a replacement behavioral check for the retained contract.
+- T01 closes with exact discovery, an observed full baseline, independent runner/clearly obsolete-test corrections and every remaining failure assigned to a named task. Product failures owned by T02–T06 remain open there; they do not force provisional repairs or prevent dependent work from starting. G04 requires the final required suite to pass; this sequencing is not a waiver.
+- Verification: inventory/discovery regression covering root and nested tests, exact full-suite command, `npm run typecheck`, `npm run lint`, `npm run audit:complexity`, `git diff --check`. Record genuine skips and CI inclusion/exclusion. T01 replaces the faulty npm command for later tasks; until then use explicit file arguments with `node --import tsx --conditions=react-server --test`.
+- Rollback: revert the bounded runner/workflow/test-contract changes; preserve original failure evidence. Proof: pending.
+
+### CMVP-04-T02 — Patch the production dependency graph
+
+- [ ] Status: pending. Depends on: T01. Route: delegated direct.
+- Starting surfaces: `package.json`, `package-lock.json`, dependency contract tests; exact-version compatibility files only when a failing test justifies them.
+- Inspect current official advisories and lockfile. At audit time Next fixes began at 16.3.3 and Sharp at 0.35.4; select a currently supported compatible patch and keep paired Next packages consistent. Do not blindly pin historical minima or run `npm audit fix --force`.
+- Acceptance: affected production paths patched; fresh `npm audit --omit=dev --json --ignore-scripts` disposition has no unresolved audited critical/high finding; app/PWA/build behavior preserved. Any newly reported unrelated finding is assessed explicitly, not silently ignored.
+- Verification: production audit, relevant dependency/PWA tests, corrected full suite, typecheck/lint and `npm run build` in the authorized local environment. Read exact Next docs under `node_modules/next/dist/docs/` before editing framework code as AGENTS.md requires.
+- Rollback: revert package/lockfile/necessary compatibility changes as one unit. Proof: pending.
+
+### CMVP-04-T03 — Preserve truthful observation and replay semantics
+
+- [ ] Status: pending. Depends on: T01. Route: delegated direct; serialize shared data-contract/schema changes.
+- Starting surfaces: `src/lib/vtex/normalize.ts`, `src/lib/ingestion/`, `scripts/pipeline/validate.ts`, `scripts/pipeline/reconcile.ts`, `scripts/pipeline/cmvp-catalog-batch.ts`, relevant identity/ingestion tests. Add a narrowly named schema/migration only if required to preserve the information correctly.
+- Acceptance: source `observedAt` captured at acquisition and preserved through staging, processing, retries and publication; `processedAt`/`publishedAt` are separate. Existing rows without credible observation time remain unknown/historical, never backfilled as current.
+- Already-promoted replay causes no new freshness or duplicate history. Older delayed observations cannot overwrite newer ones. Missing availability remains unknown or ineligible, not true and not falsely observed false; explicit false stays false.
+- Behavioral proof: acquisition Sep18 processed Sep21 stays Sep18; replay changes neither observation nor history; newer observation then delayed older arrival preserves newer; available/unavailable/absent values remain distinguishable.
+- Verification: exact focused files including `tests/cmvp-catalog-batch.test.ts`, `tests/vtex.test.ts`, ingestion/reconcile regression files named by parent; corrected full suite, typecheck/lint, complexity and diff checks. An actual DB migration requires isolated migration/replay proof before publication.
+- Rollback: bounded code revert and explicit compatibility plan if schema changed; never overwrite original timestamps to roll back. Proof: pending.
+
+### CMVP-04-T04 — One usable public snapshot and reader
+
+- [ ] Status: pending. Depends on: T03. Contract exploration may start after T01; no implementation against an unsettled timestamp/availability contract.
+- Starting surfaces: `scripts/audit-cmvp-catalog-snapshot.ts`, `scripts/pipeline/cmvp-catalog-{snapshot,gate}.ts`, one named public snapshot schema/reader, relevant `src/lib/catalog.ts`, `src/lib/portfolio-catalog.ts`, public catalog/API/basket adapters and their tests. Parent enumerates exact files, including routes and SEO readers that remain exposed.
+- Acceptance: one deterministic immutable artifact/version provides EAN, display name, category where observed, optional brand/image, source identity/context, product URL where observed, price/currency, availability state, source observation timestamp and separate publication/version fields. Missing optional facts remain null, not fabricated; no secrets/private source payloads in public output.
+- Every exposed search/list/detail/batch/category/offers/SEO consumer reads the same artifact version. No simultaneous legacy DB fallback or demo rows when data is missing. A retained endpoint is adapted; an intentionally retired endpoint is removed from public navigation/contracts with explicit behavior, not left silently disconnected.
+- Invalid/missing artifact does not replace last valid data. Last valid data still ages normally; integrity failure without a valid prior artifact yields unavailable. Freshness is evaluated at read time or an equivalent bounded expiry, never a timeless stored boolean.
+- Keep identity overlap and usable comparison separate. Initial publication gate: 500–1,000 frozen target products, all three sources and at least 100 EAN with two individually fresh/available/positive-price offers in compatible contexts. Fresh means a credible source observation within 24 hours at evaluation, not a recent export.
+- Freeze expected source–product pairs per source/context before each comparable pair of cycles. Require at least 90% fresh observations in each source's own expected set, counting missing pairs in its denominator, plus at least 90% target products with any fresh observation. Sets may differ by source; do not require 500 in every source or silently drop failed pairs. Report source/category detail and version changes to the denominator explicitly.
+- Define a small executable context policy before counting usable comparison: required context fields, stable source context identity, unknown handling and incompatibility. An explicitly labelled observed online context may have unknown region if the policy states the limited comparison it permits; do not claim shared local stock. Product identity does not establish commercial compatibility. Test known incompatible contexts and unknown values without adding a geography platform.
+- Prove all-null/all-unavailable data fails usable comparison and mixed stale/fresh source pairs do not count incorrectly. With a valid artifact, absent EAN returns 404; without a trustworthy catalog, show unavailable/503 for API instead of claiming the product does not exist. A present historical product follows the historical display policy. Empty results differ from unavailable. Include malformed, expiry, ordering and cross-version tests.
+- Verification: gate/snapshot tests, new reader/contract tests, relevant route/detail/batch tests, corrected full suite, typecheck/lint/build. Do not add another managed database or publication-governance framework.
+- Rollback: revert reader/exporter as a compatible unit to a known public version; never relabel historical prices current. Proof: pending.
+
+### CMVP-04-T05 — Consistent product, search and catalog presentation
+
+- [ ] Status: pending. Depends on: T04. Route: delegated direct; disjoint from T06 only with exact scopes.
+- Starting surfaces: search/category/offers/product pages, `src/components/price-comparison.tsx`, product cards and a shared pure price/freshness policy; parent names related files/tests. No visual redesign.
+- Acceptance: list and detail agree on display price/date/status, including historical-only observations; historical/unknown offers never win a fresh-price comparison. Available, unavailable and unknown are visibly distinct; “Disponible en” does not include unqualified unavailable entries.
+- Search/category/retained offers expose pages after item 24, preserve q/source/sort in URL, handle zero results and invalid pages; filters derive from published sources. Home examples remain explicitly illustrative and cannot add invented products to the real basket; navigation leads to actual catalog data.
+- Promos outside accepted scope must not affect public totals or masquerade as current offers; disable/exclude them if unsupported rather than inventing promotion semantics.
+- Verification: focused policy/search/product tests; browser scenarios >24 results, fresh/historical/unknown/unavailable, missing product, filter+sort pagination on mobile; relevant full-suite/typecheck/lint/complexity checks.
+- Rollback: bounded UI/policy revert retaining the settled snapshot contract. Proof: pending.
+
+### CMVP-04-T06 — Correct local basket under partial data
+
+- [ ] Status: pending. Depends on: T04. Route: delegated direct. Coordinate shared policy with T05 through parent.
+- Starting surfaces: `src/components/canasta-page.tsx`, `src/lib/basket-products{,-client,-contract}.ts`, local basket state only if necessary, named basket tests.
+- Acceptance: each requested distinct EAN belongs to every published supermarket's coverage denominator, including any of the three sources with 0/N items covered; derive source membership from the snapshot, not only resolved offers. Unresolved/missing/error products are missing, never silently dropped. Quantity affects totals, not distinct-product coverage. Only eligible offers count; partial/late/cancelled batch responses cannot create a false best complete basket or mixed catalog versions.
+- Prove A×2+B×1 with only A=$1000 returns $2000 subtotal, 1/2 covered, one missing and no complete badge. Also verify five products with varied quantities, an unavailable item, stale-only item, unknown EAN, changed quantity, local reload and catalog outage preserving the saved list.
+- Verification: focused basket/client tests plus browser journey and numerical oracle for totals/coverage; corrected full suite and static checks. Reuse existing batching/state rather than adding consumer accounts or server baskets.
+- Rollback: bounded basket/policy change; preserve saved user items and avoid incompatible storage migration. Proof: pending.
+
+### CMVP-04-T07 — Publish and observe another daily update
+
+- [ ] Status: pending. Depends on: T02, T04, T05, T06. Route: parent coordinates bounded operational work only within actual granted scope.
+- Starting surfaces: existing acquisition/export/publication entrypoints, the smallest required runtime configuration, `docs/production-catalog-runbook.md` or an existing appropriate runbook, and named evidence files. Resolve actual target/credentials/budget before external actions; no new operations platform.
+- Acceptance: final alias serves the tested commit and snapshot version, including real search/detail/basket and source/date labels. Verify anonymous use and no internal secrets/privileged writes in public reader. Record effective source/channel/region/seller context and per-source request budget.
+- Observe two consecutive real daily update/publication windows with no omitted window, preserving comparable frozen-cohort metrics. Record target schedule, start/end and due time; plan for a 24-hour cadence with at most one hour of timing tolerance (23–25 hours between cycle starts). The Sep20 eight-minute pair and a weekly repeat do not count. This bounded repetition does not establish long-term reliability.
+- At each publication satisfy T04 quality minima and its 24-hour observation window; show per-source freshness, requests/duration/errors and old/new artifact identities. Scheduling tolerance does not extend an offer's freshness. If source capability cannot meet the declared daily window, keep the gate pending or obtain an explicit product-scope revision; never silently weaken the promise.
+- Demonstrate bounded failure/recovery: source timeout or invalid candidate does not publish corrupt data; last valid artifact ages and the UI marks historical/unavailable correctly. Saved basket survives. Replayed acquisition does not refresh observation timestamps.
+- Record one feasible recurring execution path, its owner and local-machine availability; distinguish a manual daily pilot procedure from an unattended scheduler. Do not promise unattended daily refresh until actually scheduled and observed under authorized operation.
+- Verification: source-scoped execution receipts, artifact validation, deployed HTTP + mobile browser journeys, next-window measurement and controlled fault/recovery. Never fabricate elapsed time or use mocked clocks as live daily proof.
+- Rollback: restore last valid artifact/deployment identity and stop the affected updater, preserving timestamps and evidence. Proof: pending.
+
+### CMVP-04-T08 — Release proof and clean CMVP-05 handoff
+
+- [ ] Status: pending. Depends on: T01–T07. Route: independent verifier returns facts; parent owns disposition/Git state/user decisions.
+- Starting surfaces: this ledger, README, CI/branch settings as authorized, one concise dated release receipt in `docs/reports/`, and PR/issue metadata. No opportunistic refactor.
+- Complete G04 below on the final integrated/published candidate. Record actual review disposition and commit link; if native RDD is installed, follow its effective runtime contract, never invent a review receipt or assume an internal review appears on GitHub.
+- Configure appropriate required checks for master after T01 makes them credible, within actual authorization, and validate the settings. If settings cannot be changed, record the limitation and retain that platform follow-up; require an explicit owner-controlled merge procedure binding the exact candidate SHA to passing required CI and attributable review, with no unverified later changes. Verify the chosen control in the final receipt. This manual fallback does not waive a failed or missing product/security check; keep review policy proportionate to a solo maintainer.
+- Intermediate PRs use `Refs` for this tracking issue; close it only with the complete accepted outcome. Current docs must point to CMVP-05 only after G04. Superseded issue/spec instructions remain historical or receive a reconciled disposition, never silently authorize a retired deployment path.
+- Inherited complexity/Lighthouse warnings may remain, including in active code, with an owner, reason to defer, no new complexity regression and evidence that they do not invalidate required security, data truth, basket behavior, public usability or performance. Identify dormant machinery separately. A static threshold or warning alone does not require a rewrite. No known data-truth, basket, runtime security, public-integration or required-evidence defect can be waived as “future improvement”.
+- Verification: corrected full suite on the final SHA, typecheck/lint/build/complexity, current production audit, CI results, published identity/mobile journey and T07 receipts; content/link/diff checks. Re-run checks invalidated by subsequent relevant edits, not every historical harness indiscriminately.
+- Rollback: withdraw pilot eligibility and preserve last known valid public version/evidence if a release gate fails. Proof: pending.
+
+## G04 — Eligibility gate for CMVP-05
+
+All conditions are conjunctive. Work-unit checkboxes alone never substitute for observed acceptance.
+
+- [ ] T01–T08 complete with candidate-specific proof; every A01–A16 row has its final disposition recorded.
+- [ ] Full test discovery is verified; no unexplained failing required check, skipped critical scenario or unresolved audited dependency vulnerability.
+- [ ] One public catalog version supports the actual journey; at publication it meets T04 minima with truthful observation/availability and per-source diagnostics.
+- [ ] Five-product totals, quantities and complete/partial coverage correct; search beyond 24, missing product, unknown availability, stale data and outage verified on mobile and desktop.
+- [ ] Final public alias bound to exact commit/snapshot; two consecutive daily-window cycles under T07's declared cadence/tolerance and failure/recovery completed; operational owner/procedure identified.
+- [ ] One final review/evidence receipt exists, credible required checks and T08's merge control are verified, current docs are consistent and the issue represents product outcome rather than intermediate merges. Any unavailable platform setting remains explicitly tracked.
+- [ ] Catalog-growth horizon preserved; no almost-complete or national-stock claim without a defensible source/context denominator.
+
+Receipt fields: `candidateSha`, `deploymentUrl`, `snapshotId/digest`, observation range, `publishedAt`, runtime, exact commands + counts, CI/review links, daily cycle links, A01–A16 dispositions, remaining nonblocking debt, and next task. Unavailable evidence is `pending`, not PASS. A newly found blocker reopens its affected unit; keep unrelated completed proof when still valid.
+
+## CMVP-05 pilot tasks — locked until G04
+
+- [ ] **CMVP-05-T01 — Prepare observation.** Depends on G04. Define 5–15 participants and a lightweight record of query attempts, success, two/three-source usable comparison, basket coverage, abandonment and confidence. User contact requires actual authorization; this plan does not send invitations.
+- [ ] **CMVP-05-T02 — Observe real shopping journeys.** Depends on T01. At least five people complete the journey; include their own plausible lists, record unsuccessful attempts and selection context rather than counting only curated success cases.
+- [ ] **CMVP-05-T03 — Decide first catalog expansion.** Depends on T02. Classify failures as data coverage, data trust or interaction; identify next categories/gaps and evidence needed for CAT-01. Keep “near-complete catalog” as the product goal and publish measured scope limits. No broad acquisition is launched just by closing this planning unit.
+
+## Historical progress — through CMVP-03
 
 - The user accepted the four-milestone consumer-first reset exactly as proposed.
 - The project audit established that a portfolio/demo MVP exists but a broad, current live catalog does not.
@@ -129,7 +277,7 @@ A person can search for a real product, compare an exact product across supermar
 - CMVP-02 is complete: authorization was granted, the authorized `feat/consumer-mvp-reset` branch/worktree was prepared at `a62540b`, its documented reconciliation acceptance is explicit, and baseline verification passed. Native review `review-171abeb863d28cac` is approved and acknowledged; its informational cleanup observations were resolved without becoming blockers.
 - CMVP-03 is complete. CMVP-03-T4b-1 is approved under native review lineage `review-710c21f80035b825`, and CMVP-03-T4b-2 is complete with strict offline TDD, independent verification, and a parent spot-check. CMVP-03-T4a is complete under the accepted EAN-only exact-identity policy; the durable acceptance and strict RED→GREEN runner are recorded above. Local PostgreSQL is its acquisition and processing authority, and a validated immutable static snapshot is the public Next.js/Vercel read surface. CMVP-03-T1 provides the fixture/snapshot-backed read-only gate reporter. CMVP-03-T2 is complete: its injected-boundary offline snapshot generator has a regression proving byte-equivalent output for equal-key duplicate offers returned in opposite orders, and it uses a complete serialized-offer ordering independent of repository/DB return order. CMVP-03-T3 is closed. Behavior-first source correction observed RED at 2 pass/1 fail because the Dockerfile lacked `FROM dependencies AS seeder`; GREEN passed 3/3 after adding the narrow seeder target that copies Prisma, runs `db:generate`, and changes only `seed.build.target`. Focused offline checks (3/3), typecheck, `lint --quiet`, and diff-check passed. `npm run bootstrap:cmvp-local` succeeded with seed exit 0; an existing-seed rerun via `docker compose up --build --abort-on-container-exit --exit-code-from seed seed` also exited 0 without cleanup. Exactly Carrefour, Disco, and Jumbo were observed. A read-only `SET LOCAL ROLE ofertasuper_app` transaction selected counts from the required catalog tables, while effective app-role checks for schema CREATE, role administration, database creation, superuser, RLS bypass, and database CREATE privilege were all false. The initial `postgres`-role check failure was non-blocking because that role does not exist; configured-owner checks then passed. B-CMVP-003 is resolved. PostgreSQL remains healthy/running; role-provision, migrate, grants, and seed exited 0; the bridge network and retained local PostgreSQL-data volume remain. No cleanup/down/volumes/prune, Supabase, source probes, ingestion, T4, commit, review, push, or secret exposure occurred. B-CMVP-002 is mitigated: Supabase remains temporary recovery/export only and its connectivity is not a CMVP-03 prerequisite. Do not upgrade Supabase to Pro or delete it before backup/export parity is observed; do not add another managed database. At that bootstrap stage, no live snapshot had been authorized or measured and no catalog write had started. SEPA remains excluded and Vea remains incomplete.
 
-## Verification evidence
+## Historical verification evidence — dated, not CMVP-04 acceptance
 
 - Public demo inspection showed a four-product illustrative home and degraded stale demo search data.
 - Repository audit found extensive real acquisition and guarded-write capabilities, but no proof of current broad freshness or recurring operation.
@@ -145,12 +293,12 @@ A person can search for a real product, compare an exact product across supermar
 
 ## Resume protocol
 
-1. Read this file.
-2. Load Engram topic `odd/consumer-mvp-reset/tasks` and reconcile both copies.
-3. Inspect current Git status and the latest evidence for the first unchecked task.
-4. Continue only that task; do not skip milestone gates or reopen accepted scope without new user authorization.
-5. Update this file, its Engram mirror, and the visible todo projection after every task transition or material plan change.
+1. Read the current authority block, audit traceability and next eligible task in this file; use the roadmap only for stable scope/catalog definitions.
+2. Inspect actual Git HEAD, worktree changes and candidate proof. Preserve unrelated work; revalidate only changed dependencies. Older historical “next step” text below archived phases is not an instruction.
+3. If Engram exists, read the full matching `odd/consumer-mvp-reset/tasks` observation, reconcile using explicit intent and observed evidence (never timestamp alone), update this file first, mirror its full content and read back both. If irreconcilable, preserve both versions and pause only the affected decision. If unavailable, record pending mirror and continue independent work.
+4. Resolve effective TDD/RDD/runtime tool contracts without changing model configuration. Parent gives exact task scope, dependencies, edit surfaces and checks; delegate only useful independent work.
+5. Update the assigned task's status/proof and one next step after meaningful transitions; Todo and GitHub issue are projections, not new authorities. No checkmark from intention, document creation or a worker's unverified completion claim.
 
 ## Next step
 
-CMVP-04 — Complete the real consumer journey. Do not start it until separately authorized.
+**CMVP-04-T01 — Trustworthy baseline and delivery hygiene.** Implementation is pending; this request prepared the documentation and PR. In the next authorized CMVP-04 execution, start T01 and continue eligible tasks within the granted scope. CMVP-05 remains ineligible until G04 passes.

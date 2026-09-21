@@ -1,114 +1,103 @@
-# CMVP Herdr-assisted orchestration contract
+# Consumer MVP — ODD / Gentle Shell orchestration contract
 
-This is the operating contract for **CMVP-02 and later consumer-MVP units**. It coordinates bounded human-directed work; it is not an autonomous delivery platform. The parent owns scope, evidence, and all integration decisions.
+This is the current project application of **Organic Driven Development (ODD)**. It uses the existing [feature ledger](../tasks/consumer-mvp-reset.md) and installed tools. It does not introduce another workflow engine. The parent coordinates bounded work, verification and integration toward the consumer outcome.
 
-## Quick path
+## Authority and sources
 
-1. The parent maps dependencies and opens only eligible read-only lanes.
-2. Scouts return evidence envelopes; the parent groups human decisions and selects one bounded writer.
-3. The writer works in one isolated scope; an independent verifier checks its result.
-4. The parent integrates only after explicit human approval and observed verification.
+Read the ledger's current authority block first. That file owns objective, constraints, stable task IDs, acceptance, status, evidence and one next step. The [roadmap](../../docs/consumer-mvp-roadmap.md) owns product direction and coverage definitions; the [audit](../../docs/reports/engineering-audit/2026-09-21-consumer-mvp-audit.md) owns historical findings. GitHub issues, temporary todos and agent messages are projections, not competing task ledgers.
 
-## Roles and authority
+Official Gentleman Programming sources inspected at commit `b6188befaa4628a697a5020ea4e3c0ee087bb900`:
 
-| Role | May do | Must not do |
+- [ODD technical reference](https://github.com/Gentleman-Programming/gentle-shell/blob/b6188befaa4628a697a5020ea4e3c0ee087bb900/docs/readme-reference.md#organic-driven-development).
+- [Runtime orchestrator](https://github.com/Gentleman-Programming/gentle-shell/blob/b6188befaa4628a697a5020ea4e3c0ee087bb900/assets/orchestrator.md).
+- [Delegation and ODD routing](https://github.com/Gentleman-Programming/gentle-shell/blob/b6188befaa4628a697a5020ea4e3c0ee087bb900/assets/orchestrator-delegation.md#organic-driven-development-odd).
+- [Feature continuity and memory](https://github.com/Gentleman-Programming/gentle-shell/blob/b6188befaa4628a697a5020ea4e3c0ee087bb900/assets/orchestrator-memory.md#organic-feature-continuity).
+- [Bounded worker contract](https://github.com/Gentleman-Programming/gentle-shell/blob/b6188befaa4628a697a5020ea4e3c0ee087bb900/assets/agents/gentle-ai-worker.md).
+- [Delegated verification](https://github.com/Gentleman-Programming/gentle-shell/blob/b6188befaa4628a697a5020ea4e3c0ee087bb900/docs/delegated-verification.md).
+
+The current technical reference and runtime assets guide this adaptation. At this upstream revision, the older static `skills/gentle-ai/SKILL.md` has routing/TDD wording that differs from them. Do not import automatic large-task-to-SDD or tests-present-to-TDD rules. Use the effective installed runtime contract; SDD is a separate explicit user choice. This document does not install or update Gentle Shell.
+
+## Parent, workers and verification
+
+Mateo selected **GPT 5.6 Sol** as parent orchestrator. This is a user preference, not a prescribed provider model ID. Generic child model and thinking settings inherit the installed runtime configuration. Do not modify model settings as part of this plan.
+
+| Role | Responsibility | Boundary |
 |---|---|---|
-| Parent | Decompose dependencies, assign lanes, collect evidence, maintain the ledger/blocker registry, request human decisions. | Write multiple integration scopes concurrently or answer a human prompt. |
-| Read-only scout | Inspect its assigned facts and return an envelope. | Modify files, Git state, worktrees, prompts, or conclusions outside evidence. |
-| Single-scope writer | Change one approved scope in one isolated worktree and report checks. | Touch another writer's scope, integrate, merge, delete, push, or answer prompts. |
-| Independent verifier | Inspect the writer's candidate and run approved checks. | Edit the candidate, self-approve uncertainty, or integrate. |
-| Integrator | Apply the explicitly approved integration sequence in the selected authoritative line. | Merge, commit, push, delete a worktree, or resolve a decision without explicit human authorization. |
+| Parent | Read intent and evidence, select eligible work, delegate, maintain the ledger, evaluate results and integrate. | Own actual user decisions and terminal Git actions within granted scope; do not infer success from agent state. |
+| Explorer | Answer a bounded question with paths, facts and uncertainty. | Read-only; do not expand the implementation or build a second plan. |
+| Worker | Implement one task or justified bounded part, run its agreed checks and return evidence. | Only allowed edit surfaces; no recursive delegation, terminal Git action, scope expansion or unrelated state changes. |
+| Independent verifier | Inspect the candidate and test the task's observable acceptance. | Do not write the candidate or replace missing evidence with an approval. |
 
-The parent is the sole coordinator. The same person or process cannot be both writer and final independent verifier for one candidate.
+Use installed generic roles such as `gentle-ai-explore`, `gentle-ai-worker` and `gentle-ai-verify` when available. These are roles, not a requirement to create custom CMVP agents. Use the actual runtime's review/RDD contract when present; never fabricate review IDs, read receipts or a GitHub review from an internal result.
 
-## CMVP-02 observed closure
+## Authorization and useful concurrency
 
-CMVP-02's authorization was granted and its authorized target branch/worktree was prepared on `feat/consumer-mvp-reset` at `a62540b`, with `origin/master` as an ancestor. The reconciliation record makes the base, included CMVP artifacts, paused work, preserved work, and integration sequence explicit. Baseline verification then passed: `npm test` reported 99 pass, 0 fail, and 12 skip; typecheck passed; lint reported 0 errors and 195 pre-existing warnings; and shell-helper checks passed. Only intended CMVP artifacts were dirty. SEPA remains excluded and Vea remains incomplete.
+Authorization persists for the scope the user granted. Preparing a reviewable result, routine reversible checks and already-authorized delivery steps do not each create another confirmation request. The parent asks only when a material action falls outside that scope or a real user decision remains. Pause that dependency and continue independent work. Never answer a genuine human approval prompt on the user's behalf.
 
-Native review `review-171abeb863d28cac` is terminal approved and acknowledged. Its registry-description, stale-evidence, help-argument, worktree-count, and doctor-failure observations are cleanup evidence, not CMVP-02 blockers. This bounded cleanup corrects the applicable documentation/script issues without starting CMVP-03.
+The current request covers documentation, branch/commit/push/PR and a tracking issue. It does not execute application fixes, source acquisition, migrations, deployment or pilot outreach. A later implementation request can authorize routine CMVP-04 work without reopening historical per-command permissions. Determine the actual scope, target and risk of external writes before executing them.
 
-## CMVP-03 authority and next bounded unit
+Use concurrency only where it resolves independent questions or disjoint changes. T02 dependency remediation and T03 observation correctness become eligible after T01. T05 interface work and T06 basket work can proceed after T04 if the parent assigns ownership of shared policies/types and prevents overlap. T07 needs both outcomes. Do not add scouts to fill capacity.
 
-- Local PostgreSQL is the acquisition and processing authority.
-- A validated immutable static snapshot is the public Next.js/Vercel read surface.
-- Supabase is temporary recovery/export only, will not be upgraded to Pro, and does not block CMVP-03; never delete it before backup/export parity is observed.
-- Do not add another managed database.
-- CMVP-03-T1 is complete: the frozen-manifest/snapshot gate reporter enforces exact-identity proof and reports deterministic freshness, representation, diagnostics, and exclusions.
-- CMVP-03-T2 is complete: the offline injected-boundary snapshot generator feeds that gate and totally orders complete serialized offers, including equal `source:targetId` duplicates, independent of repository/DB return order.
-- CMVP-03-T3 is pending and is the next bounded unit: local PostgreSQL bootstrap and reproducible fixture/seed-to-snapshot proof before any live source acquisition. Its acceptance boundary is the local authority plus validated immutable snapshot proof; its checks must be focused, deterministic, and exclude live acquisition, public deployment, Supabase deletion, and managed-database addition.
+One writer per worktree; no overlapping active edit paths, lockfiles, migration domains or generated outputs. The parent records the baseline and preserves unrelated or ambiguous work. Worktrees are an isolation tool when needed, not a mandatory new worktree for each read-only question. Child workers do not create/remove worktrees or perform commit/push/merge. The parent handles those actions under actual authorization; no automatic merge is implied by this plan.
 
-## Eligibility and useful concurrency
+## Delegation packet
 
-A lane is eligible only when its prerequisite facts are observed, its scope is disjoint from every active writer, its required credentials are available, and it has no unresolved blocker that affects its result. An `unknown` prerequisite is not eligible.
+Before dispatch, the parent resolves starting surfaces in the ledger into exact allowed paths, effective configuration and runnable verification commands. Do not send placeholders to a worker. Keep one concrete next action; expand the task only when evidence requires it.
 
-For CMVP-02, the maximum useful initial concurrency is **three read-only scouts**:
-
-| Lane | Question | Depends on |
-|---|---|---|
-| `cmvp02-delivery-line` | What do `origin/master`, the current branch, and visible delivery claims establish? | None. |
-| `cmvp02-os03-worktrees` | What are OS03, active branches, and worktree relationships? | None. |
-| `cmvp02-openspec-claims` | Which OpenSpec changes and completion claims conflict or agree? | None. |
-
-Do not open a writer or integrator lane until all three envelopes are returned and the parent has classified conflicts. The verifier becomes eligible only after the writer reports a bounded candidate and its checks. More scouts are justified only by a newly observed independent question; do not add workers merely to fill capacity.
-
-## Herdr state handling
-
-Herdr's recognized states are `idle`, `working`, `blocked`, `done`, and `unknown`. `idle` and `done` mean ready for input, not that the assigned result is accepted. `blocked` means a recognized approval/question UI, but Herdr can miss it; the parent must also inspect returned output and stalled/timeout evidence. `unknown` means Herdr cannot classify the agent confidently and is **never success**.
-
-Treat `blocked`, `unknown`, timeout, stalled submission, missing envelope, failed check, or contradictory evidence as a stop-and-classify event. Never submit an answer to an approval or question UI. Use Herdr only after checking its installed help/version and only through its documented read/control surface; Stage A automation below does not control it.
-
-## Write isolation and worktree lifecycle
-
-- Scouts run read-only against the selected checkout and do not share a writer worktree.
-- Each writer has one named, purpose-specific Git worktree and one declared allowed edit surface.
-- No two active writers may edit the same path, generated output, lockfile, migration domain, or integration branch.
-- The parent records the worktree path, branch/commit baseline, scope, owner, and candidate checks before work begins.
-- Preserve existing and ambiguous worktrees. A worktree is closed or removed only after the human explicitly authorizes it and the parent records the outcome in the ledger.
-- A writer never creates/removes worktrees autonomously under this contract. The parent may request a human-authorized lifecycle action outside this Stage A script.
-
-## Result envelopes
-
-Every lane returns this complete, concise envelope:
+Example packet structure (replace every placeholder before use):
 
 ```text
-lane: <stable lane name>
-role: scout | writer | verifier | integrator
-scope: <question or allowed edit surface>
-baseline: <branch/commit/worktree identity observed>
-status: complete | blocked | unknown | failed
-facts: <observed facts with paths/commands>
-checks: <exact command and observed result>
-blockers: <registry IDs, or none>
-decisions_needed: <decision IDs, or none>
-next_eligible: <lanes now eligible, or none>
+Task: CMVP-04-Txx
+Objective: <one observable outcome>
+Feature document: odd/tasks/consumer-mvp-reset.md
+Baseline: <branch, commit, worktree and relevant local changes>
+Dependencies: <accepted prerequisite proof>
+Relevant context: <paths, evidence, known environment failures>
+Effective TDD: <on/off, config source, scope and exact runner>
+Acceptance: <task criteria and relevant audit IDs>
+Do not: recurse, expand scope, edit unrelated state, commit, push or merge.
+Return: changed files, behavior, commands/results, remaining blockers,
+reviewable candidate identity and suggested next action.
+
+## Skills to load before work
+<actual applicable installed skill paths, or none>
+
+## Verification
+<exact focused RED/GREEN command when TDD applies>
+<exact applicable static/full-suite/browser commands, in execution order>
+
+## Known environmental failures
+<observed failures and evidence, or none observed>
+
+## Allowed edit surfaces
+<repository-relative path or narrow glob>
+<repository-relative path or narrow glob>
 ```
 
-`complete` requires evidence for the lane's stated question; it does not imply milestone completion. An incomplete envelope is `unknown`, never silently inferred as complete.
+Preserve all four exact headings shown above; the upstream worker consumes them. The body of `## Allowed edit surfaces` contains only one repository-relative path or narrow glob per line; put explanations elsewhere. Parent retains ledger ownership unless an explicit non-overlapping assignment includes that file. Workers return proposed status updates for parent integration.
 
-## Human decision inbox and blockers
+## Verification and review size
 
-The parent groups unresolved decisions into one inbox entry per decision, rather than interrupting each lane independently:
+The existing `openspec/config.yaml` explicitly sets `strict_tdd: true`; prior CMVP execution also records the user's choice. Keep behavior-first RED → GREEN for behavior changes. Resolve the effective setting from explicit user intent and configuration on resume; the mere presence of tests is not a TDD trigger. Documentation-only work needs structural/content/link review and diff checks.
 
-| Decision ID | Question | Options | Affected lanes | Default posture |
-|---|---|---|---|---|
-| `D-<date>-<n>` | One concrete decision | Closed, evidence-backed choices | Lane names | Pause affected lanes; continue independent lanes. |
+Each worker packet identifies the exact runtime and runner, its execution order and pre-existing failures. T01 repairs discovery of the complete test set. A small passing subset, generic `done`, skipped critical scenario or stale result cannot close a task. Independent verification checks behavior and adverse cases rather than mirroring implementation details. A verifier reports unavailable checks as pending, with their cause.
 
-Record durable impediments in [`../blockers/consumer-mvp-blockers.md`](../blockers/consumer-mvp-blockers.md). Continue only lanes demonstrably independent of the blocker; do not fabricate a blocker to justify a guess.
+Forecast the configured 400-authored-line review budget before assigning changes. Prefer cohesive units with source, relevant tests and necessary documentation. If a unit exceeds the budget, explain a justified exception or split by observable outcome; do not create approval-only slices. A passive documentation PR may keep the historical audit, current task mapping and entrypoint corrections together with an explicit size rationale.
 
-## Stop conditions
+After a coherent implementation work unit passes its applicable checks and review, the parent creates its authorized work-unit commit and records SHA, task ID and PR boundary in the existing task evidence. Do not accumulate T01–T08 into an unreviewable final diff. Updating a todo or recording evidence alone does not trigger another review cycle.
 
-Stop the affected lane and surface a blocker or decision when: eligibility is unknown; evidence conflicts; a credential is absent; a required command fails; a scope overlap appears; a human prompt appears or may have been missed; Herdr reports `blocked`/`unknown`; a worktree is ambiguous; or a lane would require merge, deletion, commit, push, or decision-answering.
+## Continuity and blockers
 
-Stop the whole CMVP unit when its authoritative-line decision cannot be made from observed evidence. Preserve evidence and worktrees; do not start the next milestone.
+After each meaningful transition, update the local feature file first: task status, exact evidence, blockers and one next step. If Engram is available, mirror the **complete feature document** to topic `odd/consumer-mvp-reset/tasks`, then read back both the local file and mirror. Reconcile conflicts using explicit intent and observed evidence, never timestamp precedence alone. If versions cannot be reconciled, preserve both and pause only the affected decision. If Engram is unavailable, mark the mirror pending and continue independent work. This documentation session did not synchronize Mateo's Engram.
 
-## Resume and recovery
+Record genuine durable impediments in the [blocker registry](../blockers/consumer-mvp-blockers.md), reusing an existing ID where applicable. An unknown prerequisite pauses dependent work. Missing credentials for one operational task do not block unrelated local work. Retain historical evidence without treating old temporary restrictions as fresh commands.
 
-1. Read the CMVP ledger, this contract, the blocker registry, and the latest envelopes.
-2. Reinspect Git/worktree topology and compare it with each recorded baseline; do not trust stale Herdr state.
-3. Classify each interrupted lane as eligible, blocked, or unknown. Re-run read-only scouts when their baseline changed or their output is missing.
-4. Reopen only independent eligible lanes. A writer requires a fresh isolated scope and an explicit parent assignment.
-5. Rebuild the grouped decision inbox and continue only after its affected decisions are answered by a human.
+On resume: read the current ledger, inspect actual Git/worktree state, reconcile memory if available, validate changed dependencies, then assign the next eligible bounded task. Close CMVP-04 only through G04 and its candidate-specific receipt. Intermediate PRs reference the tracking issue; they do not close the complete product outcome.
 
-## Explicit prohibitions
+## Herdr compatibility and historical evidence
 
-This contract and Stage A script must never automatically merge, delete worktrees, push, commit, answer prompts, answer decisions, create a scheduler/daemon/queue, or treat agent state as proof of product readiness. It must not delete Supabase before backup/export parity is observed or add another managed database. CMVP-02 is closed with its observed reconciliation evidence. CMVP-03 remains open: T1 and T2 are complete, while T3 is pending and is the next eligible bounded unit; no live source acquisition has started.
+Herdr is optional coordination tooling. Inspect its installed version/help before using it. `idle`/`done` indicate agent state, not accepted product results; `blocked`, `unknown`, timeout and missing output require inspection. Do not automate answers to human prompts.
+
+The existing [helper](../../scripts/orchestration/consumer-mvp-herdr.sh) was created for the CMVP-02 inventory/plan surface. Its supported commands must come from its actual help; it does not implement a new CMVP-04 executor, `/odd` command, scheduler or readiness engine. Do not invent a `plan CMVP-04` command.
+
+CMVP-02 reconciliation and CMVP-03 acquisition are historically complete at the audited integrated base. Their dated receipts remain in the ledger and [delivery-line record](../../docs/consumer-mvp-delivery-line-reconciliation.md). The active next unit is **CMVP-04-T01**, not the former CMVP-03-T3 bootstrap.

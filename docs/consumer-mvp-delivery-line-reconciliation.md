@@ -1,6 +1,8 @@
 # Consumer MVP delivery-line reconciliation
 
-## Decision
+> Historical CMVP-02 record. At the 2026-09-21 audit, OS03/CMVP integration was already merged into `master` at `f8d8f4eccf82dfbd35f0c152b42bdb0379747b15`. Paths, permissions and next steps below describe the earlier preparation window; they are not current execution instructions. Resume from the [feature ledger](../odd/tasks/consumer-mvp-reset.md), currently CMVP-04-T01.
+
+## Historical decision
 
 The latest cumulative OS03 tip, `feat/os03-u16-guarded-catalog-consumers` at `a62540b`, is the selected authoritative base. Human authorization was granted, `feat/consumer-mvp-reset` was created from that exact commit, the CMVP documentation was transplanted, and the required baseline checks passed.
 
@@ -48,4 +50,4 @@ The authorization covered branch/worktree creation and CMVP documentation transp
 - SEPA `9801931` remains outside the selected line.
 - Vea acceptance/output evidence remains incomplete and is not treated as readiness.
 
-CMVP-02 is closed. CMVP-03 is the next eligible task and has not started.
+At this historical preparation checkpoint, CMVP-02 was closed and CMVP-03 had not started. CMVP-03 was completed subsequently; current state belongs to the feature ledger.
