@@ -9,7 +9,11 @@ import {
 } from "../src/lib/promotions/detect";
 import { withFallback } from "../src/lib/safe-data";
 import { searchQuerySchema } from "../src/lib/schemas/search";
-import { normalizeVtexCatalogPayload } from "../src/lib/vtex/client";
+import {
+  fetchVtexDirectProducts,
+  fetchVtexProducts,
+  normalizeVtexCatalogPayload,
+} from "../src/lib/vtex/client";
 import {
 	buildVtexCatalogSearchRequest,
 	buildVtexRequest,
@@ -21,13 +25,17 @@ import {
 } from "../src/lib/redis";
 import { limitRequestOrFallback } from "../src/lib/rate-limit";
 
+function isError(value: unknown): value is Error {
+  return value instanceof Error;
+}
+
 function vtexProduct(id: string) {
 	return {
 		productName: `Product ${id}`,
 		items: [
 			{
 				itemId: id,
-				referenceId: [{ Value: `7790001${id.padStart(6, "0")}` }],
+				referenceId: [{ Value: "7790000000003" }],
 			},
 		],
 	};
@@ -68,7 +76,7 @@ describe("VTEX request builder", () => {
 					items: [
 						{
 							itemId: "sku-direct",
-							referenceId: [{ Value: "7790001000099" }],
+							referenceId: [{ Value: "7790000000003" }],
 							sellers: [
 								{
 									sellerId: "1",
@@ -87,7 +95,7 @@ describe("VTEX request builder", () => {
 		);
 
 		assert.equal(products.length, 1);
-		assert.equal(products[0].ean, "7790001000099");
+		assert.equal(products[0].ean, "7790000000003");
 		assert.equal(products[0].skuId, "sku-direct");
 		assert.equal(
 			products[0].productUrl,
@@ -103,7 +111,7 @@ describe("VTEX request builder", () => {
 			items: [
 				{
 					itemId: skuId,
-					referenceId: [{ Value: "7790001000099" }],
+					referenceId: [{ Value: "7790000000003" }],
 					sellers: [
 						{
 							sellerId: "1",
@@ -156,6 +164,145 @@ describe("VTEX request builder", () => {
     assert.equal(variables.fullText, "leche");
     assert.equal(variables.count, 12);
     assert.equal(variables.productOriginVtex, true);
+  });
+});
+
+describe("VTEX persisted-query term-search fallback", () => {
+  const baseUrl = "https://www.example.com";
+  const hashInvalidPayload = JSON.stringify({
+    errors: [{ message: "PersistedQueryNotFound" }],
+  });
+  const catalogProduct = (ean: string, skuId = "sku-1") => ({
+    productName: "Leche entera",
+    linkText: "leche-entera",
+    items: [{
+      itemId: skuId,
+      referenceId: [{ Value: ean }],
+      sellers: [{ sellerId: "1", commertialOffer: { Price: 1000, ListPrice: 1000, AvailableQuantity: 1 } }],
+    }],
+  });
+  const client = (...responses: Array<{ data: string; headers?: Record<string, string> } | Error>) => {
+    const urls: string[] = [];
+    return {
+      urls,
+      http: {
+        get: async (url: string) => {
+          urls.push(url);
+          const response = responses.shift();
+          if (response instanceof Error) throw response;
+          if (!response) throw new Error("Unexpected request");
+          return { data: response.data, headers: response.headers ?? { "content-type": "application/json" } };
+        },
+      },
+      sleep: async () => undefined,
+    };
+  };
+
+  it("uses one encoded catalog term fallback after the first hash-invalid persisted request, dedupes EANs, and marks metadata", async () => {
+    const dependency = client(
+      { data: hashInvalidPayload },
+      { data: JSON.stringify([catalogProduct("7790000000003"), catalogProduct("7790000000003", "sku-2")]) },
+    );
+
+    const products = await fetchVtexProducts({
+      baseUrl,
+      query: "leche & crema",
+      hash: "hash",
+      count: 2,
+      retries: 3,
+      dependencies: dependency,
+    });
+
+    assert.equal(dependency.urls.length, 2);
+    assert.match(dependency.urls[0], /\/_v\/segment\/graphql\/v1\?/);
+    assert.equal(dependency.urls[1], "https://www.example.com/api/catalog_system/pub/products/search?ft=leche+%26+crema&_from=0&_to=1");
+    assert.deepEqual(products.map((product) => product.ean), ["7790000000003"]);
+    assert.equal(products.fallbackUsed, true);
+  });
+
+  it("does not fall back for blocked, timeout, network, unknown, or malformed persisted responses and preserves retry counts", async () => {
+    const cases: Array<[string, Error | { data: string; headers?: Record<string, string> }, number]> = [
+      ["blocked", Object.assign(new Error("blocked"), { isAxiosError: true, response: { status: 403, data: "denied" } }), 3],
+      ["timeout", Object.assign(new Error("timeout"), { isAxiosError: true, code: "ECONNABORTED" }), 3],
+      ["network", Object.assign(new Error("network"), { isAxiosError: true }), 3],
+      ["unknown", new Error("unknown"), 3],
+      ["malformed", { data: "not json" }, 3],
+    ];
+
+    for (const [name, failure, expectedRequests] of cases) {
+      const dependency = client(failure, failure, failure);
+      await assert.rejects(
+        fetchVtexProducts({ baseUrl, query: "leche", hash: "hash", retries: 3, dependencies: dependency }),
+        isError,
+        name,
+      );
+      assert.equal(dependency.urls.length, expectedRequests, name);
+      assert.ok(dependency.urls.every((url) => url.includes("/_v/segment/graphql/v1")), name);
+    }
+  });
+
+  it("does not request either path when the hash is missing", async () => {
+    const dependency = client();
+    await assert.rejects(fetchVtexProducts({ baseUrl, query: "leche", hash: "", dependencies: dependency }));
+    assert.equal(dependency.urls.length, 0);
+  });
+
+  it("caps fallback catalog bounds at the established count limit", async () => {
+    const dependency = client({ data: hashInvalidPayload }, { data: "[]" });
+    await fetchVtexProducts({ baseUrl, query: "leche", hash: "hash", count: 51, dependencies: dependency });
+    assert.match(dependency.urls[1], /[?&]_to=49$/);
+  });
+
+  it("normalizes invalid and fractional fallback counts to integer catalog bounds", async () => {
+    const cases: Array<[string, number, string]> = [
+      ["zero", 0, "0"],
+      ["negative", -3, "0"],
+      ["non-finite", Number.POSITIVE_INFINITY, "49"],
+      ["fractional", 2.7, "1"],
+    ];
+
+    for (const [name, count, expectedTo] of cases) {
+      const dependency = client({ data: hashInvalidPayload }, { data: "[]" });
+      await fetchVtexProducts({
+        baseUrl,
+        query: "leche",
+        hash: "hash",
+        count,
+        dependencies: dependency,
+      });
+      assert.match(dependency.urls[1], new RegExp(`[?&]_to=${expectedTo}$`), name);
+    }
+  });
+
+  it("makes one fallback attempt when its payload is malformed", async () => {
+    const dependency = client({ data: hashInvalidPayload }, { data: "not json" });
+    await assert.rejects(fetchVtexProducts({ baseUrl, query: "leche", hash: "hash", retries: 3, dependencies: dependency }));
+    assert.equal(dependency.urls.length, 2);
+    assert.match(dependency.urls[1], /\/api\/catalog_system\/pub\/products\/search\?ft=leche&_from=0&_to=49$/);
+  });
+
+  it("keeps direct EAN/SKU requests on their established catalog URLs and never exposes fallback metadata", async () => {
+    const dependency = client(
+      { data: JSON.stringify([catalogProduct("7790000000003")]) },
+      { data: JSON.stringify([catalogProduct("7790000000003")]) },
+    );
+    const eanProducts = await fetchVtexDirectProducts({
+      baseUrl,
+      lookup: { kind: "ean", value: "7790000000003" },
+      dependencies: dependency,
+    });
+    const skuProducts = await fetchVtexDirectProducts({
+      baseUrl,
+      lookup: { kind: "sku-id", value: "sku-1" },
+      dependencies: dependency,
+    });
+
+    assert.deepEqual(dependency.urls, [
+      "https://www.example.com/api/catalog_system/pub/products/search?fq=alternateIds_Ean:7790000000003",
+      "https://www.example.com/api/catalog_system/pub/products/search?fq=skuId:sku-1",
+    ]);
+    assert.equal(eanProducts.fallbackUsed, undefined);
+    assert.equal(skuProducts.fallbackUsed, undefined);
   });
 });
 
@@ -335,7 +482,7 @@ describe("VTEX product normalizer", () => {
         items: [
           {
             itemId: "sku-1",
-            referenceId: [{ Value: "7790001000011" }],
+            referenceId: [{ Value: "7790000000003" }],
             images: [{ imageUrl: "/arquivos/leche.jpg" }],
             sellers: [
               {
@@ -353,7 +500,7 @@ describe("VTEX product normalizer", () => {
       "https://www.disco.com.ar",
     );
 
-    assert.equal(product?.ean, "7790001000011");
+    assert.equal(product?.ean, "7790000000003");
     assert.equal(product?.name, "Leche Entera 1L");
     assert.equal(product?.brand, "La Serenisima");
     assert.equal(product?.price, 1200);
@@ -368,15 +515,29 @@ describe("VTEX product normalizer", () => {
 		]);
   });
 
-  it("rejects products without a valid EAN", () => {
+  it("normalizes ASCII spaces and hyphens in valid GTIN references", () => {
     const product = normalizeProduct(
       {
-        productName: "Producto sin EAN",
-        items: [{ referenceId: [{ Value: "ABC" }] }],
+        productName: "Leche con GTIN formateado",
+        items: [{ referenceId: [{ Value: "779 000-000 0003" }] }],
       },
       "https://www.disco.com.ar",
     );
 
-    assert.equal(product, null);
+    assert.equal(product?.ean, "7790000000003");
+  });
+
+  it("rejects products without a valid checksummed EAN", () => {
+    for (const value of ["ABC", "7790001000012"]) {
+      const product = normalizeProduct(
+        {
+          productName: "Producto sin EAN",
+          items: [{ referenceId: [{ Value: value }] }],
+        },
+        "https://www.disco.com.ar",
+      );
+
+      assert.equal(product, null);
+    }
   });
 });

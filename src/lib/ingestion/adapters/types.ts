@@ -19,6 +19,10 @@ export type HealthResult = {
   vtexHash: string | null;
 };
 
+export type FetchProductsResult = NormalizedProduct[] & {
+  fallbackUsed?: boolean;
+};
+
 export type FetchOptions = {
   count?: number;
   queryLimit?: number;
@@ -37,10 +41,10 @@ export interface SourceAdapter {
 	fetchProducts(
 		terms: string[],
 		options?: FetchOptions,
-	): Promise<NormalizedProduct[]>;
+	): Promise<FetchProductsResult>;
 	fetchDirectProducts(
 		lookup: DirectLookup,
 		options?: FetchOptions,
-	): Promise<NormalizedProduct[]>;
+	): Promise<FetchProductsResult>;
   getDefaultTerms(limit?: number): Promise<string[]>;
 }

@@ -9,19 +9,52 @@ import { normalizeProduct, type NormalizedProduct } from "./normalize";
 
 type LooseRecord = Record<string, unknown>;
 
+export type VtexProductsResult = NormalizedProduct[] & {
+  fallbackUsed?: boolean;
+};
+
+type VtexHttpResponse = {
+  data: unknown;
+  headers: { "content-type"?: unknown };
+};
+
+type VtexHttpRequest = {
+  headers: {
+    "user-agent": string;
+    "accept-language": string;
+    referer: string;
+    origin: string;
+  };
+  transformResponse: [(value: string) => string];
+  responseType: "text";
+};
+
+type VtexHttpClient = {
+  get: (url: string, request: VtexHttpRequest) => Promise<VtexHttpResponse>;
+};
+
+export type VtexClientDependencies = {
+  http?: VtexHttpClient;
+  sleep?: (ms: number) => Promise<void>;
+};
+
 type FetchVtexProductsOptions = {
   baseUrl: string;
   query: string;
   hash?: string;
   count?: number;
   retries?: number;
+  dependencies?: VtexClientDependencies;
 };
 
 type FetchVtexDirectProductsOptions = {
 	baseUrl: string;
 	lookup: VtexCatalogLookup;
 	retries?: number;
+  dependencies?: VtexClientDependencies;
 };
+
+const MAX_VTEX_SEARCH_COUNT = 50;
 
 type VtexProbeErrorType =
 	| "hash_invalid"
@@ -229,89 +262,128 @@ function extractProductRecords(payload: unknown): LooseRecord[] {
   return products;
 }
 
-async function requestVtexCatalogPayload({
-	baseUrl,
-	lookup,
+type VtexPayloadMessages = {
+  unexpectedType: string;
+  blockedResponse: string;
+  blockedJson: string;
+  invalidJson: string;
+};
+
+function buildVtexHttpRequest(baseUrl: string): VtexHttpRequest {
+  const origin = new URL(baseUrl).origin;
+  return {
+    headers: {
+      "user-agent": pickUserAgent(),
+      "accept-language": "es-AR,es;q=0.9,en;q=0.7",
+      referer: `${origin}/`,
+      origin,
+    },
+    transformResponse: [(value: string) => value],
+    responseType: "text",
+  };
+}
+
+function parseVtexJsonPayload(
+  response: VtexHttpResponse,
+  responseTimeMs: number,
+  messages: VtexPayloadMessages,
+) {
+  const rawData = response.data;
+  if (typeof rawData !== "string") {
+    throw new VtexRequestError(messages.unexpectedType, {
+      errorType: "unknown",
+      hashValid: true,
+      responseTimeMs,
+    });
+  }
+
+  const contentType = String(response.headers["content-type"] ?? "").toLowerCase();
+  if (!contentType.includes("json") && detectBlockedPayload(rawData)) {
+    throw new VtexRequestError(messages.blockedResponse, {
+      errorType: "blocked",
+      hashValid: true,
+      responseTimeMs,
+    });
+  }
+
+  try {
+    return JSON.parse(rawData) as unknown;
+  } catch {
+    if (detectBlockedPayload(rawData)) {
+      throw new VtexRequestError(messages.blockedJson, {
+        errorType: "blocked",
+        hashValid: true,
+        responseTimeMs,
+      });
+    }
+
+    throw new VtexRequestError(messages.invalidJson, {
+      errorType: "unknown",
+      hashValid: true,
+      responseTimeMs,
+    });
+  }
+}
+
+async function requestVtexJsonPayload({
+  baseUrl,
+  request,
+  dependencies = {},
+  messages,
 }: {
-	baseUrl: string;
-	lookup: VtexCatalogLookup;
+  baseUrl: string;
+  request: { pathname: string; search: string };
+  dependencies?: VtexClientDependencies;
+  messages: VtexPayloadMessages;
 }) {
-	const request = buildVtexCatalogSearchRequest(lookup);
-	const url = new URL(request.pathname, baseUrl);
-	url.search = request.search;
-	const startedAt = Date.now();
+  const url = new URL(request.pathname, baseUrl);
+  url.search = request.search;
+  const startedAt = Date.now();
 
-	try {
-		await sleep(getRequestDelayMs());
-		const response = await http.get(url.toString(), {
-			headers: {
-				"user-agent": pickUserAgent(),
-				"accept-language": "es-AR,es;q=0.9,en;q=0.7",
-				referer: `${new URL(baseUrl).origin}/`,
-				origin: new URL(baseUrl).origin,
-			},
-			transformResponse: [(value) => value],
-			responseType: "text",
-		});
-		const responseTimeMs = Date.now() - startedAt;
-		const contentType = String(
-			response.headers["content-type"] ?? "",
-		).toLowerCase();
-		const rawData = response.data;
+  try {
+    await (dependencies.sleep ?? sleep)(getRequestDelayMs());
+    const response = await (dependencies.http ?? http).get(url.toString(), buildVtexHttpRequest(baseUrl));
+    const responseTimeMs = Date.now() - startedAt;
+    return { payload: parseVtexJsonPayload(response, responseTimeMs, messages), responseTimeMs };
+  } catch (error) {
+    if (error instanceof VtexRequestError) throw error;
+    throw classifyAxiosError(error, Date.now() - startedAt);
+  }
+}
 
-		if (typeof rawData !== "string") {
-			throw new VtexRequestError("Unexpected VTEX catalog payload type", {
-				errorType: "unknown",
-				hashValid: true,
-				responseTimeMs,
-			});
-		}
+const CATALOG_PAYLOAD_MESSAGES: VtexPayloadMessages = {
+  unexpectedType: "Unexpected VTEX catalog payload type",
+  blockedResponse: "VTEX catalog returned an HTML or anti-bot page",
+  blockedJson: "VTEX catalog returned a blocked HTML response",
+  invalidJson: "VTEX catalog returned invalid JSON",
+};
 
-		if (!contentType.includes("json") && detectBlockedPayload(rawData)) {
-			throw new VtexRequestError(
-				"VTEX catalog returned an HTML or anti-bot page",
-				{
-					errorType: "blocked",
-					hashValid: true,
-					responseTimeMs,
-				},
-			);
-		}
+const PERSISTED_PAYLOAD_MESSAGES: VtexPayloadMessages = {
+  unexpectedType: "Unexpected VTEX payload type",
+  blockedResponse: "VTEX returned an HTML or anti-bot page",
+  blockedJson: "VTEX returned a blocked HTML response",
+  invalidJson: "VTEX returned invalid JSON",
+};
 
-		let payload: unknown;
+async function requestVtexCatalogPayload({
+  baseUrl,
+  request,
+  dependencies = {},
+}: {
+  baseUrl: string;
+  request: { pathname: string; search: string };
+  dependencies?: VtexClientDependencies;
+}) {
+  return requestVtexJsonPayload({ baseUrl, request, dependencies, messages: CATALOG_PAYLOAD_MESSAGES });
+}
 
-		try {
-			payload = JSON.parse(rawData);
-		} catch {
-			if (detectBlockedPayload(rawData)) {
-				throw new VtexRequestError(
-					"VTEX catalog returned a blocked HTML response",
-					{
-						errorType: "blocked",
-						hashValid: true,
-						responseTimeMs,
-					},
-				);
-			}
-
-			throw new VtexRequestError("VTEX catalog returned invalid JSON", {
-				errorType: "unknown",
-				hashValid: true,
-				responseTimeMs,
-			});
-		}
-
-		return {
-			payload,
-			responseTimeMs,
-		};
-	} catch (error) {
-		if (error instanceof VtexRequestError) {
-			throw error;
-		}
-
-		throw classifyAxiosError(error, Date.now() - startedAt);
-	}
+function ensurePersistedHashIsValid(payload: unknown, responseTimeMs: number) {
+  if (!detectHashInvalid(payload)) return;
+  throw new VtexRequestError(getErrorMessage(payload), {
+    errorType: "hash_invalid",
+    hashValid: false,
+    responseTimeMs,
+  });
 }
 
 async function requestVtexPayload({
@@ -319,90 +391,22 @@ async function requestVtexPayload({
   query,
   hash,
   count,
+  dependencies = {},
 }: {
   baseUrl: string;
   query: string;
   hash: string;
   count: number;
+  dependencies?: VtexClientDependencies;
 }) {
-  const request = buildVtexRequest(query, hash, count);
-  const url = new URL(request.pathname, baseUrl);
-  url.search = request.search;
-  const startedAt = Date.now();
-
-  try {
-    await sleep(getRequestDelayMs());
-    const response = await http.get(url.toString(), {
-      headers: {
-        "user-agent": pickUserAgent(),
-        "accept-language": "es-AR,es;q=0.9,en;q=0.7",
-        referer: `${new URL(baseUrl).origin}/`,
-        origin: new URL(baseUrl).origin,
-      },
-      transformResponse: [(value) => value],
-      responseType: "text",
-    });
-    const responseTimeMs = Date.now() - startedAt;
-		const contentType = String(
-			response.headers["content-type"] ?? "",
-		).toLowerCase();
-    const rawData = response.data;
-
-    if (typeof rawData !== "string") {
-      throw new VtexRequestError("Unexpected VTEX payload type", {
-        errorType: "unknown",
-        hashValid: true,
-        responseTimeMs,
-      });
-    }
-
-    if (!contentType.includes("json") && detectBlockedPayload(rawData)) {
-      throw new VtexRequestError("VTEX returned an HTML or anti-bot page", {
-        errorType: "blocked",
-        hashValid: true,
-        responseTimeMs,
-      });
-    }
-
-    let payload: unknown;
-
-    try {
-      payload = JSON.parse(rawData);
-    } catch {
-      if (detectBlockedPayload(rawData)) {
-        throw new VtexRequestError("VTEX returned a blocked HTML response", {
-          errorType: "blocked",
-          hashValid: true,
-          responseTimeMs,
-        });
-      }
-
-      throw new VtexRequestError("VTEX returned invalid JSON", {
-        errorType: "unknown",
-        hashValid: true,
-        responseTimeMs,
-      });
-    }
-
-    if (detectHashInvalid(payload)) {
-      throw new VtexRequestError(getErrorMessage(payload), {
-        errorType: "hash_invalid",
-        hashValid: false,
-        responseTimeMs,
-      });
-    }
-
-    return {
-      payload,
-      responseTimeMs,
-    };
-  } catch (error) {
-    if (error instanceof VtexRequestError) {
-      throw error;
-    }
-
-    throw classifyAxiosError(error, Date.now() - startedAt);
-  }
+  const result = await requestVtexJsonPayload({
+    baseUrl,
+    request: buildVtexRequest(query, hash, count),
+    dependencies,
+    messages: PERSISTED_PAYLOAD_MESSAGES,
+  });
+  ensurePersistedHashIsValid(result.payload, result.responseTimeMs);
+  return result;
 }
 
 export async function probeVtexHash({
@@ -467,21 +471,23 @@ export async function fetchVtexDirectProducts({
 	baseUrl,
 	lookup,
 	retries = 3,
-}: FetchVtexDirectProductsOptions): Promise<NormalizedProduct[]> {
+  dependencies = {},
+}: FetchVtexDirectProductsOptions): Promise<VtexProductsResult> {
 	let lastError: unknown;
 
 	for (let attempt = 1; attempt <= retries; attempt += 1) {
 		try {
 			const { payload } = await requestVtexCatalogPayload({
 				baseUrl,
-				lookup,
+				request: buildVtexCatalogSearchRequest(lookup),
+        dependencies,
 			});
 
 			return normalizeVtexCatalogPayload(payload, baseUrl);
 		} catch (error) {
 			lastError = error;
 			if (attempt < retries) {
-				await sleep(400 * attempt);
+				await (dependencies.sleep ?? sleep)(400 * attempt);
 			}
 		}
 	}
@@ -489,17 +495,63 @@ export async function fetchVtexDirectProducts({
 	throw lastError;
 }
 
+function dedupeVtexProducts(payload: unknown, baseUrl: string): VtexProductsResult {
+  return Array.from(
+    new Map(normalizeVtexCatalogPayload(payload, baseUrl).map((product) => [product.ean, product])).values(),
+  );
+}
+
+function markFallbackUsed(products: VtexProductsResult): VtexProductsResult {
+  products.fallbackUsed = true;
+  return products;
+}
+
+function getBoundedSearchCount(count: number) {
+  if (!Number.isFinite(count)) return MAX_VTEX_SEARCH_COUNT;
+  return Math.min(Math.max(Math.floor(count), 1), MAX_VTEX_SEARCH_COUNT);
+}
+
+function isHashInvalidRequestError(error: unknown) {
+  return error instanceof VtexRequestError && error.errorType === "hash_invalid";
+}
+
+function buildVtexTermFallbackRequest(query: string, count: number) {
+  return {
+    pathname: "/api/catalog_system/pub/products/search",
+    search: new URLSearchParams({
+      ft: query,
+      _from: "0",
+      _to: String(count - 1),
+    }).toString(),
+  };
+}
+
+async function fetchVtexTermFallback(baseUrl: string, query: string, count: number, dependencies: VtexClientDependencies) {
+  const { payload } = await requestVtexCatalogPayload({
+    baseUrl,
+    request: buildVtexTermFallbackRequest(query, count),
+    dependencies,
+  });
+  return markFallbackUsed(dedupeVtexProducts(payload, baseUrl));
+}
+
+async function waitForVtexRetry(attempt: number, retries: number, dependencies: VtexClientDependencies) {
+  if (attempt < retries) await (dependencies.sleep ?? sleep)(400 * attempt);
+}
+
 export async function fetchVtexProducts({
   baseUrl,
   query,
   hash = process.env.VTEX_SHA256_HASH,
-  count = 50,
+  count = MAX_VTEX_SEARCH_COUNT,
   retries = 3,
-}: FetchVtexProductsOptions): Promise<NormalizedProduct[]> {
+  dependencies = {},
+}: FetchVtexProductsOptions): Promise<VtexProductsResult> {
   if (!hash) {
     throw new Error("VTEX_SHA256_HASH is required");
   }
 
+  const boundedCount = getBoundedSearchCount(count);
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= retries; attempt += 1) {
@@ -508,21 +560,17 @@ export async function fetchVtexProducts({
         baseUrl,
         query,
         hash,
-        count,
+        count: boundedCount,
+        dependencies,
       });
-      const rawProducts = extractProductRecords(payload);
-      const normalized = rawProducts
-        .map((product) => normalizeProduct(product, baseUrl))
-        .filter((product): product is NormalizedProduct => Boolean(product));
-
-			return Array.from(
-				new Map(normalized.map((product) => [product.ean, product])).values(),
-			);
+      return dedupeVtexProducts(payload, baseUrl);
     } catch (error) {
-      lastError = error;
-      if (attempt < retries) {
-        await sleep(400 * attempt);
+      if (isHashInvalidRequestError(error)) {
+        return fetchVtexTermFallback(baseUrl, query, boundedCount, dependencies);
       }
+
+      lastError = error;
+      await waitForVtexRetry(attempt, retries, dependencies);
     }
   }
 
