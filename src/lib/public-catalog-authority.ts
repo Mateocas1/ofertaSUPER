@@ -173,45 +173,47 @@ export function canEmitPublicCatalogDecision(decision: unknown, now: Date): bool
   return deadline <= expiry && deadline <= readerExpiry && now < deadline && now < expiry && now < readerExpiry;
 }
 
-export async function resolvePublicCatalogAuthority(
+export type PublicCatalogAuthorityOutcome =
+  | { readonly status: "eligible"; readonly decision: PublicCatalogAuthorityDecision }
+  | { readonly status: "ineligible" }
+  | { readonly status: "unavailable" };
+
+export async function resolvePublicCatalogAuthorityOutcome(
   input: unknown,
   loadPublication: (publicationId: string) => Promise<PublicCatalogAuthorityRecord | null>,
   now: Date,
-): Promise<PublicCatalogAuthorityDecision | null> {
+): Promise<PublicCatalogAuthorityOutcome> {
   const identity = parsePublicCatalogServingIdentity(input);
-  if (!identity || !validDate(now)) return null;
+  if (!identity || !validDate(now)) return { status: "ineligible" };
 
   let record: unknown;
   try {
     record = await loadPublication(identity.publicationId);
   } catch {
-    return null;
+    return { status: "unavailable" };
   }
   if (!hasExactPublicationIdentity(record, identity)
     || !matchesPromotionIdentity(record, identity)
-    || !isEligibleAuthority(record, identity, now)) return null;
+    || !isEligibleAuthority(record, identity, now)) return { status: "ineligible" };
 
   const readerExpiry = record.readerEligibility.expiresAt;
-  const decisionDeadline = new Date(Math.min(
-    now.getTime() + 30_000,
-    record.promotion.expires_at.getTime(),
-    readerExpiry.getTime(),
-  ));
-  return {
-    publicationId: identity.publicationId,
-    promotionId: record.promotion_id,
-    target: identity.target,
-    deploymentId: identity.deploymentId,
-    commitSha: identity.commitSha,
-    candidateDigest: identity.candidateDigest,
-    verifiedAt: record.verified_at.toISOString(),
-    expiresAt: record.promotion.expires_at.toISOString(),
-    generation: record.readerEligibility.generation,
-    lineage: record.readerEligibility.lineage,
-    policyDigest: record.readerEligibility.policyDigest,
-    healthVersion: record.readerEligibility.healthVersion,
-    buildDigest: record.readerEligibility.buildDigest,
-    readerExpiresAt: readerExpiry.toISOString(),
+  const decisionDeadline = new Date(Math.min(now.getTime() + 30_000, record.promotion.expires_at.getTime(), readerExpiry.getTime()));
+  return { status: "eligible", decision: {
+    publicationId: identity.publicationId, promotionId: record.promotion_id, target: identity.target,
+    deploymentId: identity.deploymentId, commitSha: identity.commitSha, candidateDigest: identity.candidateDigest,
+    verifiedAt: record.verified_at.toISOString(), expiresAt: record.promotion.expires_at.toISOString(),
+    generation: record.readerEligibility.generation, lineage: record.readerEligibility.lineage,
+    policyDigest: record.readerEligibility.policyDigest, healthVersion: record.readerEligibility.healthVersion,
+    buildDigest: record.readerEligibility.buildDigest, readerExpiresAt: readerExpiry.toISOString(),
     decisionDeadline: decisionDeadline.toISOString(),
-  };
+  } };
+}
+
+export async function resolvePublicCatalogAuthority(
+  input: unknown,
+  loadPublication: (publicationId: string) => Promise<PublicCatalogAuthorityRecord | null>,
+  now: Date,
+): Promise<PublicCatalogAuthorityDecision | null> {
+  const outcome = await resolvePublicCatalogAuthorityOutcome(input, loadPublication, now);
+  return outcome.status === "eligible" ? outcome.decision : null;
 }
