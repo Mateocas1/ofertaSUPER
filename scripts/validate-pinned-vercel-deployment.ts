@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 import type { PublicCatalogAuthorityFingerprint } from "../src/lib/public-catalog-authority";
+import { validateBootstrapContract, type BootstrapInput } from "../src/lib/production-readiness/build-contract";
 
 export type GuardOptions = {
   deploymentId: string;
@@ -117,6 +118,19 @@ function exactFingerprint(actual: unknown, expected: PublicCatalogAuthorityFinge
 function proofMatches(result: CommandResult, proof: Record<string, unknown>, nonce: string, fingerprint: PublicCatalogAuthorityFingerprint) {
   return result.code === 0 && result.httpStatus !== undefined && result.httpStatus >= 200 && result.httpStatus < 300
     && proof.active === true && proof.nonce === nonce && exactFingerprint(proof.fingerprint, fingerprint);
+}
+
+/** Separate read-only bootstrap path: never invokes active proof, promotion, or configuration. */
+export async function inspectBootstrapDeployment(
+  options: Omit<BootstrapInput, "metadata"> & { url: string; scope: string },
+  run: Dependencies["run"] = runGuardCommand,
+) {
+  if (!immutableHostname(options.url) || !identifier.test(options.scope)) throw new Error("Invalid bootstrap target");
+  const result = await run({ kind: "metadata", args: ["inspect", options.url, "--scope", options.scope, "--json", "--non-interactive"] });
+  if (result.code !== 0) throw new Error("Bootstrap inspection failed");
+  const metadata = parseRecord(result.stdout);
+  if (!metadata) throw new Error("Invalid bootstrap metadata");
+  return validateBootstrapContract({ ...options, metadata });
 }
 
 async function validateMetadata(options: GuardOptions, run: Dependencies["run"]) {

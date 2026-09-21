@@ -43,6 +43,7 @@ enum ProductionReadinessState {
   BLOCKED
   PROMOTED
   ROLLED_BACK
+  REVOKED
 }
 
 enum ProductionReadinessReceiptKind {
@@ -313,4 +314,497 @@ model DirectRefreshRunLedger {
   @@index([issue_number])
   @@index([planned_at])
   @@map("direct_refresh_run_ledger")
+}
+
+model PublicationGrant {
+  id            String   @id
+  user_id       String
+  action        String
+  scope         String
+  target        String
+  policy_digest String
+  expires_at    DateTime
+  revoked_at    DateTime?
+  created_at    DateTime @default(now())
+
+  @@index([user_id, action, scope, target, policy_digest, expires_at])
+  @@map("publication_grants")
+}
+
+model ApprovalChallenge {
+  id                        String   @id
+  nonce_hash                String
+  csrf_hash                 String
+  user_id                   String
+  session_id                String
+  request_digest            String
+  expires_at                DateTime
+  grant_expires_at          DateTime?
+  consumed_at               DateTime?
+  created_at                DateTime @default(now())
+  candidate_admission_id    String
+  candidate_verification_id String
+  reviewed_payload_bytes    String
+  reviewed_payload_digest   String
+
+  @@index([user_id, session_id, expires_at])
+  @@map("approval_challenges")
+}
+
+model ApprovalReceipt {
+  idempotency_key           String   @id
+  request_digest            String
+  actor_id                  String
+  approved_at               DateTime
+  grant_expires_at          DateTime?
+  candidate_admission_id    String
+  candidate_verification_id String
+  reviewed_payload_bytes    String
+  reviewed_payload_digest   String
+
+  @@map("approval_receipts")
+}
+
+model RefreshPolicy {
+  id              String   @id
+  version         String
+  canonical_bytes String
+  digest          String   @unique
+  created_at      DateTime @default(now())
+
+  @@map("refresh_policies")
+}
+
+model BaselineManifest {
+  id                 String   @id
+  canonical_bytes    String
+  digest             String   @unique
+  build_epoch        BigInt
+  root_digest        String
+  snapshot_digest    String
+  evidence_digest    String
+  coverage_bytes     String
+  watermarks_bytes   String
+  provenance_bytes   String
+  custody_refs_bytes String
+  created_at         DateTime @default(now())
+
+  @@map("baseline_manifests")
+}
+
+model AuthorityCandidate {
+  id                   String   @id
+  manifest_bytes       String
+  manifest_digest      String   @unique
+  version              String
+  release_id           String
+  deployment_id        String
+  full_sha             String
+  domain               String
+  target               String
+  scope                String
+  valid_from           DateTime
+  expires_at           DateTime
+  policy_id            String
+  baseline_manifest_id String
+  created_at           DateTime @default(now())
+
+  @@map("authority_candidates")
+}
+
+model CandidateTechnicalVerification {
+  id              String   @id
+  candidate_id    String
+  verifier_id     String
+  verifier_class  String
+  result          String
+  evidence_bytes  String
+  evidence_digest String
+  verified_at     DateTime
+  deadline_at     DateTime
+  revoked_at      DateTime?
+  failure_reason  String?
+  created_at      DateTime @default(now())
+
+  @@index([candidate_id, result, deadline_at])
+  @@map("candidate_technical_verifications")
+}
+
+model GovernedCatalog {
+  id                      String @id
+  state                   String
+  build_epoch             BigInt @default(0)
+  governed_generation     BigInt?
+  active_build_attempt_id String?
+  authority_adoption      Json?
+
+  @@map("governed_catalogs")
+}
+
+model AuthorityLifecycleReservation {
+  id                    String @id
+  selector              Json
+  version               Int @default(0)
+  build_digest          String
+  configuration_receipt String
+
+  @@map("authority_lifecycle_reservations")
+}
+
+model AuthorityLifecycleOutcome {
+  operation_id     String @id
+  request          Json
+  reservation_id   String @unique
+  approval_id      String @unique
+  verification_id  String
+  publication_id   String @unique
+  final_checked_at DateTime @db.Timestamptz
+  expires_at       DateTime @db.Timestamptz
+  proof            Json
+
+  @@map("authority_lifecycle_outcomes")
+}
+
+model AuthorityLifecycleAudit {
+  operation_id String @id
+  actor_id     String
+  transition   String
+  evidence     Json
+
+  @@map("authority_lifecycle_audits")
+}
+
+model BaselineBuildAttempt {
+  id                   String   @id
+  epoch                BigInt
+  status               String
+  deadline_at          DateTime
+  expected_row_count   BigInt
+  uploaded_row_count   BigInt   @default(0)
+  snapshot_id          String?
+  root_digest          String?
+  verifier_snapshot_id String?
+  verifier_root_digest String?
+
+  @@unique([id, epoch])
+  @@map("baseline_build_attempts")
+}
+
+model CatalogOperation {
+  id                       String @id
+  action                   String
+  client_key               String
+  request_bytes            String
+  operation_request_digest String
+  status                   String @default("PENDING")
+
+  @@unique([action, client_key])
+  @@map("catalog_operations")
+}
+
+model ServingProduct {
+  ean               String @id
+  name              String
+  brand             String?
+  description       String?
+  image_url         String?
+  images            String[] @default([])
+  category          String?
+  content_digest    String
+  last_operation_id String
+
+  @@map("serving_products")
+}
+
+model ServingSupermarket {
+  id                  Int @id
+  name                String
+  slug                String @unique
+  logo_url            String?
+  base_url            String
+  is_vtex             Boolean
+  is_active           Boolean
+  freshness_sla_hours Int
+  content_digest      String
+  last_operation_id   String
+
+  @@map("serving_supermarkets")
+}
+
+model ServingOffer {
+  product_ean       String
+  supermarket_id    Int
+  price             Decimal? @db.Decimal(10, 2)
+  list_price        Decimal? @db.Decimal(10, 2)
+  reference_price   Decimal? @db.Decimal(10, 2)
+  reference_unit    String?
+  is_available      Boolean
+  sku_id            String?
+  seller_id         String?
+  product_url       String?
+  last_checked_at   DateTime
+  content_digest    String
+  last_operation_id String
+
+  @@id([product_ean, supermarket_id])
+  @@map("serving_offers")
+}
+
+model ServingHistory {
+  id                BigInt @id
+  product_ean       String
+  supermarket_id    Int
+  price             Decimal? @db.Decimal(10, 2)
+  list_price        Decimal? @db.Decimal(10, 2)
+  scraped_at        DateTime
+  content_digest    String
+  last_operation_id String
+
+  @@map("serving_history")
+}
+
+model ServingPromotion {
+  id                BigInt @id
+  supermarket_id    Int
+  type              String
+  title             String
+  wallet_provider   String?
+  bank_name         String?
+  discount_value    Decimal? @db.Decimal(10, 2)
+  conditions        String?
+  start_date        DateTime?
+  end_date          DateTime?
+  is_active         Boolean
+  content_digest    String
+  last_operation_id String
+
+  @@map("serving_promotions")
+}
+
+model ServingMembership {
+  promotion_id      BigInt
+  product_ean       String
+  content_digest    String
+  last_operation_id String
+
+  @@id([promotion_id, product_ean])
+  @@map("serving_memberships")
+}
+
+model AuthorityRevokeChallenge {
+  id               String @id
+  actor_id         String
+  session_hash     String
+  nonce_hash       String
+  csrf_hash        String
+  reviewed         Json
+  grant_id         String
+  grant_expires_at DateTime @db.Timestamptz
+  expires_at       DateTime @db.Timestamptz
+
+  @@map("authority_revoke_challenges")
+}
+
+model AuthorityRevokeReceipt {
+  idempotency_key String @id
+  challenge_id   String @unique
+  request        Json
+  approved_at    DateTime @db.Timestamptz
+  receipt        Json
+
+  @@map("authority_revoke_receipts")
+}
+
+model AuthorityRevokeOutcome {
+  operation_id          String @id
+  request               Json
+  authority_operation_id String @unique
+  consent_id            String @unique
+  final_checked_at      DateTime @db.Timestamptz
+  proof                 Json
+
+  @@map("authority_revoke_outcomes")
+}
+
+model AuthorityRevokeAudit {
+  operation_id String @id
+  actor_id     String
+  transition   String
+  evidence     Json
+
+  @@map("authority_revoke_audits")
+}
+
+model VerifierEnvelopeCommitment {
+  id                     String   @id @default(uuid()) @db.Uuid
+  envelope_bytes         Bytes
+  envelope_digest        String   @unique
+  authenticated_verifier String
+  admission_id           String?  @unique @db.Uuid
+  created_at             DateTime @default(now()) @db.Timestamptz
+
+  @@map("verifier_envelope_commitments")
+}
+
+model PromotionReadyEnvelopeAdmission {
+  id                     String   @id @default(uuid()) @db.Uuid
+  commitment_id          String   @unique @db.Uuid
+  request_key            String   @unique
+  request_digest         String   @unique
+  envelope_bytes         Bytes
+  envelope_digest        String   @unique
+  payload                Json
+  candidate_digest       String
+  delta_digest           String
+  incarnation            String   @db.Uuid
+  policy_digest          String
+  build_digest           String
+  health_version         BigInt
+  predecessor_generation BigInt
+  predecessor_lineage    String
+  evidence_digest        String
+  observed_at            DateTime @db.Timestamptz
+  verified_at            DateTime @db.Timestamptz
+  authenticated_verifier String
+  created_at             DateTime @default(now()) @db.Timestamptz
+  items                  PromotionReadyEnvelopeItem[]
+
+  @@map("promotion_ready_envelope_admissions")
+}
+
+model PromotionReadyEnvelopeItem {
+  admission_id String @db.Uuid
+  ordinal      Int
+  entity       String
+  item_key     String
+  before_image Json
+  after_image  Json
+  fields       Json
+  tombstone    Boolean
+  admission    PromotionReadyEnvelopeAdmission @relation(fields: [admission_id], references: [id], onDelete: Restrict)
+
+  @@id([admission_id, ordinal])
+  @@unique([admission_id, entity, item_key])
+  @@map("promotion_ready_envelope_items")
+}
+
+model SealedGenerationManifest {
+  id              String   @id @default(uuid()) @db.Uuid
+  admission_id    String   @unique @db.Uuid
+  publication_id  String
+  manifest_bytes  Bytes
+  manifest_digest String   @unique
+  created_at      DateTime @default(now()) @db.Timestamptz
+
+  @@map("sealed_generation_manifests")
+}
+
+model SealedGenerationDeltaItem {
+  manifest_id   String  @db.Uuid
+  admission_id  String  @db.Uuid
+  ordinal       Int
+  entity        String
+  item_key      String
+  type_identity String
+  after_image   Json
+  tombstone     Boolean
+
+  @@id([manifest_id, ordinal])
+  @@unique([manifest_id, entity, item_key])
+  @@map("sealed_generation_delta_items")
+}
+
+model GovernedGenerationRecord {
+  id                     String   @id @default(uuid()) @db.Uuid
+  manifest_id            String   @unique @db.Uuid
+  incarnation            String   @db.Uuid
+  generation             BigInt
+  predecessor_generation BigInt
+  predecessor_lineage    String
+  result_lineage         String
+  policy_digest          String
+  build_digest           String
+  health_version         BigInt
+  evidence_digest        String
+  audit_digest           String
+  created_at             DateTime @default(now()) @db.Timestamptz
+
+  @@unique([incarnation, generation])
+  @@map("governed_generation_records")
+}
+
+model GenerationPromotionOperation {
+  id                   String   @id @default(uuid()) @db.Uuid
+  request_key          String   @unique
+  request_digest       String   @unique
+  generation_record_id String   @unique @db.Uuid
+  outcome              Json
+  created_at           DateTime @default(now()) @db.Timestamptz
+
+  @@map("generation_promotion_operations")
+}
+
+model GenerationPublishingAdoption {
+  id                   String   @id @db.Uuid
+  generation_record_id String   @unique @db.Uuid
+  publication_id       String
+  created_at           DateTime @default(now()) @db.Timestamptz
+
+  @@map("generation_publishing_adoptions")
+}
+
+model ExistingLiveAdoption {
+  id                     String   @id @default(uuid()) @db.Uuid
+  request_key            String   @unique
+  publication_id         String
+  authority_operation_id String
+  generation_record_id   String?  @db.Uuid
+  generation             BigInt
+  incarnation            String   @db.Uuid
+  policy_digest          String
+  lineage                String
+  health_version         BigInt
+  build_digest           String
+  final_checked_at       DateTime @db.Timestamptz
+  expires_at             DateTime @db.Timestamptz
+  proof                  Json
+  created_at             DateTime @default(now()) @db.Timestamptz
+
+  @@unique([publication_id, generation, lineage, health_version, build_digest])
+  @@map("existing_live_adoptions")
+}
+
+model ReaderGenerationAdoption {
+  id                        String   @id @default(uuid()) @db.Uuid
+  request_key               String   @unique
+  reader_id                 String
+  existing_live_adoption_id String   @db.Uuid
+  generation                BigInt
+  lineage                   String
+  policy_digest             String
+  health_version            BigInt
+  build_digest              String
+  surface                   String
+  final_checked_at          DateTime @db.Timestamptz
+  expires_at                DateTime @db.Timestamptz
+  created_at                DateTime @default(now()) @db.Timestamptz
+
+  @@unique([reader_id, existing_live_adoption_id, surface])
+  @@map("reader_generation_adoptions")
+}
+
+model CatalogRestrictionFact {
+  fact          String   @id
+  restricted_at DateTime @default(now()) @db.Timestamptz
+  reason        String
+
+  @@map("catalog_restriction_facts")
+}
+
+model CatalogRestrictionSurface {
+  fact    String
+  surface String
+
+  @@id([fact, surface])
+  @@map("catalog_restriction_surfaces")
 }

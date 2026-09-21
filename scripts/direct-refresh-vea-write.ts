@@ -237,6 +237,15 @@ function createActiveWriteTransaction(
 			});
 			return row.id;
 		},
+		async captureSourceDelta(capture) {
+			const rows = await tx.$queryRaw<Array<{ operation_id: string; observed_at: Date }>>`
+				select operation_id, observed_at from public.capture_source_delta(
+					${capture.operationKey}, ${capture.source}, ${JSON.stringify(capture.items)}::jsonb
+				)`;
+			if (rows.length !== 1 || !rows[0]?.operation_id || !rows[0].observed_at)
+				throw new Error("source capture returned no durable identity");
+			return { operationId: rows[0].operation_id, observedAt: rows[0].observed_at.toISOString() };
+		},
 	};
 }
 

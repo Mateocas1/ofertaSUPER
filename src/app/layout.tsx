@@ -1,3 +1,4 @@
+import { SerwistProvider } from "@serwist/next/react";
 import type { Metadata, Viewport } from "next";
 import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
@@ -60,6 +61,12 @@ export default function RootLayout({
   return (
     <html lang="es-AR" className="h-full antialiased">
       <body className="min-h-full bg-background text-foreground">
+        <SerwistProvider
+          swUrl="/sw.js"
+          disable={process.env.NODE_ENV !== "production" || process.env.DISABLE_PWA === "true"}
+          cacheOnNavigation={false}
+          reloadOnOnline
+        />
         <div className="relative flex min-h-full flex-col">
           <a href="#main-content" className="skip-link">
             Saltar al contenido

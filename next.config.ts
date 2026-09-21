@@ -1,32 +1,4 @@
-import withPWAInit from "@ducanh2912/next-pwa";
 import type { NextConfig } from "next";
-
-const disablePwa = process.env.DISABLE_PWA === "true";
-
-const withPWA = withPWAInit({
-  dest: "public",
-  disable: process.env.NODE_ENV === "development" || disablePwa,
-  register: true,
-  reloadOnOnline: true,
-  // The plugin's frontend-navigation cache ignores query strings, so it cannot safely cache catalog routes.
-  cacheOnFrontEndNav: false,
-  fallbacks: {
-    document: "/~offline",
-  },
-  workboxOptions: {
-    skipWaiting: true,
-    clientsClaim: true,
-    cleanupOutdatedCaches: true,
-    runtimeCaching: [
-      {
-        urlPattern: ({ sameOrigin, url }) => sameOrigin && (url.pathname === "/buscar" || url.pathname === "/ofertas"),
-        handler: "NetworkOnly",
-        options: { cacheName: "catalog-navigation" },
-      },
-    ],
-  },
-  extendDefaultRuntimeCaching: true,
-});
 
 const securityHeaders = [
   {
@@ -72,4 +44,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withPWA(nextConfig);
+export default nextConfig;
