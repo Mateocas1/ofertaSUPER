@@ -1,5 +1,6 @@
 import { ZodError } from "zod";
 
+import type { PublicCatalogAuthorityFingerprint } from "@/lib/public-catalog-authority";
 import { classifyPublicCatalogReadiness } from "@/lib/public-catalog-readiness";
 import { productListQuerySchema } from "@/lib/schemas/product";
 import { promotionListQuerySchema } from "@/lib/schemas/promotion";
@@ -40,6 +41,12 @@ export type PublicCatalogProvenance = {
 export type PublicCatalogData<T> = T & PublicCatalogProvenance;
 
 export class PublicCatalogUnavailableError extends Error {}
+
+type PublicCatalogCacheEnvelope<T extends object> = {
+  version: 1;
+  authority: PublicCatalogAuthorityFingerprint;
+  payload: PublicCatalogData<T>;
+};
 
 export function publicCatalogUnavailable(): PublicCatalogUnavailable {
   return {
@@ -120,24 +127,43 @@ function getPublicLatestCheckedAt(value: unknown): string | null {
     .sort((left, right) => right.localeCompare(left))[0] ?? null;
 }
 
+type AvailablePublicCatalogReadiness = Exclude<
+  ReturnType<typeof classifyPublicCatalogReadiness>,
+  { status: "unavailable" }
+>;
+
+function requireAvailablePublicCatalogReadiness(
+  readiness: ReturnType<typeof classifyPublicCatalogReadiness>,
+): AvailablePublicCatalogReadiness {
+  if (readiness.status === "unavailable") {
+    throw new PublicCatalogUnavailableError();
+  }
+
+  return readiness;
+}
+
+function publicCatalogData<T extends object>(
+  data: T,
+  readiness: AvailablePublicCatalogReadiness,
+): PublicCatalogData<T> {
+  return {
+    ...data,
+    dataSource: "database",
+    degraded: readiness.status === "degraded",
+    verifiedAt: readiness.verifiedAt!,
+    latestCheckedAt: getPublicLatestCheckedAt(data),
+  };
+}
+
 export async function resolvePublicCatalogData<T extends object>(
   loadData: () => Promise<T>,
   loadPublication: PublicationLoader = loadPublicCatalogPublication,
 ): Promise<PublicCatalogData<T>> {
   try {
-    const readiness = classifyPublicCatalogReadiness(await loadPublication());
-    if (readiness.status === "unavailable") {
-      throw new PublicCatalogUnavailableError();
-    }
-
-    const data = await loadData();
-    return {
-      ...data,
-      dataSource: "database",
-      degraded: readiness.status === "degraded",
-      verifiedAt: readiness.verifiedAt!,
-      latestCheckedAt: getPublicLatestCheckedAt(data),
-    };
+    const readiness = requireAvailablePublicCatalogReadiness(
+      classifyPublicCatalogReadiness(await loadPublication()),
+    );
+    return publicCatalogData(await loadData(), readiness);
   } catch (error) {
     if (error instanceof PublicCatalogUnavailableError) {
       throw error;
@@ -145,6 +171,105 @@ export async function resolvePublicCatalogData<T extends object>(
 
     throw new PublicCatalogUnavailableError();
   }
+}
+
+export async function resolvePublicCatalogDataFromAuthority<T extends object>(
+  loadData: () => Promise<T>,
+  authority: PublicCatalogAuthorityFingerprint | null,
+  now?: Date,
+): Promise<PublicCatalogData<T>> {
+  if (!authority) {
+    throw new PublicCatalogUnavailableError();
+  }
+
+  try {
+    const readiness = requireAvailablePublicCatalogReadiness(
+      classifyPublicCatalogReadiness({ verified_at: new Date(authority.verifiedAt) }, { now }),
+    );
+    return publicCatalogData(await loadData(), readiness);
+  } catch (error) {
+    if (error instanceof PublicCatalogUnavailableError) {
+      throw error;
+    }
+
+    throw new PublicCatalogUnavailableError();
+  }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+const fingerprintFields = [
+  "publicationId",
+  "promotionId",
+  "target",
+  "deploymentId",
+  "commitSha",
+  "candidateDigest",
+  "verifiedAt",
+  "expiresAt",
+] as const;
+
+function isFingerprint(value: unknown): value is PublicCatalogAuthorityFingerprint {
+  if (!isObject(value) || value.target !== "production") {
+    return false;
+  }
+
+  return fingerprintFields.every((field) => typeof value[field] === "string");
+}
+
+function fingerprintsMatch(
+  cached: unknown,
+  authority: PublicCatalogAuthorityFingerprint,
+): cached is PublicCatalogAuthorityFingerprint {
+  return isFingerprint(cached)
+    && isFingerprint(authority)
+    && fingerprintFields.every((field) => cached[field] === authority[field]);
+}
+
+function hasConsistentCachedPayload(
+  payload: unknown,
+  authority: PublicCatalogAuthorityFingerprint,
+): payload is PublicCatalogData<object> {
+  return isObject(payload)
+    && payload.dataSource === "database"
+    && typeof payload.degraded === "boolean"
+    && payload.verifiedAt === authority.verifiedAt
+    && (typeof payload.latestCheckedAt === "string" || payload.latestCheckedAt === null)
+    && payload.latestCheckedAt === getPublicLatestCheckedAt(payload);
+}
+
+export function createPublicCatalogCacheEnvelope<T extends object>(
+  authority: PublicCatalogAuthorityFingerprint,
+  payload: PublicCatalogData<T>,
+  now?: Date,
+): PublicCatalogCacheEnvelope<T> | null {
+  if (!isFingerprint(authority) || !hasConsistentCachedPayload(payload, authority)) {
+    return null;
+  }
+
+  const reclassified = reclassifyCachedPublicCatalogData(payload, now);
+  if (!reclassified) {
+    return null;
+  }
+
+  return { version: 1, authority: { ...authority }, payload: reclassified };
+}
+
+export function readPublicCatalogCacheEnvelope<T extends object>(
+  cached: unknown,
+  authority: PublicCatalogAuthorityFingerprint,
+  now?: Date,
+): PublicCatalogData<T> | null {
+  if (!isObject(cached)
+    || cached.version !== 1
+    || !fingerprintsMatch(cached.authority, authority)
+    || !hasConsistentCachedPayload(cached.payload, authority)) {
+    return null;
+  }
+
+  return reclassifyCachedPublicCatalogData(cached.payload, now) as PublicCatalogData<T> | null;
 }
 
 export function reclassifyCachedPublicCatalogData<T extends object>(
