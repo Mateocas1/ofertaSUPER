@@ -1,0 +1,254 @@
+# U12c Build Verification — Post-interruption Environment Check
+
+- Command: `npm run build`
+- Runner: `picala` (UID 1000), Node v24.12.0, npm 11.6.2, Next 16.3.1, Prisma 6.12.0
+- Result: exit 0
+- Scope: a non-destructive recheck after attempt 99 was interrupted. No hash stack trace was emitted; the prior `null.hash` failure was not reproduced. Repeated missing-DATABASE_URL Prisma diagnostics are preserved below and did not make the process fail.
+- Environment observation: `.next` is a normal picala-owned ext4 directory. Root-owned generated entries remain below `.next/dev`; no symlinks, mount, tracked `.next` paths, active writer, or causal link to a hash failure was observed.
+
+## Exact stdout/stderr
+
+```text
+> prisma generate && tsx scripts/build-catalog-contract.ts prebuild && next build --webpack && tsx scripts/build-catalog-contract.ts package
+Prisma schema loaded from prisma/schema.prisma
+✔ Generated Prisma Client (v6.12.0) to ./node_modules/@prisma/client in 202ms
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+Tip: Need your database queries to be 1000x faster? Accelerate offers you that and more: https://pris.ly/tip-2-accelerate
+▲ Next.js 16.3.1 (webpack)
+- Environments: .env.local
+✓ Running next.config.ts took 507ms
+  Creating an optimized production build ...
+ ✓ (pwa) Compiling for server...
+ ✓ (pwa) Compiling for server...
+ ✓ (pwa) Compiling for client (static)...
+ ○ (pwa) Service worker: /home/picala/code/ofertaSUPER-worktrees/os-03-cache-authority/public/sw.js
+ ○ (pwa)   URL: /sw.js
+ ○ (pwa)   Scope: /
+ ○ (pwa) This app will fallback to these precached routes when fetching from the cache and the network fails:
+ ○ (pwa)   Documents (pages): /~offline
+ ○ (pwa) Custom runtimeCaching array found, using it to extend the default one.
+✓ Compiled successfully in 13.1s
+  Running TypeScript ...
+  Finished TypeScript in 8.1s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/30) ...
+  Generating static pages using 11 workers (7/30)
+  Generating static pages using 11 workers (14/30)
+  Generating static pages using 11 workers (22/30)
+prisma:error
+Invalid `prisma.$queryRaw()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.$queryRaw()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.ingestionRun.findMany()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.sourceHealth.findMany()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.$queryRaw()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.$queryRaw()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.$queryRaw()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.supermarket.findMany()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.stagingProduct.aggregate()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.promotion.count()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.promotion.count()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.promotion.count()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.promotion.count()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.supermarket.findMany()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.supermarketProduct.groupBy()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.supermarketProduct.groupBy()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.supermarketProduct.aggregate()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.priceHistory.count()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+prisma:error
+Invalid `prisma.supermarket.findMany()` invocation:
+error: Environment variable not found: DATABASE_URL.
+  -->  schema.prisma:7
+   |
+ 6 |   provider  = "postgresql"
+ 7 |   url       = env("DATABASE_URL")
+   |
+Validation Error Count: 1
+✓ Generating static pages using 11 workers (30/30) in 272ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+Route (app)                                       Revalidate  Expire
+┌ ○ /                                                     6h      1y
+├ ○ /_not-found
+├ ○ /~offline
+├ ƒ /admin
+├ ƒ /admin/catalog-authority/[operationId]
+├ ƒ /admin/ingestion
+├ ƒ /admin/promociones
+├ ƒ /admin/promociones/nueva
+├ ƒ /api/admin/catalog-authority/activate
+├ ƒ /api/admin/catalog-authority/approve
+├ ƒ /api/admin/catalog-authority/inspect
+├ ƒ /api/admin/catalog-authority/prepare
+├ ƒ /api/admin/catalog-authority/revoke
+├ ƒ /api/admin/ingestion
+├ ƒ /api/admin/promotions
+├ ƒ /api/admin/promotions/[id]
+├ ƒ /api/categories
+├ ƒ /api/health/catalog
+├ ƒ /api/health/live
+├ ƒ /api/health/ready
+├ ƒ /api/internal/catalog-serving-identity-proof
+├ ƒ /api/products
+├ ƒ /api/products/[ean]
+├ ƒ /api/products/[ean]/history
+├ ƒ /api/products/batch
+├ ƒ /api/promotions
+├ ƒ /api/search
+├ ƒ /buscar
+├ ○ /canasta
+├ ƒ /categoria/[slug]
+├ ○ /metodologia
+├ ƒ /ofertas
+├ ƒ /producto/[ean]
+├ ○ /robots.txt
+└ ƒ /sitemap.xml
+ƒ Proxy (Middleware)
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+```
