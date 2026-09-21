@@ -10,6 +10,16 @@ test("regression: typed stable identities tolerate line movement", () => {
 	assert.equal(moved[0].functionId, first[0].functionId);
 });
 
+test("parses generic arrow functions as TypeScript for .ts files", () => {
+	const symbols = functionSymbols("const identity = <T>(value: T) => value;\n", "src/identity.ts");
+	assert.equal(symbols[0].functionId, "src/identity.ts#variable:identity");
+});
+
+test("preserves JSX parsing for .tsx files", () => {
+	const symbols = functionSymbols("const Component = () => <div />;\n", "src/component.tsx");
+	assert.equal(symbols[0].functionId, "src/component.tsx#variable:Component");
+});
+
 test("structural fingerprints tolerate line movement", () => {
 	const first = functionSymbols("export function calculate() { return 1; }\n", "src/example.ts");
 	const moved = functionSymbols("\n\nexport function calculate() { return 1; }\n", "src/example.ts");
