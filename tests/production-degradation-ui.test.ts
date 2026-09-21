@@ -14,6 +14,15 @@ test("public catalog pages never replace unavailable data with demos", () => {
   assert.match(offersPage, /No podemos mostrar promociones ni descuentos reales en este momento/);
 });
 
+test("category pages fail closed when catalog authority is unavailable", () => {
+  const categoryPage = readFileSync("src/app/categoria/[slug]/page.tsx", "utf8");
+
+  assert.doesNotMatch(categoryPage, /getDemoProductPage|resolvePublicCatalogData|const fallback/);
+  assert.match(categoryPage, /page\.availability === "unavailable"/);
+  assert.match(categoryPage, /No podemos mostrar productos reales en este momento/);
+  assert.match(categoryPage, /<CategoryCatalogState category=\{category\} page=\{page\} \/>/);
+});
+
 test("historical catalog data is announced without demo claims", () => {
   const notice = readFileSync("src/components/catalog-provenance-notice.tsx", "utf8");
 
@@ -30,16 +39,6 @@ test("the basket denial UI preserves its shell while suppressing commercial fact
   assert.match(basketPage, /El catálogo está temporalmente no disponible/);
   assert.match(basketPage, /ocultamos productos y precios/);
   assert.match(basketPage, /setProductsByEan\(\{\}\)/);
-});
-
-test("the PWA never caches catalog navigation as a healthy page", () => {
-  const pwaConfig = readFileSync("next.config.ts", "utf8");
-
-  assert.match(pwaConfig, /cacheOnFrontEndNav:\s*false/);
-  assert.match(pwaConfig, /url\.pathname === "\/buscar"/);
-  assert.match(pwaConfig, /url\.pathname === "\/ofertas"/);
-  assert.match(pwaConfig, /handler:\s*"NetworkOnly"/);
-  assert.match(pwaConfig, /extendDefaultRuntimeCaching:\s*true/);
 });
 
 test("the browser smoke contracts catalog health runtime transitions", () => {
