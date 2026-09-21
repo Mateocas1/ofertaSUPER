@@ -42,7 +42,7 @@ COPY --chown=ingestion:ingestion tsconfig.json ./tsconfig.json
 USER ingestion
 CMD ["./node_modules/.bin/tsx", "scripts/ingest.ts"]
 
-FROM node:22.19.0-bookworm-slim AS runner
+FROM openssl-node AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
