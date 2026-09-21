@@ -34,20 +34,46 @@ export async function buildCmvpCatalogSnapshot({ targetManifest, repository, obs
 function indexIdentityEvidence(evidence: CmvpSourceIdentityEvidence[]) {
 	const observations = new Map<string, ObservedAttributes>();
 	const conflicts = new Map<string, Set<OptionalAttribute>>();
-	for (const item of evidence) {
-		if (!SOURCES.includes(item.source)) continue;
-		const normalizedEan = normalizeEan(item.ean); if (!normalizedEan) continue;
-		const key = identityKey(item.source, normalizedEan); if (!key) continue;
-		const next = attributesFrom(item); const previous = observations.get(key) ?? nullAttributes(); const merged = { ...previous };
-		for (const attribute of ["pack", "quantity", "measurementUnit", "variant"] as const) {
-			const value = next[attribute];
-			if (value === null) continue;
-			if (previous[attribute] !== null && normalize(previous[attribute]) !== normalize(value)) { const fields = conflicts.get(key) ?? new Set<OptionalAttribute>(); fields.add(attribute); conflicts.set(key, fields); merged[attribute] = null; }
-			else if (!conflicts.get(key)?.has(attribute)) merged[attribute] = value;
-		}
-		observations.set(key, merged);
+	for (const item of evidence) observeIdentityEvidence(item, observations, conflicts);
+	return { observations, conflicts: formatIdentityConflicts(conflicts) };
+}
+
+function observeIdentityEvidence(item: CmvpSourceIdentityEvidence, observations: Map<string, ObservedAttributes>, conflicts: Map<string, Set<OptionalAttribute>>) {
+	const key = observedIdentityKey(item);
+	if (!key) return;
+	const previous = observations.get(key) ?? nullAttributes();
+	const merged = { ...previous };
+	for (const attribute of ["pack", "quantity", "measurementUnit", "variant"] as const) observeAttribute(key, attribute, attributesFrom(item)[attribute], previous, merged, conflicts);
+	observations.set(key, merged);
+}
+
+function observedIdentityKey(item: CmvpSourceIdentityEvidence) {
+	if (!SOURCES.includes(item.source)) return null;
+	const normalizedEan = normalizeEan(item.ean);
+	return normalizedEan ? identityKey(item.source, normalizedEan) : null;
+}
+
+function observeAttribute(key: string, attribute: OptionalAttribute, value: string | null, previous: ObservedAttributes, merged: ObservedAttributes, conflicts: Map<string, Set<OptionalAttribute>>) {
+	if (value === null) return;
+	if (previous[attribute] !== null && normalize(previous[attribute]) !== normalize(value)) {
+		markAttributeConflict(key, attribute, conflicts);
+		merged[attribute] = null;
+	} else if (!conflicts.get(key)?.has(attribute)) {
+		merged[attribute] = value;
 	}
-	return { observations, conflicts: [...conflicts.entries()].map(([key, attributes]) => { const [source, ean] = key.split(":", 2) as [Source, string]; return { source, ean, attributes: [...attributes].toSorted() }; }).toSorted((left, right) => `${left.source}:${left.ean}`.localeCompare(`${right.source}:${right.ean}`)) };
+}
+
+function markAttributeConflict(key: string, attribute: OptionalAttribute, conflicts: Map<string, Set<OptionalAttribute>>) {
+	const fields = conflicts.get(key) ?? new Set<OptionalAttribute>();
+	fields.add(attribute);
+	conflicts.set(key, fields);
+}
+
+function formatIdentityConflicts(conflicts: Map<string, Set<OptionalAttribute>>) {
+	return [...conflicts.entries()].map(([key, attributes]) => {
+		const [source, ean] = key.split(":", 2) as [Source, string];
+		return { source, ean, attributes: [...attributes].toSorted() };
+	}).toSorted((left, right) => `${left.source}:${left.ean}`.localeCompare(`${right.source}:${right.ean}`));
 }
 function attributesFrom(item: CmvpSourceIdentityEvidence): ObservedAttributes { return { pack: optional(item.pack), quantity: optional(item.quantity), measurementUnit: optional(item.measurementUnit), variant: optional(item.variant) }; }
 function nullAttributes(): ObservedAttributes { return { pack: null, quantity: null, measurementUnit: null, variant: null }; }
