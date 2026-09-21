@@ -1,3 +1,4 @@
+import { normalizeGtin } from "../identity/gtin";
 import { inferCategoryFromText } from "./categories";
 
 type LooseRecord = Record<string, unknown>;
@@ -45,9 +46,6 @@ function asString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function isEan(value: string | null) {
-  return Boolean(value && /^\d{8,14}$/.test(value));
-}
 
 function pickFirstString(...values: unknown[]) {
   for (const value of values) {
@@ -122,7 +120,14 @@ function pickEan(rawProduct: LooseRecord, sku: LooseRecord | undefined) {
     ...referenceIds.map((entry) => entry.Value ?? entry.value),
   ].map((value) => asString(value));
 
-  return candidates.find((value) => isEan(value)) ?? null;
+  for (const candidate of candidates) {
+    const normalized = normalizeGtin(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
 }
 
 function pickOffer(rawProduct: LooseRecord, sku: LooseRecord | undefined) {

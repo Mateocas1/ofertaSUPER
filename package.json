@@ -12,6 +12,8 @@
     "test:u17-built-server-browser": "bash scripts/test-u17-built-server-browser.sh",
     "lint": "eslint .",
     "audit:complexity": "node scripts/audit-complexity.mjs",
+    "audit:cmvp-catalog-gate": "tsx scripts/audit-cmvp-catalog-gate.ts",
+    "audit:cmvp-catalog-snapshot": "tsx scripts/audit-cmvp-catalog-snapshot.ts",
     "typecheck": "tsc --noEmit",
     "lighthouse": "lhci autorun --config=./lighthouserc.json",
     "db:generate": "prisma generate",
