@@ -5,7 +5,8 @@ import { getBiggestPriceDropAlert, comparePriceAgainstHistory } from "@/lib/prom
 import { detectAutomaticDiscount, getBestPromotionPrice } from "@/lib/promotions/detect";
 import { classifyPriceFreshness } from "@/lib/price-freshness";
 import type { PublicCatalogProjection } from "@/lib/public-catalog-read.server";
-import { resolvePublicCatalogDataFromGuardedRead, type PublicCatalogGuardedReader } from "@/lib/public-catalog-api";
+import { PublicCatalogUnavailableError, resolvePublicCatalogDataFromGuardedRead, type PublicCatalogGuardedReader } from "@/lib/public-catalog-api";
+import { createPublicCatalogPageResult, type PublicCatalogPageResult } from "@/lib/seo/public-catalog-page";
 import { createPublicCatalogGuardedRead } from "@/lib/public-catalog-read.server";
 
 type CatalogEnvironment = Record<string, string | undefined>;
@@ -268,6 +269,34 @@ export async function resolveProductDetail(
 ) {
   void env;
   return loadDatabaseDetail(ean);
+}
+
+/**
+ * Converts authority denial into a shell-only page result. The callback receives
+ * the U15/U16 serving projection only after the guarded read authorizes it.
+ */
+export async function resolveGuardedCatalogPage<T extends object, Shell>(
+  shell: Shell,
+  loadData: (projection: PublicCatalogProjection) => T | Promise<T>,
+  reader: PublicCatalogGuardedReader = guardedRead,
+): Promise<PublicCatalogPageResult<T, Shell>> {
+  try {
+    return createPublicCatalogPageResult(
+      shell,
+      await resolvePublicCatalogDataFromGuardedRead(loadData, reader),
+    );
+  } catch (error) {
+    if (error instanceof PublicCatalogUnavailableError) {
+      return createPublicCatalogPageResult(shell, {
+        error: "Catalog temporarily unavailable",
+        dataSource: "unavailable",
+        degraded: false,
+        verifiedAt: null,
+      });
+    }
+
+    throw error;
+  }
 }
 
 export async function resolveRouteProductDetail(

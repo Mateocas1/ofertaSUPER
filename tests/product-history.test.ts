@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { PublicCatalogUnavailableError } from "../src/lib/public-catalog-api";
 import { handleProductHistoryRequest, loadProductPageData } from "../src/lib/product-history";
+import { createGuardedProductPageLoader } from "../src/lib/seo/public-catalog-page";
 
 const ean = "7790001000012";
 const product = { ean, name: "Test product" } as never;
@@ -20,6 +21,38 @@ describe("product page history", () => {
     await assert.rejects(loadProductPageData(ean, 90, async () => {
       throw new PublicCatalogUnavailableError();
     }), PublicCatalogUnavailableError);
+  });
+
+  it("shares one guarded result between metadata and HTML consumers for identical page inputs", async () => {
+    let guardedLoads = 0;
+    const memoize = <Args extends unknown[], Result>(load: (...args: Args) => Promise<Result>) => {
+      const results = new Map<string, Promise<Result>>();
+      return (...args: Args) => {
+        const key = JSON.stringify(args);
+        const result = results.get(key) ?? load(...args);
+        results.set(key, result);
+        return result;
+      };
+    };
+    const loadPage = createGuardedProductPageLoader(async (loadedEan, days) => {
+      guardedLoads += 1;
+      return {
+        product: { ean: loadedEan, name: `Product ${guardedLoads}` } as never,
+        history: { ean: loadedEan, days, series: [], points: [] } as never,
+        dataSource: "database",
+        degraded: false,
+        verifiedAt: "2026-03-01T00:00:00.000Z",
+        latestCheckedAt: null,
+      };
+    }, memoize);
+
+    const metadataPage = await loadPage(ean, 90);
+    const htmlPage = await loadPage(ean, 90);
+
+    assert.equal(guardedLoads, 1);
+    assert.equal(metadataPage, htmlPage);
+    assert.equal(metadataPage.availability, "eligible");
+    assert.equal(htmlPage.availability, "eligible");
   });
 });
 

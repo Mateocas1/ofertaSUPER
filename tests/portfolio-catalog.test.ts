@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { PublicCatalogUnavailableError } from "../src/lib/public-catalog-api";
-import { loadPublicProductDetail, loadPublicProductHistory, resolveOfflineBasketProducts, resolveRouteProductDetail } from "../src/lib/portfolio-catalog";
+import { loadPublicProductDetail, loadPublicProductHistory, resolveGuardedCatalogPage, resolveOfflineBasketProducts, resolveRouteProductDetail } from "../src/lib/portfolio-catalog";
 
 const knownEan = "7790002000022";
 
@@ -18,6 +18,15 @@ describe("public portfolio catalog", () => {
       return { available: false };
     }), PublicCatalogUnavailableError);
     assert.equal(callbacks, 1);
+  });
+
+  it("turns guarded page denial into a shell-only unavailable result", async () => {
+    const page = await resolveGuardedCatalogPage({ query: "yerba" }, async () => {
+      throw new PublicCatalogUnavailableError();
+    });
+
+    assert.deepEqual(page, { availability: "unavailable", shell: { query: "yerba" } });
+    assert.equal("catalog" in page, false);
   });
 
   it("maps serving offer identity, second-newest history, and governed promotion pricing into the legacy detail DTO", async () => {

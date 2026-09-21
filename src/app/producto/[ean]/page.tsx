@@ -9,11 +9,11 @@ import { PriceComparison } from "@/components/price-comparison";
 import { PromotionBadge } from "@/components/promotion-badge";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { getProductDetail } from "@/lib/catalog";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { loadProductPageData } from "@/lib/product-history";
-import { createMetadata } from "@/lib/seo/metadata";
-import { buildProductPageSchema, serializeJsonLd } from "@/lib/seo/schema";
+import { createGuardedProductMetadata } from "@/lib/seo/metadata";
+import { createGuardedProductPageLoader } from "@/lib/seo/public-catalog-page";
+import { buildGuardedProductPageSchema, serializeJsonLd } from "@/lib/seo/schema";
 import { cn } from "@/lib/utils";
 
 export const revalidate = 21600;
@@ -21,6 +21,11 @@ export const revalidate = 21600;
 type ProductPageProps = {
   params: Promise<{ ean: string }>;
 };
+
+const loadGuardedProductPage = createGuardedProductPageLoader(loadProductPageData);
+type GuardedProductPage = Awaited<ReturnType<typeof loadGuardedProductPage>>;
+type EligibleProductPage = Extract<GuardedProductPage, { availability: "eligible" }>;
+type Product = NonNullable<EligibleProductPage["catalog"]["product"]>;
 
 function summarizeDescription(description: string | null) {
   if (!description) {
@@ -35,45 +40,41 @@ function summarizeDescription(description: string | null) {
   return `${firstSentence.slice(0, 217).trimEnd()}…`;
 }
 
-export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
-  const { ean } = await params;
-  const product = await getProductDetail(ean);
-
-  if (!product) {
-    return createMetadata({
-      title: "Producto no encontrado",
-      description: "El producto solicitado no existe en el catalogo actual.",
-      path: `/producto/${ean}`,
-    });
-  }
-
-  return createMetadata({
-    title: `${product.name} desde ${formatCurrency(product.displayPrice)}`,
-    description: `Compara ${product.name} en supermercados argentinos y revisa su historial de precio registrado.`,
-    path: `/producto/${ean}`,
-  });
+function CatalogUnavailablePage() {
+  return (
+    <div className="px-6 py-8 md:py-10">
+      <div className="mx-auto w-full max-w-7xl">
+        <section className="surface p-8 md:p-10" aria-labelledby="catalog-unavailable-title">
+          <h1 id="catalog-unavailable-title" className="text-3xl font-semibold text-foreground">
+            Catalog temporarily unavailable
+          </h1>
+          <p className="mt-3 max-w-2xl text-muted-foreground" role="alert">
+            Catalog information is temporarily unavailable. Please try again later.
+          </p>
+        </section>
+      </div>
+    </div>
+  );
 }
 
-export default async function ProductPage({ params }: ProductPageProps) {
-  const { ean } = await params;
-  const { product, history } = await loadProductPageData(ean, 90);
+function productPriceSummary(product: Product) {
+  return {
+    hasCalculatedPromoPrice: product.bestFinalPrice !== null && product.displayPrice !== null && product.bestFinalPrice < product.displayPrice,
+    displayPriceLabel: product.displayPriceFreshnessStatus === "fresh" ? "Mejor precio reciente" : "Ultimo precio registrado",
+  };
+}
 
-  if (!product) {
-    notFound();
-  }
+function ProductSchema({ page }: { page: EligibleProductPage }) {
+  const structuredData = buildGuardedProductPageSchema(page);
+  return structuredData ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(structuredData) }} /> : null;
+}
 
-  const hasCalculatedPromoPrice =
-    product.bestFinalPrice !== null && product.displayPrice !== null && product.bestFinalPrice < product.displayPrice;
-  const displayPriceLabel = product.displayPriceFreshnessStatus === "fresh" ? "Mejor precio reciente" : "Ultimo precio registrado";
-  const bestPriceDropAlert = product.bestPriceDropAlert;
-  const structuredData = buildProductPageSchema(product);
+function ProductDetails({ page, product }: { page: EligibleProductPage; product: Product }) {
+  const { hasCalculatedPromoPrice, displayPriceLabel } = productPriceSummary(product);
 
   return (
     <div className="px-6 py-8 md:py-10">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: serializeJsonLd(structuredData) }}
-      />
+      <ProductSchema page={page} />
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
         <section className="surface p-8 md:p-10">
           <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
@@ -111,9 +112,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 <article className="rounded-[1.5rem] border border-border/70 bg-white/75 p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{displayPriceLabel}</p>
                   <p className="mt-2 text-3xl font-semibold text-foreground">{formatCurrency(product.displayPrice)}</p>
-                  {bestPriceDropAlert ? (
+                  {product.bestPriceDropAlert ? (
                     <p className="mt-2 text-xs font-medium text-emerald-700">
-                      Bajo {formatPercent(-bestPriceDropAlert.percentDrop)} vs ultimo registro
+                      Bajo {formatPercent(-product.bestPriceDropAlert.percentDrop)} vs ultimo registro
                     </p>
                   ) : null}
                 </article>
@@ -179,8 +180,25 @@ export default async function ProductPage({ params }: ProductPageProps) {
         </section>
 
         <PriceComparison entries={product.priceEntries} />
-        <LazyPriceChart data={history} />
+        <LazyPriceChart data={page.catalog.history} />
       </div>
     </div>
   );
+}
+
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
+  const { ean } = await params;
+  const page = await loadGuardedProductPage(ean, 90);
+
+  return createGuardedProductMetadata(page);
+}
+
+export default async function ProductPage({ params }: ProductPageProps) {
+  const { ean } = await params;
+  const page = await loadGuardedProductPage(ean, 90);
+
+  if (page.availability === "unavailable") return <CatalogUnavailablePage />;
+  if (!page.catalog.product) notFound();
+
+  return <ProductDetails page={page} product={page.catalog.product} />;
 }
