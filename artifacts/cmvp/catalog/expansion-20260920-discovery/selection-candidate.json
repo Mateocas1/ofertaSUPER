@@ -1,0 +1,5744 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "gtin": "4005900773821",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7622201385255",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:galletitas",
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7622201736033",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:galletitas",
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7622201745981",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:galletitas",
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7622202839962",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:galletitas",
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7730241003661",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790040143234",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:galletitas",
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040143265",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:galletitas",
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040144071",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:galletitas",
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040146877",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:galletitas",
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790060023684",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:aceite",
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790070012050",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:aceite",
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790070265142",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:aceite",
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790070318343",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070318350",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070318398",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070318619",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070320025",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070320032",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070321435",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070336118",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070336323",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070336385",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070336392",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070336477",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070336637",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070336651",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070431479",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790070431509",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790070431516",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790070509123",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790150007501",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:cafe",
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7790150037072",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:cafe",
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7790150110386",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:cafe",
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7790199603757",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:aceite",
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790272000794",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:aceite",
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790272000848",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:aceite",
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790387014136",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387014143",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387014617",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790480089963",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790538009615",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790550000164",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:cafe",
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7790550029127",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:cafe",
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7790639003451",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790742333605",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:leche",
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790742358400",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:leche",
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790787153664",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:leche",
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790895000232",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895000997",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895001000",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895001017",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895003295",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7790895006715",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895006821",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895007248",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895007255",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895009204",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7790895010088",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895010095",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895010101",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895012259",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895642432",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895650833",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895650871",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895650888",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790990003022",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990003039",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990003046",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990003121",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990003398",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990003411",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990003787",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791120021565",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7791120098888",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7791130963435",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290794054",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290794061",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290794078",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290794085",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290794092",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290794108",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290794115",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290794122",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290796706",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290796744",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791337007185",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337007208",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337007253",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:leche",
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7791337007260",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:leche",
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7791337007864",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337008670",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337008700",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337009943",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337010000",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337010147",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337010871",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791661000340",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7791813421603",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7791813423591",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7791813828365",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7791813888468",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7792180137944",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:aceite",
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7792280000285",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7792280005686",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7792280006157",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7792710000106",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7792710006436",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7792799000073",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7792931001050",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7793704000911",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7797330100663",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7798061190312",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:aceite",
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7798096210252",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:queso",
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7798096210269",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:queso",
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7798143356025",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7798143356032",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7798143356056",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7896004400372",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:leche",
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "8076800195057",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8076802085981",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8076808150072",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:fideos",
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8445290615831",
+      "sources": [
+        "carrefour",
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "2514470000005",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "2527386000007",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "2546625000004",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "2550673000008",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "2572702000001",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "2572703000000",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "2572705000008",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "2572749000002",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "2593136000009",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "2941001000003",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "2972690000005",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "3059946160139",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "3228020481846",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "3412290040708",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "3412290040715",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "3472710051295",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "3472710059451",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "50414307",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "6001106225582",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "650240051623",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "744430256322",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7509552455557",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7610036018097",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7610400010016",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7613036069724",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7613036071499",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7613287418869",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7622201808884",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7622202049033",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7622300742676",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7622300990114",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:leche",
+        "disco:leche"
+      ]
+    },
+    {
+      "gtin": "763571722411",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "763571722435",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7702626219912",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7730241003906",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7730900890021",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7730971670645",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790010002936",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790040003569",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040133471",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040137837",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040139091",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040139176",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040139770",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040139961",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040142992",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040143227",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040143364",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040143500",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040143524",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040143531",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040143555",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040143920",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040143937",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040143944",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "disco:queso",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040146389",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040147720",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040152793",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040153462",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "disco:leche",
+        "jumbo:galletitas",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790040153479",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "disco:leche",
+        "jumbo:galletitas",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790040153486",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "disco:leche",
+        "jumbo:galletitas",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790040154445",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040719804",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790040932104",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790045001201",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7790070100375",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790070104304",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790070104311",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790070231574",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790070265104",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790070265128",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790070317674",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070317698",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070317742",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070318312",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070322081",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070335982",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070335999",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070336002",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070336217",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070336453",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070336644",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070337207",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790070411792",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz"
+      ]
+    },
+    {
+      "gtin": "7790070413130",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790070417572",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790070431431",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790070431578",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790070431585",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790070432278",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790070433114",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790070433152",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790070507273",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba"
+      ]
+    },
+    {
+      "gtin": "7790070509079",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790071110335",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790130003653",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790139102074",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790147547270",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790147547294",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790147547300",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7790147547751",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790150080825",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7790150100806",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7790150101780",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:cafe",
+        "disco:cafe"
+      ]
+    },
+    {
+      "gtin": "7790150470350",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz"
+      ]
+    },
+    {
+      "gtin": "7790170902022",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7790170904798",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:cafe",
+        "disco:cafe"
+      ]
+    },
+    {
+      "gtin": "7790263119603",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790272001005",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790272001029",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790272001036",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790315058201",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7790315100207",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7790380024194",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790387013498",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387013504",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387013610",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387013627",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387014624",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387015317",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387015324",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387015607",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387015614",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387015621",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba"
+      ]
+    },
+    {
+      "gtin": "7790387015645",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790503000364",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz"
+      ]
+    },
+    {
+      "gtin": "7790503198672",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:arroz",
+        "disco:arroz"
+      ]
+    },
+    {
+      "gtin": "7790520028907",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790520999511",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790520999559",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7790538009554",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790538009707",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7790550002519",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7790550019111",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7790550019357",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7790580156008",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790580156046",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790639003444",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790639003468",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790639003567",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790639003826",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790639003857",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790639003925",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790710334580",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba"
+      ]
+    },
+    {
+      "gtin": "7790710334641",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790710334818",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7790742141101",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790742141705",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790742192103",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790742335609",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790742352101",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790742357205",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790742371409",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7790742373304",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7790742471307",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7790742624901",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7790787002535",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:leche",
+        "disco:leche"
+      ]
+    },
+    {
+      "gtin": "7790787002931",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7790787960422",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7790787960514",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7790895000270",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895003301",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7790895004308",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895006951",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895007217",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895007392",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895009228",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7790895011764",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7790895012310",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895067570",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895640490",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7790895642081",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895645778",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7790895645785",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7790895646027",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7790895650840",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790895650864",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "disco:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7790990001509",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990001912",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990002261",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990002810",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990003190",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990003381",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990003404",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990003909",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990004012",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7790990999868",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791017000079",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7791120021558",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7791120098895",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7791120099755",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7791120104954",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7791130963411",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791130963428",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791130963497",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290794283",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290794320",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290796140",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7791290796737",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:detergente",
+        "disco:detergente"
+      ]
+    },
+    {
+      "gtin": "7791337008663",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337008687",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337008694",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337009677",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337009950",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337009974",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337010376",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337010710",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7791337010857",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337010864",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337010895",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337010918",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791337010925",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7791473003317",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7791728242720",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7791728246575",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7791728246582",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7791728246612",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7791787000040",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7791813402022",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7791813403029",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "disco:agua"
+      ]
+    },
+    {
+      "gtin": "7791813420385",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7791813421368",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "disco:gaseosa",
+        "jumbo:agua",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7791813421382",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7791813421412",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7791813421917",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7791813434412",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7791813555032",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7791813828372",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7791813828419",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7791813828464",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7791813888376",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7791813888413",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7792052071949",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7792052074797",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7792052085991",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7792052090889",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7792052090902",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7792052091008",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7792052091657",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7792052097109",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7792052097451",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7792052097475",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7792052175494",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7792170052295",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:gaseosa",
+        "jumbo:gaseosa"
+      ]
+    },
+    {
+      "gtin": "7792180001641",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:aceite",
+        "disco:aceite"
+      ]
+    },
+    {
+      "gtin": "7792180137937",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:aceite",
+        "disco:aceite"
+      ]
+    },
+    {
+      "gtin": "7792184003283",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "7792280000612",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7792280005723",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7792280005730",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba"
+      ]
+    },
+    {
+      "gtin": "7792360097747",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7792799000011",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7792799000097",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7792799000639",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7792931000039",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7793323024572",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7793670000014",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba"
+      ]
+    },
+    {
+      "gtin": "7793670000052",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7793670000632",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba"
+      ]
+    },
+    {
+      "gtin": "7793670000670",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "disco:yerba"
+      ]
+    },
+    {
+      "gtin": "7793670006993",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7793704000508",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7793750000668",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7793750009838",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7793913001013",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7793913012996",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7793913013450",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7793913013474",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7793913013528",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur"
+      ]
+    },
+    {
+      "gtin": "7793913013566",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "disco:yogur"
+      ]
+    },
+    {
+      "gtin": "7794820000304",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7794820015001",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7794820902721",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7794820902813",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7794820902936",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7794820902967",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7794820903049",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7794820903186",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7795323775331",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7795930000543",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7795930000567",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7797234000755",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7798040891438",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7798040891452",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7798060854482",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7798061190305",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7798061190596",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7798061190732",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7798061192071",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7798062543926",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7798062547559",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7798081287443",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7798094170114",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "disco:fideos",
+        "jumbo:arroz",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7798094170268",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "disco:fideos",
+        "jumbo:arroz",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "7798096210344",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7798096210368",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:queso",
+        "disco:queso"
+      ]
+    },
+    {
+      "gtin": "7798096213765",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:queso",
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "7798124361550",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7798124362243",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7798124362342",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7798124362359",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7798131250724",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:detergente",
+        "jumbo:detergente"
+      ]
+    },
+    {
+      "gtin": "7798136870545",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7798136870859",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7798141132591",
+      "sources": [
+        "carrefour",
+        "jumbo"
+      ],
+      "terms": [
+        "carrefour:yogur",
+        "jumbo:yogur"
+      ]
+    },
+    {
+      "gtin": "7798142741129",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7798165590469",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7798181641527",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7798196990016",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7798196990047",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7798228640247",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7798228640322",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7798290582032",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7798316700808",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7798316700815",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "7798334587979",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "7798423800019",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:yerba",
+        "jumbo:yerba"
+      ]
+    },
+    {
+      "gtin": "7799155000203",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7799155000289",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7799155000333",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7799155000463",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7799155000852",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7799155001408",
+      "sources": [
+        "carrefour",
+        "disco"
+      ],
+      "terms": [
+        "carrefour:agua",
+        "disco:agua"
+      ]
+    },
+    {
+      "gtin": "7799155001668",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7891000248799",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7891000421048",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7891000421512",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7891000426937",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7891000912645",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7891010251031",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:agua",
+        "jumbo:agua"
+      ]
+    },
+    {
+      "gtin": "7896004401775",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "7896005806753",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7896045112333",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "7896419500902",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8000070053465",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8000070053526",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8001250120069",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8001250120106",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8001250120915",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8001720180142",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:galletitas",
+        "jumbo:galletitas"
+      ]
+    },
+    {
+      "gtin": "8001860870040",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:arroz",
+        "jumbo:arroz"
+      ]
+    },
+    {
+      "gtin": "8004323110035",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8004323111605",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8004690051429",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8004690051573",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8005709201101",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8005709204027",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8005709204034",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8005709204188",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8006830982716",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "8008698010075",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:fideos",
+        "jumbo:fideos"
+      ]
+    },
+    {
+      "gtin": "8410234221058",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:aceite",
+        "jumbo:aceite"
+      ]
+    },
+    {
+      "gtin": "8445290114174",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8445290114181",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8445290254023",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8445290900654",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "8445290999559",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "8445291082113",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8445291082137",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8445291082175",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8445291082212",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8445291082236",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8445291738775",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8445292368988",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "8445292446327",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "8445292457521",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:leche",
+        "jumbo:leche"
+      ]
+    },
+    {
+      "gtin": "884394002907",
+      "sources": [
+        "disco",
+        "jumbo"
+      ],
+      "terms": [
+        "disco:cafe",
+        "jumbo:cafe"
+      ]
+    },
+    {
+      "gtin": "2090001534961",
+      "sources": [
+        "jumbo"
+      ],
+      "terms": [
+        "jumbo:queso"
+      ]
+    },
+    {
+      "gtin": "2505266000002",
+      "sources": [
+        "carrefour"
+      ],
+      "terms": [
+        "carrefour:queso"
+      ]
+    },
+    {
+      "gtin": "2505271000004",
+      "sources": [
+        "carrefour"
+      ],
+      "terms": [
+        "carrefour:queso"
+      ]
+    },
+    {
+      "gtin": "2505301000004",
+      "sources": [
+        "carrefour"
+      ],
+      "terms": [
+        "carrefour:queso"
+      ]
+    },
+    {
+      "gtin": "2505467000009",
+      "sources": [
+        "carrefour"
+      ],
+      "terms": [
+        "carrefour:queso"
+      ]
+    },
+    {
+      "gtin": "2506314000005",
+      "sources": [
+        "carrefour"
+      ],
+      "terms": [
+        "carrefour:queso"
+      ]
+    },
+    {
+      "gtin": "2506425000000",
+      "sources": [
+        "carrefour"
+      ],
+      "terms": [
+        "carrefour:queso"
+      ]
+    },
+    {
+      "gtin": "2506431000001",
+      "sources": [
+        "carrefour"
+      ],
+      "terms": [
+        "carrefour:queso"
+      ]
+    },
+    {
+      "gtin": "2506435000007",
+      "sources": [
+        "carrefour"
+      ],
+      "terms": [
+        "carrefour:queso"
+      ]
+    },
+    {
+      "gtin": "2506457000009",
+      "sources": [
+        "carrefour"
+      ],
+      "terms": [
+        "carrefour:queso"
+      ]
+    }
+  ]
+}
