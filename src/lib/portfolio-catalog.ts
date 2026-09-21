@@ -22,6 +22,165 @@ function normalizePromotionType(type: string): PromotionSummary["type"] {
   }
 }
 
+type ServingSupermarket = {
+  id: number;
+  name: string;
+  slug: string;
+  logo_url: string | null;
+  freshness_sla_hours: number;
+};
+
+type ServingPromotion = {
+  id: bigint;
+  supermarket_id: number;
+  type: string;
+  title: string;
+  discount_value: unknown | null;
+  wallet_provider: string | null;
+  bank_name: string | null;
+  conditions: string | null;
+  start_date: Date | null;
+  end_date: Date | null;
+};
+
+type ServingMembership = { promotion_id: bigint; product_ean: string };
+
+type ServingProduct = {
+  ean: string;
+  name: string;
+  brand: string | null;
+  description: string | null;
+  image_url: string | null;
+  images: string[];
+  category: string | null;
+};
+
+type ServingOffer = {
+  supermarket_id: number;
+  sku_id: string | null;
+  price: unknown | null;
+  list_price: unknown | null;
+  reference_price: unknown | null;
+  reference_unit: string | null;
+  is_available: boolean;
+  product_url: string | null;
+  last_checked_at: Date;
+};
+
+type ServingHistory = { supermarket_id: number; price: unknown | null };
+
+function toNullableNumber(value: unknown | null) {
+  return value === null ? null : Number(value);
+}
+
+function groupMembershipsByPromotion(memberships: ServingMembership[]) {
+  const membershipsByPromotion = new Map<bigint, string[]>();
+  for (const membership of memberships) {
+    const productEans = membershipsByPromotion.get(membership.promotion_id) ?? [];
+    membershipsByPromotion.set(membership.promotion_id, [...productEans, membership.product_ean]);
+  }
+  return membershipsByPromotion;
+}
+
+function isPromotionApplicable(promotion: ServingPromotion, ean: string, membershipsByPromotion: Map<bigint, string[]>) {
+  const productEans = membershipsByPromotion.get(promotion.id) ?? [];
+  return productEans.length === 0 || productEans.includes(ean);
+}
+
+function mapPublicPromotion(
+  promotion: ServingPromotion,
+  supermarketsById: Map<number, ServingSupermarket>,
+  membershipsByPromotion: Map<bigint, string[]>,
+): PromotionSummary[] {
+  const supermarket = supermarketsById.get(promotion.supermarket_id);
+  if (!supermarket) return [];
+
+  return [{
+    id: Number(promotion.id), title: promotion.title, type: normalizePromotionType(promotion.type),
+    discountValue: promotion.discount_value === null ? null : Number(promotion.discount_value),
+    walletProvider: promotion.wallet_provider, bankName: promotion.bank_name, conditions: promotion.conditions,
+    startDate: promotion.start_date?.toISOString() ?? null, endDate: promotion.end_date?.toISOString() ?? null,
+    supermarket: { id: supermarket.id, name: supermarket.name, slug: supermarket.slug, logoUrl: supermarket.logo_url },
+    productCount: (membershipsByPromotion.get(promotion.id) ?? []).length,
+  }];
+}
+
+function getPreviousPricesBySupermarket(histories: ServingHistory[]) {
+  const historyCountBySupermarket = new Map<number, number>();
+  const previousBySupermarket = new Map<number, number | null>();
+  for (const history of histories) {
+    const count = (historyCountBySupermarket.get(history.supermarket_id) ?? 0) + 1;
+    historyCountBySupermarket.set(history.supermarket_id, count);
+    if (count === 2) previousBySupermarket.set(history.supermarket_id, history.price === null ? null : Number(history.price));
+  }
+  return previousBySupermarket;
+}
+
+function mapPublicPriceEntry(
+  offer: ServingOffer,
+  supermarketsById: Map<number, ServingSupermarket>,
+  previousBySupermarket: Map<number, number | null>,
+  promotions: PromotionSummary[],
+): ProductDetail["priceEntries"] {
+  const supermarket = supermarketsById.get(offer.supermarket_id);
+  if (!supermarket) return [];
+
+  const price = toNullableNumber(offer.price);
+  const listPrice = toNullableNumber(offer.list_price);
+  const priceMovement = comparePriceAgainstHistory(price, previousBySupermarket.get(offer.supermarket_id) ?? null);
+  const automaticDiscount = detectAutomaticDiscount(price, listPrice);
+  const bestPromotionResult = getBestPromotionPrice(price, promotions.filter((promotion) => promotion.supermarket.id === offer.supermarket_id));
+  const freshnessStatus = classifyPriceFreshness(offer.last_checked_at, { maxAgeHours: supermarket.freshness_sla_hours }).status;
+  return [{
+    supermarket: { id: supermarket.id, name: supermarket.name, slug: supermarket.slug, logoUrl: supermarket.logo_url },
+    supermarketProductId: offer.sku_id as unknown as number, price, listPrice,
+    referencePrice: toNullableNumber(offer.reference_price), referenceUnit: offer.reference_unit,
+    isAvailable: offer.is_available, productUrl: offer.product_url, lastCheckedAt: offer.last_checked_at.toISOString(),
+    freshnessSlaHours: supermarket.freshness_sla_hours, freshnessStatus, previousPrice: priceMovement.previousPrice,
+    deltaPercent: priceMovement.deltaPercent, priceDropAlert: priceMovement.priceDropAlert,
+    automaticDiscountPercent: automaticDiscount?.percentOff ?? null, bestPromotion: bestPromotionResult?.promotion ?? null, finalPrice: bestPromotionResult?.finalPrice ?? null,
+  }];
+}
+
+function getAutomaticDiscountPercent(entries: ProductDetail["priceEntries"]) {
+  return entries.reduce<number | null>((best, entry) => {
+    if (entry.automaticDiscountPercent === null) return best;
+    return best === null ? entry.automaticDiscountPercent : Math.max(best, entry.automaticDiscountPercent);
+  }, null);
+}
+
+function getPriceRange(prices: number[]) {
+  return {
+    min: prices.length === 0 ? null : Math.min(...prices),
+    max: prices.length === 0 ? null : Math.max(...prices),
+  };
+}
+
+function buildPublicProductDetail(
+  product: ServingProduct,
+  priceEntries: ProductDetail["priceEntries"],
+  promotions: PromotionSummary[],
+): ProductDetail {
+  const comparable = priceEntries.filter((entry) => entry.isAvailable && entry.price !== null);
+  const fresh = comparable.filter((entry) => entry.freshnessStatus === "fresh");
+  const priceRange = getPriceRange(comparable.map((entry) => entry.price as number));
+  const freshPriceRange = getPriceRange(fresh.map((entry) => entry.price as number));
+  const finalPrices = fresh.map((entry) => entry.finalPrice).filter((price): price is number => price !== null);
+
+  return {
+    ean: product.ean, name: product.name, brand: product.brand, description: product.description,
+    imageUrl: product.image_url, images: product.images, category: product.category,
+    minPrice: priceRange.min, maxPrice: priceRange.max, freshMinPrice: freshPriceRange.min,
+    displayPrice: fresh[0]?.price ?? null, displayPriceCheckedAt: fresh[0]?.lastCheckedAt ?? null,
+    displayPriceFreshnessStatus: fresh[0]?.freshnessStatus ?? "unknown", hasFreshPrice: fresh.length > 0,
+    stalePriceCount: priceEntries.filter((entry) => entry.freshnessStatus === "stale").length,
+    automaticDiscountPercent: getAutomaticDiscountPercent(fresh),
+    bestFinalPrice: getPriceRange(finalPrices).min,
+    bestPriceDropAlert: getBiggestPriceDropAlert(fresh.map((entry) => entry.priceDropAlert)),
+    priceEntries, promotions,
+  };
+}
+
 const guardedRead = createPublicCatalogGuardedRead(process.env.PUBLIC_CATALOG_SERVING_IDENTITY_JSON);
 
 export async function loadPublicProductDetail(ean: string, client: ProductProjection): Promise<ProductDetail | null> {
@@ -31,6 +190,14 @@ export async function loadPublicProductDetail(ean: string, client: ProductProjec
   });
   if (!product) return null;
 
+  return loadPublicProductDetailForProduct(ean, product, client);
+}
+
+async function loadPublicProductDetailForProduct(
+  ean: string,
+  product: ServingProduct,
+  client: ProductProjection,
+): Promise<ProductDetail> {
   const now = new Date();
   const [offers, histories, rawPromotions] = await Promise.all([
     client.servingOffer.findMany({
@@ -50,66 +217,23 @@ export async function loadPublicProductDetail(ean: string, client: ProductProjec
     where: { promotion_id: { in: rawPromotions.map((promotion) => promotion.id) } },
     select: { promotion_id: true, product_ean: true },
   });
-  const membershipsByPromotion = new Map<bigint, string[]>();
-  for (const membership of memberships) membershipsByPromotion.set(membership.promotion_id, [...(membershipsByPromotion.get(membership.promotion_id) ?? []), membership.product_ean]);
-  const applicableRawPromotions = rawPromotions.filter((promotion) => {
-    const productEans = membershipsByPromotion.get(promotion.id) ?? [];
-    return productEans.length === 0 || productEans.includes(ean);
-  });
+  const membershipsByPromotion = groupMembershipsByPromotion(memberships);
+  const applicableRawPromotions = rawPromotions.filter((promotion) =>
+    isPromotionApplicable(promotion, ean, membershipsByPromotion),
+  );
   const supermarkets = await client.servingSupermarket.findMany({
     where: { id: { in: Array.from(new Set([...offers.map((offer) => offer.supermarket_id), ...applicableRawPromotions.map((promotion) => promotion.supermarket_id)])) } },
     select: { id: true, name: true, slug: true, logo_url: true, freshness_sla_hours: true },
   });
   const supermarketsById = new Map(supermarkets.map((supermarket) => [supermarket.id, supermarket]));
-  const promotions: PromotionSummary[] = applicableRawPromotions.flatMap((promotion) => {
-    const supermarket = supermarketsById.get(promotion.supermarket_id);
-    if (!supermarket) return [];
-    return [{ id: Number(promotion.id), title: promotion.title, type: normalizePromotionType(promotion.type), discountValue: promotion.discount_value === null ? null : Number(promotion.discount_value), walletProvider: promotion.wallet_provider, bankName: promotion.bank_name, conditions: promotion.conditions, startDate: promotion.start_date?.toISOString() ?? null, endDate: promotion.end_date?.toISOString() ?? null, supermarket: { id: supermarket.id, name: supermarket.name, slug: supermarket.slug, logoUrl: supermarket.logo_url }, productCount: (membershipsByPromotion.get(promotion.id) ?? []).length }];
-  });
-  const historyCountBySupermarket = new Map<number, number>();
-  const previousBySupermarket = new Map<number, number | null>();
-  for (const history of histories) {
-    const count = (historyCountBySupermarket.get(history.supermarket_id) ?? 0) + 1;
-    historyCountBySupermarket.set(history.supermarket_id, count);
-    if (count === 2) previousBySupermarket.set(history.supermarket_id, history.price === null ? null : Number(history.price));
-  }
-  const priceEntries = offers.flatMap((offer) => {
-    const supermarket = supermarketsById.get(offer.supermarket_id);
-    if (!supermarket) return [];
-    const price = offer.price === null ? null : Number(offer.price);
-    const listPrice = offer.list_price === null ? null : Number(offer.list_price);
-    const priceMovement = comparePriceAgainstHistory(price, previousBySupermarket.get(offer.supermarket_id) ?? null);
-    const automaticDiscount = detectAutomaticDiscount(price, listPrice);
-    const bestPromotionResult = getBestPromotionPrice(price, promotions.filter((promotion) => promotion.supermarket.id === offer.supermarket_id));
-    const freshnessStatus = classifyPriceFreshness(offer.last_checked_at, { maxAgeHours: supermarket.freshness_sla_hours }).status;
-    return [{
-      supermarket: { id: supermarket.id, name: supermarket.name, slug: supermarket.slug, logoUrl: supermarket.logo_url },
-      supermarketProductId: offer.sku_id as unknown as number, price, listPrice,
-      referencePrice: offer.reference_price === null ? null : Number(offer.reference_price), referenceUnit: offer.reference_unit,
-      isAvailable: offer.is_available, productUrl: offer.product_url, lastCheckedAt: offer.last_checked_at.toISOString(),
-      freshnessSlaHours: supermarket.freshness_sla_hours, freshnessStatus, previousPrice: priceMovement.previousPrice,
-      deltaPercent: priceMovement.deltaPercent, priceDropAlert: priceMovement.priceDropAlert,
-      automaticDiscountPercent: automaticDiscount?.percentOff ?? null, bestPromotion: bestPromotionResult?.promotion ?? null, finalPrice: bestPromotionResult?.finalPrice ?? null,
-    }];
-  }).sort((left, right) => (left.price ?? Infinity) - (right.price ?? Infinity));
-  const comparable = priceEntries.filter((entry) => entry.isAvailable && entry.price !== null);
-  const fresh = comparable.filter((entry) => entry.freshnessStatus === "fresh");
-  const prices = comparable.map((entry) => entry.price as number);
-  const freshPrices = fresh.map((entry) => entry.price as number);
-  const finalPrices = fresh.map((entry) => entry.finalPrice).filter((price): price is number => price !== null);
-  const automaticDiscountPercent = fresh.reduce<number | null>((best, entry) => entry.automaticDiscountPercent === null ? best : best === null ? entry.automaticDiscountPercent : Math.max(best, entry.automaticDiscountPercent), null);
-
-  return {
-    ean: product.ean, name: product.name, brand: product.brand, description: product.description,
-    imageUrl: product.image_url, images: product.images, category: product.category,
-    minPrice: prices.length ? Math.min(...prices) : null, maxPrice: prices.length ? Math.max(...prices) : null,
-    freshMinPrice: freshPrices.length ? Math.min(...freshPrices) : null, displayPrice: fresh[0]?.price ?? null,
-    displayPriceCheckedAt: fresh[0]?.lastCheckedAt ?? null, displayPriceFreshnessStatus: fresh[0]?.freshnessStatus ?? "unknown",
-    hasFreshPrice: fresh.length > 0, stalePriceCount: priceEntries.filter((entry) => entry.freshnessStatus === "stale").length,
-    automaticDiscountPercent, bestFinalPrice: finalPrices.length ? Math.min(...finalPrices) : null,
-    bestPriceDropAlert: getBiggestPriceDropAlert(fresh.map((entry) => entry.priceDropAlert)),
-    priceEntries, promotions,
-  };
+  const promotions: PromotionSummary[] = applicableRawPromotions.flatMap((promotion) =>
+    mapPublicPromotion(promotion, supermarketsById, membershipsByPromotion),
+  );
+  const previousBySupermarket = getPreviousPricesBySupermarket(histories);
+  const priceEntries = offers
+    .flatMap((offer) => mapPublicPriceEntry(offer, supermarketsById, previousBySupermarket, promotions))
+    .sort((left, right) => (left.price ?? Infinity) - (right.price ?? Infinity));
+  return buildPublicProductDetail(product, priceEntries, promotions);
 }
 
 export async function loadPublicProductHistory(ean: string, days: number, client: Pick<PublicCatalogProjection, "servingHistory" | "servingSupermarket">): Promise<ProductHistory> {
