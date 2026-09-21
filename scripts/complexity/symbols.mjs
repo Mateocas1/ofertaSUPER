@@ -107,6 +107,7 @@ export function functionSymbols(source, filePath) {
 		sourceType: "module",
 		tokens: true,
 		ecmaFeatures: { jsx: true },
+		filePath,
 	});
 	const symbols = [];
 	const identities = new Set();
