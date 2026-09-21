@@ -2,8 +2,10 @@
 
 > Registro histórico del corte auditado. Su incorporación al repositorio no ejecuta las correcciones. El [ledger ODD vigente](../../../odd/tasks/consumer-mvp-reset.md) traduce los hallazgos A01–A16 a CMVP-04 y define la aceptación actual; sus tareas y criterios prevalecen sobre las propuestas de secuencia de este informe.
 
-**Fecha:** 21 de septiembre de 2026.  
-**Revisión de código:** `master`, `f8d8f4eccf82dfbd35f0c152b42bdb0379747b15`.  
+**Fecha:** 21 de septiembre de 2026.
+
+**Revisión de código:** `master`, `f8d8f4eccf82dfbd35f0c152b42bdb0379747b15`.
+
 **Enfoque:** ingeniería de software y producto; distancia hasta un MVP útil, complejidad proporcional y calidad de entrega.
 
 ## Dictamen
