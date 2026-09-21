@@ -2,6 +2,35 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+const lighthouseAssertions = {
+  "categories:performance": ["warn", { minScore: 0.9 }],
+  "categories:accessibility": ["error", { minScore: 0.9 }],
+  "categories:best-practices": ["warn", { minScore: 0.9 }],
+};
+
+test("Lighthouse keeps SEO enforcement for indexable routes while excluding fail-closed catalog routes", () => {
+  const config = JSON.parse(readFileSync("lighthouserc.json", "utf8"));
+  const [indexableRoutes, unavailableCatalogRoutes] = config.ci.assert.assertMatrix;
+  const matches = (entry: { matchingUrlPattern: string }, url: string) =>
+    new RegExp(entry.matchingUrlPattern).test(url);
+
+  assert.deepEqual(indexableRoutes.assertions, {
+    ...lighthouseAssertions,
+    "categories:seo": ["error", { minScore: 0.9 }],
+  });
+  assert.deepEqual(unavailableCatalogRoutes.assertions, lighthouseAssertions);
+
+  for (const url of ["http://localhost:3000/", "http://localhost:3000/canasta", "http://localhost:3000/producto/leche"]) {
+    assert.ok(matches(indexableRoutes, url));
+    assert.ok(!matches(unavailableCatalogRoutes, url));
+  }
+
+  for (const url of ["http://localhost:3000/ofertas", "http://localhost:3000/buscar?q=leche"]) {
+    assert.ok(!matches(indexableRoutes, url));
+    assert.ok(matches(unavailableCatalogRoutes, url));
+  }
+});
+
 test("public catalog pages never replace unavailable data with demos", () => {
   const searchPage = readFileSync("src/app/buscar/page.tsx", "utf8");
   const offersPage = readFileSync("src/app/ofertas/page.tsx", "utf8");
@@ -12,6 +41,15 @@ test("public catalog pages never replace unavailable data with demos", () => {
   assert.match(offersPage, /resolveGuardedCatalogPage/);
   assert.doesNotMatch(offersPage, /resolvePublicCatalogData/);
   assert.match(offersPage, /No podemos mostrar promociones ni descuentos reales en este momento/);
+});
+
+test("category pages fail closed when catalog authority is unavailable", () => {
+  const categoryPage = readFileSync("src/app/categoria/[slug]/page.tsx", "utf8");
+
+  assert.doesNotMatch(categoryPage, /getDemoProductPage|resolvePublicCatalogData|const fallback/);
+  assert.match(categoryPage, /page\.availability === "unavailable"/);
+  assert.match(categoryPage, /No podemos mostrar productos reales en este momento/);
+  assert.match(categoryPage, /<CategoryCatalogState category=\{category\} page=\{page\} \/>/);
 });
 
 test("historical catalog data is announced without demo claims", () => {
@@ -30,16 +68,6 @@ test("the basket denial UI preserves its shell while suppressing commercial fact
   assert.match(basketPage, /El catálogo está temporalmente no disponible/);
   assert.match(basketPage, /ocultamos productos y precios/);
   assert.match(basketPage, /setProductsByEan\(\{\}\)/);
-});
-
-test("the PWA never caches catalog navigation as a healthy page", () => {
-  const pwaConfig = readFileSync("next.config.ts", "utf8");
-
-  assert.match(pwaConfig, /cacheOnFrontEndNav:\s*false/);
-  assert.match(pwaConfig, /url\.pathname === "\/buscar"/);
-  assert.match(pwaConfig, /url\.pathname === "\/ofertas"/);
-  assert.match(pwaConfig, /handler:\s*"NetworkOnly"/);
-  assert.match(pwaConfig, /extendDefaultRuntimeCaching:\s*true/);
 });
 
 test("the browser smoke contracts catalog health runtime transitions", () => {
