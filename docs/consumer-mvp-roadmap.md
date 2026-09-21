@@ -1,89 +1,86 @@
-# Hoja de ruta del MVP de consumo
+# Hoja de ruta de consumo y expansión de catálogo
 
-Esta hoja de ruta preserva el reinicio de producto aceptado: convertir la base de portafolio/demostración en un MVP pequeño y confiable para consumo. Define la secuencia y sus puertas de resultado; no declara que el catálogo en vivo, la operación recurrente ni el lanzamiento público estén listos.
+## Norte de producto
 
-## Resultado que se busca
+ofertaSUPER busca cubrir progresivamente un catálogo casi completo de los supermercados soportados: que una persona encuentre los productos de su compra habitual, compare identidades exactas y decida con precios, disponibilidad observada, fechas y cobertura comprensibles.
 
-Una persona puede buscar un producto real, comparar el mismo producto entre Disco, Jumbo y Carrefour, entender la frescura y disponibilidad observada, añadir productos a una canasta local y comparar los totales de esa canasta.
+**Los 500–1.000 productos iniciales son un conjunto de validación, no el techo del producto.** Primero se demuestra el recorrido y la actualización del corte actual; después se amplían categorías, profundidad y fuentes sin perder esas garantías. Esta dirección incorpora la petición de Mateo del 2026-09-21.
 
-## Ruta rápida
+El alcance medible es el catálogo públicamente observable por **supermercado + canal/sitio + seller aplicable + región/sucursal conocida + categorías + ventana de observación**. No equivale al inventario interno ni a todos los locales de Argentina. Un contexto desconocido se informa como desconocido; no se inventa a partir del nombre de la cadena.
 
-1. Consulte el [contrato de ejecución](../odd/tasks/consumer-mvp-reset.md) antes de iniciar cualquier unidad.
-2. Complete las unidades en el orden indicado y cierre cada hito por su puerta de resultado, no por cantidad de tareas.
-3. Reanude exclusivamente la primera unidad pendiente; T4a está cerrada y T4b requiere autorización separada, sin iniciar adquisición desde fuentes en vivo.
+## Ruta de ejecución
 
-## Alcance aceptado
+1. Leer el [ledger ODD](../odd/tasks/consumer-mvp-reset.md): única autoridad de tareas, progreso, evidencia y próximo paso.
+2. Consultar la [auditoría del 2026-09-21](reports/engineering-audit/2026-09-21-consumer-mvp-audit.md) como evidencia del SHA auditado, sin asumir que ya se corrigió.
+3. Ejecutar el siguiente trabajo elegible de CMVP-04. CMVP-05 queda bloqueado hasta pasar G04.
+4. Usar el [contrato de orquestación](../odd/orchestration/consumer-mvp-herdr.md) para delegaciones acotadas. El roadmap fija dirección y criterios, no mantiene un segundo tablero.
 
-| Tema | Decisión |
-|---|---|
-| Supermercados iniciales | Disco, Jumbo y Carrefour. |
-| Identidad de producto | Un EAN/GTIN válido y normalizado que coincide establece identidad exacta. Presentación, cantidad, unidad de medida y variante son observaciones opcionales independientes. |
-| Catálogo inicial | Entre 500 y 1.000 productos útiles. |
-| Actualización | Al menos diaria, según la capacidad de cada fuente. |
-| Uso y canasta | Uso público anónimo; la canasta permanece local. |
-| Disponibilidad | Es una observación de la fuente, no una garantía de stock ni de inventario para checkout. |
+## Etapas y límites
 
-## Hitos y puertas de resultado
-
-| Hito | Resultado | Puerta de salida |
+| Etapa | Resultado | Puerta de salida |
 |---|---|---|
-| 1. Reconciliar el proyecto | Existe una línea de entrega autoritativa y trazable. | Se declaran la rama base, el trabajo incluido, el pausado y el preservado, además de la secuencia exacta de integración y las comprobaciones de base observadas. |
-| 2. Crear un catálogo pequeño en vivo | Los tres supermercados aportan datos recientes y medibles. | Hay 500–1.000 productos útiles, tres fuentes representadas, al menos 100 EAN exactos comparables en dos fuentes, 90 % o más del catálogo objetivo actualizado en 24 horas y dos ejecuciones exitosas consecutivas. |
-| 3. Completar el recorrido real de consumo | La experiencia pública usa datos reales con límites honestos. | No se presenta información ilustrativa como real; los totales y cobertura de una canasta de cinco productos son correctos; se verifican el recorrido móvil y los estados degradados en producción. |
-| 4. Ejecutar un piloto público controlado | La siguiente inversión se decide con evidencia de personas usuarias. | Al menos cinco de 5–15 personas completan el recorrido; se registran éxito de búsqueda, cobertura de comparación, uso de canasta, abandono y comentarios de confianza; los fallos se clasifican como datos, confianza o interacción. |
+| CMVP-01/02 | Plan y línea de entrega reconciliados | Evidencia histórica preservada en el ledger; no reiniciar el inventario completo sin cambios materiales. |
+| CMVP-03 | Catálogo pequeño adquirido | Corte de 500 objetivos, tres fuentes, 167 EAN en al menos dos fuentes y dos ciclos cercanos documentados. Esto no prueba actualización diaria ni despliegue. |
+| CMVP-04 | Recorrido público corregido y verificable | G04 del ledger: todos los hallazgos aplicables resueltos, snapshot único, canasta correcta, publicación atribuible y repetición diaria observada. |
+| CMVP-05 | Piloto sobre una base verificada | 5–15 participantes; al menos cinco recorridos completos y resultados de búsqueda, cobertura y confianza registrados. |
+| CAT-01, después del piloto | Más profundidad en Disco/Jumbo/Carrefour | Categorías y denominadores medidos; incremento de cobertura con frescura y costo sostenibles. |
+| CAT-02 | Catálogo observable casi completo por contexto | Criterios de completitud siguientes verificados individualmente por fuente/contexto. |
+| CAT-03 | Más supermercados y fuentes complementarias | Contrato de identidad, contexto, costo y actualización de cada incorporación; sin degradar fuentes existentes. |
 
-## Orden de ejecución: 12 unidades
+CAT-01/02/03 son horizontes de producto, no trabajos autorizados para ejecución en esta entrega. El piloto decide el orden de categorías y los gaps de mayor valor; no elimina la ambición de cobertura amplia.
 
-| Orden | Unidad | Hito | Cierre esperado |
-|---:|---|---|---|
-| 1 | Inventariar `origin/master`, OS03, ramas, worktrees, cambios OpenSpec y afirmaciones de finalización. | 1 | Inventario verificable sin borrar trabajo ambiguo. |
-| 2 | Clasificar trabajo incluido, pausado y preservado; seleccionar la línea autoritativa. | 1 | Decisión de línea y límites explícitos. |
-| 3 | Preparar la secuencia de integración y observar las comprobaciones de base. | 1 | Puerta del hito 1 satisfecha. |
-| 4 | Confirmar capacidad de fuente y contrato de observación para Disco, Jumbo y Carrefour. | 2 | Límites de actualización y disponibilidad documentados por fuente. |
-| 5 | Producir el corte inicial de catálogo con coincidencias exactas. | 2 | Datos útiles de las tres fuentes disponibles para medir. |
-| 6 | Medir cobertura, frescura y dos ejecuciones consecutivas. | 2 | Puerta del hito 2 satisfecha. |
-| 7 | Conectar las superficies públicas al catálogo vivo con límites de veracidad explícitos. | 3 | Ningún dato ilustrativo se presenta como real. |
-| 8 | Verificar búsqueda y comparación de producto exacto, frescura y disponibilidad observada. | 3 | Recorrido de comparación correcto. |
-| 9 | Verificar canasta local, totales, cobertura, móvil y estados degradados. | 3 | Puerta del hito 3 satisfecha. |
-| 10 | Preparar la observación acotada del piloto para 5–15 personas. | 4 | Métricas y clasificación de fallos listas para observar. |
-| 11 | Observar el recorrido completo con al menos cinco personas externas. | 4 | Evidencia de uso y confianza registrada. |
-| 12 | Clasificar los resultados y decidir la próxima inversión de producto. | 4 | Puerta del hito 4 satisfecha. |
+## Alcance del cierre inmediato
 
-## Authority and public read path
+- Disco, Jumbo y Carrefour; uso anónimo y canasta local.
+- Identidad exacta por EAN/GTIN válido y normalizado. Los atributos opcionales ausentes no se inventan; conflictos explícitos quedan visibles.
+- PostgreSQL local adquiere/procesa; un snapshot público inmutable validado alimenta Next/Vercel.
+- Supabase permanece como recuperación/exportación temporal; sin nuevo servicio administrado ni eliminación sin paridad de respaldo/exportación.
+- Actualización al menos diaria del corte validado, según capacidad demostrada; disponibilidad es una observación, no garantía de checkout.
+- SEPA, seis fuentes, coincidencia aproximada, cuentas, checkout y promociones complejas permanecen fuera de CMVP-04/05.
+- Pausar nuevas capas de autoridad, respaldo o planificación operativa salvo necesidad demostrada del recorrido. Conservar controles necesarios; no eliminar infraestructura a ciegas.
 
-- Local PostgreSQL is the acquisition and processing authority.
-- A validated immutable static snapshot is the public Next.js/Vercel read surface.
-- Supabase is temporary recovery/export only; it will not be upgraded to Pro and does not block CMVP-03.
-- Do not delete Supabase until backup/export parity has been observed.
-- Do not add another managed database.
+## Cómo se medirá el crecimiento
 
-## CMVP-03 bounded progress
+Las métricas se publican por fuente/contexto y categoría, con ventana, presupuesto, versión del objetivo y exclusiones. La suma entre fuentes no puede ocultar una fuente sin cobertura o desactualizada.
 
-- **CMVP-03-T1 is complete:** the frozen-manifest/snapshot gate reporter records exact-identity proof, deterministic freshness and representation, diagnostics, and exclusions.
-- **CMVP-03-T2 is complete:** the offline snapshot generator feeds that gate and corrects equal `source:targetId` ordering by sorting complete serialized offers independently of repository/DB return order; its final checks are recorded in the ledger.
-- **CMVP-03-T3 is complete:** local PostgreSQL bootstrap and fixture/seed-to-snapshot proof is closed in the durable ledger.
-- **CMVP-03-T4a is complete:** the snapshot and gate use valid normalized EAN/GTIN alone for exact identity. Optional pack, quantity, measurement unit, and variant remain nullable source observations; they are neither inferred nor copied from targets, and explicit conflicts remain deterministic diagnostics. T4b is not started.
+| Métrica | Definición y denominador |
+|---|---|
+| Enumeración | Identidades locales de fuente observadas en categorías/paginación, sitemap/feed y otras superficies verificadas; deduplicadas entre superficies. |
+| Estado del recorrido | Por categoría/superficie: completo, muestreado, truncado, bloqueado o desconocido; última página observada y límites. |
+| Captura | Identidades incorporadas / universo enumerado verificable del mismo contexto y ventana. |
+| Cobertura del supermercado | Solo estimable si el recorrido y denominador permiten sostenerla; en caso contrario: no determinada. Capturar el 100 % de una muestra no establece completitud. |
+| Elegibilidad de identidad | Fracción con GTIN válido para comparación; los SKU sin GTIN siguen contando como gaps de catálogo, no desaparecen del denominador. |
+| Comparación exacta | EAN presentes en dos o más fuentes; separar dos fuentes de tres. |
+| Comparación utilizable | EAN con al menos dos ofertas compatibles en contexto, precio válido, disponibilidad elegible y frescura vigente. |
+| Frescura | Observaciones vigentes / pares fuente–producto esperados y congelados por fuente/contexto, incluidos los faltantes. Separar productos con alguna observación fresca / todos los productos objetivo. CMVP-04 exige ≥90 % en cada fuente y ≥90 % por producto, con ventana de 24 h. |
+| Disponibilidad | Disponible / no disponible / desconocida. La indisponibilidad correctamente observada no es un fallo de captura. |
+| Novedad y cambios | Nuevas identidades por petición/tiempo; cambios y desapariciones observadas sin borrar productos por errores de consulta. |
+| Capacidad | Peticiones, duración, errores y costo de discovery y refresh por separado; deuda de actualización pendiente. |
 
-## Dejar de hacer por ahora
+La clave de cobertura es una identidad local de fuente —por ejemplo SKU—; la clave de comparación entre fuentes es el GTIN verificado. Un catálogo amplio puede incluir productos aún no comparables, claramente identificados. Esto no autoriza cambiar el modelo de datos del primer MVP: CAT-01 diseña esa extensión cuando corresponda.
 
-- No ampliar a seis supermercados hasta que el corte inicial de tres fuentes sea creíble.
-- No introducir coincidencias aproximadas de productos en el primer MVP.
-- No añadir cuentas de consumo, checkout, promociones complejas ni administración avanzada.
-- No crear nuevas capas de autoridad de publicación, recuperación, respaldo, auditoría u operación salvo que el corte actual de consumo las requiera de forma demostrable.
-- No eliminar ramas ni worktrees ambiguos antes de clasificarlos durante la reconciliación.
-- No sustituir puertas de resultado por el recuento de tareas completadas.
+## Definición operativa de «casi completo»
 
-## Autoridad y reanudación
+**Objetivo provisional de planificación:** capturar al menos el 95 % de un universo público enumerado verificable, por cada fuente/contexto soportado. El 95 % es una propuesta medible para concretar la ambición, no una cifra conseguida ni una promesa aprobada por la fuente. Su ajuste debe conservar razones y no reducir silenciosamente el alcance.
 
-El [ledger de ODD](../odd/tasks/consumer-mvp-reset.md) es el contrato operativo y el registro de progreso y evidencia. Esta hoja de ruta fija el alcance, los hitos, las puertas y el orden aceptados. Si ambos documentos difieren, detenga el avance y reconcilie el ledger con evidencia observada; no reabra decisiones de producto aceptadas sin nueva autorización.
+Antes de usar esa expresión se requiere:
 
-Para reanudar:
+1. Recorrer todas las categorías declaradas elegibles sin truncamientos ocultos; publicar las exclusiones junto al resultado y resultados por categoría para que el promedio no oculte huecos. Si se excluyeron categorías, decir «95 % del universo enumerado de las categorías X», sin convertirlo en «95 % del supermercado».
+2. Deduplicar identidades y variantes sin fusionar artículos diferentes; mantener separados universo observado, incorporado y comparable.
+3. Reconciliar totales de la fuente cuando existan y sean interpretables; contrastar otra superficie disponible. Si no hay contraste o denominador defendible, conservar la limitación y no declarar completitud del supermercado.
+4. Mantener la frescura prometida bajo el tamaño adquirido y reportar presupuesto/capacidad por fuente.
+5. Versionar denominadores y conjuntos objetivo: una expansión no cambia retroactivamente la base de comparación de ciclos anteriores.
 
-1. Lea el ledger y consulte su espejo de Engram `odd/consumer-mvp-reset/tasks`.
-2. Reconciliar ambas copias, inspeccionar el estado actual de Git y revisar la evidencia más reciente de la primera tarea sin marcar.
-3. Continúe solo esa tarea, actualizando el ledger, su espejo y la proyección visible de tareas tras cada transición o cambio material del plan.
-4. No salte puertas de resultado ni inicie el siguiente hito hasta observar la evidencia de salida del actual.
+Las búsquedas por una lista de términos sirven para descubrir, pero su bajo rendimiento marginal no demuestra agotamiento del catálogo. Se reutilizan las definiciones de [catálogo observable y denominadores](full-discovery-freshness-architecture.md#definitions), sin activar sus antiguas capas de ejecución ni tomar su «next slice» como la tarea actual.
 
-## Siguiente paso inmediato
+## Expansión después de CMVP-05
 
-Plan and execute only when separately authorized **CMVP-03-T4b**. T4a does not authorize live acquisition, a public deployment, a Supabase deletion, another managed database, or any scope beyond the accepted EAN-only identity policy.
+CAT-01 comienza por las categorías que el piloto muestre ausentes o poco cubiertas dentro de las tres fuentes actuales. Cada incremento congela su conjunto objetivo, mide captura/comparación útil, comprueba una actualización posterior y registra costo, errores y gaps. No se fija un salto arbitrario a decenas de miles de productos sin capacidad de refresh demostrada.
+
+CAT-02 amplía ese proceso hasta cubrir el universo verificable. CAT-03 añade fuentes cuando el costo incremental y su aporte a las compras reales lo justifiquen; SEPA puede reevaluarse aquí, con su propio contexto y antigüedad. Incorporar una fuente no habilita mezclar observaciones de sucursales/canales incompatibles.
+
+## Estado y evidencia
+
+La evidencia del corte adquirido está en el [ciclo 2](../artifacts/cmvp/catalog/expansion-20260920-cycle2/gate-report.json). Sus 691 ofertas, 167 comparables y 100 % de frescura describen la medición del 2026-09-20. El ledger registra 537 productos/728 ofertas en la base completa; los denominadores son distintos.
+
+La auditoría posterior confirmó brechas de lectura pública, tests, fechas y canasta. Este cambio documenta cómo cerrarlas: no las declara corregidas ni acredita publicación, Engram sincronizado o piloto ejecutado. El próximo trabajo de implementación es **CMVP-04-T01**, según el ledger.

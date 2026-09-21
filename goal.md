@@ -1,5 +1,7 @@
 # /goal - ofertasSUPER professional readiness: GitHub, demo, portfolio, CV y LinkedIn
 
+> **Objetivo histórico de portfolio.** Desde el reset de consumo, la dirección actual está en el [roadmap de producto](docs/consumer-mvp-roadmap.md) y la única secuencia ejecutable está en el [ledger ODD](odd/tasks/consumer-mvp-reset.md). Este archivo conserva el contexto anterior; no reactiva sus gates, permisos, instrucciones ni próximos pasos. Corte de reconciliación: 2026-09-21.
+
 /goal Cerrar ofertasSUPER como proyecto principal de presentacion profesional sin inflar claims, sin tapar riesgos y avanzando por gates estrictos: una fase solo habilita la siguiente si queda GREEN con evidencia fresca, o BLOCKED_APPROVED con aprobacion explicita del usuario.
 
 ## North Star

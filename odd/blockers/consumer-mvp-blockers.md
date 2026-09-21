@@ -2,6 +2,10 @@
 
 This durable registry records only observed blockers affecting consumer-MVP work. Its template starts empty; records are added only when observed. Do not invent entries to fill the template.
 
+## Current reading — 2026-09-21
+
+CMVP-02/03 are historically complete at the audited integrated base. B-CMVP-001/003/004 are resolved; B-CMVP-002 remains a mitigated recovery/export follow-up outside the current consumer read path. No new blocker is invented by this documentation update. Current execution and audit-remediation tasks are in the [feature ledger](../tasks/consumer-mvp-reset.md); dated incident evidence below does not restart old work.
+
 ## Operating policy
 
 A blocker is durable when it prevents a lane from producing trustworthy evidence or safely continuing. The parent assigns an ID, records evidence, groups any required human decision in the orchestration inbox, and updates status as evidence changes.
@@ -41,11 +45,11 @@ Use `waiting-human` only for an actual decision or unavailable authorization. Us
 | `category` | `credential` |
 | `severity` | `local` |
 | `status` | `mitigated` |
-| `affected_lanes` | Temporary Supabase recovery/export follow-up only; it does not block CMVP-03 or pending `CMVP-03-T3` local PostgreSQL bootstrap and fixture/seed-to-snapshot proof. |
+| `affected_lanes` | Temporary Supabase recovery/export follow-up only; it does not block the completed CMVP-03 or the planned CMVP-04 static public reader. No connectivity or export parity is claimed. |
 | `evidence` | Two authorized strictly read-only attempts were observed. The first had `DATABASE_URL` absent from the process. The second privately supplied the existing environment and failed with `PrismaClientInitializationError` without an error code. Neither attempt obtained DB access or results; no secrets were exposed and no writes occurred. |
 | `owner` | Parent / authorized environment maintainer |
-| `next_action` | Preserve Supabase until backup/export parity is observed; when separately authorized, perform a bounded recovery/export connectivity check. Do not upgrade to Pro, treat connectivity as verified, or make it a CMVP-03 prerequisite. |
-| `updated_at` | `2026-09-19T06:22:44+00:00` |
+| `next_action` | Preserve Supabase until backup/export parity is observed; when separately authorized, perform a bounded recovery/export connectivity check. Do not upgrade to Pro, treat connectivity as verified, or make it a prerequisite for the independent local acquisition/static public-reader path. |
+| `updated_at` | `2026-09-19T06:22:44+00:00` evidence; current affected-lane wording reconciled 2026-09-21 |
 | `resolution` | Not terminal. The bounded recovery/export follow-up remains; connectivity is neither verified nor resolved. |
 
 ### B-CMVP-003 — CMVP local bootstrap seed image/client generation
@@ -57,11 +61,11 @@ Use `waiting-human` only for an actual decision or unavailable authorization. Us
 | `category` | `bug` |
 | `severity` | `local` |
 | `status` | `resolved` |
-| `affected_lanes` | CMVP-03-T3 is closed. This resolution does not establish CMVP-03 completion, authorize live acquisition, or authorize CMVP-04/T4. |
+| `affected_lanes` | None. Historical impact was CMVP-03-T3; later CMVP-03 completion is evidenced in the feature ledger, not inferred from this bootstrap fix. |
 | `evidence` | Behavior-first focused RED observed 2 pass/1 fail because the Dockerfile lacked `FROM dependencies AS seeder`. GREEN passed 3/3 after a narrow seeder target copied Prisma, ran `db:generate`, and switched only `seed.build.target`. Independent offline focused checks (3/3), typecheck, `lint --quiet`, and diff-check passed. Authorized `npm run bootstrap:cmvp-local` succeeded with seed exit 0. Existing-seed rerun `docker compose up --build --abort-on-container-exit --exit-code-from seed seed` also succeeded with exit 0 without cleanup. Safe checks observed exactly Carrefour, Disco, and Jumbo. A read-only `SET LOCAL ROLE ofertasuper_app` transaction selected counts from `categories`, `products`, `supermarkets`, `supermarket_products`, `price_history`, `promotions`, and `promotion_products`; effective app-role checks for schema CREATE, role administration, database creation, superuser, RLS bypass, and database CREATE privilege were all false. No objects or data were mutated. An initial role `postgres` check failed because that role does not exist; configured-owner checks subsequently passed. Final status: PostgreSQL healthy/running; role-provision, migrate, grants, and seed exited 0; network `ofertasuper-cmvp-local-bootstrap_default` is bridge with PostgreSQL attached; volume `ofertasuper-cmvp-local-bootstrap_postgres-data` is local and retained. |
 | `owner` | Parent |
-| `next_action` | None for this blocker. Keep CMVP-03 open until its remaining broader acceptance and fixture/seed-to-snapshot proof are observed; do not start T4. |
-| `updated_at` | `2026-09-19T07:11:34+00:00` |
+| `next_action` | None. This blocker is resolved; follow the current ledger for CMVP-04-T01. |
+| `updated_at` | `2026-09-19T07:11:34+00:00` evidence; current next-action wording reconciled 2026-09-21 |
 | `resolution` | Resolved by observed source correction and runtime verification. No cleanup/down/volumes/prune, Supabase, source probes, ingestion, T4, commit/push/review, or secret exposure occurred. |
 
 ### B-CMVP-004 — VTEX adapter execution blocker resolved by successful isolated applicable execution
@@ -92,6 +96,6 @@ Use `waiting-human` only for an actual decision or unavailable authorization. Us
 | `affected_lanes` | `CMVP-02`, authoritative branch/worktree preparation |
 | `evidence` | The user granted B-CMVP-001 authorization to prepare the target branch/worktree and transplant CMVP planning/orchestration documentation. The prepared authoritative line is `feat/consumer-mvp-reset` at `a62540b`, with `origin/master` as an ancestor. Its baseline verification passed: `npm test` 99 pass/0 fail/12 skip, typecheck pass, lint 0 errors/195 pre-existing warnings, and shell-helper checks pass. |
 | `owner` | Parent / authorized human |
-| `next_action` | None; CMVP-02 is closed. CMVP-03 remains open, with T1/T2 complete and T3 pending. |
-| `updated_at` | `2026-09-19T05:49:51+00:00` |
-| `resolution` | Authorization was granted and the target branch/worktree was prepared. The documented reconciliation acceptance and baseline checks were observed, so this authorization blocker is resolved; CMVP-03-T1/T2 evidence and pending T3 do not establish live-catalog readiness. |
+| `next_action` | None; CMVP-02 and CMVP-03 are historically complete. Follow the current ledger for CMVP-04-T01. |
+| `updated_at` | `2026-09-19T05:49:51+00:00` evidence; current next-action wording reconciled 2026-09-21 |
+| `resolution` | Authorization was granted and the target branch/worktree was prepared. The documented reconciliation acceptance and baseline checks were observed, so this authorization blocker is resolved. Later CMVP-03 acceptance is recorded separately and does not establish public-pilot readiness. |
