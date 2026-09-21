@@ -102,6 +102,12 @@ A person can search for a real product, compare an exact product across supermar
     - Constraints: no mutation of `artifacts/cmvp/catalog/first-batch-20260920/`; no schema migration, Supabase, scheduler, deployment, destructive Docker/Git action, approximate matching, or concurrent database writers. New cycle evidence is append-only under `artifacts/cmvp/catalog/<cycle-id>/`.
     - Checks: focused gate 5/5, snapshot 6/6, and batch 9/9 passed. Typecheck and lint passed after repairing verifier-caused `pnpm node_modules` displacement from local `.ignored` copies, without install, network, or source mutation. Native review `review-2de349146ad45d08` was approved and acknowledged.
 
+- [ ] **CMVP-03-D — Unblock the reviewed delivery chain.** Publish the missing guarded-catalog ancestry and restore trustworthy CI without rewriting the CMVP work-unit commits.
+  - [x] **CMVP-03-D1 — Fix TypeScript complexity parsing.** `functionSymbols` now passes the analyzed path to `@typescript-eslint/parser`; focused `.ts` generic-arrow and `.tsx` JSX regressions pass. The corrected audit exposed genuine U16/U17 debt, which was refactored to zero new/regressed findings. Native review `review-226a0919d80ed13f` approved and acknowledged the complete correction range.
+  - [x] **CMVP-03-D2 — Publish OS03 U12–U17 ancestry.** PR #478 was fast-forwarded to the completed U12 tip. Draft PRs #486–#493 publish U15, four bounded U16/U17 slices, the parser correction, and two behavior-preserving complexity refactors. Required `size:exception` labels were explicitly authorized and applied to #486–#490 and #493.
+  - [ ] **CMVP-03-D3 — Rebase CMVP checks without history rewriting.** The preserved CMVP base was fast-forwarded from `a62540b` to the reviewed parser/refactor tip `1e3fb5c`, preserving every CMVP commit hash. Verify #479–#493 and retarget #479 to `master` only after OS03 ancestry lands.
+  - Acceptance: OS03 and CMVP PR diffs remain focused; complexity, Lighthouse, Vercel, and policy checks are green or have a documented external blocker; merges remain explicit human decisions.
+
 - [ ] **CMVP-04 — Complete the real consumer journey.** Replace illustrative public surfaces with live catalog data and verify search → compare → freshness/availability → basket totals.
   - Route: to be derived after CMVP-03.
   - Acceptance: no illustrative data presented as real; five-product basket totals and coverage are correct; mobile journey and degraded states are verified in production.
