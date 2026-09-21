@@ -522,6 +522,66 @@ function buildServingProductWhere(filters: ProductListFilters): Prisma.ServingPr
   };
 }
 
+async function findServingSupermarketIds(client: PublicCatalogListProjection, supermarket: string | undefined) {
+  if (!supermarket) return undefined;
+
+  const supermarkets = await client.servingSupermarket.findMany({
+    where: { slug: supermarket },
+    select: { id: true },
+  });
+  return supermarkets.map((entry) => entry.id);
+}
+
+async function findServingCandidateEans(
+  client: PublicCatalogListProjection,
+  matchingEans: string[],
+  supermarketIds: number[] | undefined,
+  filters: ProductListFilters,
+) {
+  if (matchingEans.length === 0 || supermarketIds?.length === 0) return [];
+
+  const sourceRows = await client.servingOffer.findMany({
+    where: {
+      product_ean: { in: matchingEans },
+      price: { not: null },
+      is_available: true,
+      supermarket_id: supermarketIds ? { in: supermarketIds } : undefined,
+    },
+    orderBy: [{ last_checked_at: "desc" }, { supermarket_id: "asc" }],
+    take: calculateSourceProductCandidateReadLimit(filters),
+    select: { product_ean: true },
+  });
+  return Array.from(new Set(sourceRows.map((row) => row.product_ean)))
+    .slice(0, calculateProductCandidateReadLimit(filters));
+}
+
+function groupServingOffersByEan(
+  offers: Array<Omit<PriceEntryRecord, "id" | "supermarket"> & { product_ean: string; supermarket_id: number }>,
+  supermarkets: PriceEntryRecord["supermarket"][],
+) {
+  const supermarketsById = new Map(supermarkets.map((supermarket) => [supermarket.id, supermarket]));
+  const offersByEan = new Map<string, PriceEntryRecord[]>();
+  for (const offer of offers) {
+    const supermarket = supermarketsById.get(offer.supermarket_id);
+    if (!supermarket) continue;
+    const entries = offersByEan.get(offer.product_ean) ?? [];
+    entries.push({ ...offer, id: offer.supermarket_id, supermarket });
+    offersByEan.set(offer.product_ean, entries);
+  }
+  return offersByEan;
+}
+
+function paginatePublicProductList(items: ProductSummary[], page: number, limit: number) {
+  const offset = (page - 1) * limit;
+  return {
+    items: items.slice(offset, offset + limit),
+    total: items.length,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(items.length / limit)),
+  };
+}
+
 export async function loadPublicProductList(
   client: PublicCatalogListProjection,
   filters: ProductListFilters = {},
@@ -532,31 +592,16 @@ export async function loadPublicProductList(
     where: buildServingProductWhere(filters),
     select: { ean: true },
   });
-  const matchingEans = matchingProducts.map((product) => product.ean);
-  const supermarketIds = filters.supermarket
-    ? (await client.servingSupermarket.findMany({
-        where: { slug: filters.supermarket },
-        select: { id: true },
-      })).map((supermarket) => supermarket.id)
-    : undefined;
-  const sourceRows = matchingEans.length === 0 || (supermarketIds && supermarketIds.length === 0)
-    ? []
-    : await client.servingOffer.findMany({
-        where: {
-          product_ean: { in: matchingEans },
-          price: { not: null },
-          is_available: true,
-          supermarket_id: supermarketIds ? { in: supermarketIds } : undefined,
-        },
-        orderBy: [{ last_checked_at: "desc" }, { supermarket_id: "asc" }],
-        take: calculateSourceProductCandidateReadLimit(filters),
-        select: { product_ean: true },
-      });
-  const candidateEans = Array.from(new Set(sourceRows.map((row) => row.product_ean)))
-    .slice(0, calculateProductCandidateReadLimit(filters));
+  const supermarketIds = await findServingSupermarketIds(client, filters.supermarket);
+  const candidateEans = await findServingCandidateEans(
+    client,
+    matchingProducts.map((product) => product.ean),
+    supermarketIds,
+    filters,
+  );
 
   if (candidateEans.length === 0) {
-    return { items: [], total: 0, page, limit, totalPages: 1 };
+    return paginatePublicProductList([], page, limit);
   }
 
   const [products, offers] = await Promise.all([
@@ -576,28 +621,12 @@ export async function loadPublicProductList(
     where: { id: { in: Array.from(new Set(offers.map((offer) => offer.supermarket_id))) } },
     select: { id: true, name: true, slug: true, logo_url: true, freshness_sla_hours: true },
   });
-  const supermarketsById = new Map(supermarkets.map((supermarket) => [supermarket.id, supermarket]));
-  const offersByEan = new Map<string, PriceEntryRecord[]>();
-  for (const offer of offers) {
-    const supermarket = supermarketsById.get(offer.supermarket_id);
-    if (!supermarket) continue;
-    const entries = offersByEan.get(offer.product_ean) ?? [];
-    entries.push({ ...offer, id: offer.supermarket_id, supermarket });
-    offersByEan.set(offer.product_ean, entries);
-  }
+  const offersByEan = groupServingOffersByEan(offers, supermarkets);
   const mapped = products
     .map((product) => mapProductSummary({ ...product, supermarket_products: offersByEan.get(product.ean) ?? [] }, filters))
     .filter((product): product is ProductSummary => product !== null);
-  const sorted = sortProducts(filterProducts(mapped, filters), filters);
-  const offset = (page - 1) * limit;
 
-  return {
-    items: sorted.slice(offset, offset + limit),
-    total: sorted.length,
-    page,
-    limit,
-    totalPages: Math.max(1, Math.ceil(sorted.length / limit)),
-  };
+  return paginatePublicProductList(sortProducts(filterProducts(mapped, filters), filters), page, limit);
 }
 
 const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail | null> => {
