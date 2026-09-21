@@ -38,8 +38,18 @@ test("rate limiter preserves allow, deny, and fail-open shape", async () => {
   assert.deepEqual({ success: open.success, limit: open.limit, remaining: open.remaining }, { success: true, limit: 60, remaining: 60 });
 });
 
+test("compose smoke preserves the non-Vercel strict boundary", async () => {
+  const smoke = await import("node:fs/promises").then(({ readFile }) => readFile("scripts/compose-smoke.mjs", "utf8"));
+  assert.doesNotMatch(smoke, /VERCEL/);
+  assert.match(smoke, /assert\.equal\(response\.status, 503\)/);
+  assert.match(smoke, /redis-cli", "DBSIZE"/);
+});
+
 test("integrated search cache isolates the top-level envelope in v3 and excludes degraded writes", async () => {
   assert.equal(buildSearchCacheKey(" Leche ", 8), "search:v3:leche:8");
   const route = await import("node:fs/promises").then(({ readFile }) => readFile("src/app/api/search/route.ts", "utf8"));
-  assert.match(route, /if \(!data\.degraded\) \{\s*await setCachedJson\(cacheKey, data,/);
+  assert.match(
+    route,
+    /if \(!data\.degraded\) \{\s*const envelope = createPublicCatalogCacheEnvelope\(authority, data\);\s*if \(envelope\) await setCachedJson\(cacheKey, envelope,/,
+  );
 });
