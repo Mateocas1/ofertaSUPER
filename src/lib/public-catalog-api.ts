@@ -1,6 +1,12 @@
 import { ZodError } from "zod";
 
+import { loadPublicProductList } from "@/lib/catalog";
 import type { PublicCatalogAuthorityFingerprint } from "@/lib/public-catalog-authority";
+import {
+  createPublicCatalogGuardedRead,
+  type PublicCatalogProjection,
+  type PublicCatalogReadResult,
+} from "@/lib/public-catalog-read.server";
 import { classifyPublicCatalogReadiness } from "@/lib/public-catalog-readiness";
 import { productListQuerySchema } from "@/lib/schemas/product";
 import { promotionListQuerySchema } from "@/lib/schemas/promotion";
@@ -42,6 +48,10 @@ export type PublicCatalogData<T> = T & PublicCatalogProvenance;
 
 export class PublicCatalogUnavailableError extends Error {}
 
+export type PublicCatalogGuardedReader = <T>(
+  callback: (projection: PublicCatalogProjection) => T | Promise<T>,
+) => Promise<PublicCatalogReadResult<T>>;
+
 type PublicCatalogCacheEnvelope<T extends object> = {
   version: 1;
   authority: PublicCatalogAuthorityFingerprint;
@@ -73,8 +83,21 @@ export const loadPublicCatalogPublication: PublicationLoader = async () => {
 };
 
 type ProductListLoader = (filters: ProductListFilters) => Promise<ProductPage>;
+type SearchProjection = Pick<
+  PublicCatalogProjection,
+  "servingProduct" | "servingOffer" | "servingSupermarket"
+>;
 type CategoryLoader = () => Promise<CategorySummary[]>;
 type PromotionLoader = (filters: PromotionFilters) => Promise<PromotionSummary[]>;
+type GuardedProductListLoader = (
+  projection: PublicCatalogProjection,
+  filters: ProductListFilters,
+) => Promise<ProductPage>;
+type GuardedCategoryLoader = (projection: PublicCatalogProjection) => Promise<CategorySummary[]>;
+type GuardedPromotionLoader = (
+  projection: PublicCatalogProjection,
+  filters: PromotionFilters,
+) => Promise<PromotionSummary[]>;
 
 function validationErrorResult(error: ZodError): PublicApiResult<never> {
   return {
@@ -196,6 +219,23 @@ export async function resolvePublicCatalogDataFromAuthority<T extends object>(
   }
 }
 
+export async function resolvePublicCatalogDataFromGuardedRead<T extends object>(
+  loadData: (projection: PublicCatalogProjection) => T | Promise<T>,
+  guardedRead: PublicCatalogGuardedReader = createPublicCatalogGuardedRead(
+    process.env.PUBLIC_CATALOG_SERVING_IDENTITY_JSON,
+  ),
+): Promise<PublicCatalogData<T>> {
+  const result = await guardedRead(loadData);
+  if (!result.available) {
+    throw new PublicCatalogUnavailableError();
+  }
+
+  const readiness = requireAvailablePublicCatalogReadiness(
+    classifyPublicCatalogReadiness({ verified_at: new Date(result.decision.verifiedAt) }),
+  );
+  return publicCatalogData(result.value, readiness);
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -310,6 +350,32 @@ async function catalogResult<T extends object>(
   }
 }
 
+export async function loadPublicSearchSuggestions(
+  projection: SearchProjection,
+  query: string,
+  limit: number,
+) {
+  const result = await loadPublicProductList(projection, {
+    query,
+    limit,
+    page: 1,
+    sort: "relevance",
+  });
+
+  return result.items.slice(0, limit).map((item) => ({
+    ean: item.ean,
+    name: item.name,
+    brand: item.brand,
+    imageUrl: item.imageUrl,
+    category: item.category,
+    minPrice: item.displayPrice,
+    displayPrice: item.displayPrice,
+    latestCheckedAt: item.latestCheckedAt,
+    bestPriceCheckedAt: item.displayPriceCheckedAt,
+    freshnessStatus: item.displayPriceFreshnessStatus,
+  }));
+}
+
 export async function resolvePublicProductList(
   searchParams: Record<string, string>,
   loadProducts: ProductListLoader,
@@ -348,5 +414,60 @@ export async function resolvePublicPromotions(
     }
 
     throw error;
+  }
+}
+
+export async function resolveGuardedPublicProductList(
+  searchParams: Record<string, string>,
+  loadProducts: GuardedProductListLoader,
+): Promise<PublicApiResult<PublicCatalogData<ProductPage>>> {
+  try {
+    const filters = productFiltersFromSearchParams(searchParams);
+    return {
+      status: 200,
+      body: await resolvePublicCatalogDataFromGuardedRead((projection) => loadProducts(projection, filters)),
+    };
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return validationErrorResult(error);
+    }
+
+    return { status: 503, body: publicCatalogUnavailable() };
+  }
+}
+
+export async function resolveGuardedPublicCategories(
+  loadCategories: GuardedCategoryLoader,
+): Promise<PublicApiResult<PublicCatalogData<{ items: CategorySummary[] }>>> {
+  try {
+    return {
+      status: 200,
+      body: await resolvePublicCatalogDataFromGuardedRead(
+        async (projection) => ({ items: await loadCategories(projection) }),
+      ),
+    };
+  } catch {
+    return { status: 503, body: publicCatalogUnavailable() };
+  }
+}
+
+export async function resolveGuardedPublicPromotions(
+  searchParams: Record<string, string>,
+  loadPromotions: GuardedPromotionLoader,
+): Promise<PublicApiResult<PublicCatalogData<{ items: PromotionSummary[] }>>> {
+  try {
+    const filters = promotionFiltersFromSearchParams(searchParams);
+    return {
+      status: 200,
+      body: await resolvePublicCatalogDataFromGuardedRead(
+        async (projection) => ({ items: await loadPromotions(projection, filters) }),
+      ),
+    };
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return validationErrorResult(error);
+    }
+
+    return { status: 503, body: publicCatalogUnavailable() };
   }
 }

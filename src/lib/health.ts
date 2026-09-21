@@ -1,3 +1,4 @@
+import type { PublicCatalogGuardedReader } from "./public-catalog-api";
 import { classifyPublicCatalogReadiness } from "./public-catalog-readiness";
 import { validateRuntimeContract, type RuntimeEnvironment } from "./runtime-contract";
 
@@ -7,18 +8,33 @@ export type Readiness = {
 };
 
 type DatabaseCheck = () => Promise<unknown>;
-type PublicationCheck = () => Promise<{ verified_at: Date | null } | null>;
 type Cache = { expiresAt: number; database: "ok" | "error" } | undefined;
 
-export type CatalogHealth = { status: "current" | "degraded"; publication: "current" | "unproven" };
+export type CatalogHealth = {
+	status: "current" | "degraded" | "unavailable";
+	publication: "current" | "unproven";
+};
 
-export function createCatalogHealthChecker(loadPublication: PublicationCheck, options: { now?: () => Date } = {}) {
+export function catalogHealthStatusCode(health: CatalogHealth) {
+	return health.status === "current" ? 200 : 503;
+}
+
+export function createCatalogHealthChecker(guardedRead: PublicCatalogGuardedReader, options: { now?: () => Date } = {}) {
 	return async (): Promise<CatalogHealth> => {
 		try {
-			const readiness = classifyPublicCatalogReadiness(await loadPublication(), { now: options.now?.() });
-			return readiness.status === "fresh" ? { status: "current", publication: "current" } : { status: "degraded", publication: "unproven" };
+			const result = await guardedRead(async () => undefined);
+			if (!result.available) return { status: "unavailable", publication: "unproven" };
+
+			const readiness = classifyPublicCatalogReadiness(
+				{ verified_at: new Date(result.decision.verifiedAt) },
+				{ now: options.now?.() },
+			);
+			if (readiness.status === "fresh") return { status: "current", publication: "current" };
+			return readiness.status === "degraded"
+				? { status: "degraded", publication: "unproven" }
+				: { status: "unavailable", publication: "unproven" };
 		} catch {
-			return { status: "degraded", publication: "unproven" };
+			return { status: "unavailable", publication: "unproven" };
 		}
 	};
 }

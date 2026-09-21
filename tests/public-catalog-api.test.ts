@@ -9,6 +9,7 @@ import {
   reclassifyCachedPublicCatalogData,
   resolvePublicCatalogData,
   resolvePublicCatalogDataFromAuthority,
+  resolvePublicCatalogDataFromGuardedRead,
   resolvePublicCategories,
   resolvePublicProductList,
   resolvePublicPromotions,
@@ -133,6 +134,47 @@ describe("public catalog publication gate", () => {
 
     assert.equal(loadCalls, 1);
     assert.deepEqual(result, cachePayload);
+  });
+
+  it("maps guarded authority denial to unavailable before loading commercial data", async () => {
+    let loadCalls = 0;
+
+    await assert.rejects(resolvePublicCatalogDataFromGuardedRead(
+      async () => { loadCalls += 1; return databasePage; },
+      async () => ({ available: false }),
+    ), PublicCatalogUnavailableError);
+
+    assert.equal(loadCalls, 0);
+  });
+
+  it("passes the guarded transaction projection to the low-level loader", async () => {
+    const projection = { guarded: "transaction projection" } as never;
+    let receivedProjection: unknown;
+
+    const result = await resolvePublicCatalogDataFromGuardedRead(
+      async (received) => {
+        receivedProjection = received;
+        return { items: [] };
+      },
+      async (loadData) => ({
+        available: true,
+        decision: {
+          ...authority,
+          generation: "1",
+          lineage: `sha256:${"c".repeat(64)}`,
+          policyDigest: `sha256:${"d".repeat(64)}`,
+          healthVersion: "1",
+          buildDigest: `sha256:${"e".repeat(64)}`,
+          readerExpiresAt: authority.expiresAt,
+          decisionDeadline: authority.expiresAt,
+        },
+        value: await loadData(projection),
+      }),
+    );
+
+    assert.equal(receivedProjection, projection);
+    assert.deepEqual(result.items, []);
+    assert.equal(result.dataSource, "database");
   });
 
   it("withholds unavailable authority before loading data but serves degraded history", async () => {

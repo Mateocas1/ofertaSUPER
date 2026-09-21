@@ -40,6 +40,31 @@ function runRouteScenario(scenario: Scenario, route: "search" | "product" = scen
     else process.env.PUBLIC_CATALOG_SERVING_IDENTITY_JSON = ${JSON.stringify(JSON.stringify(identity))};
     const fixtureModule = await import("./tests/fixtures/public-catalog-revocation-dependencies.ts");
     const dependencies = fixtureModule.default ?? fixtureModule;
+    const servingIdentity = ${JSON.stringify(identity)};
+    const queryAuthority = async (query) => {
+      const now = new Date();
+      if (query.join("").includes("clock_timestamp")) return [{ now }];
+      return [{
+        readerId: servingIdentity.deploymentId,
+        generation: "1",
+        lineage: "sha256:" + "c".repeat(64),
+        policyDigest: "sha256:" + "d".repeat(64),
+        healthVersion: "2",
+        buildDigest: "sha256:" + "e".repeat(64),
+        expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+      }];
+    };
+    dependencies.db.$queryRaw = queryAuthority;
+    dependencies.db.$transaction = async (callback) => callback({
+      ...dependencies.db,
+      $executeRaw: async () => 0,
+      servingProduct: { findUnique: async ({ where }) => dependencies.getProductDetail(where.ean) },
+      servingOffer: { findMany: async () => [] },
+      servingHistory: { findMany: async () => [] },
+      servingPromotion: { findMany: async () => [] },
+      servingMembership: { findMany: async () => [] },
+      servingSupermarket: { findMany: async () => [] },
+    });
     const { NextRequest } = await import("next/server");
     const [searchModule, productDetailModule] = await Promise.all([
       import("./src/app/api/search/route.ts"), import("./src/app/api/products/[ean]/route.ts"),
@@ -77,23 +102,29 @@ function runRouteScenario(scenario: Scenario, route: "search" | "product" = scen
   };
 }
 
-describe("public catalog cache revocation", () => {
-  it("uses a valid authority for each real GET request and serves warm cache data", () => {
+describe("public catalog guarded no-cache revocation", () => {
+  it("uses a valid authority for each real GET request and reloads eligible serving data without Redis", () => {
     const actual = runRouteScenario("warm");
     assert.equal(actual.initial.status, 200);
     assert.equal(actual.followUp?.status, 200);
     assert.deepEqual(actual.followUp?.body, {
-      item: { ean: "7790000000001", name: "Cached product" }, dataSource: "database", degraded: false,
+      item: {
+        ean: "7790000000001", name: "Cached product", minPrice: null, maxPrice: null, freshMinPrice: null,
+        displayPrice: null, displayPriceCheckedAt: null, displayPriceFreshnessStatus: "unknown", hasFreshPrice: false,
+        stalePriceCount: 0, automaticDiscountPercent: null, bestFinalPrice: null, bestPriceDropAlert: null,
+        priceEntries: [], promotions: [],
+      },
+      dataSource: "database", degraded: false,
       verifiedAt: actual.initial.body && typeof actual.initial.body === "object" ? (actual.initial.body as { verifiedAt: string }).verifiedAt : undefined,
       latestCheckedAt: null,
     });
-    assert.deepEqual(actual.observations, { authorityReads: 2, cacheReads: 2, cacheWrites: 1, catalogReads: 1, cachedEntries: 1 });
+    assert.deepEqual(actual.observations, { authorityReads: 2, cacheReads: 0, cacheWrites: 0, catalogReads: 2, cachedEntries: 0 });
   });
 
-  it("denies a warm cache after revocation before another catalog or Redis read", () => {
+  it("denies after revocation before another catalog or Redis read", () => {
     const actual = runRouteScenario("revoked");
     assert.deepEqual(actual.followUp, { status: 503, body: unavailable });
-    assert.deepEqual(actual.observations, { authorityReads: 2, cacheReads: 1, cacheWrites: 1, catalogReads: 1, cachedEntries: 1 });
+    assert.deepEqual(actual.observations, { authorityReads: 2, cacheReads: 0, cacheWrites: 0, catalogReads: 0, cachedEntries: 0 });
   });
 
   it("denies a missing startup identity without authority, catalog, or cache access", () => {
@@ -106,7 +137,7 @@ describe("public catalog cache revocation", () => {
     const actual = runRouteScenario("historical");
     assert.equal(actual.initial.status, 200);
     assert.equal((actual.initial.body as { degraded: boolean }).degraded, true);
-    assert.deepEqual(actual.observations, { authorityReads: 1, cacheReads: 1, cacheWrites: 0, catalogReads: 1, cachedEntries: 0 });
+    assert.deepEqual(actual.observations, { authorityReads: 1, cacheReads: 0, cacheWrites: 0, catalogReads: 1, cachedEntries: 0 });
   });
 
   for (const scenario of ["global", "client", "error", "timeout", "missing-provider", "missing-ip", "non-vercel", "spoofed"] as const) {

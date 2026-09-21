@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { searchParamsToObject } from "@/lib/api";
-import { getPromotions } from "@/lib/catalog";
-import { resolvePublicPromotions } from "@/lib/public-catalog-api";
+import { loadPublicPromotions } from "@/lib/catalog";
+import { resolveGuardedPublicPromotions } from "@/lib/public-catalog-api";
 import { rejectIfRateLimited, withRateLimitHeaders } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     return limiter.response;
   }
 
-  const result = await resolvePublicPromotions(searchParamsToObject(request.nextUrl), getPromotions);
+  const result = await resolveGuardedPublicPromotions(searchParamsToObject(request.nextUrl), loadPublicPromotions);
   const response = NextResponse.json(result.body, { status: result.status });
   void limiter.state.pending;
   return withRateLimitHeaders(response, limiter.state);

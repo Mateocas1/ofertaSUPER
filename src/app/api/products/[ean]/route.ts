@@ -1,20 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { buildDatabaseCatalogResponse } from "@/lib/basket-products-contract";
-import { getProductDetail } from "@/lib/catalog";
-import { buildProductDetailCacheKey } from "@/lib/cache-keys";
-import {
-  createPublicCatalogCacheEnvelope,
-  PublicCatalogUnavailableError,
-  publicCatalogUnavailable,
-  readPublicCatalogCacheEnvelope,
-  resolvePublicCatalogDataFromAuthority,
-} from "@/lib/public-catalog-api";
-import { resolvePublicCatalogRuntimeAuthority } from "@/lib/public-catalog-runtime.server";
-import { getCachedJson, setCachedJson } from "@/lib/redis";
+import { PublicCatalogUnavailableError, publicCatalogUnavailable } from "@/lib/public-catalog-api";
+import { resolveRouteProductDetail } from "@/lib/portfolio-catalog";
 import { admitStrictPublicRoute, withRateLimitHeaders } from "@/lib/rate-limit";
-
-const CACHE_TTL_SECONDS = 300;
 
 export async function GET(
   request: NextRequest,
@@ -31,29 +20,10 @@ export async function GET(
   void admission.global.pending;
   void admission.client.pending;
 
-  const authority = await resolvePublicCatalogRuntimeAuthority();
-  if (!authority) {
-    return NextResponse.json(buildDatabaseCatalogResponse(null, publicCatalogUnavailable()).body, { status: 503 });
-  }
   try {
-    const cacheKey = buildProductDetailCacheKey(ean);
-    const cached = readPublicCatalogCacheEnvelope<{ item: Awaited<ReturnType<typeof getProductDetail>> }>(
-      await getCachedJson<unknown>(cacheKey),
-      authority,
-    );
-    if (cached) return withRateLimitHeaders(NextResponse.json(cached), admission.client);
-
-    const data = await resolvePublicCatalogDataFromAuthority(
-      async () => ({ item: await getProductDetail(ean) }),
-      authority,
-    );
+    const data = await resolveRouteProductDetail(ean);
     if (!data.item) return withRateLimitHeaders(NextResponse.json({ error: "Product not found" }, { status: 404 }), admission.client);
-    if (!data.degraded) {
-      const envelope = createPublicCatalogCacheEnvelope(authority, data);
-      if (envelope) await setCachedJson(cacheKey, envelope, CACHE_TTL_SECONDS);
-    }
-    const result = buildDatabaseCatalogResponse(data, publicCatalogUnavailable());
-    return withRateLimitHeaders(NextResponse.json(result.body, { status: result.status }), admission.client);
+    return withRateLimitHeaders(NextResponse.json(data), admission.client);
   } catch (error) {
     const response = error instanceof PublicCatalogUnavailableError
       ? NextResponse.json(buildDatabaseCatalogResponse(null, publicCatalogUnavailable()).body, { status: 503 })
