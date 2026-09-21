@@ -101,6 +101,9 @@ function normalizeContract(request: CmvpFirstBatchRequest) {
   return { ...request, batchId: request.batchId.trim(), term, expectedGtins };
 }
 
+type NormalizedRequest = ReturnType<typeof normalizeContract>;
+type CmvpFirstBatchResult = { artifact: CmvpFirstBatchArtifact; replayed: boolean };
+
 function acquisitionRunId(artifact: CmvpFirstBatchArtifact) {
   return artifact.runs[0]?.runId ?? null;
 }
@@ -109,7 +112,7 @@ function runsWithError(artifact: CmvpFirstBatchArtifact, error: string) {
   return artifact.runs.map((run) => ({ ...run, error }));
 }
 
-function contractDigest(request: ReturnType<typeof normalizeContract>) {
+function contractDigest(request: NormalizedRequest) {
   return digest({
     executionMode: request.dryRun ? "dry-run" : "confirmed-write",
     source: request.source,
@@ -120,88 +123,142 @@ function contractDigest(request: ReturnType<typeof normalizeContract>) {
   });
 }
 
-export async function runCmvpFirstBatch(
-  input: CmvpFirstBatchRequest,
-  dependencies: CmvpFirstBatchDependencies,
-): Promise<{ artifact: CmvpFirstBatchArtifact; replayed: boolean }> {
-  const request = normalizeContract(input);
-  const contract = contractDigest(request);
-  const existing = await dependencies.loadArtifact(request.batchId);
-  if (existing) {
-    if (existing.contractDigest !== contract) throw new Error("checkpoint contract conflict");
-    if (existing.state !== "acquired") return { artifact: existing, replayed: true };
-  }
+function createAcquiringCheckpoint(request: NormalizedRequest, contract: string): CmvpFirstBatchArtifact {
+  return {
+    schemaVersion: 1, batchId: request.batchId, source: request.source, term: request.term, count: 5,
+    dryRun: false, contractDigest: contract, state: "acquiring",
+    fetchedGtins: [], admittedGtins: [], reconciliationError: null, runs: [],
+  };
+}
 
-  let artifact: CmvpFirstBatchArtifact;
-  if (existing) {
-    artifact = existing;
-  } else {
-    if (!request.dryRun) {
-      artifact = {
-        schemaVersion: 1, batchId: request.batchId, source: request.source, term: request.term, count: 5,
-        dryRun: false, contractDigest: contract, state: "acquiring",
-        fetchedGtins: [], admittedGtins: [], reconciliationError: null, runs: [],
-      };
-      await dependencies.saveArtifact(artifact);
-    }
-    const acquisition = await dependencies.acquire(request);
-    let fetchedGtins: string[] = [];
-    let admittedGtins: string[] = [];
-    let error = acquisition.error;
-    try {
-      fetchedGtins = normalizeActualGtins(acquisition.fetchedGtins, "fetched");
-      admittedGtins = normalizeActualGtins(acquisition.admittedGtins, "admitted");
-    } catch {
-      error = "invalid_acquisition_gtins";
-    }
-    artifact = {
+async function persistArtifact(
+  request: NormalizedRequest,
+  artifact: CmvpFirstBatchArtifact,
+  dependencies: CmvpFirstBatchDependencies,
+) {
+  if (!request.dryRun) await dependencies.saveArtifact(artifact);
+}
+
+async function replayCheckpoint(
+  request: NormalizedRequest,
+  contract: string,
+  dependencies: CmvpFirstBatchDependencies,
+): Promise<CmvpFirstBatchArtifact | CmvpFirstBatchResult | null> {
+  const existing = await dependencies.loadArtifact(request.batchId);
+  if (!existing) return null;
+  if (existing.contractDigest !== contract) throw new Error("checkpoint contract conflict");
+  return existing.state === "acquired" ? existing : { artifact: existing, replayed: true };
+}
+
+function validateFetchedAndAdmitted(acquisition: AcquisitionResult) {
+  let fetchedGtins: string[] = [];
+  let admittedGtins: string[] = [];
+  let error = acquisition.error;
+  try {
+    fetchedGtins = normalizeActualGtins(acquisition.fetchedGtins, "fetched");
+    admittedGtins = normalizeActualGtins(acquisition.admittedGtins, "admitted");
+  } catch {
+    error = "invalid_acquisition_gtins";
+  }
+  return { fetchedGtins, admittedGtins, error };
+}
+
+function createAcquisitionArtifact(
+  request: NormalizedRequest,
+  contract: string,
+  acquisition: AcquisitionResult,
+) {
+  const { fetchedGtins, admittedGtins, error } = validateFetchedAndAdmitted(acquisition);
+  return {
+    artifact: {
       schemaVersion: 1, batchId: request.batchId, source: request.source, term: request.term, count: 5,
       dryRun: request.dryRun, contractDigest: contract, state: error ? "blocked" : "acquired",
       fetchedGtins, admittedGtins, reconciliationError: null,
       runs: [{ runId: acquisition.runId, startedAt: acquisition.startedAt, finishedAt: acquisition.finishedAt,
         fetchedCount: fetchedGtins.length, admittedCount: admittedGtins.length, rejectedCount: acquisition.rejectedCount, error }],
-    };
-    if (!request.dryRun) await dependencies.saveArtifact(artifact);
-    if (error) {
-      if (!request.dryRun && acquisition.runId !== null) {
-        await dependencies.finalizeAcquisition(acquisition.runId, { status: "FAILED", errorSummary: error });
-      }
-      return { artifact, replayed: false };
-    }
+    } satisfies CmvpFirstBatchArtifact,
+    error,
+  };
+}
+
+async function finalizeRun(
+  request: NormalizedRequest,
+  runId: number | null,
+  outcome: { status: "SUCCESS" | "FAILED"; errorSummary: string | null },
+  dependencies: CmvpFirstBatchDependencies,
+) {
+  if (!request.dryRun && runId !== null) await dependencies.finalizeAcquisition(runId, outcome);
+}
+
+async function handleAcquisitionFailure(
+  request: NormalizedRequest,
+  artifact: CmvpFirstBatchArtifact,
+  error: string | null,
+  dependencies: CmvpFirstBatchDependencies,
+): Promise<CmvpFirstBatchResult | null> {
+  if (!error) return null;
+  await finalizeRun(request, acquisitionRunId(artifact), { status: "FAILED", errorSummary: error }, dependencies);
+  return { artifact, replayed: false };
+}
+
+function reconciliationFailureMessage(cause: unknown) {
+  return cause instanceof Error && cause.message ? cause.message : "unknown_reconciliation_error";
+}
+
+async function reconcileArtifact(
+  request: NormalizedRequest,
+  artifact: CmvpFirstBatchArtifact,
+  dependencies: CmvpFirstBatchDependencies,
+): Promise<CmvpFirstBatchResult> {
+  const runId = acquisitionRunId(artifact);
+  const reconciliation = await dependencies.reconcile(request).catch((cause) => ({
+    runId: null,
+    promotedCount: 0,
+    error: reconciliationFailureMessage(cause),
+  }));
+  const error = reconciliation.error ?? (reconciliation.promotedCount === request.count
+    ? null
+    : `reconciliation promoted count mismatch: expected ${request.count}, got ${reconciliation.promotedCount}`);
+  if (error) {
+    await finalizeRun(request, runId, { status: "FAILED", errorSummary: error }, dependencies);
+    const blocked = { ...artifact, state: "blocked" as const, reconciliationError: error, runs: runsWithError(artifact, error) };
+    await persistArtifact(request, blocked, dependencies);
+    throw new Error(`reconciliation failed: ${error}`);
+  }
+  await finalizeRun(request, runId, { status: "SUCCESS", errorSummary: null }, dependencies);
+  const completed = { ...artifact, state: "completed" as const, reconciliationError: null };
+  await persistArtifact(request, completed, dependencies);
+  return { artifact: completed, replayed: false };
+}
+
+export async function runCmvpFirstBatch(
+  input: CmvpFirstBatchRequest,
+  dependencies: CmvpFirstBatchDependencies,
+): Promise<CmvpFirstBatchResult> {
+  const request = normalizeContract(input);
+  const contract = contractDigest(request);
+  const checkpoint = await replayCheckpoint(request, contract, dependencies);
+  if (checkpoint && "replayed" in checkpoint) return checkpoint;
+
+  let artifact = checkpoint;
+  if (!artifact) {
+    await persistArtifact(request, createAcquiringCheckpoint(request, contract), dependencies);
+    const acquisition = await dependencies.acquire(request);
+    const acquired = createAcquisitionArtifact(request, contract, acquisition);
+    artifact = acquired.artifact;
+    await persistArtifact(request, artifact, dependencies);
+    const failure = await handleAcquisitionFailure(request, artifact, acquired.error, dependencies);
+    if (failure) return failure;
   }
 
   const runId = acquisitionRunId(artifact);
   if (!sameSet(artifact.fetchedGtins, request.expectedGtins) || !sameSet(artifact.admittedGtins, request.expectedGtins)) {
     const error = "fetched/admitted GTIN mismatch before reconciliation";
-    if (!request.dryRun && runId !== null) {
-      await dependencies.finalizeAcquisition(runId, { status: "FAILED", errorSummary: error });
-    }
-    artifact = { ...artifact, state: "blocked", runs: runsWithError(artifact, error) };
-    if (!request.dryRun) await dependencies.saveArtifact(artifact);
-    return { artifact, replayed: false };
+    await finalizeRun(request, runId, { status: "FAILED", errorSummary: error }, dependencies);
+    const blocked = { ...artifact, state: "blocked" as const, runs: runsWithError(artifact, error) };
+    await persistArtifact(request, blocked, dependencies);
+    return { artifact: blocked, replayed: false };
   }
   if (request.dryRun) return { artifact: { ...artifact, state: "completed" }, replayed: false };
-  const reconciliation = await dependencies.reconcile(request);
-  const error = reconciliation.error ?? (reconciliation.promotedCount === request.count
-    ? null
-    : `reconciliation promoted count mismatch: expected ${request.count}, got ${reconciliation.promotedCount}`);
-  if (error) {
-    if (runId !== null) {
-      await dependencies.finalizeAcquisition(runId, { status: "FAILED", errorSummary: error });
-    }
-    artifact = {
-      ...artifact,
-      state: "blocked",
-      reconciliationError: error,
-      runs: runsWithError(artifact, error),
-    };
-    await dependencies.saveArtifact(artifact);
-    throw new Error(`reconciliation failed: ${error}`);
-  }
-  if (runId !== null) {
-    await dependencies.finalizeAcquisition(runId, { status: "SUCCESS", errorSummary: null });
-  }
-  artifact = { ...artifact, state: "completed", reconciliationError: null };
-  await dependencies.saveArtifact(artifact);
-  return { artifact, replayed: false };
+  return reconcileArtifact(request, artifact, dependencies);
 }
