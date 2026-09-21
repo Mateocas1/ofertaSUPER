@@ -195,4 +195,57 @@ describe("CMVP catalog batch", () => {
       reconcile: async () => ({ runId: 12, promotedCount: 2, error: "" }),
     })), /reconciliation failed/);
   });
+
+  it("finalizes and persists a deterministic blocked checkpoint when reconciliation rejects", async () => {
+    const failed = dependencies({
+      reconcile: async () => { failed.calls.push("reconcile"); throw new Error("connection reset"); },
+    });
+    await assert.rejects(
+      () => runCmvpCatalogBatch(request({ dryRun: false, confirmWrite: true }), failed),
+      /reconciliation failed: reconciliation dependency rejected: connection reset/,
+    );
+    assert.deepEqual(failed.calls, ["save", "acquire", "save", "reconcile", "finalize:FAILED", "save"]);
+  });
+
+  it("rejects malformed acquired checkpoints before reconciliation without finalizing success", async () => {
+    const checkpoint = await runCmvpCatalogBatch(request({ dryRun: false, confirmWrite: true }), dependencies());
+    const acquired = { ...checkpoint.artifact, state: "acquired" as const };
+    const malformed = [
+      { ...acquired, contractDigest: "tampered" },
+      { ...acquired, expectedGtins: [expectedGtins[0]!], runs: [{ ...acquired.runs[0]!, fetchedCount: 1 }] },
+      { ...acquired, fetchedGtins: [expectedGtins[0]!] },
+      { ...acquired, admittedGtins: [expectedGtins[0]!] },
+      { ...acquired, reconciliationError: "previous failure" },
+      { ...acquired, runs: [{ ...acquired.runs[0]!, error: "previous failure" }] },
+    ];
+    for (const invalid of malformed) {
+      const replay = dependencies({ loadArtifact: async () => invalid });
+      await assert.rejects(() => runCmvpCatalogBatch(request({ dryRun: false, confirmWrite: true }), replay), /checkpoint/);
+      assert.deepEqual(replay.calls, []);
+    }
+  });
+
+  it("does not persist when dry-run finds an acquiring checkpoint", async () => {
+    const completed = await runCmvpCatalogBatch(request(), dependencies());
+    const acquiring = { ...completed.artifact, state: "acquiring" as const };
+    const replay = dependencies({ loadArtifact: async () => acquiring });
+    const result = await runCmvpCatalogBatch(request(), replay);
+    assert.equal(result.artifact.state, "blocked");
+    assert.equal(result.artifact.reconciliationError, "acquisition checkpoint lacks durable outcome");
+    assert.deepEqual(replay.calls, []);
+  });
+
+  it("propagates thrown dependencies without executing later pipeline steps", async () => {
+    const loadFailure = dependencies({ loadArtifact: async () => { loadFailure.calls.push("load"); throw new Error("load failed"); } });
+    await assert.rejects(() => runCmvpCatalogBatch(request(), loadFailure), /load failed/);
+    assert.deepEqual(loadFailure.calls, ["load"]);
+
+    const acquireFailure = dependencies({ acquire: async () => { acquireFailure.calls.push("acquire"); throw new Error("acquire failed"); } });
+    await assert.rejects(() => runCmvpCatalogBatch(request(), acquireFailure), /acquire failed/);
+    assert.deepEqual(acquireFailure.calls, ["acquire"]);
+
+    const reconcileFailure = dependencies({ reconcile: async () => { reconcileFailure.calls.push("reconcile"); throw new Error("reconcile failed"); } });
+    await assert.rejects(() => runCmvpCatalogBatch(request({ dryRun: false, confirmWrite: true }), reconcileFailure), /reconcile failed/);
+    assert.deepEqual(reconcileFailure.calls, ["save", "acquire", "save", "reconcile", "finalize:FAILED", "save"]);
+  });
 });
