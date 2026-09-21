@@ -1,4 +1,4 @@
-name: ofertasuper-compose-smoke
+name: ofertasuper-cmvp-local-bootstrap
 services:
   postgres:
     image: postgres:16-bookworm
@@ -15,54 +15,43 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
-  redis:
-    image: redis:7-bookworm
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 2s
-      timeout: 3s
-      retries: 20
+  role-provision:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_DB: ofertasuper
+      POSTGRES_USER: ofertasuper_owner
+      APP_PASSWORD: app-local-only
+      PGPASSWORD: owner-local-only
+      PGHOST: postgres
+    volumes:
+      - ./docker/compose/init-app-role.sh:/harness/init-app-role.sh:ro
+    entrypoint: ["/bin/sh", "/harness/init-app-role.sh"]
+    depends_on:
+      postgres: { condition: service_healthy }
   migrate:
     build: { context: ., target: migrator }
     environment:
       DATABASE_URL: postgresql://ofertasuper_owner:owner-local-only@postgres:5432/ofertasuper
       DIRECT_URL: postgresql://ofertasuper_owner:owner-local-only@postgres:5432/ofertasuper
     depends_on:
-      postgres: { condition: service_healthy }
-  fixture:
+      role-provision: { condition: service_completed_successfully }
+  grants:
     image: postgres:16-bookworm
-    environment: { PGPASSWORD: app-local-only }
+    environment: { PGPASSWORD: owner-local-only }
     volumes:
       - ./docker/compose/app-grants.sql:/harness/app-grants.sql:ro
-      - ./docker/compose/fixture.sql:/harness/fixture.sql:ro
     command: >-
-      sh -ec 'PGPASSWORD=owner-local-only psql -h postgres -U ofertasuper_owner -d ofertasuper -v ON_ERROR_STOP=1 -f /harness/app-grants.sql &&
-      psql -h postgres -U ofertasuper_app -d ofertasuper -v ON_ERROR_STOP=1 -f /harness/fixture.sql'
+      psql -h postgres -U ofertasuper_owner -d ofertasuper -v ON_ERROR_STOP=1 -f /harness/app-grants.sql
     depends_on:
       migrate: { condition: service_completed_successfully }
-  web:
-    build: .
+  seed:
+    build: { context: ., target: seeder }
     environment:
       DATABASE_URL: postgresql://ofertasuper_app:app-local-only@postgres:5432/ofertasuper
-      DIRECT_URL: postgresql://ofertasuper_owner:owner-local-only@postgres:5432/ofertasuper
-      REDIS_URL: redis://redis:6379
-      NEXT_PUBLIC_SITE_URL: http://localhost:3000
-      ADMIN_ENABLED: "false"
-      CATALOG_OFFLINE_MODE: "false"
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ""
-      CLERK_SECRET_KEY: ""
-      UPSTASH_REDIS_REST_URL: ""
-      UPSTASH_REDIS_REST_TOKEN: ""
-      VTEX_SHA256_HASH: ""
-      SCRAPER_ALERT_WEBHOOK_URL: ""
-    ports: ["127.0.0.1:${COMPOSE_WEB_PORT:-3300}:3000"]
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
-      interval: 2s
-      timeout: 3s
-      retries: 20
+    volumes:
+      - ./prisma:/app/prisma:ro
+    command: ./node_modules/.bin/tsx prisma/seed.ts
     depends_on:
-      fixture: { condition: service_completed_successfully }
-      redis: { condition: service_healthy }
+      grants: { condition: service_completed_successfully }
 volumes:
   postgres-data:

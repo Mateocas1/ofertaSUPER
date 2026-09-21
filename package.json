@@ -19,6 +19,7 @@
     "db:migrate:deploy": "tsx scripts/deploy-migrations.ts",
     "db:bootstrap:render": "tsx scripts/render-postgres-bootstrap.ts",
     "db:seed": "tsx prisma/seed.ts",
+    "bootstrap:cmvp-local": "docker compose up --build --exit-code-from seed seed",
     "runtime:check": "tsx scripts/check-runtime-contract.ts",
     "smoke:job-image": "node scripts/job-image-smoke.mjs",
     "smoke:compose": "node scripts/compose-smoke.mjs",

@@ -20,6 +20,10 @@ FROM dependencies AS migrator
 COPY prisma ./prisma
 CMD ["npx", "prisma", "migrate", "deploy"]
 
+FROM dependencies AS seeder
+COPY prisma ./prisma
+RUN npm run db:generate
+
 FROM dependencies AS job-dependencies
 COPY prisma ./prisma
 RUN npm run db:generate \
