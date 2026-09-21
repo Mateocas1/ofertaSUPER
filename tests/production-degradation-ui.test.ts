@@ -2,6 +2,35 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+const lighthouseAssertions = {
+  "categories:performance": ["warn", { minScore: 0.9 }],
+  "categories:accessibility": ["error", { minScore: 0.9 }],
+  "categories:best-practices": ["warn", { minScore: 0.9 }],
+};
+
+test("Lighthouse keeps SEO enforcement for indexable routes while excluding fail-closed catalog routes", () => {
+  const config = JSON.parse(readFileSync("lighthouserc.json", "utf8"));
+  const [indexableRoutes, unavailableCatalogRoutes] = config.ci.assert.assertMatrix;
+  const matches = (entry: { matchingUrlPattern: string }, url: string) =>
+    new RegExp(entry.matchingUrlPattern).test(url);
+
+  assert.deepEqual(indexableRoutes.assertions, {
+    ...lighthouseAssertions,
+    "categories:seo": ["error", { minScore: 0.9 }],
+  });
+  assert.deepEqual(unavailableCatalogRoutes.assertions, lighthouseAssertions);
+
+  for (const url of ["http://localhost:3000/", "http://localhost:3000/canasta", "http://localhost:3000/producto/leche"]) {
+    assert.ok(matches(indexableRoutes, url));
+    assert.ok(!matches(unavailableCatalogRoutes, url));
+  }
+
+  for (const url of ["http://localhost:3000/ofertas", "http://localhost:3000/buscar?q=leche"]) {
+    assert.ok(!matches(indexableRoutes, url));
+    assert.ok(matches(unavailableCatalogRoutes, url));
+  }
+});
+
 test("public catalog pages never replace unavailable data with demos", () => {
   const searchPage = readFileSync("src/app/buscar/page.tsx", "utf8");
   const offersPage = readFileSync("src/app/ofertas/page.tsx", "utf8");
