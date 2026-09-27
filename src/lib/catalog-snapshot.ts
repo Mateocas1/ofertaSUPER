@@ -93,6 +93,31 @@ function matchesQuery(product: SnapshotProduct, haystack: string): boolean {
     .some((field) => field.includes(haystack));
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Search ranking, shared by /api/search, /api/products and /buscar:
+// 0) exact EAN match; 1) name starts with the term; 2) term as a whole word
+// in the name without a preceding "de" (so "dulce de leche" is not leche);
+// 3) any other name or brand match. Ties break by supermarkets with an
+// offer, then by name.
+export function snapshotMatchRank(
+  product: { ean: string; name: string },
+  query: string,
+): 0 | 1 | 2 | 3 {
+  if (product.ean === query.trim()) return 0;
+  const term = normalizeQuery(query);
+  const name = normalizeQuery(product.name);
+  if (name.startsWith(term)) return 1;
+  const wholeWord = new RegExp(
+    `(?<![\\p{L}\\p{N}])(?<!de )${escapeRegExp(term)}(?![\\p{L}\\p{N}])`,
+    "u",
+  );
+  if (term.length > 0 && wholeWord.test(name)) return 2;
+  return 3;
+}
+
 export type SnapshotProductResult = {
   product: SnapshotProduct;
   offers: OfferWithFreshness[];
@@ -128,6 +153,33 @@ export type SnapshotListResult = {
   products: SnapshotProductResult[];
 };
 
+function filterAndRankProducts(
+  snapshot: CatalogSnapshot,
+  query: string | null,
+  supermarket: string | null,
+): SnapshotProduct[] {
+  const matching = snapshot.products
+    .filter((product) => query === null || matchesQuery(product, query))
+    .filter((product) => {
+      if (supermarket === null) return true;
+      return snapshot.offers.some(
+        (offer) => offer.ean === product.ean && offer.source === supermarket,
+      );
+    });
+
+  const offersWithPrice = new Map<string, number>();
+  for (const offer of snapshot.offers) {
+    if (offer.available && offer.price !== null) {
+      offersWithPrice.set(offer.ean, (offersWithPrice.get(offer.ean) ?? 0) + 1);
+    }
+  }
+  matching.sort((left, right) =>
+    snapshotMatchRank(left, query ?? "") - snapshotMatchRank(right, query ?? "")
+    || (offersWithPrice.get(right.ean) ?? 0) - (offersWithPrice.get(left.ean) ?? 0)
+    || left.name.localeCompare(right.name));
+  return matching;
+}
+
 export function searchSnapshotProducts(options: {
   query?: string;
   supermarket?: string;
@@ -142,15 +194,7 @@ export function searchSnapshotProducts(options: {
   const supermarket = options.supermarket ?? null;
   const page = Math.max(1, options.page ?? 1);
 
-  const matching = snapshot.products
-    .filter((product) => query === null || matchesQuery(product, query))
-    .filter((product) => {
-      if (supermarket === null) return true;
-      return snapshot.offers.some(
-        (offer) => offer.ean === product.ean && offer.source === supermarket,
-      );
-    })
-    .sort((a, b) => a.ean.localeCompare(b.ean));
+  const matching = filterAndRankProducts(snapshot, query, supermarket);
 
   const start = (page - 1) * pageSize;
   const slice = matching.slice(start, start + pageSize);
