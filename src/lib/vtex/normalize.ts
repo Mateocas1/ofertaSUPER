@@ -130,20 +130,49 @@ function pickEan(rawProduct: LooseRecord, sku: LooseRecord | undefined) {
   return null;
 }
 
-function pickOffer(rawProduct: LooseRecord, sku: LooseRecord | undefined) {
-  const sellers = asRecordArray(sku?.sellers).length > 0 ? asRecordArray(sku?.sellers) : asRecordArray(rawProduct.sellers);
+function pickSellerAndOffer(rawProduct: LooseRecord, sku: LooseRecord | undefined) {
+  const skuSellers = asRecordArray(sku?.sellers);
+  const sellers = skuSellers.length > 0 ? skuSellers : asRecordArray(rawProduct.sellers);
   const seller = sellers.find((entry) => asRecord(entry.commertialOffer)?.AvailableQuantity) ?? sellers[0];
-  const offer = asRecord(seller?.commertialOffer) ?? asRecord(seller?.commercialOffer);
+
+  return { seller, offer: asRecord(seller?.commertialOffer) ?? asRecord(seller?.commercialOffer) };
+}
+
+function pickOfferPrices(rawProduct: LooseRecord, offer: LooseRecord | null) {
   const price = asNumber(offer?.Price ?? rawProduct.price);
-  const listPrice = asNumber(offer?.ListPrice ?? rawProduct.listPrice);
+
+  return {
+    price,
+    listPrice: normalizeListPrice(price, asNumber(offer?.ListPrice ?? rawProduct.listPrice)),
+  };
+}
+
+// An absent availability signal must not become "available". Treating an
+// unobserved offer as purchasable puts it in comparisons and in the basket,
+// so only an explicit signal from the source can mark an offer eligible.
+function resolveAvailability(offer: LooseRecord | null, rawProduct: LooseRecord): boolean {
+  const signals = [offer?.AvailableQuantity, offer?.IsAvailable, rawProduct.available];
+
+  for (const signal of signals) {
+    if (signal !== undefined && signal !== null) {
+      return Boolean(signal);
+    }
+  }
+
+  return false;
+}
+
+function pickOffer(rawProduct: LooseRecord, sku: LooseRecord | undefined) {
+  const { seller, offer } = pickSellerAndOffer(rawProduct, sku);
+  const { price, listPrice } = pickOfferPrices(rawProduct, offer);
 
   return {
     sellerId: pickFirstString(seller?.sellerId, seller?.id),
     price,
-    listPrice: normalizeListPrice(price, listPrice),
+    listPrice,
     referencePrice: asNumber(rawProduct.unitMultiplier ?? offer?.PriceWithoutDiscount),
     referenceUnit: pickFirstString(rawProduct.measurementUnit, sku?.measurementUnit),
-    isAvailable: Boolean(offer?.AvailableQuantity ?? offer?.IsAvailable ?? rawProduct.available ?? true),
+    isAvailable: resolveAvailability(offer, rawProduct),
   };
 }
 
