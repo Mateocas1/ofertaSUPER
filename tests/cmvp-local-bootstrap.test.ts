@@ -17,7 +17,7 @@ test("CMVP local bootstrap provisions roles before migrations on fresh and prese
   assert.match(compose, /migrate:[\s\S]*role-provision: \{ condition: service_completed_successfully \}/);
   assert.match(compose, /grants:[\s\S]*migrate: \{ condition: service_completed_successfully \}/);
   assert.match(compose, /seed:[\s\S]*grants: \{ condition: service_completed_successfully \}/);
-  assert.match(compose, /DATABASE_URL: postgresql:\/\/ofertasuper_app:app-local-only@postgres:5432\/ofertasuper/);
+  assert.match(compose, /DATABASE_URL: postgresql:\/\/ofertasuper_app:\$\{APP_PASSWORD:\?[^}]*\}@postgres:5432\/ofertasuper/);
   assert.match(compose, /role-provision:[\s\S]*init-app-role\.sh/);
   assert.match(dockerfile, /FROM dependencies AS seeder\nCOPY prisma \.\/prisma\nRUN npm run db:generate/);
   assert.match(compose, /seed:\n    build: \{ context: \., target: seeder \}/);
@@ -51,4 +51,23 @@ test("CMVP local bootstrap grants the app role only core catalog and ingestion C
     assert.match(grants, new RegExp(`REVOKE EXECUTE ON FUNCTION public\\.${escaped} FROM PUBLIC, ofertasuper_app, ofertasuper_runtime, ofertasuper_verifier;`));
     assert.match(grants, new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${escaped} TO ofertasuper_authority;`));
   }
+});
+
+test("CMVP local bootstrap takes credentials from the environment and commits no secret literal", () => {
+  assert.doesNotMatch(
+    compose,
+    /(?:^|(?<![$\w])[{,][ \t]*)(?:POSTGRES_PASSWORD|APP_PASSWORD|PGPASSWORD):[ \t]*(?!\$\{)\S/m,
+    "bootstrap passwords must be environment interpolations, not committed literals",
+  );
+  assert.doesNotMatch(
+    compose,
+    /postgresql:\/\/[^\s:@/]+:(?!\$\{)[^\s@/]+@/,
+    "postgres URLs must not embed a literal password",
+  );
+  assert.match(compose, /POSTGRES_PASSWORD: \$\{POSTGRES_PASSWORD:\?[^}]*\}/);
+  assert.match(compose, /APP_PASSWORD: \$\{APP_PASSWORD:\?[^}]*\}/);
+  assert.match(compose, /PGPASSWORD: \$\{POSTGRES_PASSWORD:\?[^}]*\}/);
+  assert.match(compose, /DATABASE_URL: postgresql:\/\/ofertasuper_owner:\$\{POSTGRES_PASSWORD:\?[^}]*\}@postgres:5432\/ofertasuper/);
+  assert.match(compose, /DIRECT_URL: postgresql:\/\/ofertasuper_owner:\$\{POSTGRES_PASSWORD:\?[^}]*\}@postgres:5432\/ofertasuper/);
+  assert.match(compose, /DATABASE_URL: postgresql:\/\/ofertasuper_app:\$\{APP_PASSWORD:\?[^}]*\}@postgres:5432\/ofertasuper/);
 });
