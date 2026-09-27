@@ -208,6 +208,7 @@ export function searchSnapshotSummaries(options: {
   query?: string;
   supermarket?: string;
   page?: number;
+  pageSize?: number;
   now: Date;
 }): { total: number; page: number; totalPages: number; pageSize: number; products: ProductSummary[] } {
   const result = searchSnapshotProducts(options);

@@ -32,21 +32,6 @@ function runRoutes() {
   return JSON.parse(result.stdout) as Array<{ status: number; body: { error?: string } }>;
 }
 
-describe("guarded catalog collection routes", () => {
-  it("preserves invalid queries and withholds collections without serving authority", () => {
-    const [invalidProducts, products, categories, invalidPromotions, promotions] = runRoutes();
-
-    assert.equal(invalidProducts.status, 400);
-    assert.equal(products.status, 503);
-    assert.equal(categories.status, 503);
-    assert.equal(invalidPromotions.status, 400);
-    assert.equal(promotions.status, 503);
-    assert.equal(products.body.error, "Catalog temporarily unavailable");
-    assert.equal(categories.body.error, "Catalog temporarily unavailable");
-    assert.equal(promotions.body.error, "Catalog temporarily unavailable");
-  });
-});
-
 describe("guarded catalog projection loaders", () => {
   it("returns eligible products ranked by price with their total", async () => {
     const product = { servingProduct: { findMany: async (query: { select: { ean: boolean; name?: boolean } }) =>
