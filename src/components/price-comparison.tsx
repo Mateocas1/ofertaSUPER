@@ -1,41 +1,140 @@
 import Link from "next/link";
 
 import { PromotionBadge } from "@/components/promotion-badge";
+import { StruckListPrice } from "@/components/struck-list-price";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatDateTime, formatPercent } from "@/lib/format";
 import { getPriceFreshnessCopy, type PriceFreshnessStatus } from "@/lib/price-freshness";
 import { cn } from "@/lib/utils";
 
-type PriceComparisonProps = {
-  entries: Array<{
-    supermarket: {
-      id: number;
-      name: string;
-      slug: string;
-      logoUrl: string | null;
-    };
-    price: number | null;
-    previousPrice: number | null;
-    deltaPercent: number | null;
-    priceDropAlert: {
-      previousPrice: number;
-      currentPrice: number;
-      amountDrop: number;
-      percentDrop: number;
-    } | null;
-    automaticDiscountPercent: number | null;
-    bestPromotion: {
-      id: number;
-      title: string;
-      type: "2x1" | "2nd_50" | "wallet_discount" | "bank_discount" | "percentage";
-    } | null;
-    finalPrice: number | null;
-    productUrl: string | null;
-    lastCheckedAt: string;
-    freshnessStatus: PriceFreshnessStatus;
-  }>;
+type PriceComparisonEntry = {
+  supermarket: {
+    id: number;
+    name: string;
+    slug: string;
+    logoUrl: string | null;
+  };
+  price: number | null;
+  listPrice: number | null;
+  previousPrice: number | null;
+  deltaPercent: number | null;
+  priceDropAlert: {
+    previousPrice: number;
+    currentPrice: number;
+    amountDrop: number;
+    percentDrop: number;
+  } | null;
+  automaticDiscountPercent: number | null;
+  bestPromotion: {
+    id: number;
+    title: string;
+    type: "2x1" | "2nd_50" | "wallet_discount" | "bank_discount" | "percentage";
+  } | null;
+  finalPrice: number | null;
+  productUrl: string | null;
+  lastCheckedAt: string;
+  freshnessStatus: PriceFreshnessStatus;
 };
+
+type PriceComparisonProps = {
+  entries: PriceComparisonEntry[];
+};
+
+function PriceComparisonPromoCell({ entry }: { entry: PriceComparisonEntry }) {
+  if (entry.bestPromotion) {
+    return (
+      <div className="space-y-2">
+        <PromotionBadge type={entry.bestPromotion.type} />
+        <p className="max-w-44 text-xs leading-5 text-muted-foreground">{entry.bestPromotion.title}</p>
+      </div>
+    );
+  }
+  if (entry.automaticDiscountPercent) {
+    return <PromotionBadge type="percentage" label={`${formatPercent(entry.automaticDiscountPercent, 0)} OFF`} />;
+  }
+  return <span className="text-muted-foreground">Sin promo</span>;
+}
+
+function PriceComparisonDeltaCell({ entry }: { entry: PriceComparisonEntry }) {
+  return (
+    <div>
+      <p>{formatPercent(entry.deltaPercent)}</p>
+      {entry.priceDropAlert ? (
+        <p className="mt-1 text-xs text-emerald-700">
+          Ahorra {formatCurrency(entry.priceDropAlert.amountDrop)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function PriceComparisonLinkCell({ entry }: { entry: PriceComparisonEntry }) {
+  if (!entry.productUrl) {
+    return <span className="text-muted-foreground">Sin link</span>;
+  }
+  return (
+    <Link
+      href={entry.productUrl}
+      target="_blank"
+      rel="noreferrer"
+      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-full")}
+    >
+      Abrir
+    </Link>
+  );
+}
+
+function PriceComparisonRow({ entry }: { entry: PriceComparisonEntry }) {
+  const freshnessCopy = getPriceFreshnessCopy({
+    status: entry.freshnessStatus,
+    checkedAt: entry.lastCheckedAt,
+    ageHours: null,
+    maxAgeHours: 0,
+  });
+  const isStale = entry.freshnessStatus === "stale";
+
+  return (
+    <tr className={cn("border-t border-border/60", isStale && "bg-amber-50/45")}>
+      <td className="px-6 py-4">
+        <SupermarketBadge
+          name={entry.supermarket.name}
+          slug={entry.supermarket.slug}
+          logoUrl={entry.supermarket.logoUrl}
+        />
+      </td>
+      <td className="px-6 py-4">
+        <span className="font-semibold text-foreground">{formatCurrency(entry.price)}</span>
+        <div className="mt-1">
+          <StruckListPrice price={entry.price} listPrice={entry.listPrice} />
+        </div>
+      </td>
+      <td className="px-6 py-4">
+        <PriceComparisonPromoCell entry={entry} />
+      </td>
+      <td className={cn("px-6 py-4 font-semibold", entry.finalPrice !== null ? "text-emerald-700" : "text-muted-foreground")}>
+        {entry.finalPrice !== null ? formatCurrency(entry.finalPrice) : "No calculable"}
+      </td>
+      <td className="px-6 py-4 text-muted-foreground">{formatCurrency(entry.previousPrice)}</td>
+      <td
+        className={cn(
+          "px-6 py-4 font-medium",
+          entry.deltaPercent !== null && entry.deltaPercent > 0 && "text-rose-700",
+          entry.deltaPercent !== null && entry.deltaPercent < 0 && "text-emerald-700",
+        )}
+      >
+        <PriceComparisonDeltaCell entry={entry} />
+      </td>
+      <td className="px-6 py-4 text-muted-foreground">
+        <p>{formatDateTime(entry.lastCheckedAt)}</p>
+        {isStale ? <p className="mt-1 text-xs font-medium text-amber-700">{freshnessCopy.badgeLabel}</p> : null}
+      </td>
+      <td className="px-6 py-4">
+        <PriceComparisonLinkCell entry={entry} />
+      </td>
+    </tr>
+  );
+}
 
 export function PriceComparison({ entries }: PriceComparisonProps) {
   if (entries.length === 0) {
@@ -71,81 +170,7 @@ export function PriceComparison({ entries }: PriceComparisonProps) {
             </tr>
           </thead>
           <tbody>
-            {entries.map((entry) => {
-              const freshnessCopy = getPriceFreshnessCopy({
-                status: entry.freshnessStatus,
-                checkedAt: entry.lastCheckedAt,
-                ageHours: null,
-                maxAgeHours: 0,
-              });
-              const isStale = entry.freshnessStatus === "stale";
-
-              return (
-                <tr key={entry.supermarket.slug} className={cn("border-t border-border/60", isStale && "bg-amber-50/45")}>
-                  <td className="px-6 py-4">
-                    <SupermarketBadge
-                      name={entry.supermarket.name}
-                      slug={entry.supermarket.slug}
-                      logoUrl={entry.supermarket.logoUrl}
-                    />
-                  </td>
-                  <td className="px-6 py-4 font-semibold text-foreground">{formatCurrency(entry.price)}</td>
-                  <td className="px-6 py-4">
-                    {entry.bestPromotion ? (
-                      <div className="space-y-2">
-                        <PromotionBadge type={entry.bestPromotion.type} />
-                        <p className="max-w-44 text-xs leading-5 text-muted-foreground">{entry.bestPromotion.title}</p>
-                      </div>
-                    ) : entry.automaticDiscountPercent ? (
-                      <PromotionBadge
-                        type="percentage"
-                        label={`${formatPercent(entry.automaticDiscountPercent, 0)} OFF`}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground">Sin promo</span>
-                    )}
-                  </td>
-                  <td className={cn("px-6 py-4 font-semibold", entry.finalPrice !== null ? "text-emerald-700" : "text-muted-foreground")}>
-                    {entry.finalPrice !== null ? formatCurrency(entry.finalPrice) : "No calculable"}
-                  </td>
-                  <td className="px-6 py-4 text-muted-foreground">{formatCurrency(entry.previousPrice)}</td>
-                  <td
-                    className={cn(
-                      "px-6 py-4 font-medium",
-                      entry.deltaPercent !== null && entry.deltaPercent > 0 && "text-rose-700",
-                      entry.deltaPercent !== null && entry.deltaPercent < 0 && "text-emerald-700",
-                    )}
-                  >
-                    <div>
-                      <p>{formatPercent(entry.deltaPercent)}</p>
-                      {entry.priceDropAlert ? (
-                        <p className="mt-1 text-xs text-emerald-700">
-                          Ahorra {formatCurrency(entry.priceDropAlert.amountDrop)}
-                        </p>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-muted-foreground">
-                    <p>{formatDateTime(entry.lastCheckedAt)}</p>
-                    {isStale ? <p className="mt-1 text-xs font-medium text-amber-700">{freshnessCopy.badgeLabel}</p> : null}
-                  </td>
-                  <td className="px-6 py-4">
-                    {entry.productUrl ? (
-                      <Link
-                        href={entry.productUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-full")}
-                      >
-                        Abrir
-                      </Link>
-                    ) : (
-                      <span className="text-muted-foreground">Sin link</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {entries.map((entry) => <PriceComparisonRow key={entry.supermarket.slug} entry={entry} />)}
           </tbody>
         </table>
       </div>

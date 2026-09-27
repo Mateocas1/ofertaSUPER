@@ -208,6 +208,11 @@ describe("public catalog handlers serve the committed snapshot", () => {
     assert.equal(body.dataSource, "database");
     assert.equal(typeof body.verifiedAt, "string");
     assert.ok(body.items[0].priceEntries.length > 0);
+    const withListPrice = body.items[0].priceEntries.filter((entry) => entry.listPrice !== null);
+    assert.ok(withListPrice.length > 0, "entries must expose the list price so the cart can strike it through");
+    for (const entry of withListPrice) {
+      assert.ok(entry.listPrice !== null && entry.price !== null && entry.listPrice > entry.price, "a struck price needs list above registered");
+    }
   });
 
   it("products batch rejects invalid bodies with 400 and exhausted budgets with 429", async () => {

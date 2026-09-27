@@ -213,6 +213,7 @@ function toBasketProduct(detail: ProductDetail): BasketProduct {
         logoUrl: entry.supermarket.logoUrl,
       },
       price: entry.price,
+      listPrice: entry.listPrice,
       isAvailable: entry.isAvailable,
       productUrl: entry.productUrl,
       freshnessStatus: entry.freshnessStatus,

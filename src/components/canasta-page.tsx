@@ -8,6 +8,7 @@ import { AlertCircle, LoaderCircle, ShoppingBasket, Trash2 } from "lucide-react"
 import { BasketControls } from "@/components/basket-controls";
 import { FavoriteButton } from "@/components/favorite-button";
 import { SupermarketBadge } from "@/components/supermarket-badge";
+import { StruckListPrice } from "@/components/struck-list-price";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { useCanasta, type CanastaItem } from "@/hooks/use-canasta";
 import { formatCurrency } from "@/lib/format";
@@ -195,7 +196,7 @@ function BasketItemIdentity({ item, product, degradedDemo }: { item: CanastaItem
 
 function BasketProductBadges({ item, product }: { item: CanastaItem; product: CanastaProduct | undefined }) {
   if (!product) return <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"><AlertCircle className="size-4" />Sin detalle cargado por ahora</div>;
-  return <div className="mt-4 flex flex-wrap gap-2">{product.priceEntries.slice(0, 4).map((entry) => <SupermarketBadge key={`${item.ean}-${entry.supermarket.slug}`} name={entry.supermarket.name} slug={entry.supermarket.slug} logoUrl={entry.supermarket.logoUrl} price={entry.isAvailable ? formatCurrency(entry.price) : "No disp."} />)}</div>;
+  return <div className="mt-4 flex flex-wrap gap-2">{product.priceEntries.slice(0, 4).map((entry) => <SupermarketBadge key={`${item.ean}-${entry.supermarket.slug}`} name={entry.supermarket.name} slug={entry.supermarket.slug} logoUrl={entry.supermarket.logoUrl} price={entry.isAvailable ? formatCurrency(entry.price) : "No disp."} />)}{product.priceEntries.filter((entry) => entry.isAvailable).slice(0, 4).map((entry) => <StruckListPrice key={`${item.ean}-${entry.supermarket.slug}-list`} price={entry.price} listPrice={entry.listPrice} />)}</div>;
 }
 
 function BasketItemCard({ item, product, degradedDemo, removeItem }: { item: CanastaItem; product: CanastaProduct | undefined; degradedDemo: boolean; removeItem: (ean: string) => void }) {
