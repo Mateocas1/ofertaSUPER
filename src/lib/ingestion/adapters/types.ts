@@ -21,6 +21,17 @@ export type HealthResult = {
 
 export type FetchProductsResult = NormalizedProduct[] & {
   fallbackUsed?: boolean;
+  /** ISO instant captured when the HTTP response was received. */
+  observedAt?: string;
+};
+
+/**
+ * Result of a direct (sku-id) lookup. The observation instant sidecar is
+ * required here: direct refresh writes must be justified by a real source
+ * observation instant, never by the processing clock.
+ */
+export type ObservedFetchProductsResult = FetchProductsResult & {
+  observedAt: string;
 };
 
 export type FetchOptions = {
@@ -45,6 +56,6 @@ export interface SourceAdapter {
 	fetchDirectProducts(
 		lookup: DirectLookup,
 		options?: FetchOptions,
-	): Promise<FetchProductsResult>;
+	): Promise<ObservedFetchProductsResult>;
   getDefaultTerms(limit?: number): Promise<string[]>;
 }

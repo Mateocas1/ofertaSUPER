@@ -8,6 +8,7 @@ import {
 } from "../../src/lib/production-readiness/operations";
 import {
 	buildPrewriteReportHash,
+	canonicalPrewriteReportHashPayload,
 	type CarrefourDirectRefreshPrewriteGate,
 	type DirectRefreshPrewriteChange,
 	type DirectRefreshPrewriteProductSnapshot,
@@ -55,6 +56,17 @@ export const DISCO_ACTIVE_WRITE_LOCK_KEY = 61204510;
 export const JUMBO_ACTIVE_WRITE_LOCK_KEY = 68204510;
 export const MAS_ACTIVE_WRITE_LOCK_KEY = 75204510;
 const MAX_PREWRITE_AGE_MS = 15 * 60 * 1000;
+/**
+ * G04 frozen-cohort sources whose active write repos enforce the strict-newer
+ * observation guard: an older or equal observation instant never overwrites
+ * the freshness markers (last_checked_at) or inserts a duplicate/older price
+ * history row.
+ */
+const OBSERVATION_GUARDED_SOURCES: ReadonlySet<ActiveWriteSource> = new Set([
+	"carrefour",
+	"disco",
+	"jumbo",
+]);
 export const DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS = {
 	maxWait: 20_000,
 	timeout: 60_000,
@@ -144,6 +156,15 @@ type AppliedRow = {
 		supermarketProduct: DirectRefreshPrewriteChange[];
 	};
 	insertedPriceHistoryId: number | null;
+	/**
+	 * Present when the stored row already carries an observation at or after the
+	 * incoming one: the whole row update was suppressed so no field from an
+	 * older or equal observation is written.
+	 */
+	suppressedReason?:
+		| "observation-older-than-stored"
+		| "observation-equal-replay"
+		| null;
 };
 
 type ActiveWriteCliOptionsFor<Source extends ActiveWriteSource> = {
@@ -674,11 +695,14 @@ async function runActiveWriteTransaction({
 		prewriteReport,
 		options.count,
 	);
+	const selectedRowsByRowId = new Map(
+		selectedRows.map((row) => [row.rowId, row]),
+	);
 	const appliedRows = await applyPrewriteRows(
 		tx,
 		config.source,
 		prewriteReport.rows,
-		startedAt,
+		selectedRowsByRowId,
 	);
 	const { capture } = await capturePostwriteSourceDelta(
 		tx,
@@ -733,11 +757,13 @@ async function applyPrewriteRows(
 	tx: ActiveWriteTransaction,
 	source: ActiveWriteSource,
 	rows: CarrefourDirectRefreshPrewriteGate["rows"],
-	startedAt: Date,
+	selectedRowsByRowId: Map<string, TxRow>,
 ): Promise<AppliedRow[]> {
 	const appliedRows: AppliedRow[] = [];
 	for (const row of rows)
-		appliedRows.push(await applyPrewriteRow(tx, source, row, startedAt));
+		appliedRows.push(
+			await applyPrewriteRow(tx, source, row, selectedRowsByRowId),
+		);
 	return appliedRows;
 }
 
@@ -745,31 +771,83 @@ async function applyPrewriteRow(
 	tx: ActiveWriteTransaction,
 	source: ActiveWriteSource,
 	row: CarrefourDirectRefreshPrewriteGate["rows"][number],
-	startedAt: Date,
+	selectedRowsByRowId: Map<string, TxRow>,
 ): Promise<AppliedRow> {
 	const productEan = row.currentDb.supermarketProduct.productEan ?? "";
 	const skuId = row.lookup.value ?? "";
+	const observationInstant = row.observationInstant;
+	let supermarketProductChanges = row.expectedChanges.supermarketProduct;
+	let wouldInsertHistory = row.expectedChanges.priceHistory.wouldInsert;
+	let suppressedReason:
+		| "observation-older-than-stored"
+		| "observation-equal-replay"
+		| null = null;
+	const selectedRow = selectedRowsByRowId.get(row.rowId);
+	if (
+		OBSERVATION_GUARDED_SOURCES.has(source) &&
+		selectedRow &&
+		observationInstant !== null
+	) {
+		const instantMs = Date.parse(observationInstant);
+		if (Number.isFinite(instantMs)) {
+			const newestStoredMs = newestStoredObservationMs(selectedRow);
+			if (newestStoredMs !== null) {
+				if (instantMs < newestStoredMs) {
+					suppressedReason = "observation-older-than-stored";
+				} else if (instantMs === newestStoredMs) {
+					suppressedReason = "observation-equal-replay";
+				}
+			}
+			if (suppressedReason === null) {
+				const latestScrapedAt = selectedRow.latestPriceHistory?.scrapedAt;
+				if (latestScrapedAt) {
+					const latestScrapedMs = Date.parse(latestScrapedAt);
+					if (Number.isFinite(latestScrapedMs) && instantMs <= latestScrapedMs)
+						wouldInsertHistory = false;
+				}
+			}
+		}
+	}
+	if (suppressedReason !== null) {
+		// The stored row already reflects an observation at or after the incoming
+		// instant: suppress the entire row update (product, supermarketProduct and
+		// price history) so no field from a stale observation is written, and
+		// record the reason in the write report instead.
+		return {
+			rowId: row.rowId,
+			productEan,
+			skuId,
+			before: row.currentDb,
+			live: row.live,
+			appliedChanges: { product: [], supermarketProduct: [] },
+			insertedPriceHistoryId: null,
+			suppressedReason,
+		};
+	}
 	const hasProductChanges = row.expectedChanges.product.length > 0;
 	const productCount = hasProductChanges
 		? await tx.updateProductByEan(productEan, row.expectedChanges.product)
 		: 0;
 	if (productCount !== (hasProductChanges ? 1 : 0))
 		throw new Error(`product update count for ${row.rowId} was ${productCount}`);
-	const spCount = await tx.updateSupermarketProductByExactIdentity(
-		source,
-		row.rowId,
-		productEan,
-		skuId,
-		row.expectedChanges.supermarketProduct,
-	);
-	if (spCount !== 1)
-		throw new Error(`supermarketProduct update count for ${row.rowId} was ${spCount}`);
-	const insertedPriceHistoryId = row.expectedChanges.priceHistory.wouldInsert
+	let spCount = 0;
+	if (supermarketProductChanges.length > 0) {
+		spCount = await tx.updateSupermarketProductByExactIdentity(
+			source,
+			row.rowId,
+			productEan,
+			skuId,
+			supermarketProductChanges,
+		);
+		if (spCount !== 1)
+			throw new Error(`supermarketProduct update count for ${row.rowId} was ${spCount}`);
+	}
+	const insertedPriceHistoryId = wouldInsertHistory
 		? await tx.insertPriceHistory(
 				row.rowId,
 				row.expectedChanges.priceHistory.price,
 				row.expectedChanges.priceHistory.listPrice,
-				startedAt.toISOString(),
+				requireObservationInstant(row.rowId, observationInstant),
 			)
 		: null;
 	return {
@@ -780,10 +858,34 @@ async function applyPrewriteRow(
 		live: row.live,
 		appliedChanges: {
 			product: row.expectedChanges.product,
-			supermarketProduct: row.expectedChanges.supermarketProduct,
+			supermarketProduct: supermarketProductChanges,
 		},
 		insertedPriceHistoryId,
+		suppressedReason: null,
 	};
+}
+
+function newestStoredObservationMs(selectedRow: TxRow): number | null {
+	const storedInstants = [
+		selectedRow.supermarketProduct.lastCheckedAt,
+		selectedRow.latestPriceHistory?.scrapedAt ?? null,
+	]
+		.filter((value): value is string => typeof value === "string")
+		.map((value) => Date.parse(value))
+		.filter((value) => Number.isFinite(value));
+	if (storedInstants.length === 0) return null;
+	return Math.max(...storedInstants);
+}
+
+function requireObservationInstant(
+	rowId: string,
+	observationInstant: string | null,
+): string {
+	if (observationInstant === null)
+		throw new Error(
+			`observation instant missing for ${rowId} price history insert`,
+		);
+	return observationInstant;
 }
 
 async function capturePostwriteSourceDelta(
@@ -797,13 +899,31 @@ async function capturePostwriteSourceDelta(
 	const afterRows = await tx.readSelectedRowsByExactIdentity(source, identities);
 	if (afterRows.length !== identities.length)
 		throw new Error("selected rows missing after write");
+	// A source capture exists to record durable mutations. When no row in the
+	// batch actually changed state — for example a batch where the observation
+	// guard suppressed every row — there is no delta to capture, so the capture
+	// is skipped instead of handing createSourceCapture an empty item list
+	// (which it rejects with "uncaptured mutation is not allowed"). Any row
+	// with a product update, a supermarketProduct update or a price-history
+	// insert keeps the batch in capture mode, so a genuinely mutated row that
+	// produced no observable before/after delta still trips that same guard.
+	const hasCapturedMutations = appliedRows.some(
+		(row) =>
+			row.appliedChanges.product.length > 0 ||
+			row.appliedChanges.supermarketProduct.length > 0 ||
+			row.insertedPriceHistoryId !== null,
+	);
+	if (!hasCapturedMutations) return { capture: undefined };
 	const capture = tx.captureSourceDelta
 		? await tx.captureSourceDelta(
 				createSourceCapture({
 					operationKey: sourceCaptureOperationKey({
 						source,
 						rowIds: identities.map(({ rowId }) => rowId),
-						prewriteReportHash,
+						// The CLI-validated prewrite report hash is bare sha256
+						// hex; the durable operation key requires the scheme
+						// prefix to bind the capture to that report.
+						prewriteReportHash: `sha256:${prewriteReportHash}`,
 					}),
 					source,
 					observedAt: new Date().toISOString(),
@@ -980,7 +1100,5 @@ function assertSameList(label: string, left: string[], right: string[]) {
 		throw new Error(`${label} confirmation mismatch`);
 }
 function hashPayload(report: CarrefourDirectRefreshPrewriteGate) {
-	const payload: Record<string, unknown> = { ...report };
-	delete payload.futureConfirmation;
-	return payload;
+	return canonicalPrewriteReportHashPayload(report);
 }

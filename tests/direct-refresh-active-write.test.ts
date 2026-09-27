@@ -35,6 +35,7 @@ import {
 	buildCarrefourDirectRefreshPrewriteGate,
 	buildDirectRefreshPrewriteGate,
 	buildPrewriteReportHash,
+	canonicalPrewriteReportHashPayload,
 	type DirectRefreshPrewriteExistingRow,
 } from "../scripts/pipeline/direct-refresh-prewrite-gate";
 
@@ -45,6 +46,8 @@ after(async () => {
 		[...temporaryDirectories].map((directory) => rm(directory, { recursive: true, force: true })),
 	);
 });
+
+const OBSERVED_AT = "2026-06-01T00:00:05.000Z";
 
 function rows(count = 10): DirectRefreshPrewriteExistingRow[] {
 	return Array.from({ length: count }, (_, index) => {
@@ -115,25 +118,28 @@ async function prewrite(
 		now: new Date(now),
 		fetchDirectProducts: async (_sourceSlug, lookup) => {
 			const row = existingRows.find((entry) => entry.skuId === lookup.value);
-			return [
-				{
-					ean: row?.ean ?? "",
-					name: `${row?.product?.name} Nuevo`,
-					brand: "Nueva",
-					description: "Nueva",
-					imageUrl: "https://www.carrefour.com.ar/new.jpg",
-					images: ["https://www.carrefour.com.ar/new.jpg"],
-					category: "Test",
-					skuId: lookup.value,
-					sellerId: "1",
-					productUrl: row?.productUrl ?? null,
-					price: 1100,
-					listPrice: 1100,
-					referencePrice: null,
-					referenceUnit: null,
-					isAvailable: true,
-				},
-			];
+			return Object.assign(
+				[
+					{
+						ean: row?.ean ?? "",
+						name: `${row?.product?.name} Nuevo`,
+						brand: "Nueva",
+						description: "Nueva",
+						imageUrl: "https://www.carrefour.com.ar/new.jpg",
+						images: ["https://www.carrefour.com.ar/new.jpg"],
+						category: "Test",
+						skuId: lookup.value,
+						sellerId: "1",
+						productUrl: row?.productUrl ?? null,
+						price: 1100,
+						listPrice: 1100,
+						referencePrice: null,
+						referenceUnit: null,
+						isAvailable: true,
+					},
+				],
+				{ observedAt: OBSERVED_AT },
+			);
 		},
 	});
 }
@@ -193,25 +199,28 @@ async function veaPrewrite(now = "2026-06-01T00:00:00.000Z") {
 		now: new Date(now),
 		fetchDirectProducts: async (_sourceSlug, lookup) => {
 			const row = veaRows().find((entry) => entry.skuId === lookup.value);
-			return [
-				{
-					ean: row?.ean ?? "",
-					name: `${row?.product?.name} Nuevo`,
-					brand: "Nueva",
-					description: "Nueva",
-					imageUrl: "https://www.vea.com.ar/new.jpg",
-					images: ["https://www.vea.com.ar/new.jpg"],
-					category: "Test",
-					skuId: lookup.value,
-					sellerId: "1",
-					productUrl: row?.productUrl ?? null,
-					price: 1100,
-					listPrice: 1100,
-					referencePrice: null,
-					referenceUnit: null,
-					isAvailable: true,
-				},
-			];
+			return Object.assign(
+				[
+					{
+						ean: row?.ean ?? "",
+						name: `${row?.product?.name} Nuevo`,
+						brand: "Nueva",
+						description: "Nueva",
+						imageUrl: "https://www.vea.com.ar/new.jpg",
+						images: ["https://www.vea.com.ar/new.jpg"],
+						category: "Test",
+						skuId: lookup.value,
+						sellerId: "1",
+						productUrl: row?.productUrl ?? null,
+						price: 1100,
+						listPrice: 1100,
+						referencePrice: null,
+						referenceUnit: null,
+						isAvailable: true,
+					},
+				],
+				{ observedAt: OBSERVED_AT },
+			);
 		},
 	});
 }
@@ -270,25 +279,28 @@ async function discoPrewrite(now = "2026-06-01T00:00:00.000Z") {
 		now: new Date(now),
 		fetchDirectProducts: async (_sourceSlug, lookup) => {
 			const row = discoRows().find((entry) => entry.skuId === lookup.value);
-			return [
-				{
-					ean: row?.ean ?? "",
-					name: `${row?.product?.name} Nuevo`,
-					brand: "Nueva",
-					description: "Nueva",
-					imageUrl: "https://www.disco.com.ar/new.jpg",
-					images: ["https://www.disco.com.ar/new.jpg"],
-					category: "Test",
-					skuId: lookup.value,
-					sellerId: "1",
-					productUrl: row?.productUrl ?? null,
-					price: 1100,
-					listPrice: 1100,
-					referencePrice: null,
-					referenceUnit: null,
-					isAvailable: true,
-				},
-			];
+			return Object.assign(
+				[
+					{
+						ean: row?.ean ?? "",
+						name: `${row?.product?.name} Nuevo`,
+						brand: "Nueva",
+						description: "Nueva",
+						imageUrl: "https://www.disco.com.ar/new.jpg",
+						images: ["https://www.disco.com.ar/new.jpg"],
+						category: "Test",
+						skuId: lookup.value,
+						sellerId: "1",
+						productUrl: row?.productUrl ?? null,
+						price: 1100,
+						listPrice: 1100,
+						referencePrice: null,
+						referenceUnit: null,
+						isAvailable: true,
+					},
+				],
+				{ observedAt: OBSERVED_AT },
+			);
 		},
 	});
 }
@@ -347,25 +359,28 @@ async function jumboPrewrite(now = "2026-06-01T00:00:00.000Z") {
 		now: new Date(now),
 		fetchDirectProducts: async (_sourceSlug, lookup) => {
 			const row = jumboRows().find((entry) => entry.skuId === lookup.value);
-			return [
-				{
-					ean: row?.ean ?? "",
-					name: `${row?.product?.name} Nuevo`,
-					brand: "Nueva",
-					description: "Nueva",
-					imageUrl: "https://www.jumbo.com.ar/new.jpg",
-					images: ["https://www.jumbo.com.ar/new.jpg"],
-					category: "Test",
-					skuId: lookup.value,
-					sellerId: "1",
-					productUrl: row?.productUrl ?? null,
-					price: 1100,
-					listPrice: 1100,
-					referencePrice: null,
-					referenceUnit: null,
-					isAvailable: true,
-				},
-			];
+			return Object.assign(
+				[
+					{
+						ean: row?.ean ?? "",
+						name: `${row?.product?.name} Nuevo`,
+						brand: "Nueva",
+						description: "Nueva",
+						imageUrl: "https://www.jumbo.com.ar/new.jpg",
+						images: ["https://www.jumbo.com.ar/new.jpg"],
+						category: "Test",
+						skuId: lookup.value,
+						sellerId: "1",
+						productUrl: row?.productUrl ?? null,
+						price: 1100,
+						listPrice: 1100,
+						referencePrice: null,
+						referenceUnit: null,
+						isAvailable: true,
+					},
+				],
+				{ observedAt: OBSERVED_AT },
+			);
 		},
 	});
 }
@@ -424,25 +439,28 @@ async function masPrewrite(now = "2026-06-01T00:00:00.000Z") {
 		now: new Date(now),
 		fetchDirectProducts: async (_sourceSlug, lookup) => {
 			const row = masRows().find((entry) => entry.skuId === lookup.value);
-			return [
-				{
-					ean: row?.ean ?? "",
-					name: `${row?.product?.name} Nuevo`,
-					brand: "Nueva",
-					description: "Nueva",
-					imageUrl: "https://www.masonline.com.ar/new.jpg",
-					images: ["https://www.masonline.com.ar/new.jpg"],
-					category: "Test",
-					skuId: lookup.value,
-					sellerId: "1",
-					productUrl: row?.productUrl ?? null,
-					price: 1100,
-					listPrice: 1100,
-					referencePrice: null,
-					referenceUnit: null,
-					isAvailable: true,
-				},
-			];
+			return Object.assign(
+				[
+					{
+						ean: row?.ean ?? "",
+						name: `${row?.product?.name} Nuevo`,
+						brand: "Nueva",
+						description: "Nueva",
+						imageUrl: "https://www.masonline.com.ar/new.jpg",
+						images: ["https://www.masonline.com.ar/new.jpg"],
+						category: "Test",
+						skuId: lookup.value,
+						sellerId: "1",
+						productUrl: row?.productUrl ?? null,
+						price: 1100,
+						listPrice: 1100,
+						referencePrice: null,
+						referenceUnit: null,
+						isAvailable: true,
+					},
+				],
+				{ observedAt: OBSERVED_AT },
+			);
 		},
 	});
 }
@@ -841,6 +859,361 @@ describe("Carrefour active refresh writer contract", () => {
 		assert.equal(writeReport.rows.length, 10);
 	});
 
+	it("writes last_checked_at and history scraped_at from the same per-row observation instant", async () => {
+		const report = await prewrite();
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		const lastCheckedAfters: unknown[] = [];
+		const scrapedAts: string[] = [];
+		const writeReport = await executeCarrefourActiveWrite({
+			repository: repo(
+				tx({
+					async updateSupermarketProductByExactIdentity(
+						_sourceSlug,
+						_rowId,
+						_productEan,
+						_skuId,
+						changes,
+					) {
+						const change = changes.find(
+							(entry) => entry.field === "lastCheckedAt",
+						);
+						if (change) lastCheckedAfters.push(change.after);
+						return 1;
+					},
+					async insertPriceHistory(_rowId, _price, _listPrice, scrapedAt) {
+						scrapedAts.push(scrapedAt);
+						return 1;
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date("2026-06-01T00:10:00.000Z"),
+		});
+
+		assert.deepEqual(lastCheckedAfters, Array(10).fill(OBSERVED_AT));
+		assert.deepEqual(scrapedAts, Array(10).fill(OBSERVED_AT));
+		assert.notEqual(lastCheckedAfters[0], "2026-06-01T00:10:00.000Z");
+		assert.notEqual(lastCheckedAfters[0], report.generatedAt);
+		assert.equal(writeReport.summary.priceHistoryInserted, 10);
+	});
+
+	it("never overwrites a newer observation in the guarded G04 write repos", async () => {
+		const report = await prewrite();
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		const newer = "2026-06-01T00:05:00.000Z";
+		let productUpdates = 0;
+		let supermarketProductUpdates = 0;
+		let historyInserts = 0;
+		const writeReport = await executeCarrefourActiveWrite({
+			repository: repo(
+				tx({
+					async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+						const found = await tx().readSelectedRowsByExactIdentity(
+							sourceSlug,
+							identities,
+						);
+						return found.map((row) => ({
+							...row,
+							supermarketProduct: {
+								...row.supermarketProduct,
+								lastCheckedAt: newer,
+							},
+							latestPriceHistory: {
+								id: 1,
+								supermarketProductId: Number(row.supermarketProduct.id),
+								price: 1100,
+								listPrice: 1100,
+								scrapedAt: newer,
+							},
+						}));
+					},
+					async updateProductByEan() {
+						productUpdates += 1;
+						return 1;
+					},
+					async updateSupermarketProductByExactIdentity() {
+						supermarketProductUpdates += 1;
+						return 1;
+					},
+					async insertPriceHistory() {
+						historyInserts += 1;
+						return 1;
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date("2026-06-01T00:10:00.000Z"),
+		});
+
+		assert.equal(productUpdates, 0);
+		assert.equal(supermarketProductUpdates, 0);
+		assert.equal(historyInserts, 0);
+		assert.deepEqual(
+			writeReport.rows.map((row) => row.suppressedReason),
+			Array(10).fill("observation-older-than-stored"),
+		);
+	});
+
+	it("treats an equal observation as an idempotent replay with no second history row", async () => {
+		const report = await prewrite();
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		let productUpdates = 0;
+		let supermarketProductUpdates = 0;
+		let historyInserts = 0;
+		const writeReport = await executeCarrefourActiveWrite({
+			repository: repo(
+				tx({
+					async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+						const found = await tx().readSelectedRowsByExactIdentity(
+							sourceSlug,
+							identities,
+						);
+						return found.map((row) => ({
+							...row,
+							supermarketProduct: {
+								...row.supermarketProduct,
+								lastCheckedAt: OBSERVED_AT,
+							},
+							latestPriceHistory: {
+								id: 1,
+								supermarketProductId: Number(row.supermarketProduct.id),
+								price: 1100,
+								listPrice: 1100,
+								scrapedAt: OBSERVED_AT,
+							},
+						}));
+					},
+					async updateProductByEan() {
+						productUpdates += 1;
+						return 1;
+					},
+					async updateSupermarketProductByExactIdentity() {
+						supermarketProductUpdates += 1;
+						return 1;
+					},
+					async insertPriceHistory() {
+						historyInserts += 1;
+						return 1;
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date("2026-06-01T00:10:00.000Z"),
+		});
+
+		assert.equal(productUpdates, 0);
+		assert.equal(supermarketProductUpdates, 0);
+		assert.equal(historyInserts, 0);
+		assert.deepEqual(
+			writeReport.rows.map((row) => row.suppressedReason),
+			Array(10).fill("observation-equal-replay"),
+		);
+	});
+
+	it("completes a fully suppressed batch with a capture-aware transaction and never captures an empty mutation", async () => {
+		const report = await prewrite();
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		const newer = "2026-06-01T00:05:00.000Z";
+		const captures: Array<{ items: unknown[] }> = [];
+		const writeReport = await executeCarrefourActiveWrite({
+			repository: repo(
+				tx({
+					async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+						const found = await tx().readSelectedRowsByExactIdentity(
+							sourceSlug,
+							identities,
+						);
+						return found.map((row) => ({
+							...row,
+							supermarketProduct: {
+								...row.supermarketProduct,
+								lastCheckedAt: newer,
+							},
+							latestPriceHistory: {
+								id: 1,
+								supermarketProductId: Number(row.supermarketProduct.id),
+								price: 1100,
+								listPrice: 1100,
+								scrapedAt: newer,
+							},
+						}));
+					},
+					// Production transactions (carrefour, disco and jumbo) all
+					// define captureSourceDelta; the mock must mirror that shape
+					// so the postwrite capture path is actually exercised.
+					async captureSourceDelta(capture) {
+						captures.push(capture);
+						return {
+							operationId: "op-1",
+							observedAt: capture.observedAt,
+						};
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date("2026-06-01T00:10:00.000Z"),
+		});
+
+		assert.equal(writeReport.status, "PASS");
+		assert.deepEqual(
+			writeReport.rows.map((row) => row.suppressedReason),
+			Array(10).fill("observation-older-than-stored"),
+		);
+		assert.equal(writeReport.summary.productUpdates, 0);
+		assert.equal(writeReport.summary.supermarketProductUpdates, 0);
+		assert.equal(writeReport.summary.priceHistoryInserted, 0);
+		assert.equal(captures.length, 0);
+		for (const capture of captures) {
+			assert.ok(
+				capture.items.length > 0,
+				"capture must never be invoked with an empty item list",
+			);
+		}
+	});
+
+	it("still captures a mixed batch with suppressed and mutated rows under a capture-aware transaction", async () => {
+		const report = await prewrite();
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		// Row 1 already stores a newer observation (suppressed); the rest mutate.
+		const newer = "2026-06-01T00:05:00.000Z";
+		const captures: Array<{ operationKey: string; items: unknown[] }> = [];
+		let readCall = 0;
+		const writeReport = await executeCarrefourActiveWrite({
+			repository: repo(
+				tx({
+					async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+						readCall += 1;
+						const found = await tx().readSelectedRowsByExactIdentity(
+							sourceSlug,
+							identities,
+						);
+						return found.map((row) => {
+							if (row.rowId === report.rows[0].rowId) {
+								return {
+									...row,
+									supermarketProduct: {
+										...row.supermarketProduct,
+										lastCheckedAt: newer,
+									},
+									latestPriceHistory: {
+										id: 1,
+										supermarketProductId: Number(
+											row.supermarketProduct.id,
+										),
+										price: 1100,
+										listPrice: 1100,
+										scrapedAt: newer,
+									},
+								};
+							}
+							if (readCall >= 2) {
+								return {
+									...row,
+									product: {
+										...row.product,
+										name: `${row.product.name} Nuevo`,
+										brand: "Nueva",
+										description: "Nueva",
+										imageUrl: "https://www.carrefour.com.ar/new.jpg",
+										images: ["https://www.carrefour.com.ar/new.jpg"],
+									},
+									supermarketProduct: {
+										...row.supermarketProduct,
+										price: 1100,
+										listPrice: 1100,
+										lastCheckedAt: OBSERVED_AT,
+									},
+									latestPriceHistory: {
+										id: Number(row.rowId) + 1000,
+										supermarketProductId: Number(
+											row.supermarketProduct.id,
+										),
+										price: 1100,
+										listPrice: 1100,
+										scrapedAt: OBSERVED_AT,
+									},
+								};
+							}
+							return row;
+						});
+					},
+					async captureSourceDelta(capture) {
+						captures.push(capture);
+						return {
+							operationId: "op-1",
+							observedAt: capture.observedAt,
+						};
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date("2026-06-01T00:10:00.000Z"),
+		});
+
+		assert.equal(writeReport.rows[0].suppressedReason, "observation-older-than-stored");
+		assert.deepEqual(
+			writeReport.rows.slice(1).map((row) => row.suppressedReason),
+			Array(9).fill(null),
+		);
+		assert.equal(captures.length, 1);
+		assert.ok(
+			captures[0].operationKey.startsWith(
+				"source-capture/v1:sha256:",
+			),
+		);
+		assert.ok(captures[0].items.length > 0);
+		assert.ok(writeReport.capture);
+	});
+
+	it("still rejects a captured batch whose mutated rows produced no observable delta", async () => {
+		const report = await prewrite();
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		let readCall = 0;
+		await assert.rejects(
+			() =>
+				executeCarrefourActiveWrite({
+					repository: repo(
+						tx({
+							// The prewrite read returns stale rows, the writes claim
+							// success, but the postwrite read shows nothing changed:
+							// the uncaptured-mutation guard must still fire.
+							async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+								readCall += 1;
+								const found = await tx().readSelectedRowsByExactIdentity(
+									sourceSlug,
+									identities,
+								);
+								if (readCall < 2) return found;
+								return found.map((row) => ({
+									...row,
+									latestPriceHistory: {
+										id: Number(row.rowId) + 1000,
+										supermarketProductId: Number(row.supermarketProduct.id),
+										price: null,
+										listPrice: null,
+										scrapedAt: OBSERVED_AT,
+									},
+								}));
+							},
+							async captureSourceDelta() {
+								return { operationId: "op-1", observedAt: new Date().toISOString() };
+							},
+						}),
+					),
+					prewriteReport: report,
+					options,
+					startedAt: new Date(report.generatedAt),
+				}),
+			/uncaptured mutation is not allowed/,
+		);
+		assert.equal(readCall, 2);
+	});
+
 	it("executes count=25 selected-row-only transaction and emits variable count report", async () => {
 		const report = await prewrite("2026-06-01T00:00:00.000Z", 25);
 		const options = parseCarrefourActiveWriteCliOptions(argv(report));
@@ -872,10 +1245,9 @@ describe("Carrefour active refresh writer contract", () => {
 		report.summary.expectedProductUpdates = report.rows.filter(
 			(row) => row.expectedChanges.product.length > 0,
 		).length;
-		const hashPayload = { ...report } as Record<string, unknown>;
-		delete hashPayload.futureConfirmation;
-		report.futureConfirmation.shape.reportHash =
-			buildPrewriteReportHash(hashPayload);
+		report.futureConfirmation.shape.reportHash = buildPrewriteReportHash(
+			canonicalPrewriteReportHashPayload(report),
+		);
 		const options = parseCarrefourActiveWriteCliOptions(argv(report));
 		let productUpdateCalls = 0;
 		const writeReport = await executeCarrefourActiveWrite({
@@ -1015,25 +1387,28 @@ describe("Carrefour active refresh writer contract", () => {
 			lookup: { value: string },
 		) => {
 			const row = existingRows.find((entry) => entry.skuId === lookup.value);
-			return [
-				{
-					ean: row?.ean ?? "",
-					name: `${row?.product?.name} Nuevo`,
-					brand: "Nueva",
-					description: "Nueva",
-					imageUrl: "https://www.vea.com.ar/new.jpg",
-					images: ["https://www.vea.com.ar/new.jpg"],
-					category: "Test",
-					skuId: lookup.value,
-					sellerId: "1",
-					productUrl: row?.productUrl ?? null,
-					price: 1100,
-					listPrice: 1100,
-					referencePrice: null,
-					referenceUnit: null,
-					isAvailable: true,
-				},
-			];
+			return Object.assign(
+				[
+					{
+						ean: row?.ean ?? "",
+						name: `${row?.product?.name} Nuevo`,
+						brand: "Nueva",
+						description: "Nueva",
+						imageUrl: "https://www.vea.com.ar/new.jpg",
+						images: ["https://www.vea.com.ar/new.jpg"],
+						category: "Test",
+						skuId: lookup.value,
+						sellerId: "1",
+						productUrl: row?.productUrl ?? null,
+						price: 1100,
+						listPrice: 1100,
+						referencePrice: null,
+						referenceUnit: null,
+						isAvailable: true,
+					},
+				],
+				{ observedAt: OBSERVED_AT },
+			);
 		};
 		const capacityPath = await writeCapacityReport(capacity.raw);
 		const report = await buildDirectRefreshPrewriteGate({
@@ -1079,25 +1454,28 @@ describe("Carrefour active refresh writer contract", () => {
 			lookup: { value: string },
 		) => {
 			const row = existingRows.find((entry) => entry.skuId === lookup.value);
-			return [
-				{
-					ean: row?.ean ?? "",
-					name: `${row?.product?.name} Nuevo`,
-					brand: "Nueva",
-					description: "Nueva",
-					imageUrl: "https://www.vea.com.ar/new.jpg",
-					images: ["https://www.vea.com.ar/new.jpg"],
-					category: "Test",
-					skuId: lookup.value,
-					sellerId: "1",
-					productUrl: row?.productUrl ?? null,
-					price: 1100,
-					listPrice: 1100,
-					referencePrice: null,
-					referenceUnit: null,
-					isAvailable: true,
-				},
-			];
+			return Object.assign(
+				[
+					{
+						ean: row?.ean ?? "",
+						name: `${row?.product?.name} Nuevo`,
+						brand: "Nueva",
+						description: "Nueva",
+						imageUrl: "https://www.vea.com.ar/new.jpg",
+						images: ["https://www.vea.com.ar/new.jpg"],
+						category: "Test",
+						skuId: lookup.value,
+						sellerId: "1",
+						productUrl: row?.productUrl ?? null,
+						price: 1100,
+						listPrice: 1100,
+						referencePrice: null,
+						referenceUnit: null,
+						isAvailable: true,
+					},
+				],
+				{ observedAt: OBSERVED_AT },
+			);
 		};
 		const capacityPath = await writeCapacityReport(capacity.raw);
 		const report = await buildDirectRefreshPrewriteGate({
@@ -1206,6 +1584,48 @@ describe("Carrefour active refresh writer contract", () => {
 		assert.equal(writeReport.source.expectedHost, "vea.com.ar");
 		assert.equal(writeReport.summary.rows, 10);
 		assert.equal(writeReport.noCreate.productDelta, 0);
+	});
+
+	it("does not apply the strict-newer observation guard outside the G04 cohort (vea)", async () => {
+		const report = await veaPrewrite();
+		const options = parseVeaActiveWriteCliOptions(veaArgv(report));
+		const newer = "2026-06-01T00:05:00.000Z";
+		let historyInserts = 0;
+		await executeVeaActiveWrite({
+			repository: repo(
+				tx({
+					async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+						const found = await tx().readSelectedRowsByExactIdentity(
+							sourceSlug,
+							identities,
+						);
+						return found.map((row) => ({
+							...row,
+							supermarketProduct: {
+								...row.supermarketProduct,
+								lastCheckedAt: newer,
+							},
+							latestPriceHistory: {
+								id: 1,
+								supermarketProductId: Number(row.supermarketProduct.id),
+								price: 1100,
+								listPrice: 1100,
+								scrapedAt: newer,
+							},
+						}));
+					},
+					async insertPriceHistory() {
+						historyInserts += 1;
+						return 1;
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date("2026-06-01T00:10:00.000Z"),
+		});
+
+		assert.equal(historyInserts, 10);
 	});
 
 	it("parses exact Disco confirmation flags and rejects other sources", async () => {
