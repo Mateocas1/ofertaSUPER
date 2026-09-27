@@ -133,7 +133,7 @@ function mapPublicPriceEntry(
   const freshnessStatus = classifyPriceFreshness(offer.last_checked_at, { maxAgeHours: supermarket.freshness_sla_hours }).status;
   return [{
     supermarket: { id: supermarket.id, name: supermarket.name, slug: supermarket.slug, logoUrl: supermarket.logo_url },
-    supermarketProductId: offer.sku_id as unknown as number, price, listPrice,
+    supermarketProductId: offer.sku_id as unknown as number, price, listPrice, promo: null,
     referencePrice: toNullableNumber(offer.reference_price), referenceUnit: offer.reference_unit,
     isAvailable: offer.is_available, productUrl: offer.product_url, lastCheckedAt: offer.last_checked_at.toISOString(),
     freshnessSlaHours: supermarket.freshness_sla_hours, freshnessStatus, previousPrice: priceMovement.previousPrice,

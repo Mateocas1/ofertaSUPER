@@ -10,12 +10,13 @@ const snapshot = JSON.parse(readFileSync("data/catalog-snapshot.json", "utf8")) 
   generatedAt: string;
   sources: string[];
   products: Record<string, unknown>[];
-  offers: { ean: string; source: string; history: Record<string, unknown>[] }[];
+  offers: { ean: string; source: string; promo: unknown; history: Record<string, unknown>[] }[];
 };
 
 const PRODUCT_KEYS = ["ean", "name", "brand", "imageUrl", "category", "categorySlug"].sort();
 const OFFER_KEYS = ["ean", "source", "price", "listPrice", "promo", "available", "productUrl", "observedAt", "history"].sort();
 const HISTORY_KEYS = ["price", "listPrice", "observedAt"].sort();
+const PROMO_KEYS = ["type", "percent", "nth", "maxUnits", "label"].sort();
 
 describe("catalog snapshot data contract", () => {
   it("exposes only the allowed keys on every product", () => {
@@ -35,8 +36,19 @@ describe("catalog snapshot data contract", () => {
     }
   });
 
+  it("keeps every captured promotion within the allowed shape", () => {
+    for (const offer of snapshot.offers) {
+      if (offer.promo === null) continue;
+      assert.deepEqual(Object.keys(offer.promo as Record<string, unknown>).sort(), PROMO_KEYS, `promo leaked keys on ${offer.ean}`);
+      const promo = offer.promo as { type: string; percent: number; label: string };
+      assert.ok(["nth-unit", "percent-off"].includes(promo.type), `promo type invalid on ${offer.ean}`);
+      assert.ok(promo.percent > 0 && promo.percent <= 99, `promo percent out of range on ${offer.ean}`);
+      assert.ok(promo.label.length > 0, `promo label empty on ${offer.ean}`);
+    }
+  });
+
   it("keeps top-level metadata honest", () => {
-    assert.equal(snapshot.schemaVersion, 1);
+    assert.equal(snapshot.schemaVersion, 2);
     assert.ok(!Number.isNaN(Date.parse(snapshot.generatedAt)));
     assert.deepEqual(snapshot.sources, ["carrefour", "disco", "jumbo"]);
   });

@@ -3,6 +3,11 @@ import Link from "next/link";
 import { PromotionBadge } from "@/components/promotion-badge";
 import { StruckListPrice } from "@/components/struck-list-price";
 import { SupermarketBadge } from "@/components/supermarket-badge";
+import type { SimplePromotion } from "@/lib/promotions/simple-promos";
+
+function promotionBadgeFor(promo: SimplePromotion) {
+  return <PromotionBadge type={promo.type === "nth-unit" ? "2nd_50" : "percentage"} label={promo.label} />;
+}
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatDateTime, formatPercent } from "@/lib/format";
 import { getPriceFreshnessCopy, type PriceFreshnessStatus } from "@/lib/price-freshness";
@@ -17,6 +22,7 @@ type PriceComparisonEntry = {
   };
   price: number | null;
   listPrice: number | null;
+  promo: SimplePromotion | null;
   previousPrice: number | null;
   deltaPercent: number | null;
   priceDropAlert: {
@@ -42,6 +48,9 @@ type PriceComparisonProps = {
 };
 
 function PriceComparisonPromoCell({ entry }: { entry: PriceComparisonEntry }) {
+  if (entry.promo) {
+    return promotionBadgeFor(entry.promo);
+  }
   if (entry.bestPromotion) {
     return (
       <div className="space-y-2">

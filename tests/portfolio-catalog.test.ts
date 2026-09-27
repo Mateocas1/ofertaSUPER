@@ -48,7 +48,7 @@ describe("public portfolio catalog", () => {
     assert.deepEqual(detail.priceEntries[0], {
       supermarket: { id: 1, name: "Market", slug: "market", logoUrl: null }, supermarketProductId: "sku-42",
       price: 80, listPrice: 100, referencePrice: null, referenceUnit: null, isAvailable: true,
-      productUrl: "https://market.test/p/42", lastCheckedAt: now.toISOString(), freshnessSlaHours: 24, freshnessStatus: "fresh",
+      productUrl: "https://market.test/p/42", lastCheckedAt: now.toISOString(), freshnessSlaHours: 24, freshnessStatus: "fresh", promo: null,
       previousPrice: 100, deltaPercent: -20, priceDropAlert: { previousPrice: 100, currentPrice: 80, amountDrop: 20, percentDrop: 20 },
       automaticDiscountPercent: 20, bestPromotion: detail.promotions[0], finalPrice: 64,
     });

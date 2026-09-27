@@ -9,6 +9,7 @@ import { SupermarketBadge } from "@/components/supermarket-badge";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { getPriceFreshnessCopy, type PriceFreshnessStatus } from "@/lib/price-freshness";
+import type { SimplePromotion } from "@/lib/promotions/simple-promos";
 import { cn } from "@/lib/utils";
 
 type ProductCardEntry = {
@@ -20,6 +21,7 @@ type ProductCardEntry = {
   };
   price: number | null;
   listPrice: number | null;
+  promo: SimplePromotion | null;
 };
 
 type ProductCardProduct = {
@@ -85,7 +87,10 @@ function ProductCardPricePanel({ product, displayPrice, isStale, freshnessCopy }
       <div>
         <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{freshnessCopy.priceLabel}</p>
         <p className="mt-1 text-2xl font-semibold text-foreground">{formatCurrency(displayPrice)}</p>
-        <StruckListPrice price={displayEntry?.price ?? null} listPrice={displayEntry?.listPrice ?? null} />
+        <div className="mt-1 flex flex-wrap items-baseline gap-2">
+          <StruckListPrice price={displayEntry?.price ?? null} listPrice={displayEntry?.listPrice ?? null} />
+          {displayEntry?.promo ? <PromotionBadge type={displayEntry.promo.type === "nth-unit" ? "2nd_50" : "percentage"} label={displayEntry.promo.label} /> : null}
+        </div>
         {isStale ? <p className="mt-1 text-xs font-medium text-amber-700">{freshnessCopy.badgeLabel}</p> : null}
       </div>
       <div className="text-right">
