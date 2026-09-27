@@ -87,8 +87,8 @@ test("absent tsx shapes fail with a clear error, not a TypeError", () => {
 
       assert.throws(
         () => resolveTsxLoaderPath(dir, testCase.pkg),
-        (err) => {
-          const message = String(err?.message ?? err);
+        (error) => {
+          const message = error instanceof Error ? error.message : String(error);
           assert.match(message, /tsx loader/i, testCase.name);
           assert.doesNotMatch(message, /paths\[1\]/, `${testCase.name}: raw TypeError leaked`);
           assert.ok(message.includes(dir), `${testCase.name}: error must name the resolved directory`);
