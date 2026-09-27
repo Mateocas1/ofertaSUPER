@@ -10,12 +10,14 @@ type GateStatus = "PASS" | "FAIL";
 type OptionalAttribute = "pack" | "quantity" | "measurementUnit" | "variant";
 
 /**
- * An offer may count toward freshness only when its observation is
- * corroborated by a durable source-capture record; the durable-capture
- * writers set observationProven, and anything else (including a missing
- * flag from an older snapshot) is unproven and must fail closed.
+ * Provenance is the offer's own bound observation instant: the snapshot
+ * builder emits observationProven only when the offer's values come from an
+ * observation of the source itself (a non-null observed_at written by a
+ * guarded source-observation path). A missing flag or a missing instant is
+ * unproven and must fail closed; the durable source-capture corroboration is
+ * reported as an additional signal only and never substitutes for binding.
  */
-type ObservationProvenance = { observationProven?: boolean };
+type ObservationProvenance = { observationProven?: boolean; durableCaptureCorroborated?: boolean };
 
 type IdentityFields = {
 	ean: string | null;
@@ -29,7 +31,7 @@ type AttributeConflict = { source: Source; ean: string; attributes: OptionalAttr
 export type CmvpTargetManifest = { schemaVersion: 1; cycleId: string; frozenAt: string; products: Array<IdentityFields & { targetId: string; useful: boolean }> };
 export type CmvpCatalogSnapshot = {
 	schemaVersion: 1; cycleId: string; observedAt: string;
-	offers: Array<IdentityFields & { source: Source; targetId: string; available: boolean; price: number | null; observedAt: string } & ObservationProvenance>;
+	offers: Array<IdentityFields & { source: Source; targetId: string; available: boolean; price: number | null; observedAt: string | null } & ObservationProvenance>;
 	identity?: { attributeConflicts: AttributeConflict[] };
 };
 export type CmvpPriorCycle = { schemaVersion: 1; cycleId: string; targetFingerprint: string; status: GateStatus };
@@ -65,7 +67,7 @@ function buildCycle(current: string, priorCycle: CmvpPriorCycle | null, targetFi
 	return { current, prior: priorCycle?.cycleId ?? null, targetFingerprint, sameFrozenTarget, consecutiveSuccessful: Boolean(priorCycle && priorCycle.cycleId !== current && priorCycle.status === "PASS" && sameFrozenTarget && status === "PASS") };
 }
 function buildObservations(offers: CmvpCatalogSnapshot["offers"], sources: ReturnType<typeof summarizeSources>, freshTargetIds: Set<string>, freshnessPercent: number) {
-	return { total: offers.length, withinWindow: sources.reduce((sum, source) => sum + source.withinWindow, 0), unprovenObservations: offers.filter((offer) => offer.observationProven !== true).length, freshDistinctUsefulProducts: freshTargetIds.size, freshnessPercent, available: sources.reduce((sum, source) => sum + source.available, 0), priceRankable: sources.reduce((sum, source) => sum + source.priceRankable, 0) };
+	return { total: offers.length, withinWindow: sources.reduce((sum, source) => sum + source.withinWindow, 0), unprovenObservations: offers.filter((offer) => !isProvenOffer(offer)).length, freshDistinctUsefulProducts: freshTargetIds.size, freshnessPercent, available: sources.reduce((sum, source) => sum + source.available, 0), priceRankable: sources.reduce((sum, source) => sum + source.priceRankable, 0) };
 }
 
 function aggregateOfferEvidence(offers: CmvpCatalogSnapshot["offers"], usefulTargets: CmvpTargetManifest["products"], windowStart: number) {
@@ -82,8 +84,9 @@ function observeOffer(offer: CmvpCatalogSnapshot["offers"][number], targetById: 
 	const target = targetById.get(offer.targetId);
 	if (!target) throw new Error(`offer targetId ${offer.targetId} is not a useful frozen target`);
 	const reasons = identityReasons(target, offer);
-	if (offer.observationProven !== true) reasons.push("unproven-observation");
-	if (new Date(offer.observedAt).getTime() < windowStart) reasons.push("outside-24-hour-window");
+	if (!isProvenOffer(offer)) reasons.push("unproven-observation");
+	const boundMs = offerBoundInstantMs(offer);
+	if (boundMs !== null && boundMs < windowStart) reasons.push("outside-24-hour-window");
 	if (reasons.length > 0) exclusions.push({ source: offer.source, targetId: offer.targetId, reasons });
 	const normalizedOfferEan = normalizeEan(offer.ean);
 	if (normalizedOfferEan && normalizedOfferEan === normalizeEan(target.ean)) addSource(eanSources, normalizedOfferEan, offer.source);
@@ -99,12 +102,15 @@ function summarizeSources(offers: CmvpCatalogSnapshot["offers"], exactOffers: Cm
 
 function summarizeSource(source: Source, allOffers: CmvpCatalogSnapshot["offers"], exactOffers: CmvpCatalogSnapshot["offers"], windowStart: number) {
 	const offers = allOffers.filter((offer) => offer.source === source);
-	const provenOffers = exactOffers.filter((offer) => offer.source === source && offer.observationProven === true);
-	return { source, offers: offers.length, represented: provenOffers.length > 0, available: offers.filter((offer) => offer.available).length, priceRankable: offers.filter((offer) => offer.available && offer.price !== null && offer.price > 0).length, withinWindow: provenOffers.filter((offer) => new Date(offer.observedAt).getTime() >= windowStart).length, unproven: offers.filter((offer) => offer.observationProven !== true).length };
+	const provenOffers = exactOffers.filter((offer) => offer.source === source && isProvenOffer(offer));
+	return { source, offers: offers.length, represented: provenOffers.length > 0, available: offers.filter((offer) => offer.available).length, priceRankable: offers.filter((offer) => offer.available && offer.price !== null && offer.price > 0).length, withinWindow: provenOffers.filter((offer) => { const boundMs = offerBoundInstantMs(offer); return boundMs !== null && boundMs >= windowStart; }).length, unproven: offers.filter((offer) => !isProvenOffer(offer)).length };
 }
 
 function countOverlappingSources(sources: Map<string, Set<Source>>) { return [...sources.values()].filter((values) => values.size >= 2).length; }
-function collectFreshTargetIds(offers: CmvpCatalogSnapshot["offers"], windowStart: number) { return new Set(offers.filter((offer) => offer.observationProven === true && new Date(offer.observedAt).getTime() >= windowStart).map((offer) => offer.targetId)); }
+function offerBoundInstantMs(offer: CmvpCatalogSnapshot["offers"][number]) { return offer.observedAt === null ? null : new Date(offer.observedAt).getTime(); }
+function isProvenOffer(offer: CmvpCatalogSnapshot["offers"][number]) { return offer.observationProven === true && offerBoundInstantMs(offer) !== null; }
+function isFreshOffer(offer: CmvpCatalogSnapshot["offers"][number], windowStart: number) { const boundMs = offerBoundInstantMs(offer); return offer.observationProven === true && boundMs !== null && boundMs >= windowStart; }
+function collectFreshTargetIds(offers: CmvpCatalogSnapshot["offers"], windowStart: number) { return new Set(offers.filter((offer) => isFreshOffer(offer, windowStart)).map((offer) => offer.targetId)); }
 function buildGates(targetSize: number, sources: ReturnType<typeof summarizeSources>, exactComparableProducts: number, freshnessPercent: number) { return { targetSize: targetSize >= 500 && targetSize <= 1000, threeSourcesRepresented: sources.every((source) => source.represented), exactComparableProducts: exactComparableProducts >= 100, freshness: freshnessPercent >= 90 }; }
 
 function validateInput(manifest: CmvpTargetManifest, snapshot: CmvpCatalogSnapshot, prior: CmvpPriorCycle | null, evaluationTime: number) {
@@ -137,8 +143,10 @@ function validateProducts(products: CmvpTargetManifest["products"]) { for (const
 function validateOffers(offers: CmvpCatalogSnapshot["offers"], observedAt: number, evaluationTime: number) {
 	for (const offer of offers) {
 		if (!SOURCES.includes(offer.source)) throw new Error(`unsupported source ${offer.source}`);
-		const time = validDate(offer.observedAt, "offer observedAt");
-		if (time > observedAt || time > evaluationTime + CMVP_MAX_FUTURE_SKEW_MS) throw new Error("future offer observation");
+		if (offer.observedAt !== null) {
+			const time = validDate(offer.observedAt, "offer observedAt");
+			if (time > observedAt || time > evaluationTime + CMVP_MAX_FUTURE_SKEW_MS) throw new Error("future offer observation");
+		}
 		if (offer.price !== null && (!Number.isFinite(offer.price) || offer.price <= 0)) throw new Error("price must be null or positive");
 	}
 }

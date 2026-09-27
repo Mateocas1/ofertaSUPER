@@ -60,7 +60,7 @@ describe("CMVP catalog snapshot", () => {
 				{ source: "jumbo", ean: "malformed", pack: "copied?", quantity: "9", measurementUnit: "kg", variant: "wrong" },
 			],
 		});
-		assert.deepEqual(generated.offers[0], { source: "disco", targetId: "milk-1l", ean, pack: null, quantity: "1 l", measurementUnit: "l", variant: "whole", available: true, price: 100, observedAt: "2026-09-19T11:00:00.000Z", observationProven: false });
+		assert.deepEqual(generated.offers[0], { source: "disco", targetId: "milk-1l", ean, pack: null, quantity: "1 l", measurementUnit: "l", variant: "whole", available: true, price: 100, observedAt: "2026-09-19T11:00:00.000Z", observationProven: true, durableCaptureCorroborated: false });
 		assert.deepEqual(generated.identity.attributeConflicts, [{ source: "disco", ean, attributes: ["pack"] }]);
 	});
 
@@ -101,7 +101,7 @@ describe("CMVP catalog snapshot", () => {
 			schemaVersion: 1,
 			cycleId: "cycle-003",
 			observedAt: "2026-09-19T12:00:00.000Z",
-			offers: [{ source: "disco", targetId: "milk-1l", ean, pack: null, quantity: null, measurementUnit: null, variant: null, available: true, price: 100, observedAt: "2026-09-19T11:00:00.000Z", observationProven: false }],
+			offers: [{ source: "disco", targetId: "milk-1l", ean, pack: null, quantity: null, measurementUnit: null, variant: null, available: true, price: 100, observedAt: "2026-09-19T11:00:00.000Z", observationProven: true, durableCaptureCorroborated: false }],
 			readOnly: true,
 			identity: { missingStructuredEvidenceIsUnproven: false, attributeConflicts: [] },
 		});
@@ -109,7 +109,7 @@ describe("CMVP catalog snapshot", () => {
 		assert.equal("report" in snapshot, false);
 	});
 
-	it("corroborates an offer only through a durable observation record for the same source and identity inside the window", async () => {
+	it("binds provenance to the offer's own observation instant and reports durable corroboration as an additional signal", async () => {
 		const repository: CmvpCatalogSnapshotRepository = {
 			async listOffers() {
 				return [
@@ -125,27 +125,64 @@ describe("CMVP catalog snapshot", () => {
 			},
 		};
 		const generated = await buildCmvpCatalogSnapshot({ targetManifest, repository, observedAt: "2026-09-19T12:00:00.000Z" });
-		assert.deepEqual(generated.offers.map((offer) => ({ source: offer.source, observationProven: offer.observationProven })), [
-			{ source: "disco", observationProven: true },
-			{ source: "jumbo", observationProven: true },
+		assert.deepEqual(generated.offers.map((offer) => ({ source: offer.source, observationProven: offer.observationProven, durableCaptureCorroborated: offer.durableCaptureCorroborated })), [
+			{ source: "disco", observationProven: true, durableCaptureCorroborated: true },
+			{ source: "jumbo", observationProven: true, durableCaptureCorroborated: true },
 		]);
 		assert.equal(gate({ targetManifest, snapshot: generated }).observations.freshDistinctUsefulProducts, 1);
 	});
 
-	it("treats an offer whose only evidence is a processing clock last_checked_at as unproven", async () => {
+	it("treats an offer with a fresh write attempt but no bound observation instant as unproven", async () => {
+		// The snapshot row carries only the bound observation instant; a fresh
+		// processing clock on last_checked_at is invisible here and must not
+		// make the offer fresh.
 		const repository: CmvpCatalogSnapshotRepository = {
 			async listOffers() {
-				return [{ source: "jumbo", productEan: ean, available: true, price: 1200, observedAt: "2026-09-19T11:59:00.000Z" }];
+				return [{ source: "jumbo", productEan: ean, available: true, price: 1200, observedAt: null }];
 			},
 			async listDurableObservations() { return []; },
 		};
 		const generated = await buildCmvpCatalogSnapshot({ targetManifest, repository, observedAt: "2026-09-19T12:00:00.000Z" });
+		assert.equal(generated.offers[0].observedAt, null);
 		assert.equal(generated.offers[0].observationProven, false);
-		assert.equal(gate({ targetManifest, snapshot: generated }).observations.freshDistinctUsefulProducts, 0);
-		assert.equal(gate({ targetManifest, snapshot: generated }).gates.freshness, false);
+		const report = gate({ targetManifest, snapshot: generated });
+		assert.equal(report.observations.unprovenObservations, 1);
+		assert.equal(report.observations.freshDistinctUsefulProducts, 0);
+		assert.equal(report.gates.freshness, false);
 	});
 
-	it("rejects durable observations from another source, another identity, or outside the observation window", async () => {
+	it("binds a fresh observation instant inside the window as proven and fresh", async () => {
+		const repository: CmvpCatalogSnapshotRepository = {
+			async listOffers() {
+				return [{ source: "jumbo", productEan: ean, available: true, price: 1200, observedAt: "2026-09-19T11:00:00.000Z" }];
+			},
+			async listDurableObservations() { return []; },
+		};
+		const generated = await buildCmvpCatalogSnapshot({ targetManifest, repository, observedAt: "2026-09-19T12:00:00.000Z" });
+		assert.equal(generated.offers[0].observationProven, true);
+		const report = gate({ targetManifest, snapshot: generated });
+		assert.equal(report.observations.freshDistinctUsefulProducts, 1);
+		assert.equal(report.gates.freshness, true);
+	});
+
+	it("never lets window corroboration alone prove an offer", async () => {
+		const repository: CmvpCatalogSnapshotRepository = {
+			async listOffers() {
+				return [{ source: "jumbo", productEan: ean, available: true, price: 1200, observedAt: null }];
+			},
+			async listDurableObservations() {
+				return [durableObservation()];
+			},
+		};
+		const generated = await buildCmvpCatalogSnapshot({ targetManifest, repository, observedAt: "2026-09-19T12:00:00.000Z" });
+		assert.equal(generated.offers[0].durableCaptureCorroborated, true);
+		assert.equal(generated.offers[0].observationProven, false);
+		const report = gate({ targetManifest, snapshot: generated });
+		assert.equal(report.observations.unprovenObservations, 1);
+		assert.equal(report.observations.freshDistinctUsefulProducts, 0);
+	});
+
+	it("does not let another source, identity, or out-of-window durable observation corroborate the signal", async () => {
 		const repository: CmvpCatalogSnapshotRepository = {
 			async listOffers() {
 				return [{ source: "jumbo", productEan: ean, available: true, price: 1200, observedAt: "2026-09-19T11:00:00.000Z" }];
@@ -160,10 +197,11 @@ describe("CMVP catalog snapshot", () => {
 			},
 		};
 		const generated = await buildCmvpCatalogSnapshot({ targetManifest, repository, observedAt: "2026-09-19T12:00:00.000Z" });
-		assert.equal(generated.offers[0].observationProven, false);
+		assert.equal(generated.offers[0].observationProven, true);
+		assert.equal(generated.offers[0].durableCaptureCorroborated, false);
 	});
 
-	it("corroborates at the inclusive window boundaries", async () => {
+	it("reports durable corroboration at the inclusive window boundaries", async () => {
 		const repository: CmvpCatalogSnapshotRepository = {
 			async listOffers() {
 				return [{ source: "jumbo", productEan: ean, available: true, price: 1200, observedAt: "2026-09-19T11:00:00.000Z" }];
@@ -176,7 +214,7 @@ describe("CMVP catalog snapshot", () => {
 			},
 		};
 		const generated = await buildCmvpCatalogSnapshot({ targetManifest, repository, observedAt: "2026-09-19T12:00:00.000Z" });
-		assert.equal(generated.offers[0].observationProven, true);
+		assert.equal(generated.offers[0].durableCaptureCorroborated, true);
 	});
 
 	it("requires a read-only environment and rejects source expansion or write-oriented CLI flags", () => {

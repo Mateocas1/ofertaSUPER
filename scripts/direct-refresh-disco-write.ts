@@ -46,6 +46,7 @@ function productUpdateData(
 }
 function supermarketProductUpdateData(
 	changes: DirectRefreshPrewriteChange[],
+	observedAt: string | null,
 ): Prisma.SupermarketProductUpdateInput {
 	const data: Prisma.SupermarketProductUpdateInput = {};
 	for (const change of changes) {
@@ -71,6 +72,10 @@ function supermarketProductUpdateData(
 		if (change.field === "lastCheckedAt")
 			data.last_checked_at = new Date(String(change.after));
 	}
+	// Bind the offer's observation instant only when the seam supplies one.
+	// A null instant means this path did not observe the source, so the
+	// column must not be written: never overwrite it with null.
+	if (observedAt !== null) data.observed_at = new Date(observedAt);
 	return data;
 }
 
@@ -223,6 +228,7 @@ export function createDiscoActiveWriteTransaction(
 			productEan,
 			skuId,
 			changes,
+			observedAt,
 		) {
 			const result = await tx.supermarketProduct.updateMany({
 				where: {
@@ -231,7 +237,7 @@ export function createDiscoActiveWriteTransaction(
 					sku_id: skuId,
 					supermarket: { slug: sourceSlug },
 				},
-				data: supermarketProductUpdateData(changes),
+				data: supermarketProductUpdateData(changes, observedAt),
 			});
 			return result.count;
 		},

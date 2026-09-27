@@ -76,23 +76,19 @@ export function createPrismaCmvpCatalogSnapshotRepository(): CmvpCatalogSnapshot
 					product_ean: true,
 					price: true,
 					is_available: true,
-					last_checked_at: true,
+					observed_at: true,
 					sku_id: true,
 					supermarket: { select: { slug: true } },
 				},
 			});
-			return rows.flatMap((row) => {
-				const observedAt = dateToIso(row.last_checked_at);
-				if (!observedAt) return [];
-				return [{
-					source: row.supermarket.slug,
-					productEan: row.product_ean,
-					sourceSku: row.sku_id,
-					available: row.is_available,
-					price: decimalToNumber(row.price),
-					observedAt,
-				}];
-			});
+			return rows.map((row) => ({
+				source: row.supermarket.slug,
+				productEan: row.product_ean,
+				sourceSku: row.sku_id,
+				available: row.is_available,
+				price: decimalToNumber(row.price),
+				observedAt: dateToIso(row.observed_at),
+			}));
 		},
 		async listDurableObservations({ sources, windowStart, windowEnd }) {
 			const rows = await db.$queryRaw<Array<{ source: string; product_ean: string | null; sku: string | null; observed_at: Date }>>`

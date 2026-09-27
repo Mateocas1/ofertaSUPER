@@ -124,6 +124,34 @@ describe("CMVP catalog gate", () => {
 		]);
 	});
 
+	it("fails closed when the bound observation instant is missing", () => {
+		const unbound = gate({ targetManifest: manifest, snapshot: { ...snapshot, offers: snapshot.offers.map((offer) => ({ ...offer, observedAt: null })) } });
+		assert.equal(unbound.observations.unprovenObservations, 2);
+		assert.equal(unbound.observations.freshDistinctUsefulProducts, 0);
+		assert.equal(unbound.observations.freshnessPercent, 0);
+		assert.equal(unbound.sources[1].withinWindow, 0);
+		assert.equal(unbound.sources[1].unproven, 1);
+		assert.equal(unbound.gates.freshness, false);
+		assert.equal(unbound.status, "FAIL");
+		assert.deepEqual(unbound.exclusions, [
+			{ source: "disco", targetId: "milk-1l", reasons: ["unproven-observation"] },
+			{ source: "jumbo", targetId: "milk-1l", reasons: ["unproven-observation"] },
+		]);
+	});
+
+	it("evaluates the freshness window on the bound observation instant, not on any write-attempt clock", () => {
+		const stale = gate({ targetManifest: manifest, snapshot: { ...snapshot, offers: snapshot.offers.map((offer) => ({ ...offer, observedAt: "2026-09-18T10:00:00.000Z" })) } });
+		assert.equal(stale.observations.freshDistinctUsefulProducts, 0);
+		assert.equal(stale.observations.unprovenObservations, 0);
+		assert.equal(stale.sources[1].withinWindow, 0);
+		assert.equal(stale.sources[1].unproven, 0);
+		assert.deepEqual(stale.exclusions, [
+			{ source: "disco", targetId: "milk-1l", reasons: ["outside-24-hour-window"] },
+			{ source: "jumbo", targetId: "milk-1l", reasons: ["outside-24-hour-window"] },
+		]);
+		assert.equal(stale.gates.freshness, false);
+	});
+
 	it("requires explicit fixture paths and rejects write-oriented CLI flags", () => {
 		assert.deepEqual(parseCmvpCatalogGateCliOptions(["node", "script", "--target-manifest=target.json", "--snapshot=observed.json"]), { targetManifest: "target.json", snapshot: "observed.json", priorCycle: null });
 		assert.throws(() => parseCmvpCatalogGateCliOptions(["node", "script", "--target-manifest=target.json", "--snapshot=observed.json", "--write"]), /read-only/);

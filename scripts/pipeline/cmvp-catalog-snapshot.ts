@@ -8,7 +8,7 @@ type Source = (typeof SOURCES)[number];
 type OptionalAttribute = "pack" | "quantity" | "measurementUnit" | "variant";
 type ObservedAttributes = Record<OptionalAttribute, string | null>;
 
-export type CmvpCatalogSnapshotRow = { source: string; productEan: string; sourceSku?: string | null; available: boolean; price: number | null; observedAt: string };
+export type CmvpCatalogSnapshotRow = { source: string; productEan: string; sourceSku?: string | null; available: boolean; price: number | null; observedAt: string | null };
 export type CmvpSourceIdentityEvidence = { source: Source; ean?: string | null; sourceSku?: string; pack?: string | null; quantity?: string | null; measurementUnit?: string | null; variant?: string | null };
 /**
  * One durable observation extracted from the source-capture records
@@ -41,7 +41,8 @@ export async function buildCmvpCatalogSnapshot({ targetManifest, repository, obs
 		const normalizedEan = normalizeEan(row.productEan); const target = normalizedEan ? targetByEan.get(normalizedEan) : null;
 		if (!target || !normalizedEan) return [];
 		const attributes = evidence.observations.get(`${row.source}:${normalizedEan}`) ?? nullAttributes();
-		return [{ source: row.source, targetId: target.targetId, ean: normalizedEan, ...attributes, available: row.available, price: row.price, observedAt: row.observedAt, observationProven: hasCorroboratedDurableObservation(row, normalizedEan, durableBySource.get(row.source) ?? [], observedAt) }];
+		const durableCorroborated = hasCorroboratedDurableObservation(row, normalizedEan, durableBySource.get(row.source) ?? [], observedAt);
+		return [{ source: row.source, targetId: target.targetId, ean: normalizedEan, ...attributes, available: row.available, price: row.price, observedAt: row.observedAt, observationProven: row.observedAt !== null, durableCaptureCorroborated: durableCorroborated }];
 	});
 	ensureUniqueNormalizedSourceIdentities(unsortedOffers);
 	const offers = unsortedOffers.toSorted(compareSnapshotOffers);
@@ -99,11 +100,12 @@ function normalize(value: string) { return value.trim().toLocaleLowerCase("en-US
 function identityKey(source: string, ean: string | null) { return ean ? `${source}:${ean}` : null; }
 
 /**
- * The observation window used for durable corroboration is the same 24-hour
- * freshness window the gate evaluates, anchored at the snapshot's observedAt
- * with the same future-skew allowance. An offer counts as proven only when a
- * durable capture records an observation of the same source and identity
- * (EAN or SKU) inside that window; anything else fails closed as unproven.
+ * The observation window used for the durable-corroboration signal is the
+ * same 24-hour freshness window the gate evaluates, anchored at the
+ * snapshot's observedAt with the same future-skew allowance. The signal is
+ * reported per offer but never substitutes for the offer's own bound
+ * observation instant: provenance comes only from a non-null instant written
+ * by a guarded source-observation path.
  */
 function observationWindowStart(observedAt: string) { return new Date(Date.parse(observedAt) - CMVP_FRESHNESS_WINDOW_MS).toISOString(); }
 function observationWindowEnd(observedAt: string) { return new Date(Date.parse(observedAt) + CMVP_MAX_FUTURE_SKEW_MS).toISOString(); }

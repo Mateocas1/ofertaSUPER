@@ -32,6 +32,12 @@ import {
 	type ActiveWriteTransaction,
 } from "../scripts/pipeline/direct-refresh-active-write";
 import {
+	createDiscoActiveWriteTransaction,
+} from "../scripts/direct-refresh-disco-write";
+import {
+	createMasActiveWriteTransaction,
+} from "../scripts/direct-refresh-mas-write";
+import {
 	buildCarrefourDirectRefreshPrewriteGate,
 	buildDirectRefreshPrewriteGate,
 	buildPrewriteReportHash,
@@ -898,6 +904,108 @@ describe("Carrefour active refresh writer contract", () => {
 		assert.equal(writeReport.summary.priceHistoryInserted, 10);
 	});
 
+	it("binds observed_at to the same per-row observation instant in guarded sources", async () => {
+		const report = await prewrite();
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		const observedAts: Array<string | null> = [];
+		await executeCarrefourActiveWrite({
+			repository: repo(
+				tx({
+					async updateSupermarketProductByExactIdentity(
+						_sourceSlug,
+						_rowId,
+						_productEan,
+						_skuId,
+						_changes,
+						observedAt,
+					) {
+						observedAts.push(observedAt);
+						return 1;
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date("2026-06-01T00:10:00.000Z"),
+		});
+		assert.deepEqual(observedAts, Array(10).fill(OBSERVED_AT));
+	});
+
+	it("never binds an observation instant outside the guarded cohort", async () => {
+		const report = await veaPrewrite();
+		const options = parseVeaActiveWriteCliOptions(veaArgv(report));
+		const observedAts: Array<string | null> = [];
+		await executeVeaActiveWrite({
+			repository: repo(
+				tx({
+					async updateSupermarketProductByExactIdentity(
+						_sourceSlug,
+						_rowId,
+						_productEan,
+						_skuId,
+						_changes,
+						observedAt,
+					) {
+						observedAts.push(observedAt);
+						return 1;
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date(report.generatedAt),
+		});
+		assert.deepEqual(observedAts, Array(10).fill(null));
+	});
+
+	it("does not bind an observation instant on a suppressed row", async () => {
+		const report = await prewrite();
+		const options = parseCarrefourActiveWriteCliOptions(argv(report));
+		const newer = "2026-06-01T00:05:00.000Z";
+		const observedAts: Array<string | null> = [];
+		await executeCarrefourActiveWrite({
+			repository: repo(
+				tx({
+					async readSelectedRowsByExactIdentity(sourceSlug, identities) {
+						const found = await tx().readSelectedRowsByExactIdentity(
+							sourceSlug,
+							identities,
+						);
+						return found.map((row) => ({
+							...row,
+							supermarketProduct: {
+								...row.supermarketProduct,
+								lastCheckedAt: newer,
+							},
+							latestPriceHistory: {
+								id: 1,
+								supermarketProductId: Number(row.supermarketProduct.id),
+								price: 1100,
+								listPrice: 1100,
+								scrapedAt: newer,
+							},
+						}));
+					},
+					async updateSupermarketProductByExactIdentity(
+						_sourceSlug,
+						_rowId,
+						_productEan,
+						_skuId,
+						_changes,
+						observedAt,
+					) {
+						observedAts.push(observedAt);
+						return 1;
+					},
+				}),
+			),
+			prewriteReport: report,
+			options,
+			startedAt: new Date("2026-06-01T00:10:00.000Z"),
+		});
+		assert.deepEqual(observedAts, []);
+	});
+
 	it("never overwrites a newer observation in the guarded G04 write repos", async () => {
 		const report = await prewrite();
 		const options = parseCarrefourActiveWriteCliOptions(argv(report));
@@ -1558,6 +1666,7 @@ describe("Carrefour active refresh writer contract", () => {
 						productEan,
 						skuId,
 						changes,
+						observedAt,
 					) {
 						updatedSource = sourceSlug;
 						return tx().updateSupermarketProductByExactIdentity(
@@ -1566,6 +1675,7 @@ describe("Carrefour active refresh writer contract", () => {
 							productEan,
 							skuId,
 							changes,
+							observedAt,
 						);
 					},
 				}),
@@ -1673,6 +1783,7 @@ describe("Carrefour active refresh writer contract", () => {
 						productEan,
 						skuId,
 						changes,
+						observedAt,
 					) {
 						updatedSource = sourceSlug;
 						return tx().updateSupermarketProductByExactIdentity(
@@ -1681,6 +1792,7 @@ describe("Carrefour active refresh writer contract", () => {
 							productEan,
 							skuId,
 							changes,
+							observedAt,
 						);
 					},
 				}),
@@ -1747,6 +1859,7 @@ describe("Carrefour active refresh writer contract", () => {
 						productEan,
 						skuId,
 						changes,
+						observedAt,
 					) {
 						updatedSource = sourceSlug;
 						return tx().updateSupermarketProductByExactIdentity(
@@ -1755,6 +1868,7 @@ describe("Carrefour active refresh writer contract", () => {
 							productEan,
 							skuId,
 							changes,
+							observedAt,
 						);
 					},
 				}),
@@ -1852,6 +1966,7 @@ describe("Carrefour active refresh writer contract", () => {
 						productEan,
 						skuId,
 						changes,
+						observedAt,
 					) {
 						updatedSource = sourceSlug;
 						return tx().updateSupermarketProductByExactIdentity(
@@ -1860,6 +1975,7 @@ describe("Carrefour active refresh writer contract", () => {
 							productEan,
 							skuId,
 							changes,
+							observedAt,
 						);
 					},
 				}),
@@ -1878,5 +1994,57 @@ describe("Carrefour active refresh writer contract", () => {
 		assert.equal(writeReport.source.expectedHost, "masonline.com.ar");
 		assert.equal(writeReport.summary.rows, 10);
 		assert.equal(writeReport.noCreate.productDelta, 0);
+	});
+});
+
+describe("write script supermarket product update input binding", () => {
+	const BOUND_INSTANT = "2026-06-01T00:00:05.000Z";
+
+	function capturingUpdateInput(inputs: Array<Record<string, unknown>>) {
+		return {
+			supermarketProduct: {
+				updateMany: async ({
+					data,
+				}: {
+					data: Record<string, unknown>;
+				}) => {
+					inputs.push(data);
+					return { count: 1 };
+				},
+			},
+		} as never;
+	}
+
+	it("carries the bound observation instant into the guarded source update input", async () => {
+		const inputs: Array<Record<string, unknown>> = [];
+		const tx = createDiscoActiveWriteTransaction(capturingUpdateInput(inputs));
+		const count = await tx.updateSupermarketProductByExactIdentity(
+			"disco",
+			"1",
+			"7790000000001",
+			"sku-1",
+			[{ field: "price", before: 100, after: 110 }],
+			BOUND_INSTANT,
+		);
+		assert.equal(count, 1);
+		assert.equal(inputs.length, 1);
+		assert.ok("observed_at" in inputs[0]);
+		assert.deepEqual(inputs[0].observed_at, new Date(BOUND_INSTANT));
+	});
+
+	it("does not overwrite observed_at with null for an unguarded source", async () => {
+		const inputs: Array<Record<string, unknown>> = [];
+		const tx = createMasActiveWriteTransaction(capturingUpdateInput(inputs));
+		const count = await tx.updateSupermarketProductByExactIdentity(
+			"mas",
+			"1",
+			"7790000000001",
+			"sku-1",
+			[{ field: "price", before: 100, after: 110 }],
+			null,
+		);
+		assert.equal(count, 1);
+		assert.equal(inputs.length, 1);
+		assert.equal("observed_at" in inputs[0], false);
 	});
 });

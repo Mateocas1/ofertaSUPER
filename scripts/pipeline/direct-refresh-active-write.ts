@@ -211,6 +211,14 @@ export type ActiveWriteTransaction = {
 		productEan: string,
 		skuId: string,
 		changes: DirectRefreshPrewriteChange[],
+		/**
+		 * Per-offer observation instant to persist as
+		 * supermarket_products.observed_at alongside this update. Only guarded
+		 * source-observation paths receive a non-null value; null means the
+		 * caller does not bind an observation and the column must not be
+		 * written.
+		 */
+		observedAt: string | null,
 	): Promise<number>;
 	insertPriceHistory(
 		rowId: string,
@@ -832,12 +840,22 @@ async function applyPrewriteRow(
 		throw new Error(`product update count for ${row.rowId} was ${productCount}`);
 	let spCount = 0;
 	if (supermarketProductChanges.length > 0) {
+		// Bind the offer's own observation instant: only guarded source
+		// observation paths write observed_at, and a suppressed row never gets
+		// here, so no value from an older or equal observation is bound.
+		const boundObservedAt =
+			OBSERVATION_GUARDED_SOURCES.has(source) &&
+			observationInstant !== null &&
+			Number.isFinite(Date.parse(observationInstant))
+				? observationInstant
+				: null;
 		spCount = await tx.updateSupermarketProductByExactIdentity(
 			source,
 			row.rowId,
 			productEan,
 			skuId,
 			supermarketProductChanges,
+			boundObservedAt,
 		);
 		if (spCount !== 1)
 			throw new Error(`supermarketProduct update count for ${row.rowId} was ${spCount}`);

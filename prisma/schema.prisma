@@ -99,6 +99,9 @@ model SupermarketProduct {
   seller_id         String?
   product_url       String?
   last_checked_at   DateTime          @default(now())
+  // Freshness basis: only guarded source-observation paths may write this
+  // per-offer observation instant; null keeps the offer unproven.
+  observed_at       DateTime?
   product           Product           @relation(fields: [product_ean], references: [ean], onDelete: Cascade)
   supermarket       Supermarket       @relation(fields: [supermarket_id], references: [id], onDelete: Cascade)
   price_history     PriceHistory[]
