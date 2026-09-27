@@ -38,11 +38,12 @@ test("rate limiter preserves allow, deny, and fail-open shape", async () => {
   assert.deepEqual({ success: open.success, limit: open.limit, remaining: open.remaining }, { success: true, limit: 60, remaining: 60 });
 });
 
-test("compose smoke preserves the non-Vercel strict boundary", async () => {
+test("compose smoke keeps the non-Vercel bootstrap chain and verifies app grants and seed stores", async () => {
   const smoke = await import("node:fs/promises").then(({ readFile }) => readFile("scripts/compose-smoke.mjs", "utf8"));
   assert.doesNotMatch(smoke, /VERCEL/);
-  assert.match(smoke, /assert\.equal\(response\.status, 503\)/);
-  assert.match(smoke, /redis-cli", "DBSIZE"/);
+  assert.match(smoke, /up", "--build", "--exit-code-from", "seed", "seed"/);
+  assert.match(smoke, /has_table_privilege\('ofertasuper_app'/);
+  assert.match(smoke, /FROM supermarkets/);
 });
 
 test("search route builds v3 cache keys but performs no cache write or envelope creation", async () => {
