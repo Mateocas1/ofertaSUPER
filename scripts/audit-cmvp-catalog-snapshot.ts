@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { Prisma } from "@prisma/client";
+
 import { db } from "../src/lib/db";
 import { dateToIso, decimalToNumber } from "./pipeline/audit-utils";
 import type { CmvpTargetManifest } from "./pipeline/cmvp-catalog-gate";
@@ -75,6 +77,7 @@ export function createPrismaCmvpCatalogSnapshotRepository(): CmvpCatalogSnapshot
 					price: true,
 					is_available: true,
 					last_checked_at: true,
+					sku_id: true,
 					supermarket: { select: { slug: true } },
 				},
 			});
@@ -84,11 +87,31 @@ export function createPrismaCmvpCatalogSnapshotRepository(): CmvpCatalogSnapshot
 				return [{
 					source: row.supermarket.slug,
 					productEan: row.product_ean,
+					sourceSku: row.sku_id,
 					available: row.is_available,
 					price: decimalToNumber(row.price),
 					observedAt,
 				}];
 			});
+		},
+		async listDurableObservations({ sources, windowStart, windowEnd }) {
+			const rows = await db.$queryRaw<Array<{ source: string; product_ean: string | null; sku: string | null; observed_at: Date }>>`
+				SELECT op."source" AS source,
+					item."item_key"::jsonb ->> 'ean' AS product_ean,
+					NULLIF(item."after_facts" ->> 'skuId', '') AS sku,
+					op."observed_at" AS observed_at
+				FROM public."source_capture_operations" op
+				JOIN public."source_capture_items" item ON item."operation_id" = op."id"
+				WHERE item."entity" IN ('product', 'offer')
+					AND op."source" IN (${Prisma.join(sources)})
+					AND op."observed_at" >= ${new Date(windowStart)}
+					AND op."observed_at" <= ${new Date(windowEnd)}`;
+			return rows.map((row) => ({
+				source: row.source,
+				productEan: row.product_ean,
+				sourceSku: row.sku,
+				observedAt: row.observed_at.toISOString(),
+			}));
 		},
 	};
 }

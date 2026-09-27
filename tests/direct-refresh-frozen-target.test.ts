@@ -76,8 +76,10 @@ function dependencies(rows = Array.from({ length: 25 }, (_, index) => row(index)
 		},
 		async fetchDirectProducts(_source: string, lookup: { value: string }) {
 			const existing = rows.find((row) => row.skuId === lookup.value)!;
-			return [{ ...existing.product!, skuId: existing.skuId, sellerId: "1", productUrl: existing.productUrl,
-				price: 100, listPrice: 100, referencePrice: null, referenceUnit: null, isAvailable: true }];
+			return Object.assign([{ ...existing.product!, skuId: existing.skuId, sellerId: "1", productUrl: existing.productUrl,
+				price: 100, listPrice: 100, referencePrice: null, referenceUnit: null, isAvailable: true }], {
+				observedAt: "2026-09-26T00:00:01.000Z",
+			});
 		},
 		now: new Date("2026-09-26T00:00:00.000Z"),
 	};
