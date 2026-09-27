@@ -102,7 +102,7 @@ describe("basket product endpoint", () => {
       const result = await handleBasketProductsRequest(
         async () => ({ eans: [ean(1)] }),
         async () => ({ items: [{ ...product(ean(1)), priceEntries: [{
-          supermarket: { id: 1, name: "Super", slug: "super", logoUrl: null }, price: 1, listPrice: null, isAvailable: true,
+          supermarket: { id: 1, name: "Super", slug: "super", logoUrl: null }, price: 1, listPrice: null, promo: null, isAvailable: true,
           productUrl: null, freshnessStatus,
         }] }], missing: [] }),
         freshPublication,

@@ -52,6 +52,7 @@ export async function loadBasketProducts(eans: string[], client: ProductReader) 
         },
         price: entry.price === null ? null : Number(entry.price),
         listPrice: entry.list_price === null ? null : Number(entry.list_price),
+        promo: null,
         isAvailable: entry.is_available,
         productUrl: entry.product_url,
         freshnessStatus: classifyPriceFreshness(entry.last_checked_at, {

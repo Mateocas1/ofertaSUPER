@@ -117,6 +117,10 @@ function ProductDetails({ page, product }: { page: EligibleProductPage; product:
                     price={product.displayPrice}
                     listPrice={product.priceEntries.find((entry) => entry.price === product.displayPrice)?.listPrice ?? null}
                   />
+                  {(() => {
+                    const displayPromo = product.priceEntries.find((entry) => entry.price === product.displayPrice)?.promo;
+                    return displayPromo ? <PromotionBadge type={displayPromo.type === "nth-unit" ? "2nd_50" : "percentage"} label={displayPromo.label} /> : null;
+                  })()}
                   {product.bestPriceDropAlert ? (
                     <p className="mt-2 text-xs font-medium text-emerald-700">
                       Bajo {formatPercent(-product.bestPriceDropAlert.percentDrop)} vs ultimo registro

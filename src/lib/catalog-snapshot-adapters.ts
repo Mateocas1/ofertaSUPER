@@ -48,6 +48,7 @@ function buildEntry(offer: OfferWithFreshness, now: Date) {
     supermarketProductId: stableOfferId(offer.ean, offer.source),
     price,
     listPrice: toNumberOrNull(offer.listPrice),
+    promo: offer.promo,
     referencePrice: null,
     referenceUnit: null,
     isAvailable: offer.available,

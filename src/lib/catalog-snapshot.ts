@@ -1,8 +1,10 @@
 import "server-only";
 
+import type { SimplePromotion } from "@/lib/promotions/simple-promos";
+
 import catalogSnapshot from "../../data/catalog-snapshot.json";
 
-export const SNAPSHOT_SCHEMA_VERSION = 1;
+export const SNAPSHOT_SCHEMA_VERSION = 2;
 
 export type CatalogSnapshot = {
   schemaVersion: number;
@@ -21,7 +23,7 @@ export type CatalogSnapshot = {
     source: string;
     price: number | null;
     listPrice: number | null;
-    promo: null;
+    promo: SimplePromotion | null;
     available: boolean;
     productUrl: string | null;
     observedAt: string;

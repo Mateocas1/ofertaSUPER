@@ -10,6 +10,7 @@ import {
   type PriceDropAlert,
 } from "@/lib/promotions/alerts";
 import { detectAutomaticDiscount, getBestPromotionPrice } from "@/lib/promotions/detect";
+import type { SimplePromotion } from "@/lib/promotions/simple-promos";
 import {
   comparePriceEntriesForDisplay,
   comparePublicProducts,
@@ -55,6 +56,7 @@ type ProductPriceEntry = {
   supermarketProductId: number;
   price: number | null;
   listPrice: number | null;
+  promo: SimplePromotion | null;
   referencePrice: number | null;
   referenceUnit: string | null;
   isAvailable: boolean;
@@ -266,6 +268,7 @@ function mapPriceEntries(entries: PriceEntryRecord[], supermarketFilter?: string
       supermarketProductId: entry.id,
       price: toNumber(entry.price),
       listPrice: toNumber(entry.list_price),
+      promo: null,
       referencePrice: toNumber(entry.reference_price),
       referenceUnit: entry.reference_unit,
       isAvailable: entry.is_available,
@@ -629,6 +632,74 @@ export async function loadPublicProductList(
   return paginatePublicProductList(sortProducts(filterProducts(mapped, filters), filters), page, limit);
 }
 
+async function loadApplicablePromotions(ean: string, supermarketIds: number[]) {
+  if (supermarketIds.length === 0) {
+    return [];
+  }
+
+  const rawPromotions = await db.promotion.findMany({
+    where: {
+      is_active: true,
+      supermarket_id: {
+        in: supermarketIds,
+      },
+      AND: [
+        {
+          OR: [{ start_date: null }, { start_date: { lte: new Date() } }],
+        },
+        {
+          OR: [{ end_date: null }, { end_date: { gte: new Date() } }],
+        },
+        {
+          OR: [{ promotion_products: { some: { product_ean: ean } } }, { promotion_products: { none: {} } }],
+        },
+      ],
+    },
+    orderBy: [{ discount_value: "desc" }, { title: "asc" }],
+    select: {
+      id: true,
+      title: true,
+      type: true,
+      discount_value: true,
+      wallet_provider: true,
+      bank_name: true,
+      conditions: true,
+      start_date: true,
+      end_date: true,
+      supermarket: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          logo_url: true,
+        },
+      },
+      promotion_products: {
+        select: {
+          product_ean: true,
+        },
+      },
+    },
+  });
+  return rawPromotions.map(mapPromotionSummary);
+}
+
+function minOf(values: number[]): number | null {
+  return values.length > 0 ? Math.min(...values) : null;
+}
+
+function maxOf(values: number[]): number | null {
+  return values.length > 0 ? Math.max(...values) : null;
+}
+
+function displayFieldsOf(entry: { price: number | null; lastCheckedAt: string; freshnessStatus: PriceFreshnessStatus } | null | undefined) {
+  return {
+    displayPrice: entry?.price ?? null,
+    displayPriceCheckedAt: entry?.lastCheckedAt ?? null,
+    displayPriceFreshnessStatus: entry?.freshnessStatus ?? ("unknown" as PriceFreshnessStatus),
+  };
+}
+
 const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail | null> => {
   const product = await db.product.findUnique({
     where: { ean },
@@ -714,56 +785,7 @@ const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail 
     return null;
   }
 
-  const supermarketIds = product.supermarket_products.map((entry) => entry.supermarket.id);
-  const rawPromotions =
-    supermarketIds.length > 0
-      ? await db.promotion.findMany({
-          where: {
-            is_active: true,
-            supermarket_id: {
-              in: supermarketIds,
-            },
-            AND: [
-              {
-                OR: [{ start_date: null }, { start_date: { lte: new Date() } }],
-              },
-              {
-                OR: [{ end_date: null }, { end_date: { gte: new Date() } }],
-              },
-              {
-                OR: [{ promotion_products: { some: { product_ean: ean } } }, { promotion_products: { none: {} } }],
-              },
-            ],
-          },
-          orderBy: [{ discount_value: "desc" }, { title: "asc" }],
-          select: {
-            id: true,
-            title: true,
-            type: true,
-            discount_value: true,
-            wallet_provider: true,
-            bank_name: true,
-            conditions: true,
-            start_date: true,
-            end_date: true,
-            supermarket: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-                logo_url: true,
-              },
-            },
-            promotion_products: {
-              select: {
-                product_ean: true,
-              },
-            },
-          },
-        })
-      : [];
-
-  const promotions = rawPromotions.map(mapPromotionSummary);
+  const promotions = await loadApplicablePromotions(ean, product.supermarket_products.map((entry) => entry.supermarket.id));
 
   const priceEntries = product.supermarket_products
     .map((entry) => {
@@ -786,6 +808,7 @@ const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail 
         supermarketProductId: entry.id,
         price: currentPrice,
         listPrice: toNumber(entry.list_price),
+        promo: null,
         referencePrice: toNumber(entry.reference_price),
         referenceUnit: entry.reference_unit,
         isAvailable: entry.is_available,
@@ -812,7 +835,6 @@ const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail 
   const finalPrices = freshEntries
     .map((entry) => entry.finalPrice)
     .filter((entry): entry is number => entry !== null);
-  const displayPriceEntry = getBestDisplayPriceEntry(priceEntries);
   const automaticDiscountPercent = freshEntries.reduce<number | null>((best, entry) => {
     if (entry.automaticDiscountPercent === null) {
       return best;
@@ -831,16 +853,14 @@ const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail 
     imageUrl: product.image_url,
     images: product.images,
     category: product.category,
-    minPrice: prices.length > 0 ? Math.min(...prices) : null,
-    maxPrice: prices.length > 0 ? Math.max(...prices) : null,
-    freshMinPrice: freshPrices.length > 0 ? Math.min(...freshPrices) : null,
-    displayPrice: displayPriceEntry?.price ?? null,
-    displayPriceCheckedAt: displayPriceEntry?.lastCheckedAt ?? null,
-    displayPriceFreshnessStatus: displayPriceEntry?.freshnessStatus ?? "unknown",
+    minPrice: minOf(prices),
+    maxPrice: maxOf(prices),
+    freshMinPrice: minOf(freshPrices),
+    ...displayFieldsOf(getBestDisplayPriceEntry(priceEntries)),
     hasFreshPrice: freshEntries.length > 0,
     stalePriceCount: priceEntries.filter((entry) => entry.freshnessStatus === "stale").length,
     automaticDiscountPercent,
-    bestFinalPrice: finalPrices.length > 0 ? Math.min(...finalPrices) : null,
+    bestFinalPrice: minOf(finalPrices),
     bestPriceDropAlert: getBiggestPriceDropAlert(freshEntries.map((entry) => entry.priceDropAlert)),
     priceEntries,
     promotions,

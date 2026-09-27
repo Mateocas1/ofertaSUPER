@@ -89,7 +89,7 @@ const offers = psqlRows(
   source: row[1],
   price: row[2] === "" ? null : Number(row[2]),
   listPrice: row[3] === "" ? null : Number(row[3]),
-  promo: null,
+  promo: null, // Simple promos (Gate 4c) are captured by the acquisition refresh; null until then.
   available: row[4] === "t",
   productUrl: row[5] === "" ? null : row[5],
   observedAt: row[6],
@@ -97,7 +97,7 @@ const offers = psqlRows(
 }));
 
 const snapshot = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: new Date().toISOString(),
   sources: SOURCES,
   products,

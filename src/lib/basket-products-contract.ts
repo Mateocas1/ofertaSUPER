@@ -34,6 +34,13 @@ export const basketProductsResponseSchema = z.object({
       supermarket: z.object({ id: z.number().int(), name: z.string(), slug: z.string(), logoUrl: nullableString }).strict(),
       price: z.number().nullable(),
       listPrice: z.number().nullable(),
+      promo: z.object({
+        type: z.enum(["nth-unit", "percent-off"]),
+        percent: z.number(),
+        nth: z.number().int().optional(),
+        maxUnits: z.number().nullable(),
+        label: z.string(),
+      }).nullable(),
       isAvailable: z.boolean(),
       productUrl: nullableString,
       freshnessStatus: z.enum(["fresh", "stale", "unknown"]),

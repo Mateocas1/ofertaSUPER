@@ -214,6 +214,7 @@ function toBasketProduct(detail: ProductDetail): BasketProduct {
       },
       price: entry.price,
       listPrice: entry.listPrice,
+      promo: entry.promo,
       isAvailable: entry.isAvailable,
       productUrl: entry.productUrl,
       freshnessStatus: entry.freshnessStatus,
