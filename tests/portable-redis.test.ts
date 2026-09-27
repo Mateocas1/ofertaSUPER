@@ -50,6 +50,7 @@ test("integrated search cache isolates the top-level envelope in v3 and excludes
   const route = await import("node:fs/promises").then(({ readFile }) => readFile("src/app/api/search/route.ts", "utf8"));
   assert.match(
     route,
-    /if \(!data\.degraded\) \{\s*const envelope = createPublicCatalogCacheEnvelope\(authority, data\);\s*if \(envelope\) await setCachedJson\(cacheKey, envelope,/,
+    /const data = await resolvePublicCatalogDataFromGuardedRead\(async \(projection\) => \(\{\s*items: await loadPublicSearchSuggestions\(projection, parsed\.q, parsed\.limit\),\s*\}\)\);/,
   );
+  assert.doesNotMatch(route, /setCachedJson|createPublicCatalogCacheEnvelope/);
 });
