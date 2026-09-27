@@ -25,19 +25,25 @@ function runBootstrap(initialIdentity: string | undefined, replacement: string, 
   const databaseModule = `
     const identity = JSON.parse(process.env.TEST_BOOTSTRAP_IDENTITY);
     const queryIds = [];
+    const bootNow = Date.now();
     export const db = { productionReadinessPublication: { findUnique: async ({ where }) => {
       queryIds.push(where.id);
-      const now = Date.now();
       return {
         id: identity.publicationId, target: "production", state: "PROMOTED",
-        verified_at: new Date(now - 60 * 60 * 1000), promotion_id: "promotion-1",
+        verified_at: new Date(bootNow - 60 * 60 * 1000), promotion_id: "promotion-1",
         promotion: {
           id: "promotion-1", state: "PROMOTED", deployment_id: identity.deploymentId,
           commit_sha: identity.commitSha, candidate_digest: identity.candidateDigest,
-          expires_at: new Date(now + 60 * 60 * 1000),
+          expires_at: new Date(bootNow + 60 * 60 * 1000),
         },
       };
-    } } };
+    } },
+    async $queryRaw(strings) {
+      const sql = strings.join("");
+      if (sql.includes("clock_timestamp")) return [{ now: new Date(bootNow) }];
+      if (sql.includes("reader_generation_adoptions")) return [{ readerId: identity.deploymentId, generation: "1", lineage: "lineage-root", policyDigest: "policy-digest", healthVersion: "health-1", buildDigest: "build-1", expiresAt: new Date(bootNow + 30 * 60 * 1000) }];
+      throw new Error("unexpected database query");
+    } };
     export { queryIds };
   `;
   const loader = `

@@ -8,19 +8,37 @@ const fingerprint = {
   candidateDigest: `sha256:${"b".repeat(64)}`, verifiedAt: "2020-01-01T00:00:00.000Z",
   expiresAt: "2099-01-01T00:00:00.000Z",
 };
+const decision = {
+  publicationId: "pub-1", promotionId: "promotion-1", target: "production",
+  deploymentId: "domain-deployment-1", commitSha: "a".repeat(40),
+  candidateDigest: `sha256:${"b".repeat(64)}`, verifiedAt: "2020-01-01T00:00:00.000Z",
+  expiresAt: "2099-01-01T00:00:00.000Z", generation: "1", lineage: "lineage-root",
+  policyDigest: "policy-digest", healthVersion: "health-1", buildDigest: "build-1",
+  readerExpiresAt: "2099-06-01T00:00:00.000Z", decisionDeadline: "2026-06-01T00:00:30.000Z",
+};
 
 type Scenario = { secret?: string; authorization?: string; nonce?: string; authority?: unknown };
 function invoke(scenario: Scenario) {
   const databaseModule = `
     let calls = 0;
-    export const db = { productionReadinessPublication: { findUnique: async () => {
-      calls += 1;
-      if (process.env.TEST_AUTHORITY === "null") return null;
-      const fingerprint = JSON.parse(process.env.TEST_AUTHORITY);
-      return { id: fingerprint.publicationId, target: "production", state: "PROMOTED", verified_at: new Date(fingerprint.verifiedAt), promotion_id: fingerprint.promotionId,
-        promotion: { id: fingerprint.promotionId, state: "PROMOTED", deployment_id: fingerprint.deploymentId, commit_sha: fingerprint.commitSha,
-          candidate_digest: fingerprint.candidateDigest, expires_at: new Date(fingerprint.expiresAt) } };
-    } } };
+    const reader = { readerId: "domain-deployment-1", generation: "1", lineage: "lineage-root", policyDigest: "policy-digest", healthVersion: "health-1", buildDigest: "build-1", expiresAt: new Date("2099-06-01T00:00:00.000Z") };
+    export const db = {
+      productionReadinessPublication: { findUnique: async () => {
+        calls += 1;
+        if (process.env.TEST_AUTHORITY === "null") return null;
+        const fingerprint = JSON.parse(process.env.TEST_AUTHORITY);
+        return { id: fingerprint.publicationId, target: "production", state: "PROMOTED", verified_at: new Date(fingerprint.verifiedAt), promotion_id: fingerprint.promotionId,
+          promotion: { id: fingerprint.promotionId, state: "PROMOTED", deployment_id: fingerprint.deploymentId, commit_sha: fingerprint.commitSha,
+            candidate_digest: fingerprint.candidateDigest, expires_at: new Date(fingerprint.expiresAt) } };
+      } },
+      async $queryRaw(strings) {
+        calls += 1;
+        const sql = strings.join("");
+        if (sql.includes("clock_timestamp")) return [{ now: new Date("2026-06-01T00:00:00.000Z") }];
+        if (sql.includes("reader_generation_adoptions")) return [reader];
+        throw new Error("unexpected database query");
+      },
+    };
     export function getCalls() { return calls; }
   `;
   const loader = `
@@ -79,14 +97,14 @@ describe("catalog serving identity proof route", () => {
 
   it("returns a fresh active proof with only the safe fingerprint and nonce", () => {
     const result = invoke({});
-    assert.equal(result.status, 200); assert.equal(result.calls, 1);
-    assert.deepEqual(result.body, { active: true, nonce: "nonce-1234567890", fingerprint });
+    assert.equal(result.status, 200); assert.equal(result.calls, 3);
+    assert.deepEqual(result.body, { active: true, nonce: "nonce-1234567890", fingerprint: decision });
     assert.equal(result.headers["cache-control"], "private, no-store");
   });
 
   it("returns non-success inactive proof without identity fields", () => {
     const result = invoke({ authority: null });
-    assert.equal(result.status, 409); assert.equal(result.calls, 1);
+    assert.equal(result.status, 409); assert.equal(result.calls, 2);
     assert.deepEqual(result.body, { active: false, nonce: "nonce-1234567890" });
     assert.equal(result.headers["cache-control"], "private, no-store");
   });
