@@ -10,10 +10,10 @@ import { PromotionBadge } from "@/components/promotion-badge";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatPercent } from "@/lib/format";
-import { loadProductPageData } from "@/lib/product-history";
 import { createGuardedProductMetadata } from "@/lib/seo/metadata";
 import { createGuardedProductPageLoader } from "@/lib/seo/public-catalog-page";
 import { buildGuardedProductPageSchema, serializeJsonLd } from "@/lib/seo/schema";
+import { loadSnapshotProductPage } from "@/lib/public-pages";
 import { cn } from "@/lib/utils";
 
 export const revalidate = 21600;
@@ -22,7 +22,7 @@ type ProductPageProps = {
   params: Promise<{ ean: string }>;
 };
 
-const loadGuardedProductPage = createGuardedProductPageLoader(loadProductPageData);
+const loadGuardedProductPage = createGuardedProductPageLoader(loadSnapshotProductPage);
 type GuardedProductPage = Awaited<ReturnType<typeof loadGuardedProductPage>>;
 type EligibleProductPage = Extract<GuardedProductPage, { availability: "eligible" }>;
 type Product = NonNullable<EligibleProductPage["catalog"]["product"]>;

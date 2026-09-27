@@ -5,9 +5,9 @@ import { CatalogProvenanceNotice } from "@/components/catalog-provenance-notice"
 import { ProductCard } from "@/components/product-card";
 import { PromotionBadge } from "@/components/promotion-badge";
 import { SupermarketBadge } from "@/components/supermarket-badge";
-import { loadPublicProductList, loadPublicPromotions, type PromotionFilters } from "@/lib/catalog";
 import { getSingleParam } from "@/lib/page-params";
-import { resolveGuardedCatalogPage } from "@/lib/portfolio-catalog";
+import { loadSnapshotProductList, resolveSnapshotCatalogPage } from "@/lib/public-pages";
+import type { PromotionSummary } from "@/lib/catalog";
 import { createMetadata, createUnavailableCatalogMetadata } from "@/lib/seo/metadata";
 import { SUPERMARKETS } from "@/lib/supermarkets";
 
@@ -17,22 +17,25 @@ type OffersPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-type OfferFilters = PromotionFilters;
+type OfferFilters = {
+  supermarket?: string;
+  wallet?: string;
+  type?: string;
+};
 
-const loadOffersPage = cache(async (
-  supermarket: OfferFilters["supermarket"],
-  wallet: OfferFilters["wallet"],
-  type: OfferFilters["type"],
-) => resolveGuardedCatalogPage({}, async (projection) => ({
-  promotions: await loadPublicPromotions(projection, { supermarket, wallet, type }),
-  discountedProducts: await loadPublicProductList(projection, {
-    supermarket,
-    offersOnly: true,
-    sort: "discount",
-    limit: 24,
-    page: 1,
-  }),
-})));
+// The snapshot has no manual promotions yet (Gate 4c); the hub shows the
+// automatic list-price discounts it can prove from the committed data.
+const loadOffersPage = cache(async (supermarket: OfferFilters["supermarket"]) =>
+  resolveSnapshotCatalogPage({}, () => ({
+    promotions: [] as PromotionSummary[],
+    discountedProducts: loadSnapshotProductList({
+      supermarket,
+      offersOnly: true,
+      sort: "discount",
+      limit: 24,
+      page: 1,
+    }),
+  })));
 
 type OffersPageData = Awaited<ReturnType<typeof loadOffersPage>>;
 
@@ -109,7 +112,7 @@ function OffersCatalogState({ page }: { page: OffersPageData }) {
 
 export async function generateMetadata({ searchParams }: OffersPageProps): Promise<Metadata> {
   const filters = filtersFrom(await searchParams);
-  const page = await loadOffersPage(filters.supermarket, filters.wallet, filters.type);
+  const page = await loadOffersPage(filters.supermarket);
   if (page.availability === "unavailable") return createUnavailableCatalogMetadata();
 
   return createMetadata({
@@ -121,7 +124,7 @@ export async function generateMetadata({ searchParams }: OffersPageProps): Promi
 
 export default async function OffersPage({ searchParams }: OffersPageProps) {
   const filters = filtersFrom(await searchParams);
-  const page = await loadOffersPage(filters.supermarket, filters.wallet, filters.type);
+  const page = await loadOffersPage(filters.supermarket);
 
   return (
     <div className="px-6 py-8 md:py-10">

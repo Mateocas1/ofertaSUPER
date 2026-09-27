@@ -4,9 +4,8 @@ import type { Metadata } from "next";
 
 import { ProductCard } from "@/components/product-card";
 import { StaleResultsNotice } from "@/components/stale-results-notice";
-import { loadPublicProductList } from "@/lib/catalog";
 import { getSingleParam } from "@/lib/page-params";
-import { resolveGuardedCatalogPage } from "@/lib/portfolio-catalog";
+import { loadSnapshotProductList, resolveSnapshotCatalogPage } from "@/lib/public-pages";
 import { createMetadata, createUnavailableCatalogMetadata } from "@/lib/seo/metadata";
 import { SUPERMARKETS } from "@/lib/supermarkets";
 import { DETAILED_CATEGORIES } from "@/lib/vtex/categories";
@@ -31,7 +30,7 @@ const loadCategoryPage = cache(async (
   sort: CategoryFilters["sort"],
   maxPrice: CategoryFilters["maxPrice"],
   offers: CategoryFilters["offers"],
-) => resolveGuardedCatalogPage({ category }, (projection) => loadPublicProductList(projection, {
+) => resolveSnapshotCatalogPage({ category }, () => loadSnapshotProductList({
   category,
   supermarket,
   sort,

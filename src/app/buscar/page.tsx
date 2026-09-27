@@ -4,9 +4,8 @@ import type { Metadata } from "next";
 import { CatalogProvenanceNotice } from "@/components/catalog-provenance-notice";
 import { ProductCard } from "@/components/product-card";
 import { SearchBar } from "@/components/search-bar";
-import { loadPublicProductList } from "@/lib/catalog";
+import { loadSnapshotProductList, resolveSnapshotCatalogPage } from "@/lib/public-pages";
 import { getSingleParam } from "@/lib/page-params";
-import { resolveGuardedCatalogPage } from "@/lib/portfolio-catalog";
 import { createMetadata, createUnavailableCatalogMetadata } from "@/lib/seo/metadata";
 import { SUPERMARKETS } from "@/lib/supermarkets";
 
@@ -26,9 +25,9 @@ const loadSearchPage = cache(async (
   query: string,
   supermarket: SearchFilters["supermarket"],
   sort: SearchFilters["sort"],
-) => resolveGuardedCatalogPage({ query }, async (projection) => ({
+) => resolveSnapshotCatalogPage({ query }, () => ({
   products: query
-    ? await loadPublicProductList(projection, { query, supermarket, sort, limit: 24, page: 1 })
+    ? loadSnapshotProductList({ query, supermarket, sort, limit: 24, page: 1 })
     : null,
 })));
 
