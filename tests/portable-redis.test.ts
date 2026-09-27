@@ -38,18 +38,20 @@ test("rate limiter preserves allow, deny, and fail-open shape", async () => {
   assert.deepEqual({ success: open.success, limit: open.limit, remaining: open.remaining }, { success: true, limit: 60, remaining: 60 });
 });
 
-test("compose smoke preserves the non-Vercel strict boundary", async () => {
+test("compose smoke keeps the non-Vercel bootstrap chain and verifies app grants and seed stores", async () => {
   const smoke = await import("node:fs/promises").then(({ readFile }) => readFile("scripts/compose-smoke.mjs", "utf8"));
   assert.doesNotMatch(smoke, /VERCEL/);
-  assert.match(smoke, /assert\.equal\(response\.status, 503\)/);
-  assert.match(smoke, /redis-cli", "DBSIZE"/);
+  assert.match(smoke, /up", "--build", "--exit-code-from", "seed", "seed"/);
+  assert.match(smoke, /has_table_privilege\('ofertasuper_app'/);
+  assert.match(smoke, /FROM supermarkets/);
 });
 
-test("integrated search cache isolates the top-level envelope in v3 and excludes degraded writes", async () => {
+test("search route builds v3 cache keys but performs no cache write or envelope creation", async () => {
   assert.equal(buildSearchCacheKey(" Leche ", 8), "search:v3:leche:8");
   const route = await import("node:fs/promises").then(({ readFile }) => readFile("src/app/api/search/route.ts", "utf8"));
   assert.match(
     route,
-    /if \(!data\.degraded\) \{\s*const envelope = createPublicCatalogCacheEnvelope\(authority, data\);\s*if \(envelope\) await setCachedJson\(cacheKey, envelope,/,
+    /const data = await resolvePublicCatalogDataFromGuardedRead\(async \(projection\) => \(\{\s*items: await loadPublicSearchSuggestions\(projection, parsed\.q, parsed\.limit\),\s*\}\)\);/,
   );
+  assert.doesNotMatch(route, /setCachedJson|createPublicCatalogCacheEnvelope/);
 });

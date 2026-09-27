@@ -53,17 +53,18 @@ test("migration launch is injectable and does not run while constructing a plan"
   assert.equal(calls, 1);
 });
 
-test("app receives only the guarded seven-argument baseline capability", async () => {
+test("app receives no baseline function grant; execute is revoked across the public schema", async () => {
   const grants = await import("node:fs/promises").then(({ readFile }) => readFile(new URL("../docker/compose/app-grants.sql", import.meta.url), "utf8"));
-  assert.match(grants, /REVOKE EXECUTE ON FUNCTION public\.governed_catalog_begin_baseline\(text, text, text, bigint\) FROM ofertasuper_app/);
-  assert.doesNotMatch(grants, /GRANT EXECUTE ON FUNCTION public\.governed_catalog_begin_baseline\(text, text, text, bigint\) TO ofertasuper_app/);
-  assert.match(grants, /GRANT EXECUTE ON FUNCTION public\.governed_catalog_begin_baseline\(text, text, text, text, bigint, bigint, timestamptz\) TO ofertasuper_app/);
+  assert.doesNotMatch(grants, /governed_catalog_begin_baseline/);
+  assert.match(grants, /REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC, ofertasuper_app;/);
 });
 
-test("repository ACL grants promote_delta only to the authority principal", async () => {
+test("app grants execute on exactly five functions, all to the authority principal, and never promote_delta", async () => {
   const grants = await import("node:fs/promises").then(({ readFile }) => readFile(new URL("../docker/compose/app-grants.sql", import.meta.url), "utf8"));
-  assert.match(grants, /REVOKE EXECUTE ON FUNCTION public\.promote_delta\(jsonb\) FROM PUBLIC, ofertasuper_app, ofertasuper_runtime, ofertasuper_verifier;/);
-  assert.match(grants, /GRANT EXECUTE ON FUNCTION public\.promote_delta\(jsonb\) TO ofertasuper_authority;/);
+  assert.doesNotMatch(grants, /promote_delta/);
+  const executeGrants = grants.match(/^GRANT EXECUTE ON FUNCTION [^;]+;$/gm) ?? [];
+  assert.equal(executeGrants.length, 5);
+  for (const grant of executeGrants) assert.match(grant, / TO ofertasuper_authority;$/);
 });
 
 test("migration launch requires DIRECT_URL", () => {

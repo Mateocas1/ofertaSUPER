@@ -7,23 +7,20 @@ import { readCommandResult } from "../scripts/compose-command-result.mjs";
 const compose = readFileSync(new URL("../compose.yml", import.meta.url), "utf8");
 const smoke = readFileSync(new URL("../scripts/compose-smoke.mjs", import.meta.url), "utf8");
 
-test("Compose orders healthy dependencies, owner migration, grants, fixture, then web", () => {
+test("Compose orders postgres healthcheck, owner migrate with DIRECT_URL, and app DATABASE_URL without env_file or published ports", () => {
   assert.match(compose, /postgres:[\s\S]*pg_isready/);
-  assert.match(compose, /redis:[\s\S]*redis-cli.*ping/);
   assert.match(compose, /migrate:[\s\S]*DIRECT_URL: postgresql:\/\/ofertasuper_owner/);
-  assert.match(compose, /fixture:[\s\S]*service_completed_successfully[\s\S]*web:/);
   assert.match(compose, /DATABASE_URL: postgresql:\/\/ofertasuper_app/);
-  assert.match(compose, /web:[\s\S]*healthcheck:[\s\S]*\/api\/health\/ready/);
   assert.doesNotMatch(compose, /env_file|platform:|5432:5432|6379:6379/);
 });
 
-test("smoke verifies health, fixture, and strict portable rejection before cleanup", () => {
-  for (const claim of ["/api/health/live", "/api/health/ready", "SELECT ean", "Compose Smoke Saffron", "/api/search", "redis-cli", "DBSIZE"]) {
+test("smoke runs the bootstrap seed chain and verifies tables, app grants, and seed stores before cleanup", () => {
+  for (const claim of ["--exit-code-from", "information_schema.tables", "has_table_privilege('ofertasuper_app'", "FROM supermarkets"]) {
     assert.ok(smoke.includes(claim), `missing assertion for ${claim}`);
   }
-  assert.match(smoke, /assert\.equal\(fixture, "7799999000001:Compose Smoke Saffron"\)/);
-  assert.match(smoke, /assert\.equal\(response\.status, 503\)/);
-  assert.match(smoke, /assert\.equal\(Number\(docker\([^\n]*"DBSIZE"[^\n]*\)\), 0\)/);
+  assert.match(smoke, /assert\.equal\(tables, String\(BOUNDARY_TABLES\.length\), "migrations/);
+  assert.match(smoke, /assert\.equal\(grants, String\(BOUNDARY_TABLES\.length \* 4\), "ofertasuper_app/);
+  assert.match(smoke, /assert\.equal\(stores, "3:carrefour=Carrefour,disco=Disco,jumbo=Jumbo"\)/);
   assert.match(smoke, /finally \{[\s\S]*down.*--volumes.*--remove-orphans/);
 });
 

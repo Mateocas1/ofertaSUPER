@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "prisma generate && tsx scripts/build-catalog-contract.ts prebuild && next build --webpack && serwist build && tsx scripts/build-catalog-contract.ts package",
     "start": "next start",
-    "test": "tsx --conditions=react-server --test tests/**/*.test.ts",
+    "test": "node scripts/run-tests.mjs",
     "test:guarded-read-snapshot-postgres": "bash scripts/test-guarded-read-snapshot-postgres.sh",
     "test:u16-built-server-postgres": "bash scripts/test-u16-built-server-postgres.sh",
     "test:u17-built-server-browser": "bash scripts/test-u17-built-server-browser.sh",
