@@ -304,6 +304,23 @@ describe("VTEX persisted-query term-search fallback", () => {
     assert.equal(eanProducts.fallbackUsed, undefined);
     assert.equal(skuProducts.fallbackUsed, undefined);
   });
+
+  it("captures the HTTP response receipt instant as an observedAt sidecar on direct fetch results", async () => {
+    const dependency = client({ data: JSON.stringify([catalogProduct("7790000000003")]) });
+    const beforeFetchMs = Date.now();
+    const products = await fetchVtexDirectProducts({
+      baseUrl,
+      lookup: { kind: "ean", value: "7790000000003" },
+      dependencies: dependency,
+    });
+    const afterFetchMs = Date.now();
+
+    assert.equal(typeof products.observedAt, "string");
+    const observedMs = Date.parse(products.observedAt as string);
+    assert.ok(Number.isFinite(observedMs), "observedAt must be an ISO instant");
+    assert.ok(observedMs >= beforeFetchMs, "observedAt must not precede the fetch");
+    assert.ok(observedMs <= afterFetchMs, "observedAt must not follow the fetch");
+  });
 });
 
 describe("VTEX payload traversal", () => {

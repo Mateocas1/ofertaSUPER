@@ -11,6 +11,12 @@ type LooseRecord = Record<string, unknown>;
 
 export type VtexProductsResult = NormalizedProduct[] & {
   fallbackUsed?: boolean;
+  observedAt?: string;
+};
+
+/** Direct (sku-id) lookups always carry the response observation instant. */
+export type VtexDirectProductsResult = VtexProductsResult & {
+  observedAt: string;
 };
 
 type VtexHttpResponse = {
@@ -344,7 +350,8 @@ async function requestVtexJsonPayload({
     await (dependencies.sleep ?? sleep)(getRequestDelayMs());
     const response = await (dependencies.http ?? http).get(url.toString(), buildVtexHttpRequest(baseUrl));
     const responseTimeMs = Date.now() - startedAt;
-    return { payload: parseVtexJsonPayload(response, responseTimeMs, messages), responseTimeMs };
+    const observedAt = new Date().toISOString();
+    return { payload: parseVtexJsonPayload(response, responseTimeMs, messages), responseTimeMs, observedAt };
   } catch (error) {
     if (error instanceof VtexRequestError) throw error;
     throw classifyAxiosError(error, Date.now() - startedAt);
@@ -472,18 +479,25 @@ export async function fetchVtexDirectProducts({
 	lookup,
 	retries = 3,
   dependencies = {},
-}: FetchVtexDirectProductsOptions): Promise<VtexProductsResult> {
+}: FetchVtexDirectProductsOptions): Promise<VtexDirectProductsResult> {
 	let lastError: unknown;
 
 	for (let attempt = 1; attempt <= retries; attempt += 1) {
 		try {
-			const { payload } = await requestVtexCatalogPayload({
+			const { payload, observedAt } = await requestVtexCatalogPayload({
 				baseUrl,
 				request: buildVtexCatalogSearchRequest(lookup),
         dependencies,
 			});
 
-			return normalizeVtexCatalogPayload(payload, baseUrl);
+			const products = normalizeVtexCatalogPayload(
+				payload,
+				baseUrl,
+			) as VtexProductsResult;
+			const result: VtexDirectProductsResult = Object.assign(products, {
+				observedAt,
+			});
+			return result;
 		} catch (error) {
 			lastError = error;
 			if (attempt < retries) {

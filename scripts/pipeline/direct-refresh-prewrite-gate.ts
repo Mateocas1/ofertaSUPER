@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import type { FetchProductsResult } from "../../src/lib/ingestion/adapters/types";
 import type { NormalizedProduct } from "../../src/lib/vtex/normalize";
 import {
 	getDirectRefreshCapacityPassRowIds,
@@ -86,6 +87,7 @@ export type DirectRefreshPrewriteRow = {
 	rowId: string;
 	sourceSlug: DirectRefreshSourceSlug;
 	lookup: { kind: "sku-id"; value: string | null };
+	observationInstant: string | null;
 	currentDb: {
 		product: DirectRefreshPrewriteProductSnapshot | null;
 		supermarketProduct: {
@@ -327,7 +329,7 @@ export async function buildDirectRefreshPrewriteGate({
 	fetchDirectProducts(
 		sourceSlug: DirectRefreshSourceSlug,
 		lookup: { kind: "sku-id"; value: string },
-	): Promise<NormalizedProduct[]>;
+	): Promise<FetchProductsResult>;
 	sourceSlug?: string;
 	sampleSize?: number;
 	candidateScanSize?: number;
@@ -360,7 +362,6 @@ export async function buildDirectRefreshPrewriteGate({
 				row,
 				repository,
 				fetchDirectProducts,
-				generatedAt,
 				maxPriceDeltaPercent,
 				config,
 			}),
@@ -521,7 +522,9 @@ export async function buildDirectRefreshPrewriteGate({
 	};
 	const confirmationShape = {
 		source: config.slug,
-		reportHash: buildPrewriteReportHash(reportWithoutConfirmation),
+		reportHash: buildPrewriteReportHash(
+			canonicalPrewriteReportHashPayload(reportWithoutConfirmation),
+		),
 		rowIds: passRows.map((row) => row.rowId).sort(),
 		skuIds: uniqueSorted(passRows.map((row) => row.lookup.value ?? "")).filter(
 			Boolean,
@@ -546,7 +549,6 @@ async function evaluatePrewriteRow({
 	row,
 	repository,
 	fetchDirectProducts,
-	generatedAt,
 	maxPriceDeltaPercent,
 	config,
 }: {
@@ -555,8 +557,7 @@ async function evaluatePrewriteRow({
 	fetchDirectProducts(
 		sourceSlug: DirectRefreshSourceSlug,
 		lookup: { kind: "sku-id"; value: string },
-	): Promise<NormalizedProduct[]>;
-	generatedAt: string;
+	): Promise<FetchProductsResult>;
 	maxPriceDeltaPercent: number;
 	config: DirectRefreshSourceConfig;
 }): Promise<DirectRefreshPrewriteRow> {
@@ -569,7 +570,7 @@ async function evaluatePrewriteRow({
 	const sourceSkuUnique =
 		hasSkuId && skuMatches.length === 1 && skuMatches[0]?.id === row.id;
 	let lookupError: string | null = null;
-	let liveProducts: NormalizedProduct[] = [];
+	let liveProducts: FetchProductsResult = [];
 	if (hasSkuId && row.sourceSlug === config.slug) {
 		try {
 			liveProducts = await fetchDirectProducts(config.slug, {
@@ -581,6 +582,10 @@ async function evaluatePrewriteRow({
 				error instanceof Error ? error.message : "unknown direct lookup error";
 		}
 	}
+	const observationInstant =
+		typeof liveProducts.observedAt === "string" && liveProducts.observedAt.trim()
+			? liveProducts.observedAt
+			: null;
 	const liveProduct = liveProducts.length === 1 ? liveProducts[0] : null;
 	const existingHost = host(row.productUrl);
 	const liveHost = host(liveProduct?.productUrl ?? null);
@@ -602,14 +607,16 @@ async function evaluatePrewriteRow({
 	const priceDeltaPercent = priceDelta(row.price, liveProduct?.price ?? null);
 	const priceDeltaWithinLimit =
 		priceDeltaPercent === null || priceDeltaPercent <= maxPriceDeltaPercent;
+	const directLookupCount = liveProducts.length;
 	const reasons = guardReasons({
 		row,
 		hasProductSnapshot,
 		hasEan,
 		hasSkuId,
 		sourceSkuUnique,
-		directLookupCount: liveProducts.length,
+		directLookupCount,
 		lookupError,
+		hasObservationInstant: observationInstant !== null,
 		exactEanMatch,
 		exactSkuMatch,
 		carrefourHostOnly,
@@ -620,12 +627,17 @@ async function evaluatePrewriteRow({
 		config,
 	});
 	const status = reasons.length === 0 ? "PASS" : "FAIL";
-	const expectedChanges = buildExpectedChanges(row, liveProduct, generatedAt);
+	const expectedChanges = buildExpectedChanges(
+		row,
+		liveProduct,
+		observationInstant,
+	);
 
 	return {
 		rowId: row.id,
 		sourceSlug: config.slug,
 		lookup: { kind: "sku-id", value: row.skuId },
+		observationInstant,
 		currentDb: {
 			product: row.product,
 			supermarketProduct: {
@@ -684,6 +696,7 @@ function guardReasons({
 	sourceSkuUnique,
 	directLookupCount,
 	lookupError,
+	hasObservationInstant,
 	exactEanMatch,
 	exactSkuMatch,
 	carrefourHostOnly,
@@ -700,6 +713,7 @@ function guardReasons({
 	sourceSkuUnique: boolean;
 	directLookupCount: number;
 	lookupError: string | null;
+	hasObservationInstant: boolean;
 	exactEanMatch: boolean;
 	exactSkuMatch: boolean;
 	carrefourHostOnly: boolean;
@@ -723,6 +737,11 @@ function guardReasons({
 		reasons.push(
 			`direct sku-id lookup returned ${directLookupCount} live products`,
 		);
+	} else if (directLookupCount > 0 && !hasObservationInstant) {
+		// Fail closed: without the fetch sidecar there is no source observation
+		// instant, and substituting the processing clock would make a write look
+		// fresher than the source evidence warrants.
+		reasons.push("direct lookup observation instant sidecar missing");
 	}
 	if (directLookupCount === 1 && !exactEanMatch)
 		reasons.push("direct lookup EAN does not match existing EAN");
@@ -741,7 +760,7 @@ function guardReasons({
 function buildExpectedChanges(
 	row: DirectRefreshPrewriteExistingRow,
 	liveProduct: NormalizedProduct | null,
-	generatedAt: string,
+	observationInstant: string | null,
 ) {
 	const product: DirectRefreshPrewriteChange[] = [];
 	const supermarketProduct: DirectRefreshPrewriteChange[] = [];
@@ -797,12 +816,13 @@ function buildExpectedChanges(
 			row.productUrl,
 			liveProduct.productUrl,
 		);
-		pushChange(
-			supermarketProduct,
-			"lastCheckedAt",
-			row.lastCheckedAt,
-			generatedAt,
-		);
+		if (observationInstant !== null)
+			pushChange(
+				supermarketProduct,
+				"lastCheckedAt",
+				row.lastCheckedAt,
+				observationInstant,
+			);
 	}
 	return {
 		product,
@@ -901,6 +921,104 @@ function uniqueSorted(values: string[]) {
 
 export function buildPrewriteReportHash(value: unknown) {
 	return createHash("sha256").update(stableJson(value)).digest("hex");
+}
+
+/**
+ * Canonical hash payload for a prewrite report. Observation instants are
+ * captured wall-clock values that differ between two independent live
+ * observations of identical data, so they are normalized out of the hashed
+ * payload to keep the fresh prewrite rerun deterministic; every field that the
+ * active write consumes apart from the instants remains hash-covered.
+ *
+ * Because the instants are excluded from hash coverage, each present instant
+ * is still validated before being dropped: it must be a well-formed ISO UTC
+ * instant, must not be further than MAX_OBSERVATION_FUTURE_SKEW_MS ahead of
+ * the report generation (the bounded batch fetch window), and must not be
+ * older than MAX_OBSERVATION_PAST_DRIFT_MS before it. A malformed or
+ * implausible instant fails loudly instead of silently leaving the freshness
+ * decision uncovered.
+ */
+const OBSERVATION_INSTANT_PATTERN =
+	/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+const MAX_OBSERVATION_FUTURE_SKEW_MS = 10 * 60_000;
+const MAX_OBSERVATION_PAST_DRIFT_MS = 15 * 60_000;
+
+function assertPlausibleObservationInstant(
+	value: string,
+	label: string,
+	generatedAtMs: number,
+) {
+	if (!OBSERVATION_INSTANT_PATTERN.test(value) || !Number.isFinite(Date.parse(value)))
+		throw new Error(
+			`${label} observation instant is not a valid ISO instant: ${value}`,
+		);
+	const instantMs = Date.parse(value);
+	if (instantMs > generatedAtMs + MAX_OBSERVATION_FUTURE_SKEW_MS)
+		throw new Error(
+			`${label} observation instant is more than ${MAX_OBSERVATION_FUTURE_SKEW_MS}ms ahead of the report generation: ${value}`,
+		);
+	if (instantMs < generatedAtMs - MAX_OBSERVATION_PAST_DRIFT_MS)
+		throw new Error(
+			`${label} observation instant is older than the report fetch window: ${value}`,
+		);
+}
+
+export function canonicalPrewriteReportHashPayload<
+	Report extends {
+		rows: DirectRefreshPrewriteRow[];
+		skippedRows: DirectRefreshPrewriteRow[];
+		generatedAt: string;
+	},
+>(report: Report) {
+	const generatedAtMs = Date.parse(report.generatedAt);
+	if (!Number.isFinite(generatedAtMs))
+		throw new Error(
+			`prewrite report generatedAt is not a valid instant: ${report.generatedAt}`,
+		);
+	const canonicalizeRows = (rows: DirectRefreshPrewriteRow[]) =>
+		rows.map((row) => {
+			if (row.observationInstant !== null)
+				assertPlausibleObservationInstant(
+					row.observationInstant,
+					`row ${row.rowId}`,
+					generatedAtMs,
+				);
+			for (const change of row.expectedChanges.supermarketProduct) {
+				if (change.field !== "lastCheckedAt") continue;
+				// A lastCheckedAt change always carries the incoming observation
+				// instant as a string (the builder only emits the change when the
+				// instant is present). Reject any non-string value explicitly
+				// instead of letting a tampered or malformed payload fall through
+				// to an Invalid Date comparison later.
+				if (typeof change.after !== "string")
+					throw new Error(
+						`row ${row.rowId} lastCheckedAt change value is not a string: ${JSON.stringify(change.after)}`,
+					);
+				assertPlausibleObservationInstant(
+					change.after,
+					`row ${row.rowId} lastCheckedAt`,
+					generatedAtMs,
+				);
+			}
+			return {
+				...row,
+				observationInstant: null,
+				expectedChanges: {
+					...row.expectedChanges,
+					supermarketProduct: row.expectedChanges.supermarketProduct.map(
+						(change) =>
+							change.field === "lastCheckedAt"
+								? { ...change, after: null }
+								: change,
+					),
+				},
+			};
+		});
+	const payload: Record<string, unknown> = { ...report };
+	delete payload.futureConfirmation;
+	payload.rows = canonicalizeRows(report.rows);
+	payload.skippedRows = canonicalizeRows(report.skippedRows);
+	return payload;
 }
 
 function stableJson(value: unknown): string {

@@ -12,6 +12,7 @@ import type {
 	FetchOptions,
 	FetchProductsResult,
 	HealthResult,
+	ObservedFetchProductsResult,
 	SourceAdapter,
 } from "./types";
 
@@ -69,7 +70,7 @@ export class VtexSourceAdapter implements SourceAdapter {
 	async fetchDirectProducts(
 		lookup: DirectLookup,
 		options: FetchOptions = {},
-	): Promise<FetchProductsResult> {
+	): Promise<ObservedFetchProductsResult> {
 		return fetchVtexDirectProducts({
 			baseUrl: this.supermarket.baseUrl,
 			lookup,

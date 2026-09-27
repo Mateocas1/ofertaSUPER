@@ -6,6 +6,7 @@ import {
 	buildCarrefourDirectRefreshPrewriteGate,
 	buildDirectRefreshPrewriteGate,
 	buildPrewriteReportHash,
+	canonicalPrewriteReportHashPayload,
 	type DirectRefreshPrewriteExistingRow,
 } from "../scripts/pipeline/direct-refresh-prewrite-gate";
 
@@ -83,6 +84,17 @@ function liveProduct(
 		isAvailable: true,
 		...overrides,
 	};
+}
+
+const DEFAULT_OBSERVED_AT = "2026-06-01T00:00:05.000Z";
+
+function directFetch<T>(
+	products: T[],
+	observedAt: string | null = DEFAULT_OBSERVED_AT,
+): T[] & { observedAt?: string } {
+	return observedAt === null
+		? Object.assign([...products], {})
+		: Object.assign([...products], { observedAt });
 }
 
 function delay(ms: number) {
@@ -322,7 +334,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			now: new Date("2026-06-01T00:00:00.000Z"),
 			fetchDirectProducts: async (sourceSlug, lookup) => {
 				lookups.push({ sourceSlug, kind: lookup.kind, value: lookup.value });
-				return [live()];
+				return directFetch([live()]);
 			},
 		});
 
@@ -391,12 +403,10 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			buildCarrefourDirectRefreshPrewriteGate({
 				repository: repository([passRow]),
 				now: new Date(now),
-				fetchDirectProducts: async () => [live()],
+				fetchDirectProducts: async () => directFetch([live()]),
 			});
 		const first = await buildReport("2026-06-01T00:00:00.000Z");
 		const second = await buildReport("2026-06-01T00:01:00.000Z");
-		const firstHashPayload: Record<string, unknown> = { ...first };
-		delete firstHashPayload.futureConfirmation;
 
 		assert.notEqual(
 			first.futureConfirmation.shape.reportHash,
@@ -404,7 +414,134 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		);
 		assert.equal(
 			first.futureConfirmation.shape.reportHash,
-			buildPrewriteReportHash(firstHashPayload),
+			buildPrewriteReportHash(canonicalPrewriteReportHashPayload(first)),
+		);
+	});
+
+	it("binds the per-row observation instant from the fetch sidecar into the report", async () => {
+		const report = await buildCarrefourDirectRefreshPrewriteGate({
+			repository: repository([passRow]),
+			now: new Date("2026-06-01T00:00:00.000Z"),
+			fetchDirectProducts: async () => directFetch([live()]),
+		});
+
+		assert.equal(report.rows[0].observationInstant, "2026-06-01T00:00:05.000Z");
+		const lastCheckedChange = report.rows[0].expectedChanges.supermarketProduct.find(
+			(change) => change.field === "lastCheckedAt",
+		);
+		assert.equal(lastCheckedChange?.after, "2026-06-01T00:00:05.000Z");
+		assert.notEqual(lastCheckedChange?.after, report.generatedAt);
+	});
+
+	it("fails closed when the fetch result lacks the observation instant sidecar", async () => {
+		const buildReport = (observedAt?: string) =>
+			buildCarrefourDirectRefreshPrewriteGate({
+				repository: repository([passRow]),
+				now: new Date("2026-06-01T00:00:00.000Z"),
+				fetchDirectProducts: async () =>
+					observedAt === undefined
+						? [live()]
+						: Object.assign([live()], { observedAt }),
+			});
+		for (const observedAt of [undefined, "   "]) {
+			const report = await buildReport(observedAt);
+			assert.equal(report.status, "FAIL");
+			assert.equal(report.rows[0].observationInstant, null);
+			assert.equal(report.rows[0].guards.status, "FAIL");
+			assert.ok(
+				report.rows[0].guards.reasons.includes(
+					"direct lookup observation instant sidecar missing",
+				),
+			);
+			const lastCheckedChange = report.rows[0].expectedChanges.supermarketProduct.find(
+				(change) => change.field === "lastCheckedAt",
+			);
+			assert.equal(lastCheckedChange, undefined);
+		}
+	});
+
+	it("keeps the prewrite report hash deterministic across differing observation instants", async () => {
+		const buildReport = (observedAt: string | null) =>
+			buildCarrefourDirectRefreshPrewriteGate({
+				repository: repository([passRow]),
+				now: new Date("2026-06-01T00:00:00.000Z"),
+				fetchDirectProducts: async () => directFetch([live()], observedAt),
+			});
+		const first = await buildReport("2026-06-01T00:00:05.000Z");
+		const second = await buildReport("2026-06-01T00:04:05.000Z");
+
+		assert.notEqual(
+			first.rows[0].observationInstant,
+			second.rows[0].observationInstant,
+		);
+		assert.equal(
+			first.futureConfirmation.shape.reportHash,
+			second.futureConfirmation.shape.reportHash,
+		);
+	});
+
+	it("validates observation instants instead of silently dropping them from the hash payload", async () => {
+		const report = await buildCarrefourDirectRefreshPrewriteGate({
+			repository: repository([passRow]),
+			now: new Date("2026-06-01T00:00:00.000Z"),
+			fetchDirectProducts: async () => directFetch([live()]),
+		});
+		const hashed = () =>
+			buildPrewriteReportHash(canonicalPrewriteReportHashPayload(report));
+		assert.doesNotThrow(hashed);
+
+		const malformed = structuredClone(report);
+		malformed.rows[0].observationInstant = "not-a-date";
+		assert.throws(
+			() =>
+				buildPrewriteReportHash(canonicalPrewriteReportHashPayload(malformed)),
+			/ISO instant/,
+		);
+
+		const future = structuredClone(report);
+		future.rows[0].observationInstant = "2026-06-01T01:00:00.000Z";
+		assert.throws(
+			() =>
+				buildPrewriteReportHash(canonicalPrewriteReportHashPayload(future)),
+			/ahead of the report generation/,
+		);
+
+		const ancient = structuredClone(report);
+		ancient.rows[0].observationInstant = "2026-05-01T00:00:00.000Z";
+		assert.throws(
+			() =>
+				buildPrewriteReportHash(canonicalPrewriteReportHashPayload(ancient)),
+			/fetch window/,
+		);
+
+		const tamperedChange = structuredClone(report);
+		const lastCheckedChange =
+			tamperedChange.rows[0].expectedChanges.supermarketProduct.find(
+				(change) => change.field === "lastCheckedAt",
+			);
+		assert.ok(lastCheckedChange);
+		lastCheckedChange.after = "not-a-date";
+		assert.throws(
+			() =>
+				buildPrewriteReportHash(
+					canonicalPrewriteReportHashPayload(tamperedChange),
+				),
+			/ISO instant/,
+		);
+
+		const nonStringChange = structuredClone(report);
+		const lastCheckedNonString =
+			nonStringChange.rows[0].expectedChanges.supermarketProduct.find(
+				(change) => change.field === "lastCheckedAt",
+			);
+		assert.ok(lastCheckedNonString);
+		lastCheckedNonString.after = 123;
+		assert.throws(
+			() =>
+				buildPrewriteReportHash(
+					canonicalPrewriteReportHashPayload(nonStringChange),
+				),
+			/lastCheckedAt change value is not a string/,
 		);
 	});
 
@@ -431,13 +568,13 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			now: new Date("2026-06-01T00:00:00.000Z"),
 			fetchDirectProducts: async (sourceSlug, lookup) => {
 				lookups.push({ sourceSlug, kind: lookup.kind, value: lookup.value });
-				return [
+				return directFetch([
 					live({
 						productUrl: "https://www.vea.com.ar/leche-1/p",
 						imageUrl: "https://www.vea.com.ar/new.jpg",
 						images: ["https://www.vea.com.ar/new.jpg"],
 					}),
-				];
+				]);
 			},
 		});
 
@@ -499,7 +636,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			}),
 			fetchDirectProducts: async (_sourceSlug, lookup) => {
 				const row = veaRows.find((entry) => entry.skuId === lookup.value);
-				return [
+				return directFetch([
 					live({
 						ean: row?.ean ?? "missing",
 						skuId: lookup.value,
@@ -507,12 +644,9 @@ describe("Carrefour direct refresh pre-write gate", () => {
 						imageUrl: "https://www.vea.com.ar/new.jpg",
 						images: ["https://www.vea.com.ar/new.jpg"],
 					}),
-				];
+				]);
 			},
 		});
-		const hashPayload: Record<string, unknown> = { ...report };
-		delete hashPayload.futureConfirmation;
-
 		assert.equal(report.status, "PASS");
 		assert.deepEqual(
 			report.rows.map((row) => row.rowId),
@@ -530,7 +664,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 		assert.deepEqual(report.lineage.parentArtifacts[0].guardReasons, []);
 		assert.equal(
 			report.futureConfirmation.shape.reportHash,
-			buildPrewriteReportHash(hashPayload),
+			buildPrewriteReportHash(canonicalPrewriteReportHashPayload(report)),
 		);
 	});
 
@@ -559,6 +693,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			sourceSlug: "vea",
 			sampleSize: 10,
 			repository: repository(veaRows),
+			now: new Date("2026-06-01T00:00:00.000Z"),
 			capacityEvidence: capacityEvidence({
 				rows: veaRows.map((row, index) => ({
 					rowId: row.id,
@@ -567,13 +702,13 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			}),
 			fetchDirectProducts: async (_sourceSlug, lookup) => {
 				const row = veaRows.find((entry) => entry.skuId === lookup.value);
-				return [
+				return directFetch([
 					live({
 						ean: row?.ean ?? "missing",
 						skuId: lookup.value,
 						productUrl: "https://www.vea.com.ar/leche-1/p",
 					}),
-				];
+				]);
 			},
 		});
 
@@ -615,6 +750,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			sourceSlug: "vea",
 			sampleSize: 10,
 			repository: repository(veaRows),
+			now: new Date("2026-06-01T00:00:00.000Z"),
 			capacityEvidence: capacityEvidence({
 				targetBatchSize: 25,
 				viableRows: 9,
@@ -623,13 +759,13 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			}),
 			fetchDirectProducts: async (_sourceSlug, lookup) => {
 				const row = veaRows.find((entry) => entry.skuId === lookup.value);
-				return [
+				return directFetch([
 					live({
 						ean: row?.ean ?? "missing",
 						skuId: lookup.value,
 						productUrl: "https://www.vea.com.ar/leche-1/p",
 					}),
-				];
+				]);
 			},
 		});
 
@@ -671,6 +807,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			sourceSlug: "vea",
 			sampleSize: 10,
 			repository: repository(veaRows),
+			now: new Date("2026-06-01T00:00:00.000Z"),
 			capacityEvidence: capacityEvidence({
 				issue: 82,
 				expectedIssueNumber: 169,
@@ -685,13 +822,13 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			}),
 			fetchDirectProducts: async (_sourceSlug, lookup) => {
 				const row = veaRows.find((entry) => entry.skuId === lookup.value);
-				return [
+				return directFetch([
 					live({
 						ean: row?.ean ?? "missing",
 						skuId: lookup.value,
 						productUrl: "https://www.vea.com.ar/leche-1/p",
 					}),
-				];
+				]);
 			},
 		});
 
@@ -708,7 +845,8 @@ describe("Carrefour direct refresh pre-write gate", () => {
 	it("preserves existing prewrite behavior with absent capacity lineage", async () => {
 		const report = await buildCarrefourDirectRefreshPrewriteGate({
 			repository: repository([passRow]),
-			fetchDirectProducts: async () => [live()],
+			now: new Date("2026-06-01T00:00:00.000Z"),
+			fetchDirectProducts: async () => directFetch([live()]),
 		});
 
 		assert.equal(report.status, "PASS");
@@ -740,13 +878,13 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			now: new Date("2026-06-01T00:00:00.000Z"),
 			fetchDirectProducts: async (sourceSlug, lookup) => {
 				lookups.push({ sourceSlug, kind: lookup.kind, value: lookup.value });
-				return [
+				return directFetch([
 					live({
 						productUrl: "https://www.disco.com.ar/leche-1/p",
 						imageUrl: "https://www.disco.com.ar/new.jpg",
 						images: ["https://www.disco.com.ar/new.jpg"],
 					}),
-				];
+				]);
 			},
 		});
 
@@ -792,13 +930,13 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			now: new Date("2026-06-01T00:00:00.000Z"),
 			fetchDirectProducts: async (sourceSlug, lookup) => {
 				lookups.push({ sourceSlug, kind: lookup.kind, value: lookup.value });
-				return [
+				return directFetch([
 					live({
 						productUrl: "https://www.jumbo.com.ar/leche-1/p",
 						imageUrl: "https://www.jumbo.com.ar/new.jpg",
 						images: ["https://www.jumbo.com.ar/new.jpg"],
 					}),
-				];
+				]);
 			},
 		});
 
@@ -844,13 +982,13 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			now: new Date("2026-06-01T00:00:00.000Z"),
 			fetchDirectProducts: async (sourceSlug, lookup) => {
 				lookups.push({ sourceSlug, kind: lookup.kind, value: lookup.value });
-				return [
+				return directFetch([
 					live({
 						productUrl: "https://www.masonline.com.ar/leche-1/p",
 						imageUrl: "https://www.masonline.com.ar/new.jpg",
 						images: ["https://www.masonline.com.ar/new.jpg"],
 					}),
-				];
+				]);
 			},
 		});
 
@@ -883,7 +1021,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			now: new Date("2026-06-01T00:00:00.000Z"),
 			fetchDirectProducts: async (_sourceSlug, lookup) => {
 				const row = candidateRows.find((entry) => entry.skuId === lookup.value);
-				return [
+				return directFetch([
 					live({
 						ean: row?.ean ?? "missing",
 						skuId: lookup.value,
@@ -893,7 +1031,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 								? 0
 								: 1100,
 					}),
-				];
+				]);
 			},
 		});
 
@@ -945,13 +1083,13 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			now: new Date("2026-06-01T00:00:00.000Z"),
 			fetchDirectProducts: async (_sourceSlug, lookup) => {
 				const id = lookup.value.replace("mas-sku-", "");
-				return [
+				return directFetch([
 					live({
 						ean: `77910000000${id.padStart(2, "0")}`,
 						skuId: lookup.value,
 						productUrl: "https://www.masonline.com.ar/leche-1/p",
 					}),
-				];
+				]);
 			},
 		});
 
@@ -966,9 +1104,10 @@ describe("Carrefour direct refresh pre-write gate", () => {
 			sampleSize: 10,
 			candidateScanSize: 12,
 			repository: repository(candidateRows),
+			now: new Date("2026-06-01T00:00:00.000Z"),
 			fetchDirectProducts: async (_sourceSlug, lookup) => {
 				const row = candidateRows.find((entry) => entry.skuId === lookup.value);
-				return [
+				return directFetch([
 					live({
 						ean: row?.ean ?? "missing",
 						skuId: lookup.value,
@@ -982,7 +1121,7 @@ describe("Carrefour direct refresh pre-write gate", () => {
 							? 0
 							: 1100,
 					}),
-				];
+				]);
 			},
 		});
 
