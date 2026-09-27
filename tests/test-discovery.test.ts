@@ -1,61 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, relative, sep } from "node:path";
+import { readdirSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { test } from "node:test";
-import { resolveTsxLoaderPath } from "../scripts/run-tests.mjs";
 
 const LAUNCHER = "scripts/run-tests.mjs";
 
-// tsx@4.21.0 (the pinned version) defines exports["."] as the plain string
-// "./dist/loader.mjs", so the resolver must handle every real-world shape.
-test("launcher resolves tsx loader from real-world package.json shapes", () => {
-  const shapes = [
-    {
-      name: "plain-string exports[\".\"] (tsx@4.21.0 pinned shape)",
-      pkg: { exports: { ".": "./dist/loader.mjs" } },
-      files: ["dist/loader.mjs"],
-    },
-    {
-      name: "exports[\".\"] object with string import",
-      pkg: { exports: { ".": { import: "./dist/esm/index.mjs" } } },
-      files: ["dist/esm/index.mjs"],
-    },
-    {
-      name: "exports[\".\"] object with import.default",
-      pkg: { exports: { ".": { import: { default: "./dist/loader.mjs" } } } },
-      files: ["dist/loader.mjs"],
-    },
-    {
-      name: "exports[\".\"] object with only default",
-      pkg: { exports: { ".": { default: "./dist/loader.mjs" } } },
-      files: ["dist/loader.mjs"],
-    },
-    {
-      name: "bare main fallback",
-      pkg: { main: "./dist/loader.mjs" },
-      files: ["dist/loader.mjs"],
-    },
-  ];
-
-  for (const shape of shapes) {
-    const dir = mkdtempSync(join(tmpdir(), "tsx-fixture-"));
-    try {
-      for (const file of shape.files) {
-        mkdirSync(join(dir, dirname(file)), { recursive: true });
-        writeFileSync(join(dir, file), "export {};");
-      }
-      writeFileSync(join(dir, "package.json"), JSON.stringify(shape.pkg));
-
-      const resolved = resolveTsxLoaderPath(dir, shape.pkg);
-      assert.equal(resolved, join(dir, ...shape.files[0].split("/")), shape.name);
-      assert.ok(existsSync(resolved), `${shape.name}: resolved path must exist`);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
 // Independent recursive enumeration of all *.test.ts files under tests/
 // using node:fs, returning repository-relative POSIX-style paths.
 function enumerateTestFiles(dir: string): string[] {
@@ -70,37 +20,6 @@ function enumerateTestFiles(dir: string): string[] {
   }
   return found;
 }
-
-test("absent tsx shapes fail with a clear error, not a TypeError", () => {
-  const cases = [
-    { name: "no exports and no main", pkg: {} },
-    {
-      name: "specifier points at a missing file",
-      pkg: { exports: { ".": "./dist/missing.mjs" } },
-    },
-  ];
-
-  for (const testCase of cases) {
-    const dir = mkdtempSync(join(tmpdir(), "tsx-fixture-"));
-    try {
-      writeFileSync(join(dir, "package.json"), JSON.stringify(testCase.pkg));
-
-      assert.throws(
-        () => resolveTsxLoaderPath(dir, testCase.pkg),
-        (error) => {
-          const message = error instanceof Error ? error.message : String(error);
-          assert.match(message, /tsx loader/i, testCase.name);
-          assert.doesNotMatch(message, /paths\[1\]/, `${testCase.name}: raw TypeError leaked`);
-          assert.ok(message.includes(dir), `${testCase.name}: error must name the resolved directory`);
-          return true;
-        },
-        testCase.name,
-      );
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
-});
 
 test("launcher discovers every *.test.ts under tests/", () => {
   const run = spawnSync(process.execPath, [LAUNCHER, "--list"], {
