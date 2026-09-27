@@ -5,8 +5,8 @@ services:
     environment:
       POSTGRES_DB: ofertasuper
       POSTGRES_USER: ofertasuper_owner
-      POSTGRES_PASSWORD: owner-local-only
-      APP_PASSWORD: app-local-only
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required for local bootstrap}
+      APP_PASSWORD: ${APP_PASSWORD:?required for local bootstrap}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/compose/init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
@@ -20,8 +20,8 @@ services:
     environment:
       POSTGRES_DB: ofertasuper
       POSTGRES_USER: ofertasuper_owner
-      APP_PASSWORD: app-local-only
-      PGPASSWORD: owner-local-only
+      APP_PASSWORD: ${APP_PASSWORD:?required for local bootstrap}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?required for local bootstrap}
       PGHOST: postgres
     volumes:
       - ./docker/compose/init-app-role.sh:/harness/init-app-role.sh:ro
@@ -31,13 +31,14 @@ services:
   migrate:
     build: { context: ., target: migrator }
     environment:
-      DATABASE_URL: postgresql://ofertasuper_owner:owner-local-only@postgres:5432/ofertasuper
-      DIRECT_URL: postgresql://ofertasuper_owner:owner-local-only@postgres:5432/ofertasuper
+      DATABASE_URL: postgresql://ofertasuper_owner:${POSTGRES_PASSWORD:?required for local bootstrap}@postgres:5432/ofertasuper
+      DIRECT_URL: postgresql://ofertasuper_owner:${POSTGRES_PASSWORD:?required for local bootstrap}@postgres:5432/ofertasuper
     depends_on:
       role-provision: { condition: service_completed_successfully }
   grants:
     image: postgres:16-bookworm
-    environment: { PGPASSWORD: owner-local-only }
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?required for local bootstrap}
     volumes:
       - ./docker/compose/app-grants.sql:/harness/app-grants.sql:ro
     command: >-
@@ -47,7 +48,7 @@ services:
   seed:
     build: { context: ., target: seeder }
     environment:
-      DATABASE_URL: postgresql://ofertasuper_app:app-local-only@postgres:5432/ofertasuper
+      DATABASE_URL: postgresql://ofertasuper_app:${APP_PASSWORD:?required for local bootstrap}@postgres:5432/ofertasuper
     volumes:
       - ./prisma:/app/prisma:ro
     command: ./node_modules/.bin/tsx prisma/seed.ts

@@ -103,6 +103,17 @@ pg_restore --exit-on-error --no-owner --no-acl --dbname "$DISPOSABLE_URL" backup
 
 Inspect an archive first, restore only into a disposable empty database, then run application integrity checks. This rehearsal proves local PostgreSQL logical dump/restore mechanics only. It does not prove production automation, scheduling, retention, encryption, remote storage, RPO/RTO, production-scale duration, or platform-specific recovery procedures.
 
+## Local Compose bootstrap credentials
+
+`compose.yml` provisions a disposable local catalog and must never carry a credential. It reads `POSTGRES_PASSWORD` and `APP_PASSWORD` from the project-directory `.env`, which is gitignored, and Compose stops with an explicit message when either value is missing instead of falling back to a committed default. Compose reads that file directly, so no `env_file:` key is declared.
+
+```bash
+printf 'POSTGRES_PASSWORD=%s\nAPP_PASSWORD=%s\n' "$(openssl rand -hex 16)" "$(openssl rand -hex 16)" >> .env
+npm run bootstrap:cmvp-local
+```
+
+These values are local-only. Do not reuse them, or any value previously committed as a bootstrap default, in a shared or production environment; treat anything that was ever committed as disclosed and rotate it where it was reused. Credential creation for shared environments stays outside this repository, as described above.
+
 ## Public catalog serving identity
 
 `PUBLIC_CATALOG_SERVING_IDENTITY_JSON` is a server-only JSON contract consumed locally by the public search and product-detail GET handlers. Deployment and operator identity injection remain separate and are not performed by this unit; runtime role validation remains unchanged.
