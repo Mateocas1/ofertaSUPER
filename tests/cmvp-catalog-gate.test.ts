@@ -19,13 +19,13 @@ const manifest: CmvpTargetManifest = {
 	products: [{ targetId: "milk-1l", useful: true, ean, pack: "bottle", quantity: "1 l", measurementUnit: "l", variant: "whole" }],
 };
 
-const snapshot: CmvpCatalogSnapshot = {
+	const snapshot: CmvpCatalogSnapshot = {
 	schemaVersion: 1,
 	cycleId: "cycle-002",
 	observedAt: "2026-09-19T12:00:00.000Z",
 	offers: [
-		{ source: "jumbo", targetId: "milk-1l", ean: "779 000000000-3", pack: null, quantity: null, measurementUnit: null, variant: null, available: true, price: 1200, observedAt: "2026-09-19T11:00:00.000Z" },
-		{ source: "disco", targetId: "milk-1l", ean, pack: "carton", quantity: null, measurementUnit: null, variant: null, available: true, price: 1100, observedAt: "2026-09-19T10:00:00.000Z" },
+		{ source: "jumbo", targetId: "milk-1l", ean: "779 000000000-3", pack: null, quantity: null, measurementUnit: null, variant: null, available: true, price: 1200, observedAt: "2026-09-19T11:00:00.000Z", observationProven: true },
+		{ source: "disco", targetId: "milk-1l", ean, pack: "carton", quantity: null, measurementUnit: null, variant: null, available: true, price: 1100, observedAt: "2026-09-19T10:00:00.000Z", observationProven: true },
 	],
 	identity: { attributeConflicts: [{ source: "disco", ean, attributes: ["pack"] }] },
 };
@@ -36,9 +36,9 @@ describe("CMVP catalog gate", () => {
 		assert.equal(report.identity.model, "normalized-EAN/GTIN");
 		assert.equal(report.identity.exactComparableProducts, 1);
 		assert.deepEqual(report.sources, [
-			{ source: "carrefour", offers: 0, represented: false, available: 0, priceRankable: 0, withinWindow: 0 },
-			{ source: "disco", offers: 1, represented: true, available: 1, priceRankable: 1, withinWindow: 1 },
-			{ source: "jumbo", offers: 1, represented: true, available: 1, priceRankable: 1, withinWindow: 1 },
+			{ source: "carrefour", offers: 0, represented: false, available: 0, priceRankable: 0, withinWindow: 0, unproven: 0 },
+			{ source: "disco", offers: 1, represented: true, available: 1, priceRankable: 1, withinWindow: 1, unproven: 0 },
+			{ source: "jumbo", offers: 1, represented: true, available: 1, priceRankable: 1, withinWindow: 1, unproven: 0 },
 		]);
 		assert.equal(report.observations.freshDistinctUsefulProducts, 1);
 		assert.deepEqual(report.identity.attributeConflicts, [{ source: "disco", ean, attributes: ["pack"] }]);
@@ -79,6 +79,49 @@ describe("CMVP catalog gate", () => {
 		const stale = gate({ targetManifest: manifest, snapshot, now: "2026-09-20T12:00:00.000Z" });
 		assert.equal(stale.observations.freshDistinctUsefulProducts, 0);
 		assert.throws(() => gate({ targetManifest: manifest, snapshot: { ...snapshot, observedAt: "2026-09-19T12:06:00.000Z" }, now: fixedNow }), /future snapshot observation/);
+	});
+
+	it("never counts a processing-clock observation as fresh and fails the freshness gate on it", () => {
+		const clocked = gate({ targetManifest: manifest, snapshot: { ...snapshot, offers: snapshot.offers.map((offer) => ({ ...offer, observationProven: false })) } });
+		assert.equal(clocked.observations.unprovenObservations, 2);
+		assert.equal(clocked.observations.freshDistinctUsefulProducts, 0);
+		assert.equal(clocked.observations.freshnessPercent, 0);
+		assert.equal(clocked.sources[1].withinWindow, 0);
+		assert.equal(clocked.sources[1].unproven, 1);
+		assert.equal(clocked.gates.freshness, false);
+		assert.equal(clocked.status, "FAIL");
+		assert.deepEqual(clocked.exclusions, [
+			{ source: "disco", targetId: "milk-1l", reasons: ["unproven-observation"] },
+			{ source: "jumbo", targetId: "milk-1l", reasons: ["unproven-observation"] },
+		]);
+	});
+
+	it("fails closed when the durable provenance flag is missing entirely", () => {
+		const unflagged = gate({ targetManifest: manifest, snapshot: { ...snapshot, offers: snapshot.offers.map(({ observationProven: _omitted, ...offer }) => offer) } });
+		assert.equal(unflagged.observations.unprovenObservations, 2);
+		assert.equal(unflagged.gates.freshness, false);
+		assert.equal(unflagged.status, "FAIL");
+	});
+
+	it("counts corroborated observations as fresh and distinguishes unproven from stale", () => {
+		const mixed = gate({ targetManifest: manifest, snapshot: { ...snapshot, offers: [
+			{ source: "carrefour", targetId: "milk-1l", ean, pack: null, quantity: null, measurementUnit: null, variant: null, available: true, price: 1300, observedAt: "2026-09-19T11:00:00.000Z", observationProven: true },
+			{ ...snapshot.offers[1], observedAt: "2026-09-18T10:00:00.000Z" },
+			{ ...snapshot.offers[0], observationProven: false },
+		] } });
+		assert.equal(mixed.observations.freshDistinctUsefulProducts, 1);
+		assert.equal(mixed.observations.freshnessPercent, 100);
+		assert.equal(mixed.observations.unprovenObservations, 1);
+		assert.equal(mixed.sources[0].withinWindow, 1);
+		assert.equal(mixed.sources[1].withinWindow, 0);
+		assert.equal(mixed.sources[1].unproven, 0);
+		assert.equal(mixed.sources[2].withinWindow, 0);
+		assert.equal(mixed.sources[2].unproven, 1);
+		assert.equal(mixed.gates.freshness, true);
+		assert.deepEqual(mixed.exclusions, [
+			{ source: "disco", targetId: "milk-1l", reasons: ["outside-24-hour-window"] },
+			{ source: "jumbo", targetId: "milk-1l", reasons: ["unproven-observation"] },
+		]);
 	});
 
 	it("requires explicit fixture paths and rejects write-oriented CLI flags", () => {

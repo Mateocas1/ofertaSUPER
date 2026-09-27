@@ -1,5 +1,5 @@
 import type { CmvpCatalogSnapshot, CmvpTargetManifest } from "./cmvp-catalog-gate";
-import { normalizeEan } from "./cmvp-catalog-gate";
+import { CMVP_FRESHNESS_WINDOW_MS, CMVP_MAX_FUTURE_SKEW_MS, normalizeEan } from "./cmvp-catalog-gate";
 
 export type { CmvpTargetManifest } from "./cmvp-catalog-gate";
 
@@ -10,7 +10,17 @@ type ObservedAttributes = Record<OptionalAttribute, string | null>;
 
 export type CmvpCatalogSnapshotRow = { source: string; productEan: string; sourceSku?: string | null; available: boolean; price: number | null; observedAt: string };
 export type CmvpSourceIdentityEvidence = { source: Source; ean?: string | null; sourceSku?: string; pack?: string | null; quantity?: string | null; measurementUnit?: string | null; variant?: string | null };
-export type CmvpCatalogSnapshotRepository = { listOffers(input: { sources: Source[]; productEans: string[] }): Promise<CmvpCatalogSnapshotRow[]> };
+/**
+ * One durable observation extracted from the source-capture records
+ * (source_capture_operations.observed_at joined with its capture items).
+ * The identity is whatever the capture carries: the product EAN from the
+ * item key, or the offer SKU from its captured facts.
+ */
+export type CmvpDurableObservationRow = { source: string; productEan: string | null; sourceSku: string | null; observedAt: string };
+export type CmvpCatalogSnapshotRepository = {
+	listOffers(input: { sources: Source[]; productEans: string[] }): Promise<CmvpCatalogSnapshotRow[]>;
+	listDurableObservations(input: { sources: Source[]; windowStart: string; windowEnd: string }): Promise<CmvpDurableObservationRow[]>;
+};
 export type CmvpGeneratedCatalogSnapshot = CmvpCatalogSnapshot & { readOnly: true; identity: { missingStructuredEvidenceIsUnproven: false; attributeConflicts: Array<{ source: Source; ean: string; attributes: OptionalAttribute[] }> } };
 
 export async function buildCmvpCatalogSnapshot({ targetManifest, repository, observedAt, identityEvidence = [] }: { targetManifest: CmvpTargetManifest; repository: CmvpCatalogSnapshotRepository; observedAt: string; identityEvidence?: CmvpSourceIdentityEvidence[] }): Promise<CmvpGeneratedCatalogSnapshot> {
@@ -20,11 +30,18 @@ export async function buildCmvpCatalogSnapshot({ targetManifest, repository, obs
 	const targetByEan = new Map(targets.map((target) => [normalizeEan(target.ean)!, target]));
 	const evidence = indexIdentityEvidence(identityEvidence);
 	const rows = await repository.listOffers({ sources: [...SOURCES], productEans: [...targetByEan.keys()].toSorted() });
+	const durableObservations = await repository.listDurableObservations({ sources: [...SOURCES], windowStart: observationWindowStart(observedAt), windowEnd: observationWindowEnd(observedAt) });
+	const durableBySource = new Map<string, CmvpDurableObservationRow[]>();
+	for (const observation of durableObservations) {
+		const bucket = durableBySource.get(observation.source) ?? [];
+		bucket.push(observation);
+		durableBySource.set(observation.source, bucket);
+	}
 	const unsortedOffers = rows.filter((row): row is CmvpCatalogSnapshotRow & { source: Source } => SOURCES.includes(row.source as Source)).flatMap((row) => {
 		const normalizedEan = normalizeEan(row.productEan); const target = normalizedEan ? targetByEan.get(normalizedEan) : null;
 		if (!target || !normalizedEan) return [];
 		const attributes = evidence.observations.get(`${row.source}:${normalizedEan}`) ?? nullAttributes();
-		return [{ source: row.source, targetId: target.targetId, ean: normalizedEan, ...attributes, available: row.available, price: row.price, observedAt: row.observedAt }];
+		return [{ source: row.source, targetId: target.targetId, ean: normalizedEan, ...attributes, available: row.available, price: row.price, observedAt: row.observedAt, observationProven: hasCorroboratedDurableObservation(row, normalizedEan, durableBySource.get(row.source) ?? [], observedAt) }];
 	});
 	ensureUniqueNormalizedSourceIdentities(unsortedOffers);
 	const offers = unsortedOffers.toSorted(compareSnapshotOffers);
@@ -80,5 +97,24 @@ function nullAttributes(): ObservedAttributes { return { pack: null, quantity: n
 function optional(value: string | null | undefined) { const normalized = value?.trim(); return normalized || null; }
 function normalize(value: string) { return value.trim().toLocaleLowerCase("en-US"); }
 function identityKey(source: string, ean: string | null) { return ean ? `${source}:${ean}` : null; }
+
+/**
+ * The observation window used for durable corroboration is the same 24-hour
+ * freshness window the gate evaluates, anchored at the snapshot's observedAt
+ * with the same future-skew allowance. An offer counts as proven only when a
+ * durable capture records an observation of the same source and identity
+ * (EAN or SKU) inside that window; anything else fails closed as unproven.
+ */
+function observationWindowStart(observedAt: string) { return new Date(Date.parse(observedAt) - CMVP_FRESHNESS_WINDOW_MS).toISOString(); }
+function observationWindowEnd(observedAt: string) { return new Date(Date.parse(observedAt) + CMVP_MAX_FUTURE_SKEW_MS).toISOString(); }
+function hasCorroboratedDurableObservation(row: CmvpCatalogSnapshotRow, normalizedEan: string, durable: CmvpDurableObservationRow[], observedAt: string) {
+	const observedMs = Date.parse(observedAt);
+	return durable.some((observation) => {
+		const durableMs = Date.parse(observation.observedAt);
+		if (!Number.isFinite(durableMs) || durableMs < observedMs - CMVP_FRESHNESS_WINDOW_MS || durableMs > observedMs + CMVP_MAX_FUTURE_SKEW_MS) return false;
+		if (normalizedEan && normalizeEan(observation.productEan ?? "") === normalizedEan) return true;
+		return Boolean(row.sourceSku && observation.sourceSku && row.sourceSku === observation.sourceSku);
+	});
+}
 function ensureUniqueNormalizedSourceIdentities(offers: Array<{ source: Source; ean: string }>) { const identities = offers.map((offer) => `${offer.source}:${offer.ean}`); if (new Set(identities).size !== identities.length) throw new Error("duplicate normalized source identity"); }
 function compareSnapshotOffers(left: CmvpGeneratedCatalogSnapshot["offers"][number], right: CmvpGeneratedCatalogSnapshot["offers"][number]) { const leftKey = JSON.stringify(left); const rightKey = JSON.stringify(right); return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0; }
