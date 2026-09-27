@@ -20,6 +20,7 @@ export const basketProductsBodySchema = z
 
 const nullableString = z.string().nullable();
 const nullableTimestamp = z.string().datetime({ offset: true }).nullable();
+
 export const basketProductsResponseSchema = z.object({
   items: z.array(z.object({
     ean: eanSchema,
@@ -32,6 +33,7 @@ export const basketProductsResponseSchema = z.object({
     priceEntries: z.array(z.object({
       supermarket: z.object({ id: z.number().int(), name: z.string(), slug: z.string(), logoUrl: nullableString }).strict(),
       price: z.number().nullable(),
+      listPrice: z.number().nullable(),
       isAvailable: z.boolean(),
       productUrl: nullableString,
       freshnessStatus: z.enum(["fresh", "stale", "unknown"]),

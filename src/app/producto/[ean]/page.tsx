@@ -8,6 +8,7 @@ import { LazyPriceChart } from "@/components/lazy-price-chart";
 import { PriceComparison } from "@/components/price-comparison";
 import { PromotionBadge } from "@/components/promotion-badge";
 import { SupermarketBadge } from "@/components/supermarket-badge";
+import { StruckListPrice } from "@/components/struck-list-price";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { createGuardedProductMetadata } from "@/lib/seo/metadata";
@@ -112,6 +113,10 @@ function ProductDetails({ page, product }: { page: EligibleProductPage; product:
                 <article className="rounded-[1.5rem] border border-border/70 bg-white/75 p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{displayPriceLabel}</p>
                   <p className="mt-2 text-3xl font-semibold text-foreground">{formatCurrency(product.displayPrice)}</p>
+                  <StruckListPrice
+                    price={product.displayPrice}
+                    listPrice={product.priceEntries.find((entry) => entry.price === product.displayPrice)?.listPrice ?? null}
+                  />
                   {product.bestPriceDropAlert ? (
                     <p className="mt-2 text-xs font-medium text-emerald-700">
                       Bajo {formatPercent(-product.bestPriceDropAlert.percentDrop)} vs ultimo registro
