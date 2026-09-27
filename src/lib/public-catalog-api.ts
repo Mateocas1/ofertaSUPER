@@ -135,7 +135,7 @@ function promotionFiltersFromSearchParams(searchParams: Record<string, string>):
   };
 }
 
-function getPublicLatestCheckedAt(value: unknown): string | null {
+export function getPublicLatestCheckedAt(value: unknown): string | null {
   if (!value || typeof value !== "object" || !("items" in value) || !Array.isArray(value.items)) {
     return null;
   }

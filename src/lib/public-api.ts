@@ -12,17 +12,12 @@ import {
 import {
   findSnapshotAdaptedProduct,
   searchSnapshotSummaries,
-  toProductDetail,
 } from "@/lib/catalog-snapshot-adapters";
-import {
-  getSnapshotGeneratedAt,
-  getSnapshotProduct,
-  SnapshotUnavailableError,
-  type SnapshotProductResult,
-} from "@/lib/catalog-snapshot";
-import type { ProductDetail, ProductHistory, ProductSummary } from "@/lib/catalog";
+import { getSnapshotGeneratedAt, SnapshotUnavailableError } from "@/lib/catalog-snapshot";
+import type { ProductDetail, ProductSummary } from "@/lib/catalog";
 import { handleProductHistoryRequest } from "@/lib/product-history";
 import { publicCatalogUnavailable } from "@/lib/public-catalog-api";
+import { loadSnapshotProductPage } from "@/lib/public-pages";
 import {
   admitStrictPublicRoute,
   defaultRateLimiter,
@@ -49,9 +44,6 @@ const defaultDeps = (): PublicApiDeps => ({
 });
 
 const rateLimitedBody = { error: "Rate limit exceeded", message: "Too many requests. Try again in a moment." } as const;
-
-// Same series palette the guarded history loader used.
-const SERIES_COLORS = ["#d24726", "#2a6f58", "#4259d6"];
 
 function admitOrBlock(admission: StrictAdmissionResult, unavailableBody: object) {
   if (admission.status === "exhausted") {
@@ -182,55 +174,7 @@ export async function handleProductDetail(request: NextRequest, ean: string, dep
 // fields, so handleProductHistoryRequest keeps working unchanged; only the
 // history body reaches the route.
 function snapshotProductPageLoader(deps: PublicApiDeps) {
-  return async (ean: string, days: number) => {
-    const now = deps.now();
-    const entry = getSnapshotProduct(ean, now);
-    return {
-      product: entry ? toProductDetail(entry.product, entry.offers, now) : null,
-      history: buildSnapshotHistory(ean, days, entry, now),
-      dataSource: "database" as const,
-      degraded: false,
-      verifiedAt: getSnapshotGeneratedAt(),
-      latestCheckedAt: null,
-    };
-  };
-}
-
-function buildSnapshotHistory(ean: string, days: number, entry: SnapshotProductResult | null, now: Date): ProductHistory {
-  if (!entry) return { ean, days, series: [], points: [] };
-
-  const cutoff = now.getTime() - days * 86_400_000;
-  const namesBySlug = new Map(entry.offers.map((offer) => [offer.source, offer.source]));
-  const detail = toProductDetail(entry.product, entry.offers, now);
-  for (const priceEntry of detail.priceEntries) {
-    namesBySlug.set(priceEntry.supermarket.slug, priceEntry.supermarket.name);
-  }
-
-  const observations = entry.offers
-    .flatMap((offer) => offer.history.map((point) => ({ source: offer.source, price: point.price, observedAt: point.observedAt })))
-    .filter((observation) => {
-      const observed = Date.parse(observation.observedAt);
-      return !Number.isNaN(observed) && observed >= cutoff;
-    })
-    .sort((left, right) => left.observedAt.localeCompare(right.observedAt));
-
-  const series = new Map<string, ProductHistory["series"][number]>();
-  const pointsByDate = new Map<string, Record<string, number | string | null>>();
-  for (const observation of observations) {
-    if (!series.has(observation.source)) {
-      series.set(observation.source, {
-        slug: observation.source,
-        name: namesBySlug.get(observation.source) ?? observation.source,
-        color: SERIES_COLORS[series.size % SERIES_COLORS.length],
-      });
-    }
-    const date = observation.observedAt.slice(0, 10);
-    const point = pointsByDate.get(date) ?? { date };
-    point[observation.source] = observation.price;
-    pointsByDate.set(date, point);
-  }
-
-  return { ean, days, series: Array.from(series.values()), points: Array.from(pointsByDate.values()) };
+  return async (ean: string, days: number) => loadSnapshotProductPage(ean, days, deps.now());
 }
 
 export async function handleProductHistory(request: NextRequest, ean: string, deps: PublicApiDeps = defaultDeps()) {
