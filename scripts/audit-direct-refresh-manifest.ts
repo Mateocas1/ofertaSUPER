@@ -17,9 +17,11 @@ import {
 	parsePositiveIntegerFlag,
 } from "./pipeline/audit-utils";
 
+import { parseFrozenTargetFlags, readDirectRefreshFrozenTarget } from "./pipeline/direct-refresh-frozen-target";
+
 type SupportedManifestSource = "carrefour" | "vea" | "disco" | "jumbo" | "mas";
 
-type CliOptions = {
+type CliOptions = ReturnType<typeof parseFrozenTargetFlags> & {
 	source: SupportedManifestSource;
 	sampleSize: number;
 	candidateScanSize: number;
@@ -105,6 +107,7 @@ export function parseDirectRefreshManifestCliOptions(
 		throw new Error("--capacity-report requires --issue-number=...");
 	}
 	return {
+		...parseFrozenTargetFlags(argv),
 		source: sources[0] as SupportedManifestSource,
 		sampleSize,
 		candidateScanSize,
@@ -114,7 +117,7 @@ export function parseDirectRefreshManifestCliOptions(
 	};
 }
 
-function createRepository(): DirectRefreshManifestRepository {
+export function createDirectRefreshManifestRepository(): DirectRefreshManifestRepository {
 	const mapRows = (
 		rows: Array<{
 			id: number;
@@ -150,13 +153,13 @@ function createRepository(): DirectRefreshManifestRepository {
 				? { id: source.id, slug: source.slug, baseUrl: source.base_url }
 				: null;
 		},
-		async listOldestPublicRankableRows(sourceSlug, sampleSize) {
+		async listOldestPublicRankableRows(sourceSlug, sampleSize, targetEans) {
 			const rows = await db.supermarketProduct.findMany({
 				where: {
 					supermarket: { slug: sourceSlug },
 					is_available: true,
 					price: { gt: 0 },
-					product_ean: { not: "" },
+					product_ean: { not: "", ...(targetEans ? { in: [...targetEans] } : {}) },
 					product: { name: { not: "" } },
 				},
 				orderBy: { last_checked_at: "asc" },
@@ -219,8 +222,10 @@ async function readCapacityEvidence(
 
 async function main() {
 	const options = parseDirectRefreshManifestCliOptions();
+	const frozenTarget = await readDirectRefreshFrozenTarget(options);
 	const report = await buildDirectRefreshManifestDryRun({
-		repository: createRepository(),
+		frozenTarget,
+		repository: createDirectRefreshManifestRepository(),
 		sourceSlug: options.source,
 		sampleSize: options.sampleSize,
 		candidateScanSize: options.candidateScanSize,

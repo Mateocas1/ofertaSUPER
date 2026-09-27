@@ -8,6 +8,14 @@ import {
 	type DirectRefreshCapacityEvidenceLineage,
 } from "./direct-refresh-capacity-lineage";
 
+import {
+	assertFrozenTargetMembership,
+	frozenTargetEvidence,
+	parseDirectRefreshFrozenTarget,
+	type DirectRefreshFrozenTargetInput,
+	type DirectRefreshFrozenTargetEvidence,
+} from "./direct-refresh-frozen-target";
+
 type GateStatus = "PASS" | "FAIL";
 type RowGuardStatus = "PASS" | "FAIL";
 type JsonValue = string | number | boolean | null | string[];
@@ -59,6 +67,7 @@ export type DirectRefreshPrewriteRepository = {
 	listOldestPublicRankableRows(
 		sourceSlug: string,
 		sampleSize: number,
+		targetEans?: readonly string[],
 	): Promise<DirectRefreshPrewriteExistingRow[]>;
 	findRowsBySourceSku(
 		sourceSlug: string,
@@ -157,6 +166,7 @@ export type CarrefourDirectRefreshPrewriteGate = {
 		guards: string[];
 	};
 	selection: {
+		frozenTarget?: DirectRefreshFrozenTargetEvidence;
 		strategy:
 			| "oldest-public-rankable-existing-rows"
 			| "oldest-public-rankable-existing-rows-bounded-viable-scan"
@@ -311,6 +321,7 @@ export async function buildDirectRefreshPrewriteGate({
 	now = new Date(),
 	maxPriceDeltaPercent = MAX_PRICE_DELTA_PERCENT,
 	capacityEvidence = null,
+	frozenTarget = null,
 }: {
 	repository: DirectRefreshPrewriteRepository;
 	fetchDirectProducts(
@@ -323,8 +334,10 @@ export async function buildDirectRefreshPrewriteGate({
 	now?: Date;
 	maxPriceDeltaPercent?: number;
 	capacityEvidence?: DirectRefreshCapacityEvidenceInput | null;
+	frozenTarget?: DirectRefreshFrozenTargetInput | null;
 }): Promise<CarrefourDirectRefreshPrewriteGate> {
 	const config = sourceConfig(sourceSlug);
+	const target = frozenTarget === null ? null : parseDirectRefreshFrozenTarget(frozenTarget);
 	const generatedAt = now.toISOString();
 	const source = await repository.getSource(config.slug);
 	if (candidateScanSize < sampleSize)
@@ -333,8 +346,10 @@ export async function buildDirectRefreshPrewriteGate({
 		? await repository.listOldestPublicRankableRows(
 				config.slug,
 				candidateScanSize,
+				...(target ? [target.eans] : []),
 			)
 		: [];
+	assertFrozenTargetMembership(target, candidateRows.map((row) => row.ean));
 	const maxPriceHistoryId = source
 		? await repository.getMaxPriceHistoryId()
 		: null;
@@ -380,7 +395,7 @@ export async function buildDirectRefreshPrewriteGate({
 	const selectedFailReasons =
 		candidateRows.length === 0 ? ["no rows selected"] : [];
 	const insufficientViableReasons =
-		shouldFilterSelection && rows.length < sampleSize
+		(shouldFilterSelection || target !== null) && rows.length < sampleSize
 			? [
 					capacityAlignedSelection
 						? `insufficient capacity-PASS rows: selected ${rows.length} of ${sampleSize} from ${candidateRows.length} candidates (${capacityPassRows.length} capacity-PASS candidates)`
@@ -479,6 +494,7 @@ export async function buildDirectRefreshPrewriteGate({
 			guards: identityGuards(config),
 		},
 		selection: {
+			...(target ? { frozenTarget: frozenTargetEvidence(target, rows.map((row) => row.currentDb.supermarketProduct.productEan)) } : {}),
 			strategy: capacityAlignedSelection
 				? boundedViableScan
 					? ("capacity-pass-existing-rows-bounded-viable-scan" as const)
