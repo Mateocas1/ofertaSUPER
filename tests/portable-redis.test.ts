@@ -45,7 +45,7 @@ test("compose smoke preserves the non-Vercel strict boundary", async () => {
   assert.match(smoke, /redis-cli", "DBSIZE"/);
 });
 
-test("integrated search cache isolates the top-level envelope in v3 and excludes degraded writes", async () => {
+test("search route builds v3 cache keys but performs no cache write or envelope creation", async () => {
   assert.equal(buildSearchCacheKey(" Leche ", 8), "search:v3:leche:8");
   const route = await import("node:fs/promises").then(({ readFile }) => readFile("src/app/api/search/route.ts", "utf8"));
   assert.match(
