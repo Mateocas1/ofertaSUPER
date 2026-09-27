@@ -33,6 +33,10 @@ export type EvaluatedStageCandidate = {
   qualityScore: number;
   qualityFlags: string[];
   status: "PENDING" | "REJECTED";
+  // When the source was actually read, taken from the acquisition run that
+  // produced this staging row. Absent only for candidates built outside the
+  // loader, which then fall back to processing time.
+  acquiredAt?: Date | null;
 };
 
 export type ValidationSummary = {
