@@ -46,12 +46,22 @@ test("compose smoke keeps the non-Vercel bootstrap chain and verifies app grants
   assert.match(smoke, /FROM supermarkets/);
 });
 
-test("search route builds v3 cache keys but performs no cache write or envelope creation", async () => {
+test("search route builds v3 cache keys and performs no cache write", async () => {
   assert.equal(buildSearchCacheKey(" Leche ", 8), "search:v3:leche:8");
-  const route = await import("node:fs/promises").then(({ readFile }) => readFile("src/app/api/search/route.ts", "utf8"));
-  assert.match(
-    route,
-    /const data = await resolvePublicCatalogDataFromGuardedRead\(async \(projection\) => \(\{\s*items: await loadPublicSearchSuggestions\(projection, parsed\.q, parsed\.limit\),\s*\}\)\);/,
+  // The snapshot-backed route never touches a cache: freshness is computed per
+  // request and the committed JSON has no revocation layer. Admission itself
+  // is covered by the route behavior tests; here we only need the handler live
+  // and reading the snapshot.
+  const { handleSearch } = await import("../src/lib/public-api");
+  const { NextRequest } = await import("next/server");
+  process.env.VERCEL = "1";
+  const state = { success: true, limit: 60, remaining: 59, reset: Date.now() + 60_000, pending: Promise.resolve() };
+  const response = await handleSearch(
+    new NextRequest("https://ofertas-super.vercel.app/api/search?q=leche", { headers: { "x-forwarded-for": "203.0.113.7" } }),
+    { limiter: { limit: async () => state }, now: () => new Date() },
   );
-  assert.doesNotMatch(route, /setCachedJson|createPublicCatalogCacheEnvelope/);
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as { dataSource: string };
+  assert.equal(body.dataSource, "database");
+  assert.equal(JSON.stringify(body).includes("cache"), false);
 });

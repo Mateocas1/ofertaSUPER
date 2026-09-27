@@ -115,15 +115,19 @@ export async function admitStrictRateLimit(
 
 const rateLimiter = createRateLimiter(process.env);
 
+// The deployment default; handlers take a limiter through deps for tests.
+export const defaultRateLimiter: Pick<RateLimiter, "limit"> | null = rateLimiter;
+
 export async function admitStrictPublicRoute(
   request: Pick<NextRequest, "headers">,
   routeScope: string,
+  limiter: Pick<RateLimiter, "limit"> | null = rateLimiter,
 ): Promise<StrictAdmissionResult> {
   const forwardedFor = request.headers.get("x-forwarded-for")?.trim();
   const trustedClientIp = process.env.VERCEL === "1" && forwardedFor && !forwardedFor.includes(",")
     ? forwardedFor
     : "";
-  return admitStrictRateLimit(rateLimiter, { routeScope, trustedClientIp });
+  return admitStrictRateLimit(limiter, { routeScope, trustedClientIp });
 }
 
 function getClientIp(request: NextRequest) {
@@ -136,10 +140,6 @@ export async function limitRequestOrFallback(limiter: Pick<RateLimiter, "limit">
   try { return await limiter.limit(identifier); } catch { return fallback(); }
 }
 
-async function checkRateLimit(request: NextRequest, scope = "api") {
-  return limitRequestOrFallback(rateLimiter, `${scope}:${getClientIp(request)}`);
-}
-
 export function withRateLimitHeaders(response: NextResponse, state: RateLimitState) {
   response.headers.set("X-RateLimit-Limit", String(state.limit));
   response.headers.set("X-RateLimit-Remaining", String(Math.max(0, state.remaining)));
@@ -148,8 +148,8 @@ export function withRateLimitHeaders(response: NextResponse, state: RateLimitSta
   return response;
 }
 
-export async function rejectIfRateLimited(request: NextRequest, scope?: string) {
-  const state = await checkRateLimit(request, scope);
+export async function rejectIfRateLimited(request: NextRequest, scope?: string, limiter: Pick<RateLimiter, "limit"> | null = rateLimiter) {
+  const state = await limitRequestOrFallback(limiter, `${scope ?? "api"}:${getClientIp(request)}`);
   if (state.success) return { state, response: null };
   const response = NextResponse.json({ error: "Rate limit exceeded", message: "Too many requests. Try again in a moment." }, { status: 429 });
   return { state, response: withRateLimitHeaders(response, state) };
