@@ -12,19 +12,11 @@ import { StruckListPrice } from "@/components/struck-list-price";
 import { SupermarketBadge } from "@/components/supermarket-badge";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { useCanasta, type CanastaItem } from "@/hooks/use-canasta";
+import { buildBasketSummaries, computeBasketPlan, type BasketPlanItem } from "@/lib/basket-mix";
 import { formatCurrency } from "@/lib/format";
 import { BasketCatalogUnavailableError, fetchBasketProducts } from "@/lib/basket-products-client";
 import type { BasketProduct as CanastaProduct } from "@/lib/basket-products-contract";
 import { cn } from "@/lib/utils";
-
-type SupermarketSummary = {
-  slug: string;
-  name: string;
-  logoUrl: string | null;
-  total: number;
-  coveredItems: number;
-  missingItems: number;
-};
 
 type BasketProductData = {
   productsByEan: Record<string, CanastaProduct>;
@@ -33,56 +25,6 @@ type BasketProductData = {
   catalogUnavailable: boolean;
   isPending: boolean;
 };
-
-function registerProductSupermarkets(summaryMap: Map<string, SupermarketSummary>, product: CanastaProduct) {
-  for (const entry of product.priceEntries) {
-    if (summaryMap.has(entry.supermarket.slug)) continue;
-    summaryMap.set(entry.supermarket.slug, {
-      slug: entry.supermarket.slug,
-      name: entry.supermarket.name,
-      logoUrl: entry.supermarket.logoUrl,
-      total: 0,
-      coveredItems: 0,
-      missingItems: 0,
-    });
-  }
-}
-
-function isEligibleBasketEntry(entry: CanastaProduct["priceEntries"][number] | undefined, degradedDemo: boolean) {
-  return entry?.freshnessStatus === "fresh" || (degradedDemo && entry?.freshnessStatus === "stale");
-}
-
-function addItemToSummaries(item: CanastaItem, product: CanastaProduct, summaries: SupermarketSummary[], degradedDemo: boolean) {
-  for (const summary of summaries) {
-    const entry = product.priceEntries.find((candidate) => candidate.supermarket.slug === summary.slug);
-    if (entry && entry.price !== null && entry.isAvailable && isEligibleBasketEntry(entry, degradedDemo)) {
-      summary.coveredItems += 1;
-      summary.total += entry.price * item.qty;
-    } else {
-      summary.missingItems += 1;
-    }
-  }
-}
-
-function buildSupermarketSummaries(
-  items: CanastaItem[],
-  productsByEan: Record<string, CanastaProduct>,
-  degradedDemo: boolean,
-) {
-  const summaryMap = new Map<string, SupermarketSummary>();
-  items.forEach((item) => {
-    const product = productsByEan[item.ean];
-    if (product) registerProductSupermarkets(summaryMap, product);
-  });
-
-  const summaries = Array.from(summaryMap.values());
-  items.forEach((item) => {
-    const product = productsByEan[item.ean];
-    if (product) addItemToSummaries(item, product, summaries, degradedDemo);
-  });
-
-  return summaries.filter((summary) => summary.coveredItems > 0).toSorted((left, right) => left.missingItems - right.missingItems || left.total - right.total);
-}
 
 function useBasketProductData(uniqueEansKey: string): BasketProductData {
   const [productsByEan, setProductsByEan] = useState<Record<string, CanastaProduct>>({});
@@ -182,16 +124,15 @@ function BasketItemTitle({ item, product }: { item: CanastaItem; product: Canast
   </>;
 }
 
-function BasketItemPrice({ item, product, degradedDemo }: { item: CanastaItem; product: CanastaProduct | undefined; degradedDemo: boolean }) {
-  const linePrice = degradedDemo ? product?.minPrice : product?.freshMinPrice;
-  const lineTotal = linePrice !== null && linePrice !== undefined ? linePrice * item.qty : null;
-  return <p className="mt-3 text-sm text-muted-foreground">{degradedDemo ? "Estimación histórica" : "Total con registro reciente"}: <strong className="text-foreground">{formatCurrency(lineTotal)}</strong></p>;
+function BasketItemPrice({ planItem, degradedDemo }: { planItem: BasketPlanItem; degradedDemo: boolean }) {
+  const chosen = planItem.chosenName ? `Elegido: ${planItem.chosenName}` : "Sin precio elegible";
+  return <p className="mt-3 text-sm text-muted-foreground">{chosen}: <strong className="text-foreground">{formatCurrency(planItem.lineTotal)}</strong>{degradedDemo ? " (estimación histórica)" : ""}</p>;
 }
 
-function BasketItemIdentity({ item, product, degradedDemo }: { item: CanastaItem; product: CanastaProduct | undefined; degradedDemo: boolean }) {
+function BasketItemIdentity({ item, product, planItem, degradedDemo }: { item: CanastaItem; product: CanastaProduct | undefined; planItem: BasketPlanItem; degradedDemo: boolean }) {
   return <div className="flex min-w-0 gap-4">
     <BasketItemImage product={product} />
-    <div className="min-w-0"><BasketItemTitle item={item} product={product} /><BasketItemPrice item={item} product={product} degradedDemo={degradedDemo} /></div>
+    <div className="min-w-0"><BasketItemTitle item={item} product={product} /><BasketItemPrice planItem={planItem} degradedDemo={degradedDemo} /></div>
   </div>;
 }
 
@@ -205,17 +146,64 @@ function BasketProductBadges({ item, product }: { item: CanastaItem; product: Ca
   </div>;
 }
 
-function BasketItemCard({ item, product, degradedDemo, removeItem }: { item: CanastaItem; product: CanastaProduct | undefined; degradedDemo: boolean; removeItem: (ean: string) => void }) {
+function BasketSuperSelector({ planItem, onSelect }: { planItem: BasketPlanItem; onSelect: (ean: string, slug: string) => void }) {
+  if (planItem.options.length === 0) {
+    return <p className="mt-3 text-sm text-muted-foreground">Sin precio elegible para este producto todavia.</p>;
+  }
+  return <label className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+    <span className="sr-only">Supermercado para {planItem.ean}</span>
+    <span>Súper</span>
+    <select
+      value={planItem.chosenSlug ?? ""}
+      onChange={(event) => onSelect(planItem.ean, event.target.value)}
+      className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground"
+    >
+      {planItem.options.map((option) => (
+        <option key={option.slug} value={option.slug}>{option.name} — {formatCurrency(option.price)}</option>
+      ))}
+    </select>
+  </label>;
+}
+
+function BasketItemCard({ item, product, planItem, degradedDemo, removeItem, onSelect }: { item: CanastaItem; product: CanastaProduct | undefined; planItem: BasketPlanItem; degradedDemo: boolean; removeItem: (ean: string) => void; onSelect: (ean: string, slug: string) => void }) {
   return <article className="surface-soft p-5">
     <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-      <BasketItemIdentity item={item} product={product} degradedDemo={degradedDemo} />
+      <BasketItemIdentity item={item} product={product} planItem={planItem} degradedDemo={degradedDemo} />
       <div className="flex flex-wrap items-center gap-3">
         <BasketControls ean={item.ean} productName={product?.name ?? item.ean} />
         <button type="button" onClick={() => removeItem(item.ean)} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "rounded-full text-muted-foreground")} aria-label={`Eliminar ${product?.name ?? item.ean} de la canasta`}><Trash2 className="size-4" />Quitar</button>
       </div>
     </div>
+    <BasketSuperSelector planItem={planItem} onSelect={onSelect} />
     <BasketProductBadges item={item} product={product} />
   </article>;
+}
+
+function BasketMixCard({ plan, degradedDemo }: { plan: ReturnType<typeof computeBasketPlan>; degradedDemo: boolean }) {
+  const { bestSingle, savings } = plan;
+  return (
+    <section className="surface p-6 md:p-8">
+      <div><p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Mezcla automática</p><h2 className="mt-2 text-3xl font-semibold text-foreground">Cada producto en su súper más barato</h2></div>
+      <p className="mt-5 text-4xl font-semibold text-foreground">{formatCurrency(plan.mixedTotal)}</p>
+      {savings !== null && bestSingle ? (
+        <p className="mt-3 text-sm font-medium text-emerald-700">Ahorás {formatCurrency(savings)} frente a la mejor canasta en un solo súper ({formatCurrency(bestSingle.total)} en {bestSingle.name}).</p>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">La mezcla esta incompleta: {plan.mixedMissing} producto(s) sin precio elegible todavia.</p>
+      )}
+      <p className="mt-3 text-xs text-muted-foreground">Cambiá el súper de cada producto en su tarjeta; la mezcla respeta tu elección.</p>
+      {degradedDemo ? <p className="mt-2 text-xs text-amber-700">Estimación histórica: los valores pueden estar desactualizados.</p> : null}
+    </section>
+  );
+}
+
+function BasketSummaryCard({ summary, isBest, degradedDemo }: { summary: ReturnType<typeof buildBasketSummaries>[number]; isBest: boolean; degradedDemo: boolean }) {
+  return (
+    <article className={cn("rounded-[1.5rem] border p-5", isBest ? "border-emerald-300 bg-emerald-50/80" : "border-border/70 bg-white/80")}>
+      <div className="flex items-center justify-between gap-4"><SupermarketBadge name={summary.name} slug={summary.slug} logoUrl={summary.logoUrl} />{isBest ? <span className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-900">{degradedDemo ? "Mejor estimación completa" : "Mejor canasta completa"}</span> : null}</div>
+      <p className="mt-5 text-4xl font-semibold text-foreground">{formatCurrency(summary.total)}</p>
+      <div className="mt-3 flex flex-wrap gap-2 text-sm text-muted-foreground"><span>{summary.coveredItems} items cubiertos</span><span>•</span><span>{summary.missingItems} faltantes</span></div>
+    </article>
+  );
 }
 
 function CanastaCatalog({
@@ -228,10 +216,15 @@ function CanastaCatalog({
   removeItem: (ean: string) => void;
   data: BasketProductData;
 }) {
+  const [selections, setSelections] = useState<Record<string, string>>({});
   const { productsByEan, degradedDemo, loadError, isPending } = data;
-  const summaries = buildSupermarketSummaries(items, productsByEan, degradedDemo);
-  const bestCompleteSummary = summaries.find((summary) => summary.missingItems === 0) ?? null;
+  const plan = computeBasketPlan(items, productsByEan, selections, degradedDemo);
+  const { summaries, bestSingle, savings } = plan;
   const unresolvedItems = items.filter((item) => !productsByEan[item.ean]);
+
+  function selectSupermarket(ean: string, slug: string) {
+    setSelections((current) => ({ ...current, [ean]: slug }));
+  }
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr]">
@@ -251,25 +244,19 @@ function CanastaCatalog({
         </div>
 
         <div className="space-y-4">
-          {items.map((item) => <BasketItemCard key={item.ean} item={item} product={productsByEan[item.ean]} degradedDemo={degradedDemo} removeItem={removeItem} />)}
+          {items.map((item) => <BasketItemCard key={item.ean} item={item} product={productsByEan[item.ean]} planItem={plan.items.find((planItem) => planItem.ean === item.ean)!} degradedDemo={degradedDemo} removeItem={removeItem} onSelect={selectSupermarket} />)}
         </div>
       </section>
 
       <aside className="space-y-5">
+        <BasketMixCard plan={plan} degradedDemo={degradedDemo} />
         <section className="surface p-6 md:p-8">
           <div className="flex items-center justify-between gap-4">
             <div><p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Comparativa</p><h2 className="mt-2 text-3xl font-semibold text-foreground">{degradedDemo ? "Estimación histórica por supermercado" : "Total por supermercado"}</h2></div>
             {isPending ? <LoaderCircle className="size-5 animate-spin text-muted-foreground" /> : null}
           </div>
           <div className="mt-6 space-y-4">
-            {summaries.map((summary) => {
-              const isBestComplete = bestCompleteSummary?.slug === summary.slug;
-              return <article key={summary.slug} className={cn("rounded-[1.5rem] border p-5", isBestComplete ? "border-emerald-300 bg-emerald-50/80" : "border-border/70 bg-white/80")}>
-                <div className="flex items-center justify-between gap-4"><SupermarketBadge name={summary.name} slug={summary.slug} logoUrl={summary.logoUrl} />{isBestComplete ? <span className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-900">{degradedDemo ? "Menor estimación completa" : "Mejor canasta completa"}</span> : null}</div>
-                <p className="mt-5 text-4xl font-semibold text-foreground">{formatCurrency(summary.total)}</p>
-                <div className="mt-3 flex flex-wrap gap-2 text-sm text-muted-foreground"><span>{summary.coveredItems} items cubiertos</span><span>•</span><span>{summary.missingItems} faltantes</span></div>
-              </article>;
-            })}
+            {summaries.map((summary) => <BasketSummaryCard key={summary.slug} summary={summary} isBest={bestSingle?.slug === summary.slug} degradedDemo={degradedDemo} />)}
             {summaries.length === 0 ? <div className="rounded-[1.5rem] border border-dashed border-border bg-white/70 p-5 text-sm text-muted-foreground">Aun no hay suficiente cobertura multi-super para calcular un total agregado.</div> : null}
           </div>
         </section>
