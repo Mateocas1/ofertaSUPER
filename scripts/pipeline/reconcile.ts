@@ -23,6 +23,21 @@ type CandidateLoaderClient = {
 
 export const RECONCILE_ADVISORY_LOCK_KEY = 2026051901;
 
+// The instant a source observation is recorded against: when the acquisition
+// run started reading the source, never when the pipeline got around to
+// processing the staging row. A row acquired on the 18th and processed on the
+// 21st keeps the 18th, otherwise freshness would measure pipeline runs rather
+// than source observations.
+//
+// `processedAt` is only a fallback for candidates built outside the staging
+// loader, which carry no acquisition time.
+export function observationInstantFor(
+  candidate: Pick<EvaluatedStageCandidate, "acquiredAt">,
+  processedAt: Date,
+): Date {
+  return candidate.acquiredAt ?? processedAt;
+}
+
 export class ReconcileLockUnavailableError extends Error {
   constructor() {
     super("Another ingestion reconciliation is already running.");
@@ -369,12 +384,14 @@ async function loadCandidates(
       quality_score: true,
       quality_flags: true,
       status: true,
+      run: { select: { started_at: true } },
     },
   });
 
   return products.map((product) => ({
     id: product.id,
     runId: product.run_id,
+    acquiredAt: product.run?.started_at ?? null,
     sourceSlug: product.source_slug,
     ean: product.ean,
     name: product.name,
@@ -523,6 +540,57 @@ async function reconcileChunk(
     existingSupermarketProducts.map((product) => [supermarketProductKey(product.product_ean, product.supermarket_id), product]),
   );
   const timestamp = new Date();
+  const persisted = await persistReconcileChunk({
+    tx,
+    candidates,
+    supermarketIdBySlug,
+    eans,
+    allSupermarketIds,
+    existingSupermarketProductByKey,
+    dryRun,
+    timestamp,
+  });
+
+  return {
+    newProducts: newProductRows.length,
+    mergedProducts: eans.length - newProductRows.length,
+    ...persisted,
+  };
+}
+
+type ChunkPersistResult = {
+  supermarketProductsCreated: number;
+  supermarketProductsUpdated: number;
+  priceHistoryInserted: number;
+  promoted: number;
+  promotedByRunId: Record<string, number>;
+  promotedBySource: Record<string, number>;
+};
+
+async function persistReconcileChunk(args: {
+  tx: Prisma.TransactionClient;
+  candidates: EvaluatedStageCandidate[];
+  supermarketIdBySlug: Map<string, number>;
+  eans: string[];
+  allSupermarketIds: number[];
+  existingSupermarketProductByKey: Map<
+    string,
+    { id: number; product_ean: string; supermarket_id: number }
+  >;
+  dryRun: boolean;
+  timestamp: Date;
+}): Promise<ChunkPersistResult> {
+  const {
+    tx,
+    candidates,
+    supermarketIdBySlug,
+    eans,
+    allSupermarketIds,
+    existingSupermarketProductByKey,
+    dryRun,
+    timestamp,
+  } = args;
+
   const latestCandidateBySupermarketKey = new Map<string, EvaluatedStageCandidate>();
 
   for (const candidate of candidates) {
@@ -545,7 +613,7 @@ async function reconcileChunk(
       sku_id: candidate.skuId,
       seller_id: candidate.sellerId,
       product_url: candidate.productUrl,
-      last_checked_at: timestamp,
+      last_checked_at: observationInstantFor(candidate, timestamp),
     };
   });
 
@@ -634,37 +702,35 @@ async function reconcileChunk(
   const latestHistoryBySupermarketProductId = new Map(
     latestHistoryRows.map((row) => [row.supermarket_product_id, row]),
   );
-  let syntheticSupermarketProductId = -1;
-  const historyRows = candidates
-    .map((candidate) => {
-      const supermarketId = supermarketIdBySlug.get(candidate.sourceSlug)!;
-      const existingSupermarketProduct = refreshedSupermarketProductByKey.get(
-        supermarketProductKey(candidate.ean, supermarketId),
-      );
-      const supermarketProductId = existingSupermarketProduct?.id ?? syntheticSupermarketProductId--;
+  const priceHistoryInserted = await insertReconcileHistory({
+    tx,
+    candidates,
+    supermarketIdBySlug,
+    refreshedSupermarketProductByKey,
+    latestHistoryBySupermarketProductId,
+    dryRun,
+    timestamp,
+  });
 
-      if (!existingSupermarketProduct && !dryRun) {
-        throw new Error(`Missing supermarket product for ${candidate.ean} in ${candidate.sourceSlug}`);
-      }
+  const promoted = await promoteReconcileCandidates(tx, candidates, dryRun);
 
-      if (!shouldInsertHistory(latestHistoryBySupermarketProductId.get(supermarketProductId), candidate)) {
-        return null;
-      }
+  return {
+    supermarketProductsCreated: createSupermarketProductRows.length,
+    supermarketProductsUpdated: updateSupermarketProducts.length,
+    priceHistoryInserted,
+    ...promoted,
+  };
+}
 
-      return {
-        supermarket_product_id: supermarketProductId,
-        price: toDecimal(candidate.price),
-        list_price: toDecimal(candidate.listPrice),
-      };
-    })
-    .filter((row): row is NonNullable<typeof row> => row !== null);
-
-  if (!dryRun && historyRows.length > 0) {
-    await tx.priceHistory.createMany({
-      data: historyRows,
-    });
-  }
-
+async function promoteReconcileCandidates(
+  tx: Prisma.TransactionClient,
+  candidates: EvaluatedStageCandidate[],
+  dryRun: boolean,
+): Promise<{
+  promoted: number;
+  promotedByRunId: Record<string, number>;
+  promotedBySource: Record<string, number>;
+}> {
   if (!dryRun) {
     await tx.stagingProduct.updateMany({
       where: {
@@ -689,17 +755,68 @@ async function reconcileChunk(
     promotedBySource[candidate.sourceSlug] = (promotedBySource[candidate.sourceSlug] ?? 0) + 1;
   }
 
-  return {
-    newProducts: newProductRows.length,
-    mergedProducts: eans.length - newProductRows.length,
-    supermarketProductsCreated: createSupermarketProductRows.length,
-    supermarketProductsUpdated: updateSupermarketProducts.length,
-    priceHistoryInserted: historyRows.length,
-    promoted: candidates.length,
-    promotedByRunId,
-    promotedBySource,
-  };
+  return { promoted: candidates.length, promotedByRunId, promotedBySource };
 }
+
+async function insertReconcileHistory(args: {
+  tx: Prisma.TransactionClient;
+  candidates: EvaluatedStageCandidate[];
+  supermarketIdBySlug: Map<string, number>;
+  refreshedSupermarketProductByKey: Map<
+    string,
+    { id: number; product_ean: string; supermarket_id: number }
+  >;
+  latestHistoryBySupermarketProductId: Map<
+    number,
+    { price: Prisma.Decimal | null; list_price: Prisma.Decimal | null } | undefined
+  >;
+  dryRun: boolean;
+  timestamp: Date;
+}): Promise<number> {
+  const {
+    tx,
+    candidates,
+    supermarketIdBySlug,
+    refreshedSupermarketProductByKey,
+    latestHistoryBySupermarketProductId,
+    dryRun,
+    timestamp,
+  } = args;
+
+  let syntheticSupermarketProductId = -1;
+  const historyRows = candidates
+    .map((candidate) => {
+      const supermarketId = supermarketIdBySlug.get(candidate.sourceSlug)!;
+      const existingSupermarketProduct = refreshedSupermarketProductByKey.get(
+        supermarketProductKey(candidate.ean, supermarketId),
+      );
+      const supermarketProductId = existingSupermarketProduct?.id ?? syntheticSupermarketProductId--;
+
+      if (!existingSupermarketProduct && !dryRun) {
+        throw new Error(`Missing supermarket product for ${candidate.ean} in ${candidate.sourceSlug}`);
+      }
+
+      if (!shouldInsertHistory(latestHistoryBySupermarketProductId.get(supermarketProductId), candidate)) {
+        return null;
+      }
+
+      return {
+        supermarket_product_id: supermarketProductId,
+        price: toDecimal(candidate.price),
+        list_price: toDecimal(candidate.listPrice),
+        scraped_at: observationInstantFor(candidate, timestamp),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
+
+  if (!dryRun && historyRows.length > 0) {
+    await tx.priceHistory.createMany({
+      data: historyRows,
+    });
+  }
+  return historyRows.length;
+}
+
 
 export async function reconcileStageProducts({
   batchId,
