@@ -2,22 +2,33 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { NextRequest } from "next/server";
 
-import { handleProducts, handleSearch, type PublicApiDeps } from "../src/lib/public-api";
+import { basketProductsResponseSchema } from "../src/lib/basket-products-contract";
+import {
+  handleProductDetail,
+  handleProductHistory,
+  handleProducts,
+  handleProductsBatch,
+  handleSearch,
+  type PublicApiDeps,
+} from "../src/lib/public-api";
 
 // Behavioral tests for the public catalog handlers reading the committed
 // snapshot. Handlers receive their collaborators through deps, so the rate
 // limiter is a stub: admit, exhaust (429) or null (strict routes fail closed
-// with 503). The committed JSON is the only data source.
-
-const NOW = new Date("2026-09-27T12:00:00Z");
+// with 503). The committed JSON is the only data source; an unknown EAN is 404.
 
 // Strict admission derives the client identity at a trusted deployment
 // boundary (a single-address x-forwarded-for on Vercel); tests simulate that
 // boundary instead of injecting anything into the handlers.
 process.env.VERCEL = "1";
 
-function request(path: string): NextRequest {
+const SNAPSHOT_EAN = "2505271000004";
+const UNKNOWN_EAN = "0000000000000";
+const NOW = new Date("2026-09-27T12:00:00Z");
+
+function request(path: string, init?: { method?: string; body?: string }): NextRequest {
   return new NextRequest(`https://ofertas-super.vercel.app${path}`, {
+    ...init,
     headers: { "x-forwarded-for": "203.0.113.7" },
   });
 }
@@ -115,5 +126,100 @@ describe("public catalog handlers serve the committed snapshot", () => {
   it("products list rejects invalid queries with 400", async () => {
     const response = await handleProducts(request("/api/products?page=0"), deps("admit"));
     assert.equal(response.status, 400);
+  });
+
+  it("product detail returns 404 for an unknown EAN", async () => {
+    const response = await handleProductDetail(request(`/api/products/${UNKNOWN_EAN}`), UNKNOWN_EAN, deps("admit"));
+    assert.equal(response.status, 404);
+    const body = (await response.json()) as { error: string };
+    assert.equal(body.error, "Product not found");
+  });
+
+  it("product detail returns the full guarded envelope for a real EAN", async () => {
+    const response = await handleProductDetail(request(`/api/products/${SNAPSHOT_EAN}`), SNAPSHOT_EAN, deps("admit"));
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as {
+      dataSource: string;
+      degraded: boolean;
+      verifiedAt: string | null;
+      latestCheckedAt: string | null;
+      item: { ean: string; priceEntries: { supermarket: { slug: string }; freshnessStatus: string }[] };
+    };
+    assert.equal(body.item.ean, SNAPSHOT_EAN);
+    assert.equal(body.dataSource, "database");
+    assert.equal(body.degraded, false);
+    assert.equal(typeof body.verifiedAt, "string");
+    assert.equal(body.latestCheckedAt, null);
+    assert.ok(body.item.priceEntries.length > 0, "a snapshot offer must surface as a price entry");
+    for (const entry of body.item.priceEntries) {
+      assert.ok(["carrefour", "disco", "jumbo"].includes(entry.supermarket.slug));
+      assert.ok(["fresh", "stale", "unknown"].includes(entry.freshnessStatus));
+    }
+  });
+
+  it("product detail fails closed with 503 when the strict limiter is unavailable", async () => {
+    const response = await handleProductDetail(request(`/api/products/${SNAPSHOT_EAN}`), SNAPSHOT_EAN, deps(null));
+    assert.equal(response.status, 503);
+    const body = (await response.json()) as { dataSource: string };
+    assert.equal(body.dataSource, "unavailable");
+  });
+
+  it("product history builds series and dated points from the snapshot history", async () => {
+    const response = await handleProductHistory(request(`/api/products/${SNAPSHOT_EAN}/history?days=7`), SNAPSHOT_EAN, deps("admit"));
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as {
+      ean: string;
+      days: number;
+      series: { slug: string; name: string; color: string }[];
+      points: Record<string, number | string | null>[];
+    };
+    assert.equal(body.ean, SNAPSHOT_EAN);
+    assert.equal(body.days, 7);
+    assert.ok(body.series.length > 0, "every supermarket with history needs a series");
+    for (const series of body.series) {
+      assert.ok(series.name.length > 0);
+      assert.match(series.color, /^#[0-9a-fA-F]{6}$/, "series color must come from the supermarket color constant");
+    }
+    assert.ok(body.points.length > 0);
+    for (const point of body.points) {
+      assert.match(point.date as string, /^\d{4}-\d{2}-\d{2}$/);
+    }
+    const carrefourValue = body.points.flatMap((point) => point.carrefour ?? []);
+    assert.ok(carrefourValue.includes(9990), "the snapshot history price must surface as a chart point");
+  });
+
+  it("product history returns 404 for an unknown EAN and 400 for invalid days", async () => {
+    const missing = await handleProductHistory(request(`/api/products/${UNKNOWN_EAN}/history`), UNKNOWN_EAN, deps("admit"));
+    assert.equal(missing.status, 404);
+    const invalid = await handleProductHistory(request(`/api/products/${SNAPSHOT_EAN}/history?days=1`), SNAPSHOT_EAN, deps("admit"));
+    assert.equal(invalid.status, 400);
+  });
+
+  it("products batch serves the basket contract for found and missing EANs", async () => {
+    const response = await handleProductsBatch(
+      request("/api/products/batch", { method: "POST", body: JSON.stringify({ eans: [SNAPSHOT_EAN, UNKNOWN_EAN] }) }),
+      deps("admit"),
+    );
+    assert.equal(response.status, 200);
+    const body = basketProductsResponseSchema.parse(await response.json());
+    assert.equal(body.items.length, 1);
+    assert.equal(body.items[0].ean, SNAPSHOT_EAN);
+    assert.deepEqual(body.missing, [UNKNOWN_EAN]);
+    assert.equal(body.dataSource, "database");
+    assert.equal(typeof body.verifiedAt, "string");
+    assert.ok(body.items[0].priceEntries.length > 0);
+  });
+
+  it("products batch rejects invalid bodies with 400 and exhausted budgets with 429", async () => {
+    const invalid = await handleProductsBatch(
+      request("/api/products/batch", { method: "POST", body: "not json" }),
+      deps("admit"),
+    );
+    assert.equal(invalid.status, 400);
+    const exhausted = await handleProductsBatch(
+      request("/api/products/batch", { method: "POST", body: JSON.stringify({ eans: [SNAPSHOT_EAN] }) }),
+      deps("exhaust"),
+    );
+    assert.equal(exhausted.status, 429);
   });
 });
