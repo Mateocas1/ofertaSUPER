@@ -53,7 +53,7 @@ async function captureSimplePromotions(slug: string, products: NormalizedProduct
   return { promoByEan, promoReadsFailed };
 }
 
-async function persistStagedProducts(
+export async function persistStagedProducts(
   dryRun: boolean,
   runId: number | undefined,
   slug: string,

@@ -77,11 +77,11 @@ export function extractSimplePromotionFromPayload(payload: unknown, ean: string 
 	return null;
 }
 
-export async function fetchSimplePromotionByEan(
+export async function fetchSearchPayloadByEan(
 	baseUrl: string,
 	ean: string,
 	dependencies: PromoCaptureDependencies = {},
-): Promise<SimplePromotion | null> {
+): Promise<unknown> {
 	const http = dependencies.http ?? defaultHttp(baseUrl);
 	const url = new URL("/api/catalog_system/pub/products/search", baseUrl);
 	url.search = `fq=alternateIds_Ean:${encodeURIComponent(ean)}`;
@@ -98,6 +98,14 @@ export async function fetchSimplePromotionByEan(
 	});
 
 	const raw = response.data;
-	const payload: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
+	return typeof raw === "string" ? JSON.parse(raw) : raw;
+}
+
+export async function fetchSimplePromotionByEan(
+	baseUrl: string,
+	ean: string,
+	dependencies: PromoCaptureDependencies = {},
+): Promise<SimplePromotion | null> {
+	const payload = await fetchSearchPayloadByEan(baseUrl, ean, dependencies);
 	return extractSimplePromotionFromPayload(payload, ean);
 }
