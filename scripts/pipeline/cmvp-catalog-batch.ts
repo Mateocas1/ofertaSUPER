@@ -116,6 +116,11 @@ function matchesCheckpointMetadata(artifact: CmvpCatalogBatchArtifact, request: 
 }
 
 function matchesCheckpointGtins(artifact: CmvpCatalogBatchArtifact, request: NormalizedRequest) {
+  // Refresh batches re-assert only their own self-consistency: the source
+  // catalog evolves, so the plan's expected GTINs do not bound the replay.
+  if (request.refresh) {
+    return sameSet(normalizeGtins(artifact.fetchedGtins, "checkpoint fetched"), normalizeGtins(artifact.admittedGtins, "checkpoint admitted"));
+  }
   return sameSet(normalizeGtins(artifact.expectedGtins, "checkpoint expected"), request.expectedGtins)
     && sameSet(normalizeGtins(artifact.fetchedGtins, "checkpoint fetched"), request.expectedGtins)
     && sameSet(normalizeGtins(artifact.admittedGtins, "checkpoint admitted"), request.expectedGtins);
