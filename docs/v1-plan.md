@@ -233,6 +233,12 @@ El hash de la consulta persistida de VTEX se toma de `ingestion_run.vtex_hash` (
 
 Al final del refresh, cada oferta que la corrida no observó se relee por EAN con el endpoint REST público de su súper (el mismo de la captura de promos). Se guarda con el mismo instante de observación y el mismo formato de staging; en Carrefour también la promo. Producto ausente o sin stock → `available=false` y precio null (nunca se inventa precio). Las lecturas fallidas cuentan en el resumen (`top-up reads ok/failed`) sin abortar la corrida. Con el top-up, el primer día se alcanzó 100% <24 h en los tres súpers (327 lecturas, 0 fallas).
 
+### Restauración del Postgres local
+
+- La contraseña vive en `~/.config/ofertasuper/postgres.env` (600, nunca commitear) junto con `APP_PASSWORD`, que el compose interpola aunque solo se levante postgres.
+- Levantar solo la base: `docker compose --env-file ~/.config/ofertasuper/postgres.env up -d postgres` (desde el repo; no corre migrate ni seed).
+- Sobre un volumen ya inicializado ese env es inerte: si la contraseña del rol no coincide con la del env, sincronizarla por socket local (`docker exec ... psql -c "ALTER USER ..."`) y hacer un backup fresco con nombre distinto (por ejemplo `ofertasuper-<fecha>-post-restore.dump`).
+
 ### Cron diario
 
 1. **Script**: `scripts/cron-refresh.sh`. Trabaja en un worktree dedicado `~/code/ofertaSUPER-refresh` (excepción aprobada al guardrail de worktree único) que antes de cada corrida vuelve a `origin/master` (fetch + checkout detach; nunca toca otros worktrees). Usa `flock` para evitar corridas superpuestas.
