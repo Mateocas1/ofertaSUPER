@@ -70,6 +70,7 @@ describe("reconcile advisory lock guard", () => {
       referencePrice: null,
       referenceUnit: null,
       isAvailable: true,
+      promo: null,
       qualityScore: 1,
       qualityFlags: [],
       status: "PENDING" as const,

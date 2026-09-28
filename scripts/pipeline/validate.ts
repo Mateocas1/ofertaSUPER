@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { db } from "../../src/lib/db";
 import { evaluateStageCandidate } from "../../src/lib/ingestion/quality-gates";
+import type { SimplePromotion } from "../../src/lib/promotions/simple-promos";
 import type { NormalizedProduct } from "../../src/lib/vtex/normalize";
 
 type ValidateStageProductsOptions = {
@@ -30,6 +31,7 @@ export type EvaluatedStageCandidate = {
   referencePrice: number | null;
   referenceUnit: string | null;
   isAvailable: boolean;
+  promo: SimplePromotion | null;
   qualityScore: number;
   qualityFlags: string[];
   status: "PENDING" | "REJECTED";
@@ -65,6 +67,7 @@ type StagingCandidate = {
   referencePrice: number | null;
   referenceUnit: string | null;
   isAvailable: boolean;
+  promo: SimplePromotion | null;
 };
 
 const VALIDATION_UPDATE_CHUNK_SIZE = 100;
@@ -120,6 +123,7 @@ function normalizeProducts(products: NormalizedProduct[], slug: string): Staging
     referencePrice: product.referencePrice,
     referenceUnit: product.referenceUnit,
     isAvailable: product.isAvailable,
+    promo: null,
   }));
 }
 
@@ -145,6 +149,7 @@ async function loadPersistedCandidates(runId: number): Promise<StagingCandidate[
       reference_price: true,
       reference_unit: true,
       is_available: true,
+      promo: true,
     },
   });
 
@@ -167,6 +172,7 @@ async function loadPersistedCandidates(runId: number): Promise<StagingCandidate[
     referencePrice: decimalToNumber(product.reference_price),
     referenceUnit: product.reference_unit,
     isAvailable: product.is_available,
+    promo: (product.promo as SimplePromotion | null) ?? null,
   }));
 }
 
@@ -190,13 +196,48 @@ async function persistValidationResults(candidates: EvaluatedStageCandidate[]) {
   }
 }
 
+export function evaluatedCandidateOf(
+  candidate: StagingCandidate,
+  evaluation: ReturnType<typeof evaluateStageCandidate>,
+): EvaluatedStageCandidate {
+  return {
+    id: candidate.id,
+    runId: candidate.runId,
+    sourceSlug: candidate.sourceSlug,
+    ean: candidate.ean,
+    name: candidate.name,
+    brand: candidate.brand,
+    description: candidate.description,
+    imageUrl: candidate.imageUrl,
+    images: candidate.images,
+    category: candidate.category,
+    skuId: candidate.skuId,
+    sellerId: candidate.sellerId,
+    productUrl: candidate.productUrl,
+    price: candidate.price,
+    listPrice: candidate.listPrice,
+    referencePrice: candidate.referencePrice,
+    referenceUnit: candidate.referenceUnit,
+    isAvailable: candidate.isAvailable,
+    promo: candidate.promo,
+    qualityScore: evaluation.qualityScore,
+    qualityFlags: evaluation.qualityFlags,
+    status: evaluation.status,
+  };
+}
+
+async function loadStageCandidates(products: NormalizedProduct[] | undefined, slug: string | undefined, runId: number | undefined) {
+  if (products) return normalizeProducts(products, slug ?? "unknown");
+  return runId ? await loadPersistedCandidates(runId) : [];
+}
+
 export async function validateStageProducts({
   runId,
   slug,
   products,
   dryRun = false,
 }: ValidateStageProductsOptions): Promise<ValidationSummary> {
-  const candidates = products ? normalizeProducts(products, slug ?? "unknown") : runId ? await loadPersistedCandidates(runId) : [];
+  const candidates = await loadStageCandidates(products, slug, runId);
   const historicalAverages = await getHistoricalAverages(Array.from(new Set(candidates.map((candidate) => candidate.ean))));
 
   let rejected = 0;
@@ -207,37 +248,9 @@ export async function validateStageProducts({
     const evaluation = evaluateStageCandidate(candidate, {
       historicalAverage: historicalAverages.get(candidate.ean) ?? null,
     });
-
-    evaluatedCandidates.push({
-      id: candidate.id,
-      runId: candidate.runId,
-      sourceSlug: candidate.sourceSlug,
-      ean: candidate.ean,
-      name: candidate.name,
-      brand: candidate.brand,
-      description: candidate.description,
-      imageUrl: candidate.imageUrl,
-      images: candidate.images,
-      category: candidate.category,
-      skuId: candidate.skuId,
-      sellerId: candidate.sellerId,
-      productUrl: candidate.productUrl,
-      price: candidate.price,
-      listPrice: candidate.listPrice,
-      referencePrice: candidate.referencePrice,
-      referenceUnit: candidate.referenceUnit,
-      isAvailable: candidate.isAvailable,
-      qualityScore: evaluation.qualityScore,
-      qualityFlags: evaluation.qualityFlags,
-      status: evaluation.status,
-    });
-
-    if (evaluation.status === "REJECTED") {
-      rejected += 1;
-    } else {
-      pending += 1;
-    }
-
+    evaluatedCandidates.push(evaluatedCandidateOf(candidate, evaluation));
+    if (evaluation.status === "REJECTED") rejected += 1;
+    else pending += 1;
   }
 
   if (!dryRun && runId && evaluatedCandidates.length > 0) {

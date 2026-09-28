@@ -1,0 +1,186 @@
+import "./load-env";
+
+import { spawnSync } from "node:child_process";
+import { mkdir, readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { db } from "../src/lib/db";
+import { createDependencies, replaceCheckpointAtomically } from "./acquire-cmvp-catalog-batch";
+import { runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
+
+// Gate 6 — the single daily catalog refresh command. It replays the 36
+// acquisition batches of the cycle-2 plan with fresh daily batch ids (the
+// same batchId replays without re-querying), captures Carrefour simple
+// promotions during staging, regenerates the snapshot, and prints the run
+// summary (batches ok/failed and the under-24h offer share per supermarket).
+
+const PLAN_PATH = "artifacts/cmvp/catalog/expansion-20260920-discovery-25/acquisition-plan-cycle2.json";
+
+type PlanBatch = { ordinal: number; batchId: string; source: string; term: string; count: number; expectedGtins: string[] };
+
+type BatchOutcome = {
+  ok: boolean;
+  failure: { batchId: string; error: string } | null;
+  promosCaptured: number;
+  promoReadsFailed: number;
+};
+
+function readFlag(name: string) {
+  const prefix = `--${name}=`;
+  return process.argv.find((value) => value.startsWith(prefix))?.slice(prefix.length);
+}
+
+function todayStamp() {
+  const now = new Date();
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function batchIdFor(batch: PlanBatch, stamp: string) {
+  return `v1-refresh-${stamp}-${String(batch.ordinal).padStart(2, "0")}`;
+}
+
+function checkpointState(artifactsDir: string, batchId: string): string | null {
+  try {
+    const parsed = JSON.parse(readFileSync(resolve(artifactsDir, `${batchId}.checkpoint.json`), "utf8")) as { state?: string };
+    return typeof parsed.state === "string" ? parsed.state : null;
+  } catch {
+    return null;
+  }
+}
+
+function runSummary(artifact: CmvpCatalogBatchArtifact) {
+  const run = artifact.runs[0];
+  return {
+    state: artifact.state,
+    acquisitionError: run?.error ?? artifact.reconciliationError ?? null,
+    promosCaptured: run?.promosCaptured ?? 0,
+    promoReadsFailed: run?.promoReadsFailed ?? 0,
+  };
+}
+
+async function runBatch(batch: PlanBatch, stamp: string, artifactsDir: string): Promise<BatchOutcome> {
+  // A completed checkpoint replays without re-querying; a failed one gets a
+  // fresh batch id so the retry does not double-stage the same products.
+  let batchId = batchIdFor(batch, stamp);
+  let attempt = 2;
+  while (checkpointState(artifactsDir, batchId) !== null && checkpointState(artifactsDir, batchId) !== "completed") {
+    batchId = `${batchIdFor(batch, stamp)}-r${attempt}`;
+    attempt += 1;
+    if (attempt > 10) throw new Error(`batch ${batch.ordinal} kept failing checkpoint validation`);
+  }
+  const request: CmvpCatalogBatchRequest & { output: string } = {
+    batchId,
+    source: batch.source,
+    term: batch.term,
+    count: batch.count,
+    expectedGtins: batch.expectedGtins,
+    dryRun: false,
+    confirmWrite: true,
+    refresh: true,
+    output: resolve(artifactsDir, `${batchId}.checkpoint.json`),
+  };
+
+  process.stdout.write(`[refresh] ${batchId} (${batch.source}: ${batch.term})...\n`);
+  try {
+    const result = await runCmvpCatalogBatch(request, createDependencies(request.output));
+    const summary = runSummary(result.artifact);
+    process.stdout.write(`${JSON.stringify({ ...summary, batchId })}\n`);
+    const failure = summary.acquisitionError !== null || summary.state !== "completed"
+      ? { batchId, error: summary.acquisitionError ?? `state=${summary.state}` }
+      : null;
+    return { ok: failure === null, failure, promosCaptured: summary.promosCaptured, promoReadsFailed: summary.promoReadsFailed };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stdout.write(`[refresh] ${batchId} failed: ${message}\n`);
+    await replaceCheckpointAtomically(request.output, `${JSON.stringify({ batchId, error: message }, null, 2)}\n`).catch(() => undefined);
+    return { ok: false, failure: { batchId, error: message }, promosCaptured: 0, promoReadsFailed: 0 };
+  }
+}
+
+function regenerateSnapshot() {
+  const exporter = spawnSync(process.execPath, ["--import", "tsx", "scripts/export-catalog-snapshot.ts"], { stdio: "inherit" });
+  if (exporter.status !== 0) {
+    throw new Error("snapshot export failed");
+  }
+}
+
+async function freshnessBySupermarket() {
+  const rows = await db.$queryRaw<Array<{ slug: string; total: bigint; fresh: bigint }>>`
+    select s.slug,
+           count(*) as total,
+           count(*) filter (where sp.last_checked_at >= now() - interval '24 hours') as fresh
+    from supermarket_products sp
+    join supermarkets s on s.id = sp.supermarket_id
+    where s.slug in ('carrefour', 'disco', 'jumbo') and sp.price is not null
+    group by s.slug
+    order by s.slug`;
+  return rows.map(({ slug, total, fresh }) => ({
+    slug,
+    offers: Number(total),
+    under24hPercent: Number(total) > 0 ? Math.round((Number(fresh) / Number(total)) * 1000) / 10 : 0,
+  }));
+}
+
+function printSummary(stamp: string, ok: number, failures: Array<{ batchId: string; error: string }>, promosCaptured: number, promoReadsFailed: number, freshness: Array<{ slug: string; offers: number; under24hPercent: number }>) {
+  process.stdout.write(`\n[refresh] summary ${stamp}: batches ok=${ok} failed=${failures.length}; promos captured=${promosCaptured} readsFailed=${promoReadsFailed}\n`);
+  for (const entry of freshness) {
+    process.stdout.write(`[refresh] ${entry.slug}: ${entry.under24hPercent}% of ${entry.offers} offers under 24h\n`);
+  }
+  if (failures.length > 0) {
+    process.stdout.write(`[refresh] failures: ${JSON.stringify(failures, null, 2)}\n`);
+  }
+  const worst = Math.min(...freshness.map((entry) => entry.under24hPercent));
+  if (failures.length > 0 || worst < 90) {
+    console.error(`[refresh] gate check failed: failedBatches=${failures.length}, worstFreshness=${worst}%`);
+    process.exitCode = 1;
+  }
+}
+
+// The acquisition path needs the persisted-query hash; the system stored the
+// last known one on the runs of the previous acquisition. It is read from the
+// database and never printed.
+async function restoreVtexHash() {
+  const rows = await db.$queryRaw<Array<{ vtex_hash: string | null }>>`
+    select vtex_hash from ingestion_run where vtex_hash is not null order by started_at desc limit 1`;
+  if (rows[0]?.vtex_hash) process.env.VTEX_SHA256_HASH = rows[0].vtex_hash;
+}
+
+async function main() {
+  await restoreVtexHash();
+  const plan: { batches: PlanBatch[] } = JSON.parse(await readFile(resolve(PLAN_PATH), "utf8"));
+  const stamp = readFlag("date") ?? todayStamp();
+  const only = readFlag("batch") !== undefined ? Number(readFlag("batch")) : null;
+  const batches = only !== null ? plan.batches.filter((batch) => batch.ordinal === only) : plan.batches;
+  if (batches.length === 0) {
+    throw new Error("no batches matched the requested filter");
+  }
+
+  const artifactsDir = resolve("artifacts/refresh", stamp);
+  await mkdir(artifactsDir, { recursive: true });
+
+  let ok = 0;
+  let promosCaptured = 0;
+  let promoReadsFailed = 0;
+  const failures: Array<{ batchId: string; error: string }> = [];
+  for (const batch of batches) {
+    const outcome = await runBatch(batch, stamp, artifactsDir);
+    if (outcome.ok) ok += 1;
+    if (outcome.failure) failures.push(outcome.failure);
+    promosCaptured += outcome.promosCaptured;
+    promoReadsFailed += outcome.promoReadsFailed;
+  }
+
+  regenerateSnapshot();
+  const freshness = await freshnessBySupermarket();
+  printSummary(stamp, ok, failures, promosCaptured, promoReadsFailed, freshness);
+  await db.$disconnect();
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  void main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}

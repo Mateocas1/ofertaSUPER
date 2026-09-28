@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { db } from "../../src/lib/db";
 import type { EvaluatedStageCandidate } from "./validate";
+import type { SimplePromotion } from "../../src/lib/promotions/simple-promos";
 
 type ReconcileWriteMode = "standard" | "refresh-existing";
 
@@ -384,6 +385,7 @@ async function loadCandidates(
       quality_score: true,
       quality_flags: true,
       status: true,
+      promo: true,
       run: { select: { started_at: true } },
     },
   });
@@ -408,6 +410,7 @@ async function loadCandidates(
     referencePrice: product.reference_price === null ? null : Number(product.reference_price),
     referenceUnit: product.reference_unit,
     isAvailable: product.is_available,
+    promo: (product.promo as SimplePromotion | null) ?? null,
     qualityScore: product.quality_score,
     qualityFlags: Array.isArray(product.quality_flags)
       ? product.quality_flags.filter((flag): flag is string => typeof flag === "string")
@@ -613,6 +616,7 @@ async function persistReconcileChunk(args: {
       sku_id: candidate.skuId,
       seller_id: candidate.sellerId,
       product_url: candidate.productUrl,
+      promo: candidate.promo ?? null,
       last_checked_at: observationInstantFor(candidate, timestamp),
     };
   });
@@ -631,7 +635,7 @@ async function persistReconcileChunk(args: {
 
   if (!dryRun && upsertRows.length > 0) {
     const upsertValues = upsertRows.map((row) =>
-      Prisma.sql`(${row.product_ean}, ${row.supermarket_id}, ${row.price}, ${row.list_price}, ${row.reference_price}, ${row.reference_unit}, ${row.is_available}, ${row.sku_id}, ${row.seller_id}, ${row.product_url}, ${row.last_checked_at})`,
+      Prisma.sql`(${row.product_ean}, ${row.supermarket_id}, ${row.price}, ${row.list_price}, ${row.reference_price}, ${row.reference_unit}, ${row.is_available}, ${row.sku_id}, ${row.seller_id}, ${row.product_url}, ${row.promo === null ? Prisma.sql`NULL` : Prisma.sql`${JSON.stringify(row.promo)}::jsonb`}, ${row.last_checked_at})`,
     );
 
     refreshedSupermarketProducts = await tx.$queryRaw<UpsertedSupermarketProductRow[]>`
@@ -646,6 +650,7 @@ async function persistReconcileChunk(args: {
         sku_id,
         seller_id,
         product_url,
+        promo,
         last_checked_at
       )
       VALUES ${Prisma.join(upsertValues)}
@@ -659,6 +664,7 @@ async function persistReconcileChunk(args: {
         sku_id = EXCLUDED.sku_id,
         seller_id = EXCLUDED.seller_id,
         product_url = EXCLUDED.product_url,
+        promo = EXCLUDED.promo,
         last_checked_at = EXCLUDED.last_checked_at
       RETURNING id, product_ean, supermarket_id
     `;

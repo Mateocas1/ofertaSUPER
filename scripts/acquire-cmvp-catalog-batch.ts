@@ -56,7 +56,7 @@ export async function replaceCheckpointAtomically(output: string, contents: stri
   }
 }
 
-function createDependencies(output: string): CmvpCatalogBatchDependencies {
+export function createDependencies(output: string): CmvpCatalogBatchDependencies {
   const acquisitionMetrics = new Map<number, { queries_sent: number; products_fetched: number; products_staged: number; products_rejected: number }>();
   return {
     async loadArtifact() {
@@ -85,7 +85,7 @@ function createDependencies(output: string): CmvpCatalogBatchDependencies {
         const stage = await stageSourceProducts({ runId, slug: request.source, dryRun: request.dryRun, queryTerms: [request.term], queryLimit: 1, count: request.count });
         const validation = await validateStageProducts({ runId, slug: request.source, products: request.dryRun ? stage.products : undefined, dryRun: request.dryRun });
         if (runId) acquisitionMetrics.set(runId, { queries_sent: stage.queriesSent, products_fetched: stage.productsFetched, products_staged: stage.productsStaged, products_rejected: validation.rejected });
-        return { runId: runId ?? null, startedAt: startedAt.toISOString(), finishedAt: new Date().toISOString(), fetchedGtins: stage.products.map((product) => product.ean), admittedGtins: validation.candidates.filter((candidate) => candidate.status === "PENDING").map((candidate) => candidate.ean), rejectedCount: validation.rejected, error: null };
+        return { runId: runId ?? null, startedAt: startedAt.toISOString(), finishedAt: new Date().toISOString(), fetchedGtins: stage.products.map((product) => product.ean), admittedGtins: validation.candidates.filter((candidate) => candidate.status === "PENDING").map((candidate) => candidate.ean), rejectedCount: validation.rejected, promoReadsFailed: stage.promoReadsFailed, promosCaptured: stage.promosCaptured, error: null };
       } catch (error) {
         return { runId: runId ?? null, startedAt: startedAt.toISOString(), finishedAt: new Date().toISOString(), fetchedGtins: [], admittedGtins: [], rejectedCount: 0, error: error instanceof Error ? error.message : "unknown_acquisition_error" };
       }
