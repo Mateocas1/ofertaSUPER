@@ -119,17 +119,23 @@ export async function stageSourceProducts({
   // Gate 6: simple-promotion capture. Only Carrefour exposes teasers through
   // the public REST read; a failed read stores null and counts as a failure
   // without aborting the batch — the price is staged regardless.
-  const { promoByEan, promoReadsFailed } = await captureSimplePromotions(slug, products);
+  // Sources list out-of-stock SKUs with a zero price; the honest value for
+  // them is "no price observed", which also keeps the quality gate honest.
+  const staged = products.map((product) =>
+    !product.isAvailable && product.price === 0 ? { ...product, price: null } : product,
+  );
 
-  await persistStagedProducts(dryRun, runId, slug, products, promoByEan);
+  const { promoByEan, promoReadsFailed } = await captureSimplePromotions(slug, staged);
+
+  await persistStagedProducts(dryRun, runId, slug, staged, promoByEan);
 
   return {
     slug,
     terms,
     queriesSent: terms.length,
     productsFetched: fetchedProducts.length,
-    productsStaged: products.length,
-    products,
+    productsStaged: staged.length,
+    products: staged,
     promoReadsFailed,
     promosCaptured: Array.from(promoByEan.values()).filter((promo) => promo !== null && promo !== undefined).length,
   };

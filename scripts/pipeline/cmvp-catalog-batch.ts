@@ -50,7 +50,7 @@ export type CmvpCatalogBatchDependencies = {
   saveArtifact: (artifact: Readonly<CmvpCatalogBatchArtifact>) => Promise<void>;
   acquire: (request: Readonly<CmvpCatalogBatchRequest>) => Promise<AcquisitionResult>;
   finalizeAcquisition: (runId: number, outcome: { status: "SUCCESS" | "FAILED"; errorSummary: string | null }) => Promise<void>;
-  reconcile: (request: Readonly<CmvpCatalogBatchRequest>) => Promise<{ runId: number | null; promotedCount: number; error: string | null }>;
+  reconcile: (request: Readonly<CmvpCatalogBatchRequest>, runId?: number | null) => Promise<{ runId: number | null; promotedCount: number; error: string | null }>;
 };
 
 type NormalizedRequest = ReturnType<typeof normalizeContract>;
@@ -186,7 +186,7 @@ function rejectedReconciliationError(error: unknown) {
 
 async function reconcile(request: NormalizedRequest, artifact: CmvpCatalogBatchArtifact, dependencies: CmvpCatalogBatchDependencies) {
   let reconciliation: Awaited<ReturnType<CmvpCatalogBatchDependencies["reconcile"]>>;
-  try { reconciliation = await dependencies.reconcile(request); }
+  try { reconciliation = await dependencies.reconcile(request, runId(artifact)); }
   catch (error) { return failReconciliation(request, artifact, rejectedReconciliationError(error), dependencies); }
   const reportedError = normalizedError(reconciliation.error, "reconciliation");
   // In refresh mode duplicate EANs collapse into one canonical candidate, so

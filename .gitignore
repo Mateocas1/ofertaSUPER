@@ -72,4 +72,4 @@ supabase/.temp/
 test-results/
 *:Zone.Identifier
 
-certificates
+certificatesartifacts/refresh/

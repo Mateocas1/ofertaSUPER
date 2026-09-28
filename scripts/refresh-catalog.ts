@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { db } from "../src/lib/db";
-import { createDependencies, replaceCheckpointAtomically } from "./acquire-cmvp-catalog-batch";
+import { createDependencies } from "./acquire-cmvp-catalog-batch";
 import { runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
 
 // Gate 6 — the single daily catalog refresh command. It replays the 36
@@ -92,9 +92,11 @@ async function runBatch(batch: PlanBatch, stamp: string, artifactsDir: string): 
       : null;
     return { ok: failure === null, failure, promosCaptured: summary.promosCaptured, promoReadsFailed: summary.promoReadsFailed };
   } catch (error) {
+    // The pipeline already persisted a blocked artifact when it could; the
+    // catch must not overwrite the checkpoint with a non-artifact payload
+    // (a malformed checkpoint would poison every later replay).
     const message = error instanceof Error ? error.message : String(error);
     process.stdout.write(`[refresh] ${batchId} failed: ${message}\n`);
-    await replaceCheckpointAtomically(request.output, `${JSON.stringify({ batchId, error: message }, null, 2)}\n`).catch(() => undefined);
     return { ok: false, failure: { batchId, error: message }, promosCaptured: 0, promoReadsFailed: 0 };
   }
 }

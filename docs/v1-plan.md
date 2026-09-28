@@ -204,4 +204,31 @@ En `src/components/canasta-page.tsx` y `src/lib/basket-*` (reusar el estado loca
 
 ## Runbook
 
-_(Se completa en el Gate 6.)_
+_(Completado en el Gate 6, 2026-09-28.)_
+
+### Actualización diaria del catálogo
+
+1. **Respaldo previo** (guardrail 10), antes de la primera escritura del día:
+   ```bash
+   mkdir -p ~/backups && docker exec ofertasuper-cmvp-local-bootstrap-postgres-1 pg_dump -U ofertasuper_owner -d ofertasuper -Fc > ~/backups/ofertasuper-$(date +%F).dump && ls -la ~/backups
+   ```
+   El archivo debe pesar más de 0 bytes.
+2. **Refresh + snapshot** (un solo comando; la base local corre en docker y el comando se ejecuta desde el worktree con `DATABASE_URL` apuntando a ella — ver nota):
+   ```bash
+   npm run refresh:catalog
+   ```
+   - Recorre los 36 lotes del plan `acquisition-plan-cycle2.json` con `batchId` del día (`v1-refresh-<YYYYMMDD>-<ordinal>`); un lote ya completado hace replay desde su checkpoint y no vuelve a consultar.
+   - Captura promos simples de Carrefour (PromotionTeasers por EAN, lectura REST pública) durante el staging; una lectura fallida deja promo null y cuenta en el resumen sin abortar el lote.
+   - Regenera `data/catalog-snapshot.json` e imprime el resumen: lotes ok/fallidos, promos capturadas/lecturas fallidas y % de ofertas <24 h por súper. Sale con error si hay lotes fallidos o el peor súper queda por debajo de 90%.
+3. **Publicar:** commitear el snapshot nuevo en un PR `chore(catalog): refresh <fecha>` y hacer merge con CI verde.
+4. **Repetir al día siguiente.** El historial de la ficha debe mostrar al menos dos puntos.
+
+**Nota de ejecución local:** la base del bootstrap no publica puertos al host. Dos formas válidas de ejecutar el paso 2:
+- desde un contenedor en la red del bootstrap con el repo montado (como lo corrió el Gate 6), o
+- desde el host si `DATABASE_URL` alcanza la base (por ejemplo publicando el puerto).
+
+El hash de la consulta persistida de VTEX se toma de `ingestion_run.vtex_hash` (lo guarda la propia adquisición); no se pide ni se imprime.
+
+### Cobertura de frescura (limitación conocida)
+
+Los 36 lotes buscan por término y toman los primeros 25 resultados por búsqueda. Con la rotación de ranking de cada súper, ~15% de las ofertas del catálogo puede quedar fuera de la cobertura del día (productos que hoy no aparecen en el top-25 de su término). El primer refresh (2026-09-28) quedó en 79.6% / 85.5% / 84.1% por súper, por debajo del objetivo de 90%: se reportó al orquestador con las opciones (ampliar cobertura por EAN o aceptar la cobertura parcial en v1).

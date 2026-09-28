@@ -93,9 +93,9 @@ export function createDependencies(output: string): CmvpCatalogBatchDependencies
     async finalizeAcquisition(runId, outcome) {
       await db.ingestionRun.update({ where: { id: runId }, data: { finished_at: new Date(), status: outcome.status, error_summary: outcome.errorSummary, ...acquisitionMetrics.get(runId) } });
     },
-    async reconcile(request) {
+    async reconcile(request, runId) {
       try {
-        const summary = await reconcileStageProducts({ batchId: request.batchId, batchSize: request.count, dryRun: false, writeMode: "standard" });
+        const summary = await reconcileStageProducts({ batchId: request.batchId, runId: runId ?? undefined, batchSize: request.count, dryRun: false, writeMode: "standard" });
         return { runId: null, promotedCount: summary.promoted, error: null };
       } catch (error) { return { runId: null, promotedCount: 0, error: error instanceof Error ? error.message : "unknown_reconciliation_error" }; }
     },

@@ -8,6 +8,7 @@ type ReconcileWriteMode = "standard" | "refresh-existing";
 
 type ReconcileStageProductsOptions = {
   batchId?: string;
+  runId?: number;
   batchSize?: number;
   candidates?: EvaluatedStageCandidate[];
   dryRun?: boolean;
@@ -355,12 +356,14 @@ export async function ensureReconcileAdvisoryLock(tx: AdvisoryLockClient) {
 
 async function loadCandidates(
   batchId: string,
+  runId: number | undefined,
   client: CandidateLoaderClient,
 ): Promise<EvaluatedStageCandidate[]> {
   const products = await client.stagingProduct.findMany({
     where: {
       run: {
         batch_id: batchId,
+        ...(runId !== undefined ? { id: runId } : {}),
       },
     },
     select: {
@@ -826,6 +829,7 @@ async function insertReconcileHistory(args: {
 
 export async function reconcileStageProducts({
   batchId,
+  runId,
   batchSize = 500,
   candidates,
   dryRun = false,
@@ -838,7 +842,7 @@ export async function reconcileStageProducts({
     async (tx) => {
       await ensureReconcileAdvisoryLock(tx);
 
-      const resolvedCandidates = candidates ?? (batchId ? await loadCandidates(batchId, tx) : []);
+      const resolvedCandidates = candidates ?? (batchId ? await loadCandidates(batchId, runId, tx) : []);
       const pendingCandidates = resolvedCandidates.filter((candidate) => candidate.status === "PENDING");
       const supermarketRows = await tx.supermarket.findMany({
         select: {
