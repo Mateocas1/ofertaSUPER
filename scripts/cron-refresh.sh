@@ -61,6 +61,9 @@ if ! docker run --rm --network "$NETWORK" -v "$REFRESH_WORKTREE":/app -w /app \
 fi
 
 BRANCH="chore/catalog-refresh-$STAMP"
+# A previous run's local branch may linger when gh's cleanup failed; it is
+# merged on GitHub, so recreating it is safe.
+git branch -D "$BRANCH" 2>/dev/null || true
 git checkout -b "$BRANCH"
 git add data/catalog-snapshot.json
 if git diff --cached --quiet; then
