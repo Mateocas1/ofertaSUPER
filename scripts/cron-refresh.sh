@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Gate 6 — daily catalog refresh (cron entry). See the Runbook in
-# docs/v1-plan.md. Runs from the dedicated refresh worktree, never touches
-# other worktrees, and publishes the snapshot only when the run is healthy.
+# Gate 6 — daily catalog refresh (cron entry). Runs from the dedicated
+# worktree prepared by cron-refresh-entry.sh, never touches other worktrees,
+# and publishes the snapshot only when the run is healthy.
 set -euo pipefail
 
 STAMP=$(date +%Y%m%d)
@@ -12,22 +12,20 @@ CONTAINER="ofertasuper-cmvp-local-bootstrap-postgres-1"
 NETWORK="ofertasuper-cmvp-local-bootstrap_default"
 MIGRATE_IMAGE="ofertasuper-cmvp-local-bootstrap-migrate:latest"
 
-mkdir -p "$LOG_DIR" "$REFRESH_WORKTREE" "$HOME/backups"
+mkdir -p "$LOG_DIR" "$HOME/backups"
 LOG="$LOG_DIR/refresh-$DATE.log"
 exec >>"$LOG" 2>&1
 echo "=== refresh $STAMP started $(date -Is) ==="
 
-# One refresh at a time.
-exec 9>"$REFRESH_WORKTREE/.refresh.lock"
+# One refresh at a time; the lock lives outside the worktree so it never
+# blocks the worktree checkout.
+exec 9>"$LOG_DIR/refresh.lock"
 if ! flock -n 9; then
   echo "another refresh is still running; aborting"
   exit 1
 fi
 
 cd "$REFRESH_WORKTREE"
-git fetch origin
-git checkout --detach origin/master
-git clean -fdq data artifacts/refresh
 
 # Guardrail 10: backup before the first write of the day.
 BACKUP="$HOME/backups/ofertasuper-$DATE.dump"
@@ -47,8 +45,11 @@ POSTGRES_PASSWORD=$(docker exec "$CONTAINER" printenv POSTGRES_PASSWORD)
 export DATABASE_URL="postgresql://ofertasuper_owner:${POSTGRES_PASSWORD}@postgres:5432/ofertasuper"
 export DIRECT_URL="$DATABASE_URL"
 
-if [ ! -d node_modules ]; then
+# Install or refresh dependencies when the lockfile changes.
+LOCK_HASH=$(sha256sum package-lock.json | cut -d" " -f1)
+if [ ! -d node_modules ] || [ ! -f node_modules/.lock-hash ] || [ "$(cat node_modules/.lock-hash)" != "$LOCK_HASH" ]; then
   npm ci --no-audit --no-fund
+  echo "$LOCK_HASH" > node_modules/.lock-hash
 fi
 npx prisma generate
 
