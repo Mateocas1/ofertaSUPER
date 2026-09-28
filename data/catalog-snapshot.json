@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-28T02:09:19.421Z",
+  "generatedAt": "2026-09-28T03:40:18.830Z",
   "sources": [
     "carrefour",
     "disco",
@@ -6536,7 +6536,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/copos-de-arroz-inflado-80-g/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 1199,
@@ -6587,7 +6587,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/condimento-para-arroz-50-g/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 925,
@@ -6813,17 +6813,22 @@
     {
       "ean": "3616475717878",
       "source": "carrefour",
-      "price": 109900,
+      "price": 98910,
       "listPrice": 162900,
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/freidora--mandine-aceite-doble-mdf50-22-lts-758789/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 109900,
           "listPrice": 162900,
           "observedAt": "2026-09-20T18:23:22.925Z"
+        },
+        {
+          "price": 98910,
+          "listPrice": 162900,
+          "observedAt": "2026-09-28T03:39:27.166Z"
         }
       ]
     },
@@ -6942,7 +6947,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/cerveza-de-arroz-tsingtao-300-ml-582742/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 5400,
@@ -7399,7 +7404,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/galletas-de-arroz-cerealitas-160-g-722432/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 3125,
@@ -8971,7 +8976,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-de-girasol-cocinero-15-l-41078/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 5539,
@@ -9027,7 +9032,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-de-girasol-cocinero-900-cc/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 4369,
@@ -9078,7 +9083,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-de-girasol-organico-lira-900-ml-785053/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 7000,
@@ -10210,7 +10215,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-carnaroli-gallo-500-g/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 3300,
@@ -10249,7 +10254,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-yamani-integral-gallo-500-g/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 3500,
@@ -10268,10 +10273,16 @@
       "source": "carrefour",
       "price": 1550,
       "listPrice": 1550,
-      "promo": null,
+      "promo": {
+        "nth": 2,
+        "type": "nth-unit",
+        "label": "2do al 50%",
+        "percent": 50,
+        "maxUnits": null
+      },
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/oblea-de-arroz-gallo-snacks-20-g/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 1550,
@@ -10305,7 +10316,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-doble-gallo-500-g-726294/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 2039,
@@ -10358,10 +10369,16 @@
       "source": "carrefour",
       "price": 2499,
       "listPrice": 2499,
-      "promo": null,
+      "promo": {
+        "nth": 2,
+        "type": "nth-unit",
+        "label": "2do al 50%",
+        "percent": 50,
+        "maxUnits": 8
+      },
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-integral-luccetti-1-kg-726296/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 2499,
@@ -10409,10 +10426,16 @@
       "source": "carrefour",
       "price": 2489,
       "listPrice": 2489,
-      "promo": null,
+      "promo": {
+        "nth": 2,
+        "type": "nth-unit",
+        "label": "2do al 50%",
+        "percent": 50,
+        "maxUnits": 8
+      },
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-parboil-lucchetti-1-kg-726299/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 2489,
@@ -10460,10 +10483,16 @@
       "source": "carrefour",
       "price": 1315,
       "listPrice": 1315,
-      "promo": null,
+      "promo": {
+        "nth": 2,
+        "type": "nth-unit",
+        "label": "2do al 50%",
+        "percent": 50,
+        "maxUnits": 8
+      },
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-parboil-lucchetti-500-g-726300/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 1315,
@@ -11068,7 +11097,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/condimento-alicante-arroz-sobre-25-g/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 1229,
@@ -11187,7 +11216,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-de-oliva-morixe-extra-virgen-500-cc-25367/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 14199,
@@ -11316,7 +11345,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-mezcla-natura-blend-15-l/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 10249,
@@ -11367,7 +11396,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-en-aerosol-natura-120-cc/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 4419,
@@ -11423,7 +11452,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-de-girasol-natura-900-cc/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 4719,
@@ -11474,7 +11503,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-de-girasol-natura-15-l/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 7469,
@@ -11576,7 +11605,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/papas-fritas-lays-clasicas-230-g-721959/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 9499,
@@ -11637,7 +11666,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/papas-fritas-sabor-a-jamon-serrano-lays-77-g-721956/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 4199,
@@ -11654,7 +11683,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/papas-fritas-lays-clasicas-85-g-721950/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 4199,
@@ -11671,7 +11700,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/papas-fritas-sabor-a-ketchup-lays-77-g-721963/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 3849,
@@ -11688,7 +11717,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/papas-fritas-sabor-a-queso-y-cebolla-lays-77-g-721958/p",
-      "observedAt": "2026-09-28T02:08:46.987Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 4199,
@@ -12325,10 +12354,16 @@
       "source": "carrefour",
       "price": 1440,
       "listPrice": 1440,
-      "promo": null,
+      "promo": {
+        "nth": 2,
+        "type": "nth-unit",
+        "label": "2do al 50%",
+        "percent": 50,
+        "maxUnits": 8
+      },
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/galletas-de-arroz-dos-hermanos-dulce-120-g/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 1440,
@@ -12362,7 +12397,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-sushi-dos-hermanos-500-g/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 3419,
@@ -13021,7 +13056,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-de-maiz-arcor-900-cc-541632/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 6529,
@@ -17862,7 +17897,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-mezcla-carrefour-classic-250-ml-770485/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 2511,
@@ -17879,7 +17914,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-mezcla-carrefour-classic-500-ml-770486/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 4540.9,
@@ -17896,7 +17931,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-mezcla-carrefour-classic-2-lts-770487/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 17091,
@@ -18596,7 +18631,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/mayonesa-aceite-de-oliva-mayoliva-250-cc-304996/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 2545,
@@ -18839,7 +18874,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-de-girasol-canuelas-15-l/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 6529,
@@ -18873,7 +18908,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-de-girasol-pureza-900-cc/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 4469,
@@ -18907,7 +18942,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-de-girasol-pureza-1500-cc/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 6979,
@@ -18958,7 +18993,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/tostadas-de-arroz-paseo-clasicas-120-grs-753409/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 2319,
@@ -19873,7 +19908,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-fino-carogran-500-g/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 789,
@@ -19890,7 +19925,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-largo-fino-carogran-1-kg/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 1249,
@@ -21142,7 +21177,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/lomito-de-atun-en-aceite-carrefour-classic-170-grs-122141/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 3338.7,
@@ -21305,7 +21340,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/aceite-de-oliva-oliovita-extra-virgen-500-cc/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 15625,
@@ -21497,7 +21532,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/tostaditas-de-arroz-tia-maruca-120-g/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 1500,
@@ -22120,7 +22155,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-yamani-400-grs-644272/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 2699,
@@ -22171,7 +22206,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-para-sushi-400-grs-644271/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 3049,
@@ -22222,7 +22257,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/arroz-para-risotto-400-grs-644270/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 3675,
@@ -22368,7 +22403,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/harina-de-arroz-sin-tacc-abucel-de-arroz-blanco-500-g-601008/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 2869,
@@ -22577,7 +22612,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/hummus-kyros-con-aceite-de-oliva-230-g-716491/p",
-      "observedAt": "2026-09-28T02:06:44.820Z",
+      "observedAt": "2026-09-28T03:39:27.166Z",
       "history": [
         {
           "price": 4599,
@@ -22730,7 +22765,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/alfajor-de-arroz-lulemuu-blanco-22-g-720534/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 1139,
@@ -23219,7 +23254,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/saborizador-para-arroz-sazon-60-g/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 1750,
@@ -24259,7 +24294,7 @@
       "promo": null,
       "available": true,
       "productUrl": "https://www.carrefour.com.ar/nestum-arroz-225-grs-721278/p",
-      "observedAt": "2026-09-28T02:07:13.403Z",
+      "observedAt": "2026-09-28T03:40:05.434Z",
       "history": [
         {
           "price": 5148.75,
