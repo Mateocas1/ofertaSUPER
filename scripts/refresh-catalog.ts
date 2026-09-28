@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 import { db } from "../src/lib/db";
 import { createDependencies } from "./acquire-cmvp-catalog-batch";
 import { runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
+import { topUpUnobservedOffers } from "./pipeline/topup";
 
 // Gate 6 — the single daily catalog refresh command. It replays the 36
 // acquisition batches of the cycle-2 plan with fresh daily batch ids (the
@@ -125,8 +126,8 @@ async function freshnessBySupermarket() {
   }));
 }
 
-function printSummary(stamp: string, ok: number, failures: Array<{ batchId: string; error: string }>, promosCaptured: number, promoReadsFailed: number, freshness: Array<{ slug: string; offers: number; under24hPercent: number }>) {
-  process.stdout.write(`\n[refresh] summary ${stamp}: batches ok=${ok} failed=${failures.length}; promos captured=${promosCaptured} readsFailed=${promoReadsFailed}\n`);
+function printSummary(stamp: string, ok: number, failures: Array<{ batchId: string; error: string }>, promosCaptured: number, promoReadsFailed: number, topUp: { readsOk: number; readsFailed: number }, freshness: Array<{ slug: string; offers: number; under24hPercent: number }>) {
+  process.stdout.write(`\n[refresh] summary ${stamp}: batches ok=${ok} failed=${failures.length}; promos captured=${promosCaptured} readsFailed=${promoReadsFailed}; top-up reads ok=${topUp.readsOk} failed=${topUp.readsFailed}\n`);
   for (const entry of freshness) {
     process.stdout.write(`[refresh] ${entry.slug}: ${entry.under24hPercent}% of ${entry.offers} offers under 24h\n`);
   }
@@ -151,6 +152,7 @@ async function restoreVtexHash() {
 
 async function main() {
   await restoreVtexHash();
+  const runStartedAt = new Date();
   const plan: { batches: PlanBatch[] } = JSON.parse(await readFile(resolve(PLAN_PATH), "utf8"));
   const stamp = readFlag("date") ?? todayStamp();
   const only = readFlag("batch") !== undefined ? Number(readFlag("batch")) : null;
@@ -174,9 +176,11 @@ async function main() {
     promoReadsFailed += outcome.promoReadsFailed;
   }
 
+  process.stdout.write("[refresh] re-reading the offers the searches missed\n");
+  const topUp = await topUpUnobservedOffers({ stamp, runStartedAt });
   regenerateSnapshot();
   const freshness = await freshnessBySupermarket();
-  printSummary(stamp, ok, failures, promosCaptured, promoReadsFailed, freshness);
+  printSummary(stamp, ok, failures, promosCaptured, promoReadsFailed, topUp, freshness);
   await db.$disconnect();
 }
 
