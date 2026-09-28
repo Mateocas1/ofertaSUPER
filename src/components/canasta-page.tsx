@@ -49,12 +49,12 @@ function useBasketProductData(uniqueEansKey: string): BasketProductData {
 
     void (async () => {
       try {
-        const { items: products, degradedDemo: nextDegradedDemo } = await fetchBasketProducts(eans, controller.signal);
+        const { items: products, degraded: nextDegraded } = await fetchBasketProducts(eans, controller.signal);
         const nextProducts = Object.fromEntries(products.map((product) => [product.ean, product]));
 
         startTransition(() => {
           setProductsByEan(nextProducts);
-          setDegradedDemo(nextDegradedDemo);
+          setDegradedDemo(nextDegraded);
           setLoadError(null);
           setCatalogUnavailable(false);
         });
