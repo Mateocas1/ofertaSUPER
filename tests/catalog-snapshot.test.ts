@@ -63,7 +63,10 @@ describe("snapshot search", () => {
     for (const offer of entry.offers) {
       assert.ok(["carrefour", "disco", "jumbo"].includes(offer.source));
       assert.ok(offer.observedAt.length > 0);
-      assert.equal(offer.promo, null, "promotions stay empty until Gate 4");
+      if (offer.promo !== null) {
+        assert.ok(["nth-unit", "percent-off"].includes(offer.promo.type), "captured promotions carry the parsed shape");
+        assert.ok(offer.promo.label.length > 0);
+      }
     }
     const stale = getSnapshotProduct(entry.product.ean, new Date("2026-10-01T00:00:00.000Z"));
     assert.ok(stale);
