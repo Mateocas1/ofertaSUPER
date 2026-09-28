@@ -10,55 +10,95 @@ import {
 // Gate 6: promotion capture for Carrefour. The capture reads the public REST
 // catalog search by EAN and only keeps promotions the strict parser
 // recognizes; a failing read surfaces as a rejection the caller counts, and
-// the price is stored regardless.
+// the price is stored regardless. The fixture is a real slice of the
+// Carrefour response: teasers live under items[].sellers[].commertialOffer,
+// and the first teaser in the list is a card promotion that must be skipped.
 
-const carrefourPayload = JSON.stringify([
+const carrefourPayload = [
 	{
-		productId: "719377",
-		productName: "Leche chocolatada Cindor 1 lt",
-		items: [],
-		PromotionTeasers: [{ Name: "PROMO-2do al 50% Max 8 unidades Combinable LUCCHETTI-Reg-2-50-Gigante23 al 1.10" }],
+		productId: "719376",
+		productName: "Leche chocolatada ​Cindor 200 ml",
+		items: [
+			{
+				ean: "7791337007260",
+				sellers: [
+					{
+						sellerId: "1",
+						commertialOffer: {
+							PromotionTeasers: [
+								{
+									Name: "Tarjeta Carrefour 15%",
+									GeneralValues: {},
+									Conditions: { MinimumQuantity: 0, Parameters: [{ Name: "RestrictionsBins", Value: "507858,858110,858111,585274,538156,520225,539958,527061,898989" }] },
+									Effects: { Parameters: [{ Name: "PercentualDiscount", Value: "15" }] },
+								},
+								{
+									Name: "PROMO-2do al 70% Max 24 unidades Iguales-Reg-2-70-Gigante23 al 1.10",
+									GeneralValues: {},
+									Conditions: { MinimumQuantity: 2, Parameters: [] },
+									Effects: { Parameters: [] },
+								},
+							],
+						},
+					},
+				],
+			},
+		],
 	},
-]);
+	{
+		productId: "676413",
+		productName: "Leche La Serenísima Sachet 1 L",
+		items: [
+			{
+				ean: "7798133500605",
+				sellers: [
+					{
+						sellerId: "1",
+						commertialOffer: { PromotionTeasers: [{ Name: "Tarjeta Carrefour 15%" }] },
+					},
+				],
+			},
+		],
+	},
+];
 
 function httpWith(body: string, status = 200): VtexPromoHttpClient {
 	return { get: async () => ({ data: body, status, headers: { "content-type": "application/json" } }) };
 }
 
 describe("promotion capture", () => {
-	it("extracts the first recognized promotion from a product payload", () => {
-		const promo = extractSimplePromotionFromPayload(JSON.parse(carrefourPayload));
+	it("extracts the first recognized promotion from the matching item's commercial offer", () => {
+		const promo = extractSimplePromotionFromPayload(carrefourPayload, "7791337007260");
 		assert.deepEqual(promo, {
 			type: "nth-unit",
 			nth: 2,
-			percent: 50,
-			maxUnits: 8,
-			label: "2do al 50%",
+			percent: 70,
+			maxUnits: 24,
+			label: "2do al 70%",
 		});
 	});
 
-	it("returns null for payloads with excluded or missing teasers", () => {
-		assert.equal(
-			extractSimplePromotionFromPayload([{ PromotionTeasers: [{ Name: "Tarjeta Carrefour 15%" }] }]),
-			null,
-			"card promotions stay out",
-		);
-		assert.equal(extractSimplePromotionFromPayload([{ PromotionTeasers: [] }]), null);
-		assert.equal(extractSimplePromotionFromPayload([]), null);
-		assert.equal(extractSimplePromotionFromPayload(null), null);
+	it("skips products whose teasers are all excluded", () => {
+		assert.equal(extractSimplePromotionFromPayload(carrefourPayload, "7798133500605"), null);
+	});
+
+	it("returns null for payloads with no matching item or no teasers", () => {
+		assert.equal(extractSimplePromotionFromPayload(carrefourPayload, "0000000000000"), null);
+		assert.equal(extractSimplePromotionFromPayload([], null), null);
+		assert.equal(extractSimplePromotionFromPayload(null, null), null);
 	});
 
 	it("fetches by EAN from the public REST search", async () => {
-		const promo = await fetchSimplePromotionByEan("https://www.carrefour.com.ar", "7791337007253", {
-			http: httpWith(carrefourPayload),
+		const promo = await fetchSimplePromotionByEan("https://www.carrefour.com.ar", "7791337007260", {
+			http: httpWith(JSON.stringify(carrefourPayload)),
 		});
 		assert.equal(promo?.type, "nth-unit");
-		assert.equal(promo?.percent, 50);
+		assert.equal(promo?.percent, 70);
 	});
 
 	it("lets read failures reach the caller so the run can count them", async () => {
 		await assert.rejects(
-			fetchSimplePromotionByEan("https://www.carrefour.com.ar", "7791337007253", {
+			fetchSimplePromotionByEan("https://www.carrefour.com.ar", "7791337007260", {
 				http: {
 					get: async () => {
 						throw new Error("upstream blocked");
