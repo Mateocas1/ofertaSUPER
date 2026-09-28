@@ -17,7 +17,12 @@ import { validateStageProducts } from "./validate";
 const TOP_UP_SOURCES = ["carrefour", "disco", "jumbo"];
 const READ_DELAY_MS = 200;
 
-export type TopUpSummary = { readsOk: number; readsFailed: number; offersFresh: number };
+export type TopUpSummary = {
+  readsOk: number;
+  readsFailed: number;
+  offersFresh: number;
+  perSource: Array<{ slug: string; readsOk: number; readsFailed: number }>;
+};
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -44,7 +49,7 @@ function rowFor(product: NormalizedProduct | undefined, ean: string, name: strin
   };
 }
 
-async function topUpSource(slug: string, stamp: string, runStartedAt: Date, delayMs: number): Promise<TopUpSummary> {
+async function topUpSource(slug: string, stamp: string, runStartedAt: Date, delayMs: number): Promise<{ readsOk: number; readsFailed: number; offersFresh: number }> {
   const offers = await db.$queryRaw<Array<{ product_ean: string; name: string }>>`
     select sp.product_ean, p.name
     from supermarket_products sp
@@ -107,11 +112,13 @@ export async function topUpUnobservedOffers({ stamp, runStartedAt, delayMs = REA
   let readsOk = 0;
   let readsFailed = 0;
   let offersFresh = 0;
+  const perSource: TopUpSummary["perSource"] = [];
   for (const slug of TOP_UP_SOURCES) {
     const summary = await topUpSource(slug, stamp, runStartedAt, delayMs);
     readsOk += summary.readsOk;
     readsFailed += summary.readsFailed;
     offersFresh += summary.offersFresh;
+    perSource.push({ slug, readsOk: summary.readsOk, readsFailed: summary.readsFailed });
   }
-  return { readsOk, readsFailed, offersFresh };
+  return { readsOk, readsFailed, offersFresh, perSource };
 }

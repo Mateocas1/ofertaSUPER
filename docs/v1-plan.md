@@ -229,6 +229,23 @@ _(Completado en el Gate 6, 2026-09-28.)_
 
 El hash de la consulta persistida de VTEX se toma de `ingestion_run.vtex_hash` (lo guarda la propia adquisición); no se pide ni se imprime.
 
+### Relectura por EAN (top-up)
+
+Al final del refresh, cada oferta que la corrida no observó se relee por EAN con el endpoint REST público de su súper (el mismo de la captura de promos). Se guarda con el mismo instante de observación y el mismo formato de staging; en Carrefour también la promo. Producto ausente o sin stock → `available=false` y precio null (nunca se inventa precio). Las lecturas fallidas cuentan en el resumen (`top-up reads ok/failed`) sin abortar la corrida. Con el top-up, el primer día se alcanzó 100% <24 h en los tres súpers (327 lecturas, 0 fallas).
+
+### Cron diario
+
+1. **Script**: `scripts/cron-refresh.sh`. Trabaja en un worktree dedicado `~/code/ofertaSUPER-refresh` (excepción aprobada al guardrail de worktree único) que antes de cada corrida vuelve a `origin/master` (fetch + checkout detach; nunca toca otros worktrees). Usa `flock` para evitar corridas superpuestas.
+2. **Respaldo**: el script hace el `pg_dump` del día antes de escribir (guardrail 10).
+3. **Publicación**: crea la rama `chore/catalog-refresh-<YYYYMMDD>`, commitea SOLO `data/catalog-snapshot.json`, abre PR y corre `gh pr merge --auto --merge --delete-branch`; si el repo no admite auto-merge, espera los checks con `gh pr checks --watch` y mergea solo en verde.
+4. **Frenos**: si el refresh falla (lotes fallidos, frescura <90% o una fuente con >20% de lecturas fallidas), NO abre el PR: escribe el motivo en el log y sale con código ≠0.
+5. **Log**: `~/.local/state/ofertasuper/refresh-<fecha>.log`.
+6. **crontab** (07:00 hora de Argentina = 10:00 UTC; el sistema está en UTC):
+   ```
+   0 10 * * * /home/picala/code/ofertaSUPER-v1/scripts/cron-refresh.sh
+   ```
+   Ver con `crontab -l`; pausar comentando la línea (`crontab -e`); el log de cada corrida queda en el path del punto 5.
+
 ### Cobertura de frescura (limitación conocida)
 
 Los 36 lotes buscan por término y toman los primeros 25 resultados por búsqueda. Con la rotación de ranking de cada súper, ~15% de las ofertas del catálogo puede quedar fuera de la cobertura del día (productos que hoy no aparecen en el top-25 de su término). El primer refresh (2026-09-28) quedó en 79.6% / 85.5% / 84.1% por súper, por debajo del objetivo de 90%: se reportó al orquestador con las opciones (ampliar cobertura por EAN o aceptar la cobertura parcial en v1).

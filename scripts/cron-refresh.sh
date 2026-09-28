@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Gate 6 — daily catalog refresh (cron entry). See the Runbook in
+# docs/v1-plan.md. Runs from the dedicated refresh worktree, never touches
+# other worktrees, and publishes the snapshot only when the run is healthy.
+set -euo pipefail
+
+STAMP=$(date +%Y%m%d)
+DATE=$(date +%F)
+REFRESH_WORKTREE="$HOME/code/ofertaSUPER-refresh"
+LOG_DIR="$HOME/.local/state/ofertasuper"
+CONTAINER="ofertasuper-cmvp-local-bootstrap-postgres-1"
+NETWORK="ofertasuper-cmvp-local-bootstrap_default"
+MIGRATE_IMAGE="ofertasuper-cmvp-local-bootstrap-migrate:latest"
+
+mkdir -p "$LOG_DIR" "$REFRESH_WORKTREE" "$HOME/backups"
+LOG="$LOG_DIR/refresh-$DATE.log"
+exec >>"$LOG" 2>&1
+echo "=== refresh $STAMP started $(date -Is) ==="
+
+# One refresh at a time.
+exec 9>"$REFRESH_WORKTREE/.refresh.lock"
+if ! flock -n 9; then
+  echo "another refresh is still running; aborting"
+  exit 1
+fi
+
+cd "$REFRESH_WORKTREE"
+git fetch origin
+git checkout --detach origin/master
+git clean -fdq data artifacts/refresh
+
+# Guardrail 10: backup before the first write of the day.
+BACKUP="$HOME/backups/ofertasuper-$DATE.dump"
+if [ ! -s "$BACKUP" ]; then
+  docker exec "$CONTAINER" pg_dump -U ofertasuper_owner -d ofertasuper -Fc > "$BACKUP"
+fi
+if [ ! -s "$BACKUP" ]; then
+  echo "backup is empty; aborting"
+  exit 1
+fi
+echo "backup ready: $BACKUP ($(stat -c%s "$BACKUP") bytes)"
+
+# The database is only reachable from the bootstrap network; the refresh runs
+# inside a container on that network with the worktree mounted.
+export POSTGRES_PASSWORD
+POSTGRES_PASSWORD=$(docker exec "$CONTAINER" printenv POSTGRES_PASSWORD)
+export DATABASE_URL="postgresql://ofertasuper_owner:${POSTGRES_PASSWORD}@postgres:5432/ofertasuper"
+export DIRECT_URL="$DATABASE_URL"
+
+if [ ! -d node_modules ]; then
+  npm ci --no-audit --no-fund
+fi
+npx prisma generate
+
+if ! docker run --rm --network "$NETWORK" -v "$REFRESH_WORKTREE":/app -w /app \
+  -e DATABASE_URL -e DIRECT_URL \
+  --entrypoint npm "$MIGRATE_IMAGE" run refresh:catalog; then
+  echo "refresh gate check failed; no PR will be opened"
+  exit 1
+fi
+
+BRANCH="chore/catalog-refresh-$STAMP"
+git checkout -b "$BRANCH"
+git add data/catalog-snapshot.json
+if git diff --cached --quiet; then
+  echo "snapshot unchanged; nothing to publish"
+  exit 0
+fi
+git commit -q -m "chore(catalog): refresh $DATE
+
+Refs #498"
+git push -q origin "$BRANCH"
+
+PR=$(gh pr create --base master --head "$BRANCH" \
+  --title "chore(catalog): refresh $DATE" \
+  --body "Snapshot diario del refresh automatizado.
+
+Refs #498")
+
+if gh pr merge "$BRANCH" --auto --merge --delete-branch 2>/dev/null; then
+  echo "auto-merge enabled for $PR"
+else
+  gh pr checks "$BRANCH" --watch
+  gh pr merge "$BRANCH" --merge --delete-branch
+fi
+echo "=== refresh $STAMP finished $(date -Is) ==="
