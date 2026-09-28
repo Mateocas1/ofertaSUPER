@@ -32,6 +32,8 @@ fi
 
 git -C "$REFRESH_WORKTREE" fetch origin
 git -C "$REFRESH_WORKTREE" checkout --detach origin/master
-git -C "$REFRESH_WORKTREE" clean -fdq data artifacts/refresh
+# Only `data` is host-owned and needs cleaning; the root-owned run artifacts
+# are gitignored and reused for checkpoint replay.
+git -C "$REFRESH_WORKTREE" clean -fdq data
 
 exec "$REFRESH_WORKTREE/scripts/cron-refresh.sh"
