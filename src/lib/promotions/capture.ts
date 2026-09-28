@@ -46,12 +46,29 @@ function recordsOf(payload: unknown): Record<string, unknown>[] {
 	return Array.isArray(payload) ? payload.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object") : [];
 }
 
-export function extractSimplePromotionFromPayload(payload: unknown): SimplePromotion | null {
+function sellerTeasers(record: Record<string, unknown>, ean: string | null): Record<string, unknown>[] {
+	const items = Array.isArray(record.items) ? record.items.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object") : [];
+	const matchingItems = items.filter((item) => ean === null || item.ean === ean);
+	const teasers: Record<string, unknown>[] = [];
+	for (const item of matchingItems) {
+		const sellers = Array.isArray(item.sellers) ? item.sellers.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object") : [];
+		for (const seller of sellers) {
+			const offer = seller.commertialOffer && typeof seller.commertialOffer === "object" ? (seller.commertialOffer as Record<string, unknown>) : {};
+			if (Array.isArray(offer.PromotionTeasers)) {
+				teasers.push(...offer.PromotionTeasers.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object"));
+			}
+		}
+	}
+	return teasers;
+}
+
+// VTEX nests the teasers under items[].sellers[].commertialOffer of the item
+// whose EAN matches the search; the first teaser may be a card promotion, so
+// the strict parser decides which one is kept.
+export function extractSimplePromotionFromPayload(payload: unknown, ean: string | null = null): SimplePromotion | null {
 	for (const record of recordsOf(payload)) {
-		const teasers = record.PromotionTeasers;
-		if (!Array.isArray(teasers)) continue;
-		for (const teaser of teasers) {
-			const name = teaser && typeof teaser === "object" ? (teaser as Record<string, unknown>).Name : null;
+		for (const teaser of sellerTeasers(record, ean)) {
+			const name = teaser.Name;
 			if (typeof name !== "string") continue;
 			const promo = parseSimplePromotion(name);
 			if (promo) return promo;
@@ -82,5 +99,5 @@ export async function fetchSimplePromotionByEan(
 
 	const raw = response.data;
 	const payload: unknown = typeof raw === "string" ? JSON.parse(raw) : raw;
-	return extractSimplePromotionFromPayload(payload);
+	return extractSimplePromotionFromPayload(payload, ean);
 }
