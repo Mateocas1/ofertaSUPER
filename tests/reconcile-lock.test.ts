@@ -43,7 +43,7 @@ describe("reconcile advisory lock guard", () => {
   it("acquires the lock before loading batch candidates", async () => {
     const source = await readFile("scripts/pipeline/reconcile.ts", "utf8");
     const lockIndex = source.indexOf("ensureReconcileAdvisoryLock(tx)");
-    const loadIndex = source.indexOf("loadCandidates(batchId, tx)");
+    const loadIndex = source.indexOf("loadCandidates(batchId, runId, tx)");
 
     assert.ok(lockIndex >= 0, "reconcileStageProducts must acquire the advisory lock inside the transaction");
     assert.ok(loadIndex >= 0, "reconcileStageProducts must load candidates inside the locked transaction");
@@ -70,6 +70,7 @@ describe("reconcile advisory lock guard", () => {
       referencePrice: null,
       referenceUnit: null,
       isAvailable: true,
+      promo: null,
       qualityScore: 1,
       qualityFlags: [],
       status: "PENDING" as const,

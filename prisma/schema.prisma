@@ -92,6 +92,7 @@ model SupermarketProduct {
   supermarket_id    Int
   price             Decimal?          @db.Decimal(10, 2)
   list_price        Decimal?          @db.Decimal(10, 2)
+  promo             Json?
   reference_price   Decimal?          @db.Decimal(10, 2)
   reference_unit    String?
   is_available      Boolean           @default(true)
@@ -209,6 +210,7 @@ model StagingProduct {
   reference_price Decimal?      @db.Decimal(10, 2)
   reference_unit  String?
   is_available    Boolean       @default(true)
+  promo           Json?
   quality_score   Float         @default(0)
   quality_flags   Json?
   status          StagingStatus @default(PENDING)

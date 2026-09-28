@@ -12,6 +12,9 @@ export type CmvpCatalogBatchRequest = {
   expectedGtins: string[];
   dryRun: boolean;
   confirmWrite: boolean;
+  // Gate 6 daily refresh: the source catalog evolves, so the plan's expected
+  // GTINs are not re-asserted; admitted products must match fetched instead.
+  refresh?: boolean;
 };
 
 type AcquisitionResult = {
@@ -22,6 +25,8 @@ type AcquisitionResult = {
   admittedGtins: string[];
   rejectedCount: number;
   error: string | null;
+  promoReadsFailed?: number;
+  promosCaptured?: number;
 };
 
 export type CmvpCatalogBatchArtifact = {
@@ -37,7 +42,7 @@ export type CmvpCatalogBatchArtifact = {
   fetchedGtins: string[];
   admittedGtins: string[];
   reconciliationError: string | null;
-  runs: Array<{ runId: number | null; startedAt: string; finishedAt: string; fetchedCount: number; admittedCount: number; rejectedCount: number; error: string | null }>;
+  runs: Array<{ runId: number | null; startedAt: string; finishedAt: string; fetchedCount: number; admittedCount: number; rejectedCount: number; error: string | null; promoReadsFailed?: number; promosCaptured?: number }>;
 };
 
 export type CmvpCatalogBatchDependencies = {
@@ -45,7 +50,7 @@ export type CmvpCatalogBatchDependencies = {
   saveArtifact: (artifact: Readonly<CmvpCatalogBatchArtifact>) => Promise<void>;
   acquire: (request: Readonly<CmvpCatalogBatchRequest>) => Promise<AcquisitionResult>;
   finalizeAcquisition: (runId: number, outcome: { status: "SUCCESS" | "FAILED"; errorSummary: string | null }) => Promise<void>;
-  reconcile: (request: Readonly<CmvpCatalogBatchRequest>) => Promise<{ runId: number | null; promotedCount: number; error: string | null }>;
+  reconcile: (request: Readonly<CmvpCatalogBatchRequest>, runId?: number | null) => Promise<{ runId: number | null; promotedCount: number; error: string | null }>;
 };
 
 type NormalizedRequest = ReturnType<typeof normalizeContract>;
@@ -155,7 +160,7 @@ function createArtifact(request: NormalizedRequest, contract: string, state: Cmv
     schemaVersion: 1, batchId: request.batchId, source: request.source, term: request.term, count: request.count,
     expectedGtins: [...request.expectedGtins], dryRun: request.dryRun, contractDigest: contract, state,
     fetchedGtins, admittedGtins, reconciliationError: null,
-    runs: acquisition ? [{ runId: acquisition.runId, startedAt: acquisition.startedAt, finishedAt: acquisition.finishedAt, fetchedCount: fetchedGtins.length, admittedCount: admittedGtins.length, rejectedCount: acquisition.rejectedCount, error }] : [],
+    runs: acquisition ? [{ runId: acquisition.runId, startedAt: acquisition.startedAt, finishedAt: acquisition.finishedAt, fetchedCount: fetchedGtins.length, admittedCount: admittedGtins.length, rejectedCount: acquisition.rejectedCount, error, promoReadsFailed: acquisition.promoReadsFailed, promosCaptured: acquisition.promosCaptured }] : [],
   };
 }
 
@@ -181,13 +186,16 @@ function rejectedReconciliationError(error: unknown) {
 
 async function reconcile(request: NormalizedRequest, artifact: CmvpCatalogBatchArtifact, dependencies: CmvpCatalogBatchDependencies) {
   let reconciliation: Awaited<ReturnType<CmvpCatalogBatchDependencies["reconcile"]>>;
-  try { reconciliation = await dependencies.reconcile(request); }
+  try { reconciliation = await dependencies.reconcile(request, runId(artifact)); }
   catch (error) { return failReconciliation(request, artifact, rejectedReconciliationError(error), dependencies); }
   const reportedError = normalizedError(reconciliation.error, "reconciliation");
+  // In refresh mode duplicate EANs collapse into one canonical candidate, so
+  // the expected promotion count is the number of distinct admitted EANs.
+  const expectedPromoted = request.refresh ? new Set(artifact.admittedGtins).size : request.count;
   const reconciliationError = reportedError ?? (!isNonNegativeInteger(reconciliation.promotedCount)
     ? "invalid_reconciliation_promoted_count"
-    : reconciliation.promotedCount === request.count ? null
-      : `reconciliation promoted count mismatch: expected ${request.count}, got ${reconciliation.promotedCount}`);
+    : reconciliation.promotedCount === expectedPromoted ? null
+      : `reconciliation promoted count mismatch: expected ${expectedPromoted}, got ${reconciliation.promotedCount}`);
   if (reconciliationError) return failReconciliation(request, artifact, reconciliationError, dependencies);
   await finalizeAcquisition(request, runId(artifact), { status: "SUCCESS", errorSummary: null }, dependencies);
   const completed = { ...artifact, state: "completed" as const, reconciliationError: null };
@@ -240,8 +248,11 @@ async function handleAcquisitionOutcome(request: NormalizedRequest, contract: st
     await finalizeAcquisition(request, acquisition.runId, { status: "FAILED", errorSummary: error }, dependencies);
     return { artifact, replayed: false };
   }
-  if (!sameSet(fetchedGtins, request.expectedGtins) || !sameSet(admittedGtins, request.expectedGtins)) {
-    const mismatch = "fetched/admitted GTIN mismatch before reconciliation";
+  const expectedMismatch = request.refresh
+    ? !sameSet(admittedGtins, fetchedGtins)
+    : !sameSet(fetchedGtins, request.expectedGtins) || !sameSet(admittedGtins, request.expectedGtins);
+  if (expectedMismatch) {
+    const mismatch = request.refresh ? "admitted GTINs diverge from the fetched products" : "fetched/admitted GTIN mismatch before reconciliation";
     await finalizeAcquisition(request, acquisition.runId, { status: "FAILED", errorSummary: mismatch }, dependencies);
     const blocked = { ...artifact, state: "blocked" as const, runs: artifact.runs.map((run) => ({ ...run, error: mismatch })) };
     await persistArtifact(request, blocked, dependencies);
