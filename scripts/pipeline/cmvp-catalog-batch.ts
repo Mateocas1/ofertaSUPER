@@ -143,6 +143,11 @@ function hasCompletedRunTimestamps(run: ArtifactRun) {
 }
 
 function hasCompletedRunCounts(run: ArtifactRun, request: NormalizedRequest) {
+  // Refresh batches report what the source actually returned today: the plan
+  // count bounds the search, not the catalog.
+  if (request.refresh) {
+    return run.fetchedCount === run.admittedCount && run.rejectedCount === 0 && run.error === null;
+  }
   return run.fetchedCount === request.count && run.admittedCount === request.count
     && run.rejectedCount === 0 && run.error === null;
 }
