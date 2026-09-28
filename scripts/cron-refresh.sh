@@ -82,6 +82,20 @@ if gh pr merge "$BRANCH" --auto --merge --delete-branch 2>/dev/null; then
   echo "auto-merge enabled for $PR"
 else
   gh pr checks "$BRANCH" --watch
-  gh pr merge "$BRANCH" --merge --delete-branch
+  gh pr merge "$BRANCH" --merge --delete-branch 2>/dev/null || true
 fi
-echo "=== refresh $STAMP finished $(date -Is) ==="
+
+# gh's local branch cleanup fails inside a detached worktree; the source of
+# truth for the outcome is the PR state on GitHub.
+for _ in $(seq 1 30); do
+  STATE=$(gh pr view "$BRANCH" --json state -q .state 2>/dev/null || echo "UNKNOWN")
+  if [ "$STATE" = "MERGED" ]; then
+    echo "PR merged"
+    echo "=== refresh $STAMP finished $(date -Is) ==="
+    exit 0
+  fi
+  if [ "$STATE" = "CLOSED" ]; then break; fi
+  sleep 10
+done
+echo "PR did not reach MERGED state; failing"
+exit 1
