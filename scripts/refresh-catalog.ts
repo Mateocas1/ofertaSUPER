@@ -9,7 +9,7 @@ import { pathToFileURL } from "node:url";
 import { db } from "../src/lib/db";
 import { createDependencies } from "./acquire-cmvp-catalog-batch";
 import { runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
-import { topUpUnobservedOffers } from "./pipeline/topup";
+import { topUpUnobservedOffers, type TopUpSummary } from "./pipeline/topup";
 
 // Gate 6 — the single daily catalog refresh command. It replays the 36
 // acquisition batches of the cycle-2 plan with fresh daily batch ids (the
@@ -126,7 +126,7 @@ async function freshnessBySupermarket() {
   }));
 }
 
-function printSummary(stamp: string, ok: number, failures: Array<{ batchId: string; error: string }>, promosCaptured: number, promoReadsFailed: number, topUp: { readsOk: number; readsFailed: number }, freshness: Array<{ slug: string; offers: number; under24hPercent: number }>) {
+function printSummary(stamp: string, ok: number, failures: Array<{ batchId: string; error: string }>, promosCaptured: number, promoReadsFailed: number, topUp: TopUpSummary, freshness: Array<{ slug: string; offers: number; under24hPercent: number }>) {
   process.stdout.write(`\n[refresh] summary ${stamp}: batches ok=${ok} failed=${failures.length}; promos captured=${promosCaptured} readsFailed=${promoReadsFailed}; top-up reads ok=${topUp.readsOk} failed=${topUp.readsFailed}\n`);
   for (const entry of freshness) {
     process.stdout.write(`[refresh] ${entry.slug}: ${entry.under24hPercent}% of ${entry.offers} offers under 24h\n`);
@@ -135,8 +135,12 @@ function printSummary(stamp: string, ok: number, failures: Array<{ batchId: stri
     process.stdout.write(`[refresh] failures: ${JSON.stringify(failures, null, 2)}\n`);
   }
   const worst = Math.min(...freshness.map((entry) => entry.under24hPercent));
-  if (failures.length > 0 || worst < 90) {
-    console.error(`[refresh] gate check failed: failedBatches=${failures.length}, worstFreshness=${worst}%`);
+  // A source whose reads fail more than 20% of the time takes the whole run
+  // down with it: the cron must not publish a partially refreshed catalog.
+  const sourceFailure = [...topUp.perSource, { slug: "carrefour", readsOk: promosCaptured, readsFailed: promoReadsFailed }]
+    .find(({ readsOk, readsFailed }) => readsOk + readsFailed > 0 && readsFailed / (readsOk + readsFailed) > 0.2);
+  if (failures.length > 0 || worst < 90 || sourceFailure) {
+    console.error(`[refresh] gate check failed: failedBatches=${failures.length}, worstFreshness=${worst}%${sourceFailure ? `, sourceReadFailures=${sourceFailure.slug}` : ""}`);
     process.exitCode = 1;
   }
 }
