@@ -4,6 +4,9 @@
 # and publishes the snapshot only when the run is healthy.
 set -euo pipefail
 
+# Cron runs with a minimal PATH; make sure optional tools (rclone) are found.
+export PATH="$PATH:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:/snap/bin"
+
 STAMP=$(date +%Y%m%d)
 DATE=$(date +%F)
 REFRESH_WORKTREE="$HOME/code/ofertaSUPER-refresh"
@@ -37,6 +40,13 @@ if [ ! -s "$BACKUP" ]; then
   exit 1
 fi
 echo "backup ready: $BACKUP ($(stat -c%s "$BACKUP") bytes)"
+
+# Optional encrypted off-site copy; fail-soft, never blocks the refresh.
+# shellcheck source=lib/r2-upload.sh
+if [ -f "$REFRESH_WORKTREE/scripts/lib/r2-upload.sh" ]; then
+  . "$REFRESH_WORKTREE/scripts/lib/r2-upload.sh"
+  r2_upload_backup "$BACKUP" || true
+fi
 
 # The database is only reachable from the bootstrap network; the refresh runs
 # inside a container on that network with the worktree mounted.
