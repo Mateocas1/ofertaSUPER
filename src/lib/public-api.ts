@@ -13,10 +13,12 @@ import {
   findSnapshotAdaptedProduct,
   searchSnapshotSummaries,
 } from "@/lib/catalog-snapshot-adapters";
-import { getSnapshotGeneratedAt, SnapshotUnavailableError } from "@/lib/catalog-snapshot";
-import type { ProductDetail, ProductSummary } from "@/lib/catalog";
+import { getSnapshotCategoryCounts, getSnapshotGeneratedAt, SnapshotUnavailableError } from "@/lib/catalog-snapshot";
+import type { CategorySummary, ProductDetail, ProductSummary, PromotionSummary } from "@/lib/catalog";
 import { handleProductHistoryRequest } from "@/lib/product-history";
-import { publicCatalogUnavailable } from "@/lib/public-catalog-api";
+import { publicCatalogUnavailable, type PublicCatalogData } from "@/lib/public-catalog-api";
+import { promotionListQuerySchema } from "@/lib/schemas/promotion";
+import { DETAILED_CATEGORIES } from "@/lib/vtex/categories";
 import { loadSnapshotProductPage } from "@/lib/public-pages";
 import {
   admitStrictPublicRoute,
@@ -253,6 +255,73 @@ export async function handleProductsBatch(request: NextRequest, deps: PublicApiD
       status = 400;
     } else {
       body = { error: "Catalog temporarily unavailable" };
+      status = 503;
+    }
+  }
+  const response = NextResponse.json(body, { status });
+  void limiter.state.pending;
+  return withRateLimitHeaders(response, limiter.state);
+}
+
+function snapshotProvenance(): Pick<PublicCatalogData<object>, "dataSource" | "degraded" | "verifiedAt" | "latestCheckedAt"> {
+  return { dataSource: "database", degraded: false, verifiedAt: getSnapshotGeneratedAt(), latestCheckedAt: null };
+}
+
+function snapshotCategories(): CategorySummary[] {
+  const counts = getSnapshotCategoryCounts();
+  return DETAILED_CATEGORIES.map((category) => ({
+    id: category.slug,
+    name: category.name,
+    slug: category.slug,
+    icon: category.slug,
+    count: counts.get(category.slug) ?? 0,
+    children: [],
+  }));
+}
+
+export async function handleCategories(request: NextRequest, deps: PublicApiDeps = defaultDeps()) {
+  const limiter = await rejectIfRateLimited(request, "categories", deps.limiter);
+
+  if (limiter.response) {
+    void limiter.state.pending;
+    return limiter.response;
+  }
+
+  let body: object;
+  let status = 200;
+  try {
+    body = { items: snapshotCategories(), ...snapshotProvenance() };
+  } catch {
+    body = publicCatalogUnavailable();
+    status = 503;
+  }
+  const response = NextResponse.json(body, { status });
+  void limiter.state.pending;
+  return withRateLimitHeaders(response, limiter.state);
+}
+
+// The snapshot stores per-offer promotions only, never promotion rows, so the
+// list is empty and truthful; filters are still validated like the database path.
+export async function handlePromotions(request: NextRequest, deps: PublicApiDeps = defaultDeps()) {
+  const limiter = await rejectIfRateLimited(request, "promotions", deps.limiter);
+
+  if (limiter.response) {
+    void limiter.state.pending;
+    return limiter.response;
+  }
+
+  let body: object;
+  let status = 200;
+  try {
+    promotionListQuerySchema.parse(searchParamsToObject(request.nextUrl));
+    const items: PromotionSummary[] = [];
+    body = { items, ...snapshotProvenance() };
+  } catch (error) {
+    if (error instanceof ZodError) {
+      body = { error: "Invalid query parameters", issues: error.flatten() };
+      status = 400;
+    } else {
+      body = publicCatalogUnavailable();
       status = 503;
     }
   }

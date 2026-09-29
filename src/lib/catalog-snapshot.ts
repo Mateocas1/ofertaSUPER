@@ -1,5 +1,6 @@
 import "server-only";
 
+import { slugify } from "@/lib/slugify";
 import type { SimplePromotion } from "@/lib/promotions/simple-promos";
 
 import catalogSnapshot from "../../data/catalog-snapshot.json";
@@ -232,4 +233,16 @@ export function getSnapshotSources(): string[] {
 
 export function getSnapshotGeneratedAt(): string {
   return readSnapshot().generatedAt;
+}
+
+// Product counts keyed by category slug, the snapshot twin of the guarded
+// groupBy over the serving projection.
+export function getSnapshotCategoryCounts(): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const product of readSnapshot().products) {
+    if (product.category === null) continue;
+    const slug = slugify(product.category);
+    counts.set(slug, (counts.get(slug) ?? 0) + 1);
+  }
+  return counts;
 }
