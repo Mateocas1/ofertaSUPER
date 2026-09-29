@@ -1,7 +1,12 @@
 import { SerwistProvider } from "@serwist/next/react";
 import type { Metadata, Viewport } from "next";
+import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
+
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
+const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-bricolage", display: "swap" });
 
 const APP_NAME = "ofertasSUPER";
 const APP_DESCRIPTION = "Comparador de precios y canastas de supermercados argentinos.";
@@ -50,7 +55,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1f6f3f",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#1f6f3f" },
+    { media: "(prefers-color-scheme: dark)", color: "#171d1a" },
+  ],
 };
 
 export default function RootLayout({
@@ -59,7 +67,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es-AR" className="h-full antialiased">
+    <html lang="es-AR" className={`${geist.variable} ${geistMono.variable} ${bricolage.variable} h-full antialiased`}>
       <body className="min-h-full bg-background text-foreground">
         <SerwistProvider
           swUrl="/sw.js"
@@ -75,7 +83,7 @@ export default function RootLayout({
           <main id="main-content" className="relative flex-1">
             {children}
           </main>
-          <footer className="relative border-t border-border bg-card/85 px-6 py-8">
+          <footer className="relative border-t-2 border-dashed border-border bg-surface-1 px-6 py-8">
             <div className="mx-auto flex w-full max-w-[1512px] flex-col gap-2 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
               <p>ofertasSUPER compara productos, precios y canastas de supermercados argentinos.</p>
               <p>Datos agregados por producto, supermercado y cobertura.</p>
