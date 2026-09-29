@@ -14,21 +14,21 @@ type RankingAccent = (typeof SMART_BASKET.ranking)[number]["accent"];
 type PulseTone = (typeof MARKET_PULSE_ITEMS)[number]["tone"];
 
 const productToneClasses: Record<ProductTone, string> = {
-	mint: "border-emerald-200 bg-emerald-50 text-emerald-900",
-	blue: "border-blue-200 bg-blue-50 text-blue-900",
-	orange: "border-orange-200 bg-orange-50 text-orange-900",
-	yellow: "border-yellow-200 bg-yellow-50 text-yellow-900",
+	mint: "border-primary/25 bg-accent text-accent-foreground",
+	blue: "border-chart-3/30 bg-chart-3/15 text-foreground",
+	orange: "border-deal/30 bg-deal-soft text-deal-ink",
+	yellow: "border-chart-2/30 bg-chart-2/20 text-foreground",
 };
 
 const marketMarkClasses: Record<RankingAccent, string> = {
-	green: "border-emerald-200 bg-emerald-500 text-white",
-	blue: "border-blue-200 bg-blue-600 text-white",
-	red: "border-red-200 bg-red-600 text-white",
+	green: "border-transparent bg-primary text-primary-foreground",
+	blue: "border-transparent bg-chart-3 text-background",
+	red: "border-transparent bg-destructive text-background",
 };
 
 const pulseValueClasses: Record<PulseTone, string> = {
-	green: "text-emerald-700",
-	amber: "text-amber-700",
+	green: "text-primary",
+	amber: "text-warning",
 };
 
 export const revalidate = 21600;
@@ -40,9 +40,9 @@ export default function Home() {
 				<section className="grid min-w-0 gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:items-center">
 					<div className="min-w-0 space-y-7 lg:pl-2">
 						<div className="space-y-5">
-							<h1 className="max-w-full text-[2.7rem] font-semibold leading-[0.96] tracking-[-0.055em] text-balance text-foreground sm:max-w-[13ch] sm:text-[3.65rem] xl:text-[4.15rem]">
+							<h1 className="max-w-full text-[2.75rem] font-extrabold leading-[0.95] tracking-[-0.05em] text-balance text-foreground sm:max-w-[13ch] sm:text-[3.75rem] xl:text-[4.5rem]">
 								Compará precios. Armá tu canasta.{" "}
-								<span className="text-primary">Comprá mejor.</span>
+								<span className="text-primary [text-decoration:underline_wavy_color-mix(in_oklab,var(--deal)_70%,transparent)_2px] [text-underline-offset:0.12em]">Comprá mejor.</span>
 							</h1>
 							<p className="max-w-full text-base leading-7 text-muted-foreground sm:max-w-[34rem] sm:text-lg sm:leading-8">
 								{HOME_HERO.body}
@@ -59,7 +59,7 @@ export default function Home() {
 								<label htmlFor="home-search" className="sr-only">
 									Buscar producto
 								</label>
-								<div className="flex min-h-16 items-center gap-3 rounded-[1rem] border border-border bg-card px-3 shadow-[0_18px_50px_rgba(31,41,55,0.08)] transition-all duration-300 focus-within:border-primary/50 focus-within:shadow-[0_22px_58px_rgba(31,111,63,0.12)]">
+								<div className="flex min-h-16 items-center gap-3 rounded-2xl border-2 border-foreground/15 bg-card px-3 shadow-[var(--elevation-2)] [transition:border-color_200ms_var(--ease-out),box-shadow_200ms_var(--ease-out)] focus-within:border-primary focus-within:shadow-[var(--elevation-3)]">
 									<SearchIcon
 										className="size-5 shrink-0 text-foreground"
 										aria-hidden="true"
@@ -74,7 +74,7 @@ export default function Home() {
 									/>
 									<button
 										type="submit"
-										className="rounded-[0.65rem] bg-primary px-4 py-3 sm:px-5 text-sm font-semibold text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition duration-200 hover:bg-primary/90 active:translate-y-px"
+										className="press min-h-11 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 sm:px-5"
 									>
 										Buscar
 									</button>
@@ -89,7 +89,7 @@ export default function Home() {
 									<Link
 										key={search}
 										href={`/buscar?q=${encodeURIComponent(search)}`}
-										className="rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground transition duration-200 hover:border-primary/40 hover:text-primary active:translate-y-px"
+										className="press inline-flex min-h-11 items-center rounded-full border border-dashed border-foreground/25 bg-card px-4 text-xs font-medium text-muted-foreground [transition:color_200ms_var(--ease-out),border-color_200ms_var(--ease-out),transform_160ms_var(--ease-out)] hover:border-primary hover:text-primary"
 									>
 										{search}
 									</Link>
@@ -101,14 +101,13 @@ export default function Home() {
 							{HOME_HERO.signals.map((signal, index) => (
 								<div
 									key={signal}
-									className="inline-flex items-center gap-2 rounded-[0.7rem] border border-border bg-card px-3.5 py-2 text-xs text-muted-foreground shadow-[0_8px_24px_rgba(31,41,55,0.04)]"
+									className="inline-flex items-center gap-2 rounded-lg bg-surface-1 px-3.5 py-2 text-xs text-muted-foreground"
 								>
 									<span
 										className={cn(
 											"size-2 rounded-full border",
 											index === 0
-												? "border-emerald-200 bg-primary"
-												: "border-zinc-300 bg-white",
+												? "border-primary/30 bg-primary" : "border-foreground/30 bg-card",
 										)}
 										aria-hidden="true"
 									/>
@@ -134,24 +133,24 @@ export default function Home() {
 function SmartBasketPanel() {
 	return (
 		<aside
-			className="surface animate-enter min-w-0 overflow-hidden p-4 sm:p-6 lg:p-7"
+			className="surface-raised animate-enter min-w-0 overflow-hidden p-4 sm:p-6 lg:p-7"
 			aria-labelledby="smart-basket-title"
 		>
 			<div className="mb-5 flex flex-wrap items-center justify-between gap-3">
 				<div className="flex items-center gap-3">
 					<h2
 						id="smart-basket-title"
-						className="text-2xl font-semibold tracking-[-0.035em] text-foreground sm:text-3xl"
+						className="text-2xl font-bold text-foreground sm:text-3xl"
 					>
 						{SMART_BASKET.title}
 					</h2>
-					<span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+					<span className="rounded-full bg-surface-3 px-3 py-1 text-xs font-medium text-muted-foreground">
 						{SMART_BASKET.summary}
 					</span>
 				</div>
 				<Link
 					href="/canasta"
-					className="inline-flex items-center gap-2 rounded-[0.65rem] border border-border bg-card px-3.5 py-2 text-xs font-semibold text-foreground transition duration-200 hover:border-primary/40 hover:text-primary active:translate-y-px"
+					className="press inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-xs font-semibold text-foreground [transition:color_200ms_var(--ease-out),border-color_200ms_var(--ease-out),transform_160ms_var(--ease-out)] hover:border-primary hover:text-primary"
 				>
 					Abrir canasta
 				</Link>
@@ -163,7 +162,7 @@ function SmartBasketPanel() {
 						<p className="text-sm font-semibold text-foreground">{SMART_BASKET.basketLabel}</p>
 						<p className="text-xs text-muted-foreground">{SMART_BASKET.summary}</p>
 					</div>
-					<ul className="divide-y divide-border/80">
+					<ul className="stagger divide-y-2 divide-dashed divide-border">
 						{SMART_BASKET.products.map((product) => (
 							<li
 								key={product.name}
@@ -183,30 +182,28 @@ function SmartBasketPanel() {
 					</ul>
 				</div>
 
-				<div className="overflow-hidden rounded-[1rem] border border-border bg-card">
-					<div className="border-b border-border px-4 py-3">
+				<div className="ticket overflow-hidden rounded-xl border border-border bg-card"> <div className="border-b-2 border-dashed border-border bg-surface-1 px-4 py-3">
 						<p className="text-sm font-semibold text-foreground">
 							{SMART_BASKET.comparisonLabel}
 						</p>
 						<p className="mt-1 text-xs text-muted-foreground">{SMART_BASKET.totalsLabel}</p>
 					</div>
-					<div className="hidden grid-cols-[1fr_0.7fr_0.85fr_0.65fr] gap-3 border-b border-border px-4 py-3 text-xs font-medium text-muted-foreground md:grid">
+					<div className="hidden grid-cols-[1fr_0.7fr_0.85fr_0.65fr] gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground md:grid">
 						<span>Supermercado</span>
 						<span>Total</span>
 						<span>Cobertura</span>
 						<span>Estado</span>
 					</div>
-					<div className="divide-y divide-border">
-						{SMART_BASKET.ranking.map((item, index) => (
+					<div className="stagger divide-y divide-border"> {SMART_BASKET.ranking.map((item, index) => (
 							<div
 								key={item.supermarket}
 								className={cn(
 									"relative grid gap-3 px-4 py-4 text-sm md:grid-cols-[1fr_0.7fr_0.85fr_0.65fr] md:items-center",
-									index === 0 && "border border-primary bg-primary/5",
+									index === 0 && "settle bg-accent py-5 shadow-[inset_4px_0_0_var(--primary)]",
 								)}
 							>
 								{item.badge ? (
-									<span className="absolute right-3 top-0 -translate-y-1/2 rounded-sm bg-primary px-2.5 py-1 text-[0.66rem] font-semibold text-primary-foreground">
+									<span className="price-tag absolute right-3 top-0 -translate-y-1/2 font-sans text-[0.66rem] font-bold">
 										{item.badge}
 									</span>
 								) : null}
@@ -216,28 +213,19 @@ function SmartBasketPanel() {
 										{item.supermarket}
 									</span>
 								</div>
-								<p className="font-mono text-lg font-semibold tracking-tight text-foreground md:text-base">
+								<p className={cn("price whitespace-nowrap text-xl md:text-lg", index === 0 ? "text-primary md:text-xl" : "text-foreground")}>
 									{item.total}
 								</p>
 								<p
 									className={cn(
 										"text-xs font-medium",
 										item.status === "Falta 1"
-											? "text-amber-700"
-											: "text-primary",
-									)}
-								>
-									{item.coverage}
+											? "text-warning" : "text-primary", )} > {item.coverage}
 								</p>
 								<p
 									className={cn(
 										"inline-flex items-center gap-2 text-xs",
-										item.status === "Falta 1"
-											? "text-amber-700"
-											: "text-primary",
-									)}
-								>
-									{item.status === "Falta 1" ? (
+										item.status === "Falta 1" ? "text-warning" : "text-primary", )} > {item.status === "Falta 1" ? (
 										<WarningIcon className="size-4" />
 									) : (
 										<CheckIcon className="size-4" />
@@ -250,14 +238,12 @@ function SmartBasketPanel() {
 				</div>
 			</div>
 
-			<div className="mt-4 flex flex-wrap items-center gap-3 rounded-[0.8rem] border border-border bg-muted/50 px-4 py-2.5 text-xs text-muted-foreground">
+			<div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-surface-3/60 px-4 py-2.5 text-xs text-muted-foreground">
 				<BarsIcon className="size-4 text-foreground" aria-hidden="true" />
 				<span>{SMART_BASKET.note}</span>
 				<Link
 					href="/metodologia"
-					className="font-semibold text-primary hover:underline"
-				>
-					Ver metodología
+					className="inline-flex min-h-11 items-center font-semibold text-primary hover:underline" > Ver metodología
 				</Link>
 			</div>
 		</aside>
@@ -274,7 +260,7 @@ function ProductRowsPreview() {
 				<div className="flex flex-wrap items-baseline gap-3">
 					<h2
 						id="product-preview-title"
-						className="text-2xl font-semibold tracking-[-0.035em] text-foreground"
+						className="text-2xl font-bold text-foreground"
 					>
 						Ejemplo de precios por producto
 					</h2>
@@ -287,8 +273,7 @@ function ProductRowsPreview() {
 				</div>
 			</div>
 
-			<div className="overflow-hidden rounded-[0.9rem] border border-border bg-card">
-				<div className="hidden grid-cols-[1.55fr_0.75fr_0.85fr_0.95fr_0.9fr_0.55fr] gap-4 border-b border-border px-4 py-3 text-xs font-medium text-muted-foreground md:grid">
+			<div className="overflow-hidden rounded-xl bg-surface-2 ring-1 ring-border"> <div className="hidden grid-cols-[1.55fr_0.75fr_0.85fr_0.95fr_0.9fr_0.55fr] gap-4 border-b-2 border-dashed border-border bg-surface-1 px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground md:grid">
 					<span>Producto</span>
 					<span>Precio mínimo</span>
 					<span>Supermercado</span>
@@ -296,8 +281,7 @@ function ProductRowsPreview() {
 					<span>Referencia</span>
 					<span>Acción</span>
 				</div>
-				<div className="divide-y divide-border">
-					{HOME_PRODUCT_ROWS.map((row) => (
+				<div className="stagger divide-y divide-border"> {HOME_PRODUCT_ROWS.map((row) => (
 						<article
 							key={row.product}
 							className="grid gap-3 px-4 py-3 md:grid-cols-[1.55fr_0.75fr_0.85fr_0.95fr_0.9fr_0.55fr] md:items-center md:gap-4"
@@ -317,8 +301,7 @@ function ProductRowsPreview() {
 									</p>
 								</div>
 							</div>
-							<p className="font-mono text-lg font-semibold tracking-tight text-primary">
-								{row.minPrice}
+							<p className="price text-2xl text-primary"> {row.minPrice}
 							</p>
 							<div className="flex items-center gap-2 text-sm font-medium text-foreground">
 								<MarketMark
@@ -328,12 +311,12 @@ function ProductRowsPreview() {
 								</MarketMark>
 								{row.supermarket}
 							</div>
-							<p className="font-mono text-xs text-foreground">{row.range}</p>
+							<p className="font-mono text-xs tabular-nums text-muted-foreground">{row.range}</p>
 							<p className="text-xs text-muted-foreground">{row.updatedAt}</p>
 							<Link
 								href={`/buscar?q=${encodeURIComponent(row.product)}`}
 								aria-label={`Buscar producto: ${row.product}`}
-								className="w-fit rounded-[0.55rem] border border-primary/45 px-3.5 py-2 text-xs font-semibold text-primary transition duration-200 hover:bg-primary hover:text-primary-foreground active:translate-y-px"
+								className="press inline-flex min-h-11 w-fit items-center rounded-lg border border-primary/50 px-3.5 text-xs font-semibold text-primary [transition:background-color_200ms_var(--ease-out),color_200ms_var(--ease-out),transform_160ms_var(--ease-out)] hover:bg-primary hover:text-primary-foreground"
 							>
 								{row.action}
 							</Link>
@@ -345,7 +328,7 @@ function ProductRowsPreview() {
 			<div className="mt-5 flex justify-center">
 				<Link
 					href="/buscar"
-					className="rounded-[0.65rem] border border-primary/45 bg-card px-8 py-2.5 text-sm font-semibold text-foreground transition duration-200 hover:border-primary hover:text-primary active:translate-y-px"
+					className="press inline-flex min-h-11 items-center rounded-lg bg-primary px-8 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
 				>
 					Abrir búsqueda de productos
 				</Link>
@@ -363,23 +346,22 @@ function MarketPulse() {
 			<div className="mb-5 flex items-center justify-between gap-3">
 				<h2
 					id="market-pulse-title"
-					className="text-2xl font-semibold tracking-[-0.035em] text-foreground"
+					className="text-2xl font-bold text-foreground"
 				>
 					Ejemplos de lectura del catálogo
 				</h2>
 				<Link
 					href="/ofertas"
-					className="text-sm font-semibold text-primary hover:underline"
+					className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline"
 				>
 					Ver ofertas disponibles
 				</Link>
 			</div>
 
-			<div className="space-y-3">
-				{MARKET_PULSE_ITEMS.map((item) => (
+			<div className="stagger space-y-3"> {MARKET_PULSE_ITEMS.map((item) => (
 					<article
 						key={item.title}
-						className="grid grid-cols-[4.5rem_1fr_auto] items-center gap-4 rounded-[0.9rem] border border-border bg-card p-4"
+						className="grid grid-cols-[4.5rem_1fr_auto] items-center gap-4 rounded-xl bg-surface-1 p-4"
 					>
 						<Sparkline points={item.points} tone={item.tone} />
 						<div>
@@ -392,8 +374,7 @@ function MarketPulse() {
 						</div>
 						<p
 							className={cn(
-								"font-mono text-xl font-semibold tracking-tight",
-								pulseValueClasses[item.tone],
+								"price text-xl", pulseValueClasses[item.tone],
 							)}
 						>
 							{item.value}
@@ -402,7 +383,7 @@ function MarketPulse() {
 				))}
 			</div>
 
-			<div className="mt-5 flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
+			<div className="mt-5 flex items-center gap-2 border-t-2 border-dashed border-border pt-4 text-xs text-muted-foreground">
 				<ClockIcon className="size-4 text-foreground" aria-hidden="true" />
 				Las líneas son ilustrativas y no representan una serie observada.
 			</div>
@@ -422,13 +403,13 @@ function ProductThumb({
 	return (
 		<div
 			className={cn(
-				"relative flex shrink-0 items-center justify-center overflow-hidden rounded-[0.35rem] border shadow-[0_10px_18px_rgba(31,41,55,0.08)]",
+				"relative flex shrink-0 items-center justify-center overflow-hidden rounded-md border shadow-[var(--elevation-1)]",
 				size === "sm" ? "h-12 w-9" : "h-[4.2rem] w-12",
 				productToneClasses[tone],
 			)}
 			aria-hidden="true"
 		>
-			<span className="absolute inset-x-1 top-1 h-2 rounded-sm bg-white/70" />
+			<span className="absolute inset-x-1 top-1 h-2 rounded-sm bg-background/60" />
 			<span className="font-mono text-[0.62rem] font-bold tracking-tight">
 				{label}
 			</span>
@@ -457,7 +438,7 @@ function MarketMark({
 }
 
 function Sparkline({ points, tone }: { points: string; tone: PulseTone }) {
-	const color = tone === "amber" ? "#d97706" : "#137333";
+	const color = tone === "amber" ? "var(--warning)" : "var(--primary)";
 
 	return (
 		<svg viewBox="0 0 80 48" className="h-12 w-20" aria-hidden="true">
@@ -501,7 +482,7 @@ function CheckIcon(props: SVGProps<SVGSVGElement>) {
 			<path
 				d="m8.6 12.2 2.1 2.1 4.8-5"
 				fill="none"
-				stroke="white"
+				stroke="var(--primary-foreground)"
 				strokeWidth="2"
 				strokeLinecap="round"
 				strokeLinejoin="round"

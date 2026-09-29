@@ -21,6 +21,7 @@
   --font-mono: var(--font-code);
   --font-heading: var(--font-display);
   --font-display: var(--font-display);
+  --color-warning: var(--warning);
   --color-deal: var(--deal);
   --color-deal-foreground: var(--deal-foreground);
   --color-deal-ink: var(--deal-ink);
@@ -93,6 +94,7 @@
   --border: oklch(0.87 0.014 95);
   --input: oklch(0.88 0.014 95);
   --ring: oklch(0.55 0.13 148);
+  --warning: oklch(0.5 0.12 75);
   --deal: oklch(0.65 0.19 35);
   --deal-foreground: oklch(0.2 0.03 35);
   --deal-ink: oklch(0.5 0.18 35);
@@ -141,6 +143,7 @@
     --border: oklch(0.94 0.012 95 / 13%);
     --input: oklch(0.94 0.012 95 / 18%);
     --ring: oklch(0.76 0.15 148);
+    --warning: oklch(0.82 0.12 85);
     --deal: oklch(0.72 0.17 40);
     --deal-foreground: oklch(0.2 0.03 40);
     --deal-ink: oklch(0.8 0.14 50);
@@ -188,6 +191,7 @@
   --border: oklch(0.94 0.012 95 / 13%);
   --input: oklch(0.94 0.012 95 / 18%);
   --ring: oklch(0.76 0.15 148);
+  --warning: oklch(0.82 0.12 85);
   --deal: oklch(0.72 0.17 40);
   --deal-foreground: oklch(0.2 0.03 40);
   --deal-ink: oklch(0.8 0.14 50);
