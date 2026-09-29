@@ -29,6 +29,67 @@ type SearchBarProps = {
   variant?: "hero" | "compact";
 };
 
+type SuggestionOptionProps = {
+  result: SearchSuggestion;
+  id: string;
+  active: boolean;
+  onActivate: () => void;
+};
+
+function SuggestionOption({ result, id, active, onActivate }: SuggestionOptionProps) {
+  return (
+    <Link
+      id={id}
+      href={`/producto/${result.ean}`}
+      role="option"
+      aria-selected={active}
+      className={cn(
+        "flex min-h-16 items-center gap-4 border-t border-dashed border-border px-4 py-3 first:border-t-0 hover:bg-accent/60 focus-visible:bg-accent/60",
+        active && "bg-accent/60",
+      )}
+      onMouseEnter={onActivate}
+    >
+      <div className="relative size-14 overflow-hidden rounded-xl bg-surface-3/70">
+        {result.imageUrl ? (
+          <Image src={result.imageUrl} alt={result.name} fill sizes="56px" className="img-outline object-cover" unoptimized />
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium text-foreground">{result.name}</p>
+        <p className="truncate text-sm text-muted-foreground">
+          {[result.brand, result.category].filter(Boolean).join(" • ") || "Sin datos extra"}
+        </p>
+      </div>
+      <div className="text-right">
+        <p className="price text-sm text-primary">{formatCurrency(result.displayPrice ?? result.minPrice)}</p>
+        {result.freshnessStatus === "stale" ? (
+          <p className="mt-1 text-xs font-medium text-warning">
+            {getPriceFreshnessCopy({
+              status: result.freshnessStatus,
+              checkedAt: result.bestPriceCheckedAt,
+              ageHours: null,
+              maxAgeHours: 0,
+            }).badgeLabel}
+          </p>
+        ) : null}
+      </div>
+    </Link>
+  );
+}
+
+const VARIANT_STYLES = {
+  hero: {
+    field: "rounded-[1.625rem] px-4 py-4 md:px-5",
+    input: "text-base md:text-lg",
+    buttonSize: "lg",
+  },
+  compact: {
+    field: "rounded-[1.375rem] px-3 py-3",
+    input: "text-sm",
+    buttonSize: "sm",
+  },
+} as const;
+
 export function SearchBar({
   defaultValue = "",
   placeholder = "Buscar yerba, leche, arroz o una marca puntual",
@@ -43,6 +104,7 @@ export function SearchBar({
   const [hasInteracted, setHasInteracted] = useState(false);
   const [isPending, startTransition] = useTransition();
   const deferredQuery = useDeferredValue(query);
+  const styles = VARIANT_STYLES[variant];
   const resultsId = `${searchId}-results`;
   const activeOptionId = activeIndex >= 0 ? `${searchId}-option-${activeIndex}` : undefined;
 
@@ -145,7 +207,7 @@ export function SearchBar({
         <div
           className={cn(
             "flex items-center gap-3 border-2 border-foreground/15 bg-card shadow-[var(--elevation-2)] [transition:border-color_200ms_var(--ease-out),box-shadow_200ms_var(--ease-out)] focus-within:border-primary focus-within:shadow-[var(--elevation-3)]",
-            variant === "hero" ? "rounded-[1.625rem] px-4 py-4 md:px-5" : "rounded-[1.375rem] px-3 py-3",
+            styles.field,
           )}
         >
           <Search className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -170,7 +232,7 @@ export function SearchBar({
             autoComplete="off"
             className={cn(
               "w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground",
-              variant === "hero" ? "text-base md:text-lg" : "text-sm",
+              styles.input,
             )}
             role="combobox"
             aria-expanded={open}
@@ -182,7 +244,7 @@ export function SearchBar({
 
           <button
             type="submit"
-            className={cn(buttonVariants({ size: variant === "hero" ? "lg" : "sm" }), "press px-4")}
+            className={cn(buttonVariants({ size: styles.buttonSize }), "press px-4")}
             aria-label="Ejecutar búsqueda"
           >
             {isPending ? <LoaderCircle className="size-4 animate-spin" /> : "Buscar"}
@@ -202,43 +264,13 @@ export function SearchBar({
         >
           {results.length > 0 ? (
             results.map((result, index) => (
-              <Link
+              <SuggestionOption
                 key={result.ean}
+                result={result}
                 id={`${searchId}-option-${index}`}
-                href={`/producto/${result.ean}`}
-                role="option"
-                aria-selected={index === activeIndex}
-                className={cn(
-                  "flex min-h-16 items-center gap-4 border-t border-dashed border-border px-4 py-3 first:border-t-0 hover:bg-accent/60 focus-visible:bg-accent/60",
-                  index === activeIndex && "bg-accent/60",
-                )}
-                onMouseEnter={() => setActiveIndex(index)}
-              >
-                    <div className="relative size-14 overflow-hidden rounded-xl bg-surface-3/70">
-                      {result.imageUrl ? (
-                        <Image src={result.imageUrl} alt={result.name} fill sizes="56px" className="img-outline object-cover" unoptimized />
-                      ) : null}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-foreground">{result.name}</p>
-                      <p className="truncate text-sm text-muted-foreground">
-                        {[result.brand, result.category].filter(Boolean).join(" • ") || "Sin datos extra"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="price text-sm text-primary">{formatCurrency(result.displayPrice ?? result.minPrice)}</p>
-                      {result.freshnessStatus === "stale" ? (
-                        <p className="mt-1 text-xs font-medium text-warning">
-                          {getPriceFreshnessCopy({
-                            status: result.freshnessStatus,
-                            checkedAt: result.bestPriceCheckedAt,
-                            ageHours: null,
-                            maxAgeHours: 0,
-                          }).badgeLabel}
-                        </p>
-                      ) : null}
-                    </div>
-              </Link>
+                active={index === activeIndex}
+                onActivate={() => setActiveIndex(index)}
+              />
             ))
           ) : (
             <div className="px-4 py-5 text-sm text-muted-foreground">Sin coincidencias por ahora.</div>
