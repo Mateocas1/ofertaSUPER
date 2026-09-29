@@ -121,7 +121,7 @@ function PriceComparisonRow({ entry }: { entry: PriceComparisonEntry }) {
       <td className="px-6 py-4">
         <PriceComparisonPromoCell entry={entry} />
       </td>
-      <td className={cn("px-6 py-4 font-mono text-base font-bold tabular-nums", entry.finalPrice !== null ? "text-primary" : "text-muted-foreground")}>
+      <td className={cn("px-6 py-4 font-bold", entry.finalPrice !== null ? "font-mono text-base tabular-nums text-primary" : "text-muted-foreground")}>
         {entry.finalPrice !== null ? formatCurrency(entry.finalPrice) : "No calculable"}
       </td>
       <td className="px-6 py-4 font-mono tabular-nums text-muted-foreground">{formatCurrency(entry.previousPrice)}</td>
