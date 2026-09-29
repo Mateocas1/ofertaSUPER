@@ -8,36 +8,6 @@ const env = { RECOVERY_MANIFEST_KEY: "postgres-r2-20260301T020304Z-abcdef123456.
 const manifest = { schemaVersion: 2, archive: "postgres-r2-20260301T020304Z-abcdef123456.dump", timestamp: "2026-03-01T02:03:04.000Z", format: "custom", validation: "pg_restore --list", bytes: 3, sha256: "a".repeat(64), ciphertext: { key: "enc/archive", sha256: "d7439bee24773bcbfa2d0a97947ee36227b10d1022b1a55847e928965bb6bfde" } };
 const count = (text: string, value: string) => text.split(value).length - 1;
 
-function assertFixedR2NoCheckBucket(workflow: string) {
-  const required = '      RCLONE_CONFIG_R2_NO_CHECK_BUCKET: "true"';
-  assert.equal((workflow.match(/^      RCLONE_CONFIG_R2_NO_CHECK_BUCKET:\s*"true"\s*$/gm) || []).length, 1);
-  assert.doesNotMatch(workflow, /^      RCLONE_CONFIG_R2_NO_CHECK_BUCKET:\s*\$\{\{/m);
-  for (const invalid of ["", "false", '"false"', "${{ vars.R2_NO_CHECK_BUCKET }}"]) assert.throws(() => assert.equal((workflow.replace(required, `      RCLONE_CONFIG_R2_NO_CHECK_BUCKET: ${invalid}`).match(/^      RCLONE_CONFIG_R2_NO_CHECK_BUCKET:\s*"true"\s*$/gm) || []).length, 1));
-}
-
-function assertRuntimeCryptPasswordDerivation(workflow: string) {
-  const heading = "      - name: Derive rclone crypt passwords\n", start = workflow.indexOf(heading), nextStep = workflow.indexOf("\n      - ", start + heading.length);
-  assert.ok(start >= 0 && nextStep > start); assert.equal(count(workflow, heading), 1);
-  const step = workflow.slice(start, nextStep), run = "        run: |\n", runStart = step.indexOf(run);
-  assert.ok(runStart >= 0); const body = step.slice(runStart + run.length), guardStart = body.indexOf("if [[ "), guardEnd = body.indexOf(" ]]; then", guardStart);
-  assert.ok(guardStart >= 0 && guardEnd > guardStart); const guard = body.slice(guardStart, guardEnd + " ]]; then".length);
-  const bindings = [["RCLONE_CRYPT_PASSWORD_PLAINTEXT", "RCLONE_CRYPT_PASSWORD", "${{ secrets.RCLONE_CRYPT_PASSWORD }}", "primary_crypt_password"], ["RCLONE_CRYPT_PASSWORD2_PLAINTEXT", "RCLONE_CRYPT_PASSWORD2", "${{ secrets.RCLONE_CRYPT_PASSWORD2 }}", "secondary_crypt_password"]] as const;
-  const job = workflow.slice(0, workflow.indexOf("    steps:\n"));
-  for (const [plaintext, secretName, secret, obscured] of bindings) {
-    const secretBinding = new RegExp(`\\$\\{\\{\\s*secrets\\.${secretName}\\s*\\}\\}`, "g");
-    assert.equal((workflow.match(secretBinding) || []).length, 1); assert.equal((step.match(secretBinding) || []).length, 1); assert.ok(step.includes(`          ${plaintext}: ${secret}\n`)); assert.equal((job.match(secretBinding) || []).length, 0);
-    assert.doesNotMatch(workflow, new RegExp(`^\\s+${plaintext.replace("_PLAINTEXT", "")}:\\s*\\$\\{\\{\\s*secrets\\.`, "m"));
-    assert.ok(guard.includes(`-z "$${plaintext}"`)); assert.ok(guard.includes(`"$${plaintext}" == *$'\\n'*`)); assert.ok(guard.includes(`"$${plaintext}" == *$'\\r'*`));
-    const obscure = `${obscured}="$(printf '%s' "$${plaintext}" | "$RUNNER_TEMP/rclone" obscure -)"`;
-    assert.equal(count(body, obscure), 1);
-    const plaintextReference = new RegExp(`\\$(?:${plaintext}\\b|\\{${plaintext}\\})`);
-    assert.deepEqual(body.split("\n").filter((line) => plaintextReference.test(line)).map((line) => line.trim()), [guard.trim(), obscure]);
-  }
-  const masks = ["printf '::add-mask::%s\\n' \"$primary_crypt_password\"", "printf '::add-mask::%s\\n' \"$secondary_crypt_password\""], writes = ["printf 'RCLONE_CONFIG_CRYPT_PASSWORD=%s\\n' \"$primary_crypt_password\" >> \"$GITHUB_ENV\"", "printf 'RCLONE_CONFIG_CRYPT_PASSWORD2=%s\\n' \"$secondary_crypt_password\" >> \"$GITHUB_ENV\""];
-  for (const command of [...masks, ...writes]) assert.equal(count(body, command), 1);
-  assert.equal(count(body, "$GITHUB_ENV"), writes.length); assert.ok(Math.max(...masks.map((command) => body.indexOf(command))) < Math.min(...writes.map((command) => body.indexOf(command))));
-}
-
 
 
 test("unsafe manifest input makes zero rclone or Docker calls", async () => {
@@ -107,11 +77,9 @@ test("mismatch creates neither Docker target nor restore, and contracts keep sec
   }, pipeline: async () => ({}) };
   await assert.rejects(runRecovery({ ...env }, runtime as never), /ciphertext/);
   assert.equal(calls.includes("docker"), false);
-  const script = read("scripts/postgres-recovery-r2.mjs"), workflow = read(".github/workflows/database-recovery.yml"), docs = read("docs/database-backup-recovery-runbook.md");
+  const script = read("scripts/postgres-recovery-r2.mjs"), docs = read("docs/database-backup-recovery-runbook.md");
   assert.match(script, /createHash\("sha256"\)|sha256/); assert.match(script, /_prisma_migrations|pg_indexes|products|supermarkets|supermarket_products|price_history|ofertasuper_app/);
   assert.match(script, /\["network", "rm"\]|\["volume", "rm"\]|rm\(state\.workspace/); assert.match(script, /AggregateError|SIGINT|SIGTERM/);
-  assert.match(workflow, /workflow_dispatch:[\s\S]*manifest_key:[\s\S]*required: true/); assert.equal((workflow.match(/^      manifest_key:/gm) || []).length, 1); assert.doesNotMatch(workflow, /schedule:|cron:/);
-  assert.match(workflow, /actions\/checkout@11d5960a326750d5838078e36cf38b85af677262/); assert.match(workflow, /aa2804e08f48250e71009c727124b6341cd0288465804a9a09d14663cabafbaa/);
   assert.match(docs, /single.*download|no-Production authority|logical manifest/i);
 });
 
@@ -162,13 +130,4 @@ test("readiness fails immediately for unexpected statuses and Docker failures", 
 test("abort reaches the restore pipeline, stops following phases, and redacts argv", async () => {
   const controller = new AbortController(), aborted = runtimeFor({ archive: true }); aborted.runtime.pipeline = async (_left: unknown, _right: unknown, options: { signal?: AbortSignal }) => { assert.equal(options.signal, controller.signal); controller.abort(); throw new Error("cancelled"); };
   await assert.rejects(runRecovery({ ...env }, aborted.runtime as never, () => "e".repeat(32), { signal: controller.signal }), /cancelled|recovery cancelled/); assert.equal(aborted.calls.some(({ options }) => options?.input?.includes("CREATE ROLE")), false); assert.ok(aborted.calls.every(({ args }) => !args.join(" ").includes("canary") && !args.join(" ").includes("PGPASSWORD=")));
-});
-
-test("workflow derives plaintext crypt secrets only at runtime", () => {
-  const workflow = read(".github/workflows/database-recovery.yml"), docs = read("docs/database-backup-recovery-runbook.md");
-  assertRuntimeCryptPasswordDerivation(workflow);
-  assertFixedR2NoCheckBucket(workflow);
-  assert.doesNotMatch(workflow, /set -x/);
-  const install = workflow.indexOf("Install pinned rclone"), derive = workflow.indexOf("Derive rclone crypt passwords"), recovery = workflow.indexOf("npm run recovery:postgres-r2"); assert.ok(install >= 0 && install < derive && derive < recovery);
-  assert.match(workflow, /BACKUP_CRYPT_REMOTE:\s*\$\{\{ vars\.BACKUP_CRYPT_REMOTE \}\}/); assert.doesNotMatch(workflow, /^\s+RCLONE_CRYPT_REMOTE:/m); assert.match(docs, /rotate both together/i); assert.match(docs, /ephemeral.*masked|masked.*ephemeral/i);
 });

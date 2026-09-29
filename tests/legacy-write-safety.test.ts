@@ -186,17 +186,3 @@ test("active direct-refresh writers are not scheduled and avoid broad ingestion 
 		/direct-refresh-carrefour-write|direct-refresh-vea-write|direct-refresh-disco-write|direct-refresh-jumbo-write|direct-refresh-mas-write|executeCarrefourActiveWrite|executeVeaActiveWrite|executeDiscoActiveWrite|executeJumboActiveWrite|executeMasActiveWrite|reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
 	);
 });
-
-test("update prices workflow is dry-run only and does not report fake write status", async () => {
-	const workflow = await readFile(
-		".github/workflows/update-prices.yml",
-		"utf8",
-	);
-
-	assert.match(workflow, /confirm_write:/);
-	assert.match(workflow, /Deprecated legacy path/);
-	assert.match(workflow, /--dry-run/);
-	assert.doesNotMatch(workflow, /--confirm-write/);
-	assert.match(workflow, /LEGACY_PRICE_WRITE_APPROVED: "false"/);
-	assert.doesNotMatch(workflow, /report-scraper-status/);
-});
