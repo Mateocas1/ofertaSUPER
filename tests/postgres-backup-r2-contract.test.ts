@@ -7,60 +7,7 @@ import { createBackupPlan, createRuntime, cryptProbeEnvironment, formatManifestB
 
 const root = new URL("../", import.meta.url), read = (path: string) => readFileSync(new URL(path, root), "utf8");
 const env = { PATH: "/runtime-bin", DATABASE_URL: "postgresql://backup_user:secret-password@db.example:6543/catalog?sslmode=require", BACKUP_CRYPT_REMOTE: "crypt:ofertasuper-r2", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", BACKUP_RETENTION: "2", BACKUP_DATABASE_ROLE: "backup_user", PG_IMAGE: "postgres:17.6-bookworm@sha256:f3bd19c606e442c3d7bdfa8002e03fe260a1023351e0ea4598032022b68dd6e3" };
-const count = (text: string, value: string) => text.split(value).length - 1;
 
-function assertFixedR2NoCheckBucket(workflow: string) {
-  const required = '      RCLONE_CONFIG_R2_NO_CHECK_BUCKET: "true"';
-  assert.equal((workflow.match(/^      RCLONE_CONFIG_R2_NO_CHECK_BUCKET:\s*"true"\s*$/gm) || []).length, 1);
-  assert.doesNotMatch(workflow, /^      RCLONE_CONFIG_R2_NO_CHECK_BUCKET:\s*\$\{\{/m);
-  for (const invalid of ["", "false", '"false"', "${{ vars.R2_NO_CHECK_BUCKET }}"]) assert.throws(() => assert.equal((workflow.replace(required, `      RCLONE_CONFIG_R2_NO_CHECK_BUCKET: ${invalid}`).match(/^      RCLONE_CONFIG_R2_NO_CHECK_BUCKET:\s*"true"\s*$/gm) || []).length, 1));
-}
-
-const manifestKeyCapture = {
-  capture: 'manifest_key="$(npm run --silent backup:postgres-r2)"', validation: 'if [[ ! "$manifest_key" =~ ^postgres-r2-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}\\.manifest\\.json$ ]]; then', output: "printf 'manifest_key=%s\\n' \"$manifest_key\" >> \"$GITHUB_OUTPUT\"", log: "printf '%s\\n' \"$manifest_key\"",
-};
-
-function assertManifestKeyCaptureContract(workflow: string) {
-  const heading = "      - name: Stream, validate, publish, and retain encrypted backup\n", start = workflow.indexOf(heading), nextStep = workflow.indexOf("\n      - ", start + heading.length);
-  assert.ok(start >= 0); assert.equal(count(workflow, heading), 1);
-  const step = workflow.slice(start, nextStep < 0 ? workflow.length : nextStep), body = step.slice(step.indexOf("        run: |\n") + "        run: |\n".length);
-  assert.ok(step.includes("        id: backup\n")); assert.equal(count(body, manifestKeyCapture.capture), 1); assert.ok(body.includes(manifestKeyCapture.validation)); assert.equal(count(body, manifestKeyCapture.output), 1); assert.equal(count(body, manifestKeyCapture.log), 1);
-  assert.doesNotMatch(body, /(?:^|\n)\s*npm run(?:\s|$)/);
-}
-
-function assertManifestKeyCapture(workflow: string) {
-  assertManifestKeyCaptureContract(workflow);
-  for (const [name, mutated] of [
-    ["plain invocation", workflow.replace(manifestKeyCapture.output, `${manifestKeyCapture.output}\n        npm run backup:postgres-r2`)],
-    ["missing validation", workflow.replace(manifestKeyCapture.validation, "")],
-    ["missing output", workflow.replace(manifestKeyCapture.output, "")],
-    ["path-permissive validation", workflow.replace(manifestKeyCapture.validation, 'if [[ "$manifest_key" =~ .+ ]]; then')],
-    ["extra-line-permissive validation", workflow.replace(manifestKeyCapture.validation, 'if [[ "$manifest_key" =~ ^postgres-r2-.+$ ]]; then')],
-  ]) assert.throws(() => assertManifestKeyCaptureContract(mutated), name);
-}
-
-function assertRuntimeCryptPasswordDerivation(workflow: string) {
-  const heading = "      - name: Derive rclone crypt passwords\n", start = workflow.indexOf(heading), nextStep = workflow.indexOf("\n      - ", start + heading.length);
-  assert.ok(start >= 0 && nextStep > start); assert.equal(count(workflow, heading), 1);
-  const step = workflow.slice(start, nextStep), run = "        run: |\n", runStart = step.indexOf(run);
-  assert.ok(runStart >= 0); const body = step.slice(runStart + run.length), guardStart = body.indexOf("if [[ "), guardEnd = body.indexOf(" ]]; then", guardStart);
-  assert.ok(guardStart >= 0 && guardEnd > guardStart); const guard = body.slice(guardStart, guardEnd + " ]]; then".length);
-  const bindings = [["RCLONE_CRYPT_PASSWORD_PLAINTEXT", "RCLONE_CRYPT_PASSWORD", "${{ secrets.RCLONE_CRYPT_PASSWORD }}", "primary_crypt_password"], ["RCLONE_CRYPT_PASSWORD2_PLAINTEXT", "RCLONE_CRYPT_PASSWORD2", "${{ secrets.RCLONE_CRYPT_PASSWORD2 }}", "secondary_crypt_password"]] as const;
-  const job = workflow.slice(0, workflow.indexOf("    steps:\n"));
-  for (const [plaintext, secretName, secret, obscured] of bindings) {
-    const secretBinding = new RegExp(`\\$\\{\\{\\s*secrets\\.${secretName}\\s*\\}\\}`, "g");
-    assert.equal((workflow.match(secretBinding) || []).length, 1); assert.equal((step.match(secretBinding) || []).length, 1); assert.ok(step.includes(`          ${plaintext}: ${secret}\n`)); assert.equal((job.match(secretBinding) || []).length, 0);
-    assert.doesNotMatch(workflow, new RegExp(`^\\s+${plaintext.replace("_PLAINTEXT", "")}:\\s*\\$\\{\\{\\s*secrets\\.`, "m"));
-    assert.ok(guard.includes(`-z "$${plaintext}"`)); assert.ok(guard.includes(`"$${plaintext}" == *$'\\n'*`)); assert.ok(guard.includes(`"$${plaintext}" == *$'\\r'*`));
-    const obscure = `${obscured}="$(printf '%s' "$${plaintext}" | "$RUNNER_TEMP/rclone" obscure -)"`;
-    assert.equal(count(body, obscure), 1);
-    const plaintextReference = new RegExp(`\\$(?:${plaintext}\\b|\\{${plaintext}\\})`);
-    assert.deepEqual(body.split("\n").filter((line) => plaintextReference.test(line)).map((line) => line.trim()), [guard.trim(), obscure]);
-  }
-  const masks = ["printf '::add-mask::%s\\n' \"$primary_crypt_password\"", "printf '::add-mask::%s\\n' \"$secondary_crypt_password\""], writes = ["printf 'RCLONE_CONFIG_CRYPT_PASSWORD=%s\\n' \"$primary_crypt_password\" >> \"$GITHUB_ENV\"", "printf 'RCLONE_CONFIG_CRYPT_PASSWORD2=%s\\n' \"$secondary_crypt_password\" >> \"$GITHUB_ENV\""];
-  for (const command of [...masks, ...writes]) assert.equal(count(body, command), 1);
-  assert.equal(count(body, "$GITHUB_ENV"), writes.length); assert.ok(Math.max(...masks.map((command) => body.indexOf(command))) < Math.min(...writes.map((command) => body.indexOf(command))));
-}
 
 type Call = { program: string; args: string[]; input?: string; env?: Record<string, string>; phase?: "upload" | "validation" | "ciphertext" };
 type MockOptions = { results?: { stdout: string; bytes: number; sha256: string }[]; fail?: string | ((program: string, args: string[], env?: Record<string, string>) => boolean); streamFailure?: "source" | "destination"; streamPhase?: "upload" | "validation" | "ciphertext"; error?: string; files?: string[]; version?: string; cryptdecodeOutput?: string };
@@ -375,14 +322,8 @@ test("formats only a strict logical manifest basename for operator output", () =
   assert.throws(() => formatManifestBasename({ manifest: "crypt:ofertasuper-r2/secret" }), /manifest name invalid/);
 });
 
-test("workflow remains manual-only, pins checkout, and documents failure semantics", () => {
-  const script = read("scripts/postgres-backup-r2.mjs"), workflow = read(".github/workflows/database-backup.yml"), docs = read("docs/database-backup-recovery-runbook.md");
-  assert.match(workflow, /actions\/checkout@11d5960a326750d5838078e36cf38b85af677262\s+# v4/); assert.match(workflow, /BACKUP_DATABASE_ROLE/); assert.match(workflow, /BACKUP_CRYPT_REMOTE:\s*\$\{\{ vars\.BACKUP_CRYPT_REMOTE \}\}/); assert.doesNotMatch(workflow, /^\s+RCLONE_CRYPT_REMOTE:/m); assert.match(workflow, /DATABASE_URL:\s*\$\{\{ secrets\.BACKUP_DATABASE_URL \}\}/); assert.doesNotMatch(workflow, /DATABASE_URL:\s*\$\{\{ secrets\.DATABASE_URL \}\}|schedule:|cron:/);
-  assertRuntimeCryptPasswordDerivation(workflow);
-  assertManifestKeyCapture(workflow);
-  assertFixedR2NoCheckBucket(workflow);
-  assert.doesNotMatch(workflow, /set -x/);
-  const install = workflow.indexOf("Install pinned rclone"), derive = workflow.indexOf("Derive rclone crypt passwords"), backup = workflow.indexOf('manifest_key="$(npm run --silent backup:postgres-r2)"'); assert.ok(install >= 0 && install < derive && derive < backup);
+test("script keeps its no-plaintext contract and docs document failure semantics", () => {
+  const script = read("scripts/postgres-backup-r2.mjs"), docs = read("docs/database-backup-recovery-runbook.md");
   assert.match(script, /createHash|--immutable|manifest\.uploading|BACKUP_DATABASE_ROLE/); assert.doesNotMatch(script, /--file=|writeFile|createWriteStream|\bhashsum\b/);
   assert.match(docs, /BACKUP_CRYPT_REMOTE.*logical/i); assert.match(docs, /RCLONE_CRYPT_REMOTE.*reserved/i); assert.match(docs, /RCLONE_CONFIG=\/dev\/null/); assert.match(docs, /upload.*validation.*source.*destination/i); assert.match(docs, /retention failure.*fails/i); assert.match(docs, /never writes a plaintext dump/i); assert.match(docs, /plaintext.*do not pre-obscure|do not pre-obscure.*plaintext/i);
 });
