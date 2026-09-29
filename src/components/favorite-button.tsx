@@ -14,6 +14,24 @@ type FavoriteButtonProps = {
   showLabel?: boolean;
 };
 
+function getFavoriteLabel(active: boolean, productName: string) {
+  return active ? `Quitar ${productName} de favoritos` : `Guardar ${productName} en favoritos`;
+}
+
+function getFavoriteButtonClassName(active: boolean, size: "sm" | "default", className?: string) {
+  return cn(
+    buttonVariants({ variant: active ? "secondary" : "outline", size: size === "sm" ? "sm" : "default" }),
+    "press rounded-full",
+    active && "text-deal-ink",
+    className,
+  );
+}
+
+function getFavoriteText(active: boolean, showLabel: boolean) {
+  if (!showLabel) return null;
+  return active ? "Guardado" : "Favorito";
+}
+
 export function FavoriteButton({
   ean,
   productName = "este producto",
@@ -23,7 +41,7 @@ export function FavoriteButton({
 }: FavoriteButtonProps) {
   const { hasHydrated, isFavorite, toggleFavorite } = useFavorites();
   const active = hasHydrated && isFavorite(ean);
-  const label = active ? `Quitar ${productName} de favoritos` : `Guardar ${productName} en favoritos`;
+  const label = getFavoriteLabel(active, productName);
 
   return (
     <button
@@ -33,14 +51,10 @@ export function FavoriteButton({
       title={label}
       disabled={!hasHydrated}
       onClick={() => toggleFavorite(ean)}
-      className={cn(
-        buttonVariants({ variant: active ? "secondary" : "outline", size: size === "sm" ? "sm" : "default" }),
-        "rounded-full",
-        className,
-      )}
+      className={getFavoriteButtonClassName(active, size, className)}
     >
       <Heart className={cn("size-4", active && "fill-current")} />
-      {showLabel ? (active ? "Guardado" : "Favorito") : null}
+      {getFavoriteText(active, showLabel)}
     </button>
   );
 }

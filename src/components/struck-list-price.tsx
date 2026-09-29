@@ -9,10 +9,10 @@ export function StruckListPrice({ price, listPrice }: { price: number | null; li
 
   return (
     <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
-      <s className="text-sm text-muted-foreground" aria-label={`Precio de lista ${formatCurrency(listPrice)}`}>
+      <s className="text-sm tabular-nums text-muted-foreground" aria-label={`Precio de lista ${formatCurrency(listPrice)}`}>
         {formatCurrency(listPrice)}
       </s>
-      <span className="text-sm font-medium text-emerald-700">{formatPercent(discount.percentOff, 0)} OFF</span>
+      <span className="text-sm font-medium tabular-nums text-primary">{formatPercent(discount.percentOff, 0)} OFF</span>
     </span>
   );
 }

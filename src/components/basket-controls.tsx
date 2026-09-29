@@ -29,7 +29,7 @@ export function BasketControls({
         type="button"
         disabled={!hasHydrated}
         onClick={() => addItem(ean, 1)}
-        className={cn(buttonVariants({ variant: "outline", size }), "rounded-full", className)}
+        className={cn(buttonVariants({ variant: "outline", size }), "press rounded-full", className)}
         aria-label={`Agregar ${productName} a la canasta`}
       >
         <ShoppingBasket className="size-4" />
@@ -42,7 +42,7 @@ export function BasketControls({
     <div
       role="group"
       aria-label={`Cantidad en canasta para ${productName}`}
-      className={cn("inline-flex items-center gap-1 rounded-full border border-border/70 bg-white/80 p-1", className)}
+      className={cn("inline-flex items-center gap-1 rounded-full bg-surface-3/70 p-1", className)}
     >
       <button
         type="button"
@@ -52,7 +52,7 @@ export function BasketControls({
       >
         <Minus className="size-4" />
       </button>
-      <span className="min-w-8 text-center text-sm font-semibold text-foreground" aria-live="polite">
+      <span className="min-w-8 text-center font-mono text-sm font-bold tabular-nums text-foreground" aria-live="polite">
         {quantity}
       </span>
       <button

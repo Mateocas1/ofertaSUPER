@@ -68,9 +68,9 @@ function PriceComparisonPromoCell({ entry }: { entry: PriceComparisonEntry }) {
 function PriceComparisonDeltaCell({ entry }: { entry: PriceComparisonEntry }) {
   return (
     <div>
-      <p>{formatPercent(entry.deltaPercent)}</p>
+      <p className="tabular-nums">{formatPercent(entry.deltaPercent)}</p>
       {entry.priceDropAlert ? (
-        <p className="mt-1 text-xs text-emerald-700">
+        <p className="mt-1 text-xs tabular-nums text-primary">
           Ahorra {formatCurrency(entry.priceDropAlert.amountDrop)}
         </p>
       ) : null}
@@ -104,7 +104,7 @@ function PriceComparisonRow({ entry }: { entry: PriceComparisonEntry }) {
   const isStale = entry.freshnessStatus === "stale";
 
   return (
-    <tr className={cn("border-t border-border/60", isStale && "bg-amber-50/45")}>
+    <tr className={cn("border-t border-border/60", isStale && "bg-deal-soft/60")}>
       <td className="px-6 py-4">
         <SupermarketBadge
           name={entry.supermarket.name}
@@ -113,7 +113,7 @@ function PriceComparisonRow({ entry }: { entry: PriceComparisonEntry }) {
         />
       </td>
       <td className="px-6 py-4">
-        <span className="font-semibold text-foreground">{formatCurrency(entry.price)}</span>
+        <span className="font-mono font-bold tabular-nums text-foreground">{formatCurrency(entry.price)}</span>
         <div className="mt-1">
           <StruckListPrice price={entry.price} listPrice={entry.listPrice} />
         </div>
@@ -121,22 +121,22 @@ function PriceComparisonRow({ entry }: { entry: PriceComparisonEntry }) {
       <td className="px-6 py-4">
         <PriceComparisonPromoCell entry={entry} />
       </td>
-      <td className={cn("px-6 py-4 font-semibold", entry.finalPrice !== null ? "text-emerald-700" : "text-muted-foreground")}>
+      <td className={cn("px-6 py-4 font-bold", entry.finalPrice !== null ? "font-mono text-base tabular-nums text-primary" : "text-muted-foreground")}>
         {entry.finalPrice !== null ? formatCurrency(entry.finalPrice) : "No calculable"}
       </td>
-      <td className="px-6 py-4 text-muted-foreground">{formatCurrency(entry.previousPrice)}</td>
+      <td className="px-6 py-4 font-mono tabular-nums text-muted-foreground">{formatCurrency(entry.previousPrice)}</td>
       <td
         className={cn(
           "px-6 py-4 font-medium",
-          entry.deltaPercent !== null && entry.deltaPercent > 0 && "text-rose-700",
-          entry.deltaPercent !== null && entry.deltaPercent < 0 && "text-emerald-700",
+          entry.deltaPercent !== null && entry.deltaPercent > 0 && "text-destructive",
+          entry.deltaPercent !== null && entry.deltaPercent < 0 && "text-primary",
         )}
       >
         <PriceComparisonDeltaCell entry={entry} />
       </td>
       <td className="px-6 py-4 text-muted-foreground">
         <p>{formatDateTime(entry.lastCheckedAt)}</p>
-        {isStale ? <p className="mt-1 text-xs font-medium text-amber-700">{freshnessCopy.badgeLabel}</p> : null}
+        {isStale ? <p className="mt-1 text-xs font-medium text-warning">{freshnessCopy.badgeLabel}</p> : null}
       </td>
       <td className="px-6 py-4">
         <PriceComparisonLinkCell entry={entry} />
@@ -156,8 +156,8 @@ export function PriceComparison({ entries }: PriceComparisonProps) {
 
   return (
     <div className="surface overflow-hidden">
-      <div className="border-b border-border/70 px-6 py-5">
-        <h2 className="text-2xl font-semibold text-foreground">Comparativa por supermercado</h2>
+      <div className="border-b-2 border-dashed border-border px-6 py-5">
+        <h2 className="font-display text-2xl font-bold text-foreground">Comparativa por supermercado</h2>
         <p className="mt-1 text-sm text-muted-foreground">Precio registrado, promo aplicable y precio final cuando se puede estimar.</p>
         <p className="mt-2 text-xs text-muted-foreground">
           Si el dato esta viejo, tratamos el valor como ultimo precio registrado. Revisalo en la web del super antes de comprar.
@@ -166,7 +166,7 @@ export function PriceComparison({ entries }: PriceComparisonProps) {
 
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-muted/50 text-muted-foreground">
+          <thead className="bg-surface-1 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
               <th className="px-6 py-3 font-medium">Super</th>
               <th className="px-6 py-3 font-medium">Precio</th>

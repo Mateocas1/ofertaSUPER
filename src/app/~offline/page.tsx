@@ -8,7 +8,7 @@ export default function OfflinePage() {
     <div className="px-6 py-10 md:py-14">
       <section className="surface mx-auto flex w-full max-w-3xl flex-col gap-5 p-8 text-center md:p-10">
         <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Modo offline</p>
-        <h1 className="text-4xl font-semibold text-foreground md:text-5xl">No hay conexion disponible.</h1>
+        <h1 className="text-4xl font-extrabold text-foreground md:text-5xl">No hay conexion disponible.</h1>
         <p className="text-base leading-7 text-muted-foreground md:text-lg">
           Puedes volver a intentar cuando recuperes internet. La app mantiene activos sus recursos estaticos, pero los precios necesitan red para seguir frescos.
         </p>

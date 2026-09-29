@@ -87,7 +87,7 @@ function EmptyCanasta() {
         <span className="flex size-16 items-center justify-center rounded-full bg-accent text-accent-foreground"><ShoppingBasket className="size-8" /></span>
         <div className="space-y-3">
           <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Canasta</p>
-          <h1 className="text-4xl font-semibold text-foreground md:text-5xl">Todavia no agregaste productos.</h1>
+          <h1 className="text-4xl font-extrabold text-foreground md:text-5xl">Todavia no agregaste productos.</h1>
           <p className="text-base leading-7 text-muted-foreground md:text-lg">Usa la canasta para estimar el total por supermercado con los productos que ya vienes comparando.</p>
         </div>
         <Link href="/buscar" className={cn(buttonVariants({ size: "lg" }), "rounded-full px-5")}>Explorar catalogo</Link>
@@ -100,7 +100,7 @@ function UnavailableCanasta({ clearCanasta }: { clearCanasta: () => void }) {
   return (
     <section className="surface p-8 md:p-10" role="alert">
       <div className="mx-auto flex max-w-3xl flex-col gap-5 text-center">
-        <AlertCircle className="mx-auto size-10 text-amber-700" />
+        <AlertCircle className="mx-auto size-10 text-warning" />
         <div className="space-y-3">
           <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Canasta</p>
           <h1 className="text-3xl font-semibold text-foreground md:text-4xl">No podemos mostrar los datos de la canasta en este momento.</h1>
@@ -113,20 +113,20 @@ function UnavailableCanasta({ clearCanasta }: { clearCanasta: () => void }) {
 }
 
 function BasketItemImage({ product }: { product: CanastaProduct | undefined }) {
-  return <div className="relative size-20 shrink-0 overflow-hidden rounded-[1.5rem] border border-border/70 bg-muted/40">{product?.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill sizes="80px" className="object-cover" unoptimized /> : <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.18em] text-muted-foreground">Sin foto</div>}</div>;
+  return <div className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-surface-3/70">{product?.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill sizes="80px" className="img-outline object-cover" unoptimized /> : <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.18em] text-muted-foreground">Sin foto</div>}</div>;
 }
 
 function BasketItemTitle({ item, product }: { item: CanastaItem; product: CanastaProduct | undefined }) {
   return <>
-    <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-border/70 bg-white/80 px-3 py-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">EAN {item.ean}</span><FavoriteButton ean={item.ean} productName={product?.name ?? item.ean} size="sm" /></div>
-    <h2 className="mt-3 text-xl font-semibold text-foreground">{product ? <Link href={`/producto/${item.ean}`} className="hover:text-primary">{product.name}</Link> : `Producto ${item.ean}`}</h2>
+    <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-surface-3/70 px-3 py-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">EAN {item.ean}</span><FavoriteButton ean={item.ean} productName={product?.name ?? item.ean} size="sm" /></div>
+    <h2 className="mt-3 text-xl font-bold text-foreground">{product ? <Link href={`/producto/${item.ean}`} className="hover:text-primary">{product.name}</Link> : `Producto ${item.ean}`}</h2>
     <p className="mt-1 text-sm text-muted-foreground">{product?.brand ?? "Sin detalle adicional"}</p>
   </>;
 }
 
 function BasketItemPrice({ planItem, degradedDemo }: { planItem: BasketPlanItem; degradedDemo: boolean }) {
   const chosen = planItem.chosenName ? `Elegido: ${planItem.chosenName}` : "Sin precio elegible";
-  return <p className="mt-3 text-sm text-muted-foreground">{chosen}: <strong className="text-foreground">{formatCurrency(planItem.lineTotal)}</strong>{degradedDemo ? " (estimación histórica)" : ""}</p>;
+  return <p className="mt-3 text-sm text-muted-foreground">{chosen}: <strong className="tabular-nums text-foreground">{formatCurrency(planItem.lineTotal)}</strong>{degradedDemo ? " (estimación histórica)" : ""}</p>;
 }
 
 function BasketItemIdentity({ item, product, planItem, degradedDemo }: { item: CanastaItem; product: CanastaProduct | undefined; planItem: BasketPlanItem; degradedDemo: boolean }) {
@@ -137,7 +137,7 @@ function BasketItemIdentity({ item, product, planItem, degradedDemo }: { item: C
 }
 
 function BasketProductBadges({ item, product }: { item: CanastaItem; product: CanastaProduct | undefined }) {
-  if (!product) return <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"><AlertCircle className="size-4" />Sin detalle cargado por ahora</div>;
+  if (!product) return <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-warning/50 bg-deal-soft px-3 py-2 text-sm text-foreground"><AlertCircle className="size-4" />Sin detalle cargado por ahora</div>;
   const visibleEntries = product.priceEntries.slice(0, 4);
   return <div className="mt-4 flex flex-wrap items-center gap-2">
     {visibleEntries.map((entry) => <SupermarketBadge key={`${item.ean}-${entry.supermarket.slug}`} name={entry.supermarket.name} slug={entry.supermarket.slug} logoUrl={entry.supermarket.logoUrl} price={entry.isAvailable ? formatCurrency(entry.price) : "No disp."} />)}
@@ -156,7 +156,7 @@ function BasketSuperSelector({ planItem, onSelect }: { planItem: BasketPlanItem;
     <select
       value={planItem.chosenSlug ?? ""}
       onChange={(event) => onSelect(planItem.ean, event.target.value)}
-      className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground"
+      className="min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground"
     >
       {planItem.options.map((option) => (
         <option key={option.slug} value={option.slug}>{option.name} — {formatCurrency(option.price)}</option>
@@ -183,24 +183,24 @@ function BasketMixCard({ plan, degradedDemo }: { plan: ReturnType<typeof compute
   const { bestSingle, savings } = plan;
   return (
     <section className="surface p-6 md:p-8">
-      <div><p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Mezcla automática</p><h2 className="mt-2 text-3xl font-semibold text-foreground">Cada producto en su súper más barato</h2></div>
-      <p className="mt-5 text-4xl font-semibold text-foreground">{formatCurrency(plan.mixedTotal)}</p>
+      <div><p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Mezcla automática</p><h2 className="mt-2 text-3xl font-bold text-foreground">Cada producto en su súper más barato</h2></div>
+      <p className="price mt-5 text-4xl text-foreground">{formatCurrency(plan.mixedTotal)}</p>
       {savings !== null && bestSingle ? (
-        <p className="mt-3 text-sm font-medium text-emerald-700">Ahorás {formatCurrency(savings)} frente a la mejor canasta en un solo súper ({formatCurrency(bestSingle.total)} en {bestSingle.name}).</p>
+        <p className="mt-3 text-sm font-medium tabular-nums text-primary">Ahorás {formatCurrency(savings)} frente a la mejor canasta en un solo súper ({formatCurrency(bestSingle.total)} en {bestSingle.name}).</p>
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">La mezcla esta incompleta: {plan.mixedMissing} producto(s) sin precio elegible todavia.</p>
       )}
       <p className="mt-3 text-xs text-muted-foreground">Cambiá el súper de cada producto en su tarjeta; la mezcla respeta tu elección.</p>
-      {degradedDemo ? <p className="mt-2 text-xs text-amber-700">Estimación histórica: los valores pueden estar desactualizados.</p> : null}
+      {degradedDemo ? <p className="mt-2 text-xs text-warning">Estimación histórica: los valores pueden estar desactualizados.</p> : null}
     </section>
   );
 }
 
 function BasketSummaryCard({ summary, isBest, degradedDemo }: { summary: ReturnType<typeof buildBasketSummaries>[number]; isBest: boolean; degradedDemo: boolean }) {
   return (
-    <article className={cn("rounded-[1.5rem] border p-5", isBest ? "border-emerald-300 bg-emerald-50/80" : "border-border/70 bg-white/80")}>
-      <div className="flex items-center justify-between gap-4"><SupermarketBadge name={summary.name} slug={summary.slug} logoUrl={summary.logoUrl} />{isBest ? <span className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-900">{degradedDemo ? "Mejor estimación completa" : "Mejor canasta completa"}</span> : null}</div>
-      <p className="mt-5 text-4xl font-semibold text-foreground">{formatCurrency(summary.total)}</p>
+    <article className={cn("rounded-xl border p-5", isBest ? "settle border-primary bg-accent shadow-[var(--elevation-2)]" : "border-border/70 bg-surface-1")}>
+      <div className="flex items-center justify-between gap-4"><SupermarketBadge name={summary.name} slug={summary.slug} logoUrl={summary.logoUrl} />{isBest ? <span className="price-tag font-sans">{degradedDemo ? "Mejor estimación completa" : "Mejor canasta completa"}</span> : null}</div>
+      <p className="price mt-5 text-4xl text-foreground">{formatCurrency(summary.total)}</p>
       <div className="mt-3 flex flex-wrap gap-2 text-sm text-muted-foreground"><span>{summary.coveredItems} items cubiertos</span><span>•</span><span>{summary.missingItems} faltantes</span></div>
     </article>
   );
@@ -233,14 +233,14 @@ function CanastaCatalog({
           <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Canasta activa</p>
-              <h1 className="mt-2 text-4xl font-semibold text-foreground md:text-5xl">{distinctItems} productos, {totalItems} unidades</h1>
+              <h1 className="mt-2 text-4xl font-extrabold text-foreground md:text-5xl">{distinctItems} productos, {totalItems} unidades</h1>
               <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">{degradedDemo ? "Esta demostración estima la canasta con precios históricos; no muestra precios actuales." : "Ajusta cantidades y compara cuanto costaría resolver la canasta con registros recientes disponibles por supermercado."}</p>
             </div>
             <button type="button" onClick={clearCanasta} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-full")}>Vaciar canasta</button>
           </div>
-          {loadError ? <p className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{loadError}</p> : null}
-          {degradedDemo ? <p role="status" className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 font-medium text-amber-950">Estimaciones de demostración con precios históricos o desactualizados. No son precios actuales.</p> : null}
-          {unresolvedItems.length > 0 ? <p className="mt-5 rounded-2xl border border-border/70 bg-white/80 px-4 py-3 text-sm text-muted-foreground">{unresolvedItems.length} producto(s) todavia no pudieron resolverse desde la API. El comparador sigue calculando con los items cargados.</p> : null}
+          {loadError ? <p className="mt-5 rounded-xl border-2 border-dashed border-warning/60 bg-deal-soft px-4 py-3 text-sm text-foreground">{loadError}</p> : null}
+          {degradedDemo ? <p role="status" className="mt-5 rounded-xl border-2 border-dashed border-warning/60 bg-deal-soft px-4 py-3 text-sm text-foreground">Estimaciones de demostración con precios históricos o desactualizados. No son precios actuales.</p> : null}
+          {unresolvedItems.length > 0 ? <p className="mt-5 rounded-xl bg-surface-3/70 px-4 py-3 text-sm text-muted-foreground">{unresolvedItems.length} producto(s) todavia no pudieron resolverse desde la API. El comparador sigue calculando con los items cargados.</p> : null}
         </div>
 
         <div className="space-y-4">
@@ -252,12 +252,12 @@ function CanastaCatalog({
         <BasketMixCard plan={plan} degradedDemo={degradedDemo} />
         <section className="surface p-6 md:p-8">
           <div className="flex items-center justify-between gap-4">
-            <div><p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Comparativa</p><h2 className="mt-2 text-3xl font-semibold text-foreground">{degradedDemo ? "Estimación histórica por supermercado" : "Total por supermercado"}</h2></div>
+            <div><p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Comparativa</p><h2 className="mt-2 text-3xl font-bold text-foreground">{degradedDemo ? "Estimación histórica por supermercado" : "Total por supermercado"}</h2></div>
             {isPending ? <LoaderCircle className="size-5 animate-spin text-muted-foreground" /> : null}
           </div>
           <div className="mt-6 space-y-4">
             {summaries.map((summary) => <BasketSummaryCard key={summary.slug} summary={summary} isBest={bestSingle?.slug === summary.slug} degradedDemo={degradedDemo} />)}
-            {summaries.length === 0 ? <div className="rounded-[1.5rem] border border-dashed border-border bg-white/70 p-5 text-sm text-muted-foreground">Aun no hay suficiente cobertura multi-super para calcular un total agregado.</div> : null}
+            {summaries.length === 0 ? <div className="rounded-xl border-2 border-dashed border-border bg-surface-1 p-5 text-sm text-muted-foreground">Aun no hay suficiente cobertura multi-super para calcular un total agregado.</div> : null}
           </div>
         </section>
         <section className="surface-soft p-6">

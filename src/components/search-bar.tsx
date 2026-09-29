@@ -29,6 +29,67 @@ type SearchBarProps = {
   variant?: "hero" | "compact";
 };
 
+type SuggestionOptionProps = {
+  result: SearchSuggestion;
+  id: string;
+  active: boolean;
+  onActivate: () => void;
+};
+
+function SuggestionOption({ result, id, active, onActivate }: SuggestionOptionProps) {
+  return (
+    <Link
+      id={id}
+      href={`/producto/${result.ean}`}
+      role="option"
+      aria-selected={active}
+      className={cn(
+        "flex min-h-16 items-center gap-4 border-t border-dashed border-border px-4 py-3 first:border-t-0 hover:bg-accent/60 focus-visible:bg-accent/60",
+        active && "bg-accent/60",
+      )}
+      onMouseEnter={onActivate}
+    >
+      <div className="relative size-14 overflow-hidden rounded-xl bg-surface-3/70">
+        {result.imageUrl ? (
+          <Image src={result.imageUrl} alt={result.name} fill sizes="56px" className="img-outline object-cover" unoptimized />
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium text-foreground">{result.name}</p>
+        <p className="truncate text-sm text-muted-foreground">
+          {[result.brand, result.category].filter(Boolean).join(" • ") || "Sin datos extra"}
+        </p>
+      </div>
+      <div className="text-right">
+        <p className="price text-sm text-primary">{formatCurrency(result.displayPrice ?? result.minPrice)}</p>
+        {result.freshnessStatus === "stale" ? (
+          <p className="mt-1 text-xs font-medium text-warning">
+            {getPriceFreshnessCopy({
+              status: result.freshnessStatus,
+              checkedAt: result.bestPriceCheckedAt,
+              ageHours: null,
+              maxAgeHours: 0,
+            }).badgeLabel}
+          </p>
+        ) : null}
+      </div>
+    </Link>
+  );
+}
+
+const VARIANT_STYLES = {
+  hero: {
+    field: "rounded-[1.625rem] px-4 py-4 md:px-5",
+    input: "text-base md:text-lg",
+    buttonSize: "lg",
+  },
+  compact: {
+    field: "rounded-[1.375rem] px-3 py-3",
+    input: "text-sm",
+    buttonSize: "sm",
+  },
+} as const;
+
 export function SearchBar({
   defaultValue = "",
   placeholder = "Buscar yerba, leche, arroz o una marca puntual",
@@ -43,6 +104,7 @@ export function SearchBar({
   const [hasInteracted, setHasInteracted] = useState(false);
   const [isPending, startTransition] = useTransition();
   const deferredQuery = useDeferredValue(query);
+  const styles = VARIANT_STYLES[variant];
   const resultsId = `${searchId}-results`;
   const activeOptionId = activeIndex >= 0 ? `${searchId}-option-${activeIndex}` : undefined;
 
@@ -144,11 +206,11 @@ export function SearchBar({
         </label>
         <div
           className={cn(
-            "flex items-center gap-3 rounded-[1.6rem] border border-border/70 bg-white/90 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur",
-            variant === "hero" ? "px-4 py-4 md:px-5" : "px-3 py-3",
+            "flex items-center gap-3 border-2 border-foreground/15 bg-card shadow-[var(--elevation-2)] [transition:border-color_200ms_var(--ease-out),box-shadow_200ms_var(--ease-out)] focus-within:border-primary focus-within:shadow-[var(--elevation-3)]",
+            styles.field,
           )}
         >
-          <Search className="size-5 text-muted-foreground" aria-hidden="true" />
+          <Search className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             id={`${searchId}-${variant}`}
             value={query}
@@ -170,7 +232,7 @@ export function SearchBar({
             autoComplete="off"
             className={cn(
               "w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground",
-              variant === "hero" ? "text-base md:text-lg" : "text-sm",
+              styles.input,
             )}
             role="combobox"
             aria-expanded={open}
@@ -182,7 +244,7 @@ export function SearchBar({
 
           <button
             type="submit"
-            className={cn(buttonVariants({ size: variant === "hero" ? "lg" : "sm" }), "rounded-full px-4")}
+            className={cn(buttonVariants({ size: styles.buttonSize }), "press px-4")}
             aria-label="Ejecutar búsqueda"
           >
             {isPending ? <LoaderCircle className="size-4 animate-spin" /> : "Buscar"}
@@ -198,47 +260,17 @@ export function SearchBar({
         <div
           id={resultsId}
           role="listbox"
-          className="absolute inset-x-0 top-[calc(100%+0.75rem)] z-50 overflow-hidden rounded-[1.5rem] border border-border/70 bg-white/95 shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur"
+          className="absolute inset-x-0 top-[calc(100%+0.75rem)] z-50 overflow-hidden rounded-2xl border border-border bg-popover shadow-[var(--elevation-3)]"
         >
           {results.length > 0 ? (
             results.map((result, index) => (
-              <Link
+              <SuggestionOption
                 key={result.ean}
+                result={result}
                 id={`${searchId}-option-${index}`}
-                href={`/producto/${result.ean}`}
-                role="option"
-                aria-selected={index === activeIndex}
-                className={cn(
-                  "flex min-h-16 items-center gap-4 border-t border-border/50 px-4 py-3 first:border-t-0 hover:bg-muted/50 focus-visible:bg-muted/50",
-                  index === activeIndex && "bg-muted/50",
-                )}
-                onMouseEnter={() => setActiveIndex(index)}
-              >
-                    <div className="relative size-14 overflow-hidden rounded-2xl border border-border/70 bg-muted/40">
-                      {result.imageUrl ? (
-                        <Image src={result.imageUrl} alt={result.name} fill sizes="56px" className="object-cover" unoptimized />
-                      ) : null}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-foreground">{result.name}</p>
-                      <p className="truncate text-sm text-muted-foreground">
-                        {[result.brand, result.category].filter(Boolean).join(" • ") || "Sin datos extra"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-foreground">{formatCurrency(result.displayPrice ?? result.minPrice)}</p>
-                      {result.freshnessStatus === "stale" ? (
-                        <p className="mt-1 text-xs font-medium text-amber-700">
-                          {getPriceFreshnessCopy({
-                            status: result.freshnessStatus,
-                            checkedAt: result.bestPriceCheckedAt,
-                            ageHours: null,
-                            maxAgeHours: 0,
-                          }).badgeLabel}
-                        </p>
-                      ) : null}
-                    </div>
-              </Link>
+                active={index === activeIndex}
+                onActivate={() => setActiveIndex(index)}
+              />
             ))
           ) : (
             <div className="px-4 py-5 text-sm text-muted-foreground">Sin coincidencias por ahora.</div>

@@ -43,7 +43,7 @@ export default function MethodologyPage() {
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Metodología
               </p>
-              <h1 className="mt-3 max-w-4xl text-4xl font-semibold leading-[0.98] tracking-[-0.05em] text-foreground text-balance sm:text-5xl lg:text-6xl">
+              <h1 className="mt-3 max-w-4xl text-4xl font-extrabold leading-[0.98] tracking-[-0.045em] text-foreground text-balance sm:text-5xl lg:text-6xl">
                 Comparaciones claras para decidir con precios registrados.
               </h1>
             </div>
@@ -58,11 +58,11 @@ export default function MethodologyPage() {
             <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Cómo se calcula</p>
-                <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground">Del producto a la canasta</h2>
+                <h2 className="mt-2 text-3xl font-bold  text-foreground">Del producto a la canasta</h2>
               </div>
               <Link
                 href="/buscar"
-                className="rounded-[0.65rem] border border-primary/45 bg-card px-5 py-2.5 text-sm font-semibold text-foreground transition duration-200 hover:border-primary hover:text-primary active:translate-y-px"
+                className="press inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
               >
                 Buscar productos
               </Link>
@@ -70,7 +70,7 @@ export default function MethodologyPage() {
 
             <div className="grid gap-4">
               {METHOD_STEPS.map((step) => (
-                <article key={step.title} className="grid gap-4 rounded-[0.9rem] border border-border bg-card p-4 sm:grid-cols-[4.5rem_1fr] sm:p-5">
+                <article key={step.title} className="grid gap-4 rounded-xl bg-surface-2 p-4 ring-1 ring-border sm:grid-cols-[4.5rem_1fr] sm:p-5">
                   <span className="font-mono text-3xl font-semibold tracking-[-0.08em] text-primary/80" aria-hidden="true">
                     {step.label}
                   </span>
@@ -85,18 +85,18 @@ export default function MethodologyPage() {
 
           <aside className="surface-soft p-5 sm:p-6 lg:p-7" aria-labelledby="quality-rules-title">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Criterios de confianza</p>
-            <h2 id="quality-rules-title" className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-foreground">
+            <h2 id="quality-rules-title" className="mt-2 text-3xl font-bold  text-foreground">
               Lectura conservadora de datos
             </h2>
             <ul className="mt-6 space-y-4">
               {QUALITY_RULES.map((rule) => (
-                <li key={rule} className="flex gap-3 rounded-[0.85rem] border border-border bg-card px-4 py-3 text-sm leading-6 text-muted-foreground">
+                <li key={rule} className="flex gap-3 rounded-xl bg-surface-2 px-4 py-3 ring-1 ring-border text-sm leading-6 text-muted-foreground">
                   <span className="mt-2 size-2 shrink-0 rounded-full bg-primary" aria-hidden="true" />
                   <span>{rule}</span>
                 </li>
               ))}
             </ul>
-            <div className="mt-6 rounded-[0.9rem] border border-primary/20 bg-primary/5 p-4 text-sm leading-6 text-foreground">
+            <div className="mt-6 rounded-xl border-2 border-dashed border-primary/40 bg-accent/60 p-4 text-sm leading-6 text-foreground">
               Si un supermercado no cubre todos los productos de una canasta, ofertasSUPER lo muestra como cobertura parcial. Así el total no se confunde con una compra equivalente.
             </div>
           </aside>

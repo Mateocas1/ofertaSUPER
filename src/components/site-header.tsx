@@ -11,7 +11,7 @@ export function SiteHeader() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/92 px-4 backdrop-blur-md sm:px-6">
+    <header className="sticky top-0 z-30 border-b-2 border-dashed border-border bg-background/95 px-4 sm:px-6">
       <div className="mx-auto flex min-h-[4.75rem] w-full max-w-[1512px] flex-wrap items-center justify-between gap-4 py-3">
         <Link href="/" className="group inline-flex items-center gap-3" aria-label="ofertasSUPER inicio">
           <span className="relative flex h-9 w-11 items-center justify-center text-[1.45rem] font-black tracking-[-0.18em] text-primary">
@@ -19,7 +19,7 @@ export function SiteHeader() {
             <span className="absolute right-1 h-6 w-6 rounded-full border-[5px] border-current opacity-90" aria-hidden="true" />
             <span className="sr-only">OS</span>
           </span>
-          <span className="text-xl font-bold tracking-[-0.04em] text-foreground">
+          <span className="font-display text-2xl font-extrabold tracking-[-0.045em] text-foreground">
             ofertas<span className="text-primary">SUPER</span>
           </span>
         </Link>
@@ -34,14 +34,14 @@ export function SiteHeader() {
                 href={item.href}
                 aria-current={isCurrent ? "page" : undefined}
                 className={cn(
-                  "relative px-1 py-4 transition duration-200 hover:text-primary active:translate-y-px",
-                  isCurrent && "text-primary",
+                  "relative px-1 py-4 [transition:color_200ms_var(--ease-out)] hover:text-primary",
+                  isCurrent && "font-semibold text-primary",
                 )}
               >
                 {item.label}
                 <span
                   className={cn(
-                    "absolute inset-x-0 bottom-0 h-px origin-center scale-x-0 bg-primary transition-transform duration-300",
+                    "absolute inset-x-0 bottom-0 h-0.5 origin-center scale-x-0 rounded-full bg-primary [transition:transform_260ms_var(--ease-out)]",
                     isCurrent && "scale-x-100",
                   )}
                   aria-hidden="true"
@@ -54,7 +54,7 @@ export function SiteHeader() {
         <Link
           href="/canasta"
           aria-label="Ver canasta"
-          className="inline-flex items-center gap-2 rounded-[0.65rem] border border-primary/45 bg-card px-3 py-2.5 text-sm font-semibold text-foreground transition duration-200 hover:border-primary hover:text-primary active:translate-y-px"
+          className="press inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground shadow-[var(--elevation-1)] hover:bg-primary/90"
         >
           <BasketIcon className="size-4" aria-hidden="true" />
           <span className="hidden sm:inline">Ver canasta</span>

@@ -10,11 +10,11 @@ type SupermarketBadgeProps = {
 
 const badgeStyles: Record<string, string> = {
   carrefour: "bg-[#0f4c81] text-white",
-  dia: "bg-[#cc1f2f] text-white",
-  disco: "bg-[#b7442d] text-white",
+  dia: "bg-[#b81c2a] text-white",
+  disco: "bg-[#a63a25] text-white",
   jumbo: "bg-[#1d6b52] text-white",
   mas: "bg-[#7a2e9b] text-white",
-  vea: "bg-[#d98b1f] text-white",
+  vea: "bg-[#8f5a0c] text-white",
 };
 
 function getInitials(name: string) {
@@ -31,15 +31,15 @@ export function SupermarketBadge({ name, slug, price, className }: SupermarketBa
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border border-border/70 bg-white/80 px-3 py-2 text-sm text-foreground shadow-sm",
+        "inline-flex items-center gap-2 rounded-full bg-surface-3/70 py-1.5 pl-1.5 pr-3 text-sm text-foreground",
         className,
       )}
     >
-      <div className={cn("flex size-7 items-center justify-center rounded-full text-[10px] font-semibold uppercase shadow-sm", badgeStyles[slug] ?? "bg-muted text-muted-foreground") }>
+      <div className={cn("flex size-7 items-center justify-center rounded-full text-[10px] font-bold uppercase", badgeStyles[slug] ?? "bg-muted text-muted-foreground") }>
         <span aria-hidden="true">{getInitials(name)}</span>
       </div>
       <span className="font-medium text-foreground">{name}</span>
-      {price ? <span className="text-muted-foreground">{price}</span> : null}
+      {price ? <span className="font-mono font-semibold tabular-nums text-muted-foreground">{price}</span> : null}
     </div>
   );
 }
