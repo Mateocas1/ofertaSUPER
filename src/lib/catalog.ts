@@ -24,6 +24,7 @@ import {
   calculateSourceProductCandidateReadLimit,
 } from "@/lib/catalog-query-planning";
 import { classifyPriceFreshness, type PriceFreshnessStatus } from "@/lib/price-freshness";
+import { slugify } from "@/lib/slugify";
 import { DETAILED_CATEGORIES } from "@/lib/vtex/categories";
 import { resolveProductDetail } from "@/lib/portfolio-catalog";
 import type { PublicCatalogProjection } from "@/lib/public-catalog-read.server";
@@ -181,15 +182,6 @@ export type PromotionFilters = {
 };
 
 const seriesColors = ["#d24726", "#2a6f58", "#4259d6", "#c77d00", "#7b3fe4", "#d13d7a"];
-
-function slugify(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
 
 function toNumber(value: Prisma.Decimal | null) {
   return value === null ? null : Number(value);
