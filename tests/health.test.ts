@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { catalogHealthStatusCode, createCatalogHealthChecker, createReadinessChecker } from "../src/lib/health";
+import { catalogHealthStatusCode, createCatalogHealthChecker, createReadinessChecker, createSnapshotCatalogHealthChecker } from "../src/lib/health";
 import { GET as liveness } from "../src/app/api/health/live/route";
 
 const valid = { DATABASE_URL: "postgresql://private:secret@db.internal/app" };
@@ -102,4 +102,60 @@ test("database checks use single-flight and short outcome-specific caches", asyn
 	now += 11;
 	await failing(valid);
 	assert.equal(failures, 2);
+});
+
+const snapshotEnv = { VERCEL: "1" };
+const snapshotNow = () => new Date("2026-09-29T09:00:00.000Z");
+const probe = (generatedAt: string) => () => ({ generatedAt });
+
+test("snapshot mode is ready from a valid fresh snapshot without touching the database", async () => {
+	let calls = 0;
+	const ready = createReadinessChecker(async () => { calls += 1; throw new Error("tenant not found"); }, {
+		snapshotProbe: probe("2026-09-28T10:09:44.217Z"), clock: snapshotNow,
+	});
+	// DATABASE_URL absent or pointing at a dead database is irrelevant in snapshot mode.
+	for (const env of [snapshotEnv, { ...snapshotEnv, DATABASE_URL: "postgresql://dead/db" }]) {
+		assert.deepEqual(await ready(env), {
+			status: "ready",
+			components: { configuration: "ok", database: "not_required", redis: "optional" },
+			snapshot: { status: "ok", generatedAt: "2026-09-28T10:09:44.217Z", ageHours: 22.8 },
+		});
+	}
+	assert.equal(calls, 0);
+});
+
+test("snapshot mode is not ready when the snapshot is stale, unreadable or from the future", async () => {
+	const stale = createReadinessChecker(async () => undefined, { snapshotProbe: probe("2026-09-27T08:00:00.000Z"), clock: snapshotNow });
+	const staleResult = await stale(snapshotEnv);
+	assert.equal(staleResult.status, "not_ready");
+	assert.equal(staleResult.snapshot?.status, "stale");
+	const broken = createReadinessChecker(async () => undefined, {
+		snapshotProbe: () => { throw new Error("corrupt /private/path"); }, clock: snapshotNow,
+	});
+	const brokenResult = await broken(snapshotEnv);
+	assert.deepEqual(brokenResult.snapshot, { status: "error" });
+	assert.equal(brokenResult.status, "not_ready");
+	assert.doesNotMatch(JSON.stringify(brokenResult), /private|corrupt/);
+	const future = createReadinessChecker(async () => undefined, { snapshotProbe: probe("2026-10-01T00:00:00.000Z"), clock: snapshotNow });
+	assert.equal((await future(snapshotEnv)).status, "not_ready");
+});
+
+test("enabling admin on Vercel keeps the database check", async () => {
+	const ready = createReadinessChecker(async () => { throw new Error("down"); }, { snapshotProbe: probe("2026-09-29T08:00:00.000Z"), clock: snapshotNow });
+	const result = await ready({ ...snapshotEnv, ADMIN_ENABLED: "true", DATABASE_URL: "postgresql://x/y", CLERK_SECRET_KEY: "k", NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "p" });
+	assert.equal(result.status, "not_ready");
+	assert.equal(result.components.database, "error");
+});
+
+test("snapshot catalog health proves freshness from the snapshot and never claims a DB publication", () => {
+	const check = (generatedAt: string | Error) => createSnapshotCatalogHealthChecker(
+		() => { if (generatedAt instanceof Error) throw generatedAt; return { generatedAt }; }, { now: snapshotNow },
+	)();
+	assert.deepEqual(check("2026-09-28T10:09:44.217Z"), {
+		status: "current", publication: "not_applicable", source: "snapshot", generatedAt: "2026-09-28T10:09:44.217Z",
+	});
+	assert.deepEqual(check("2026-09-27T08:00:00.000Z"), {
+		status: "degraded", publication: "not_applicable", source: "snapshot", generatedAt: "2026-09-27T08:00:00.000Z",
+	});
+	assert.deepEqual(check(new Error("corrupt")), { status: "unavailable", publication: "not_applicable", source: "snapshot" });
 });

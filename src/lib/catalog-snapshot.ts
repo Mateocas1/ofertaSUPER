@@ -51,6 +51,15 @@ function readSnapshot(): CatalogSnapshot {
   return catalogSnapshot;
 }
 
+// Health probe: proves the bundled snapshot loads and is structurally usable.
+export function probeCatalogSnapshot(): { generatedAt: string } {
+  const snapshot = readSnapshot();
+  if (snapshot.schemaVersion !== SNAPSHOT_SCHEMA_VERSION || snapshot.products.length === 0) {
+    throw new SnapshotUnavailableError("catalog snapshot has an unexpected schema or no products");
+  }
+  return { generatedAt: snapshot.generatedAt };
+}
+
 // Search matches against name, brand and EAN, case-insensitively and without
 // accents, so "Leche", "leche" and "lácteo"-style queries behave the same.
 export function normalizeQuery(value: string): string {
