@@ -59,7 +59,7 @@ export default function Home() {
 								<label htmlFor="home-search" className="sr-only">
 									Buscar producto
 								</label>
-								<div className="flex min-h-16 items-center gap-3 rounded-2xl border-2 border-foreground/15 bg-card px-3 shadow-[var(--elevation-2)] [transition:border-color_200ms_var(--ease-out),box-shadow_200ms_var(--ease-out)] focus-within:border-primary focus-within:shadow-[var(--elevation-3)]">
+								<div className="flex min-h-16 items-center gap-3 rounded-[1.25rem] border-2 border-foreground/15 bg-card px-3 shadow-[var(--elevation-2)] [transition:border-color_200ms_var(--ease-out),box-shadow_200ms_var(--ease-out)] focus-within:border-primary focus-within:shadow-[var(--elevation-3)]">
 									<SearchIcon
 										className="size-5 shrink-0 text-foreground"
 										aria-hidden="true"
@@ -89,7 +89,7 @@ export default function Home() {
 									<Link
 										key={search}
 										href={`/buscar?q=${encodeURIComponent(search)}`}
-										className="press inline-flex min-h-11 items-center rounded-full border border-dashed border-foreground/25 bg-card px-4 text-xs font-medium text-muted-foreground [transition:color_200ms_var(--ease-out),border-color_200ms_var(--ease-out),transform_160ms_var(--ease-out)] hover:border-primary hover:text-primary"
+										className="press inline-flex min-h-11 items-center rounded-full border border-dashed border-foreground/25 bg-card px-4 text-xs font-medium text-muted-foreground [transition:color_200ms_var(--ease-out),border-color_200ms_var(--ease-out),scale_160ms_var(--ease-out)] hover:border-primary hover:text-primary"
 									>
 										{search}
 									</Link>
@@ -150,7 +150,7 @@ function SmartBasketPanel() {
 				</div>
 				<Link
 					href="/canasta"
-					className="press inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-xs font-semibold text-foreground [transition:color_200ms_var(--ease-out),border-color_200ms_var(--ease-out),transform_160ms_var(--ease-out)] hover:border-primary hover:text-primary"
+					className="press inline-flex min-h-11 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-xs font-semibold text-foreground [transition:color_200ms_var(--ease-out),border-color_200ms_var(--ease-out),scale_160ms_var(--ease-out)] hover:border-primary hover:text-primary"
 				>
 					Abrir canasta
 				</Link>
@@ -316,7 +316,7 @@ function ProductRowsPreview() {
 							<Link
 								href={`/buscar?q=${encodeURIComponent(row.product)}`}
 								aria-label={`Buscar producto: ${row.product}`}
-								className="press inline-flex min-h-11 w-fit items-center rounded-lg border border-primary/50 px-3.5 text-xs font-semibold text-primary [transition:background-color_200ms_var(--ease-out),color_200ms_var(--ease-out),transform_160ms_var(--ease-out)] hover:bg-primary hover:text-primary-foreground"
+								className="press inline-flex min-h-11 w-fit items-center rounded-lg border border-primary/50 px-3.5 text-xs font-semibold text-primary [transition:background-color_200ms_var(--ease-out),color_200ms_var(--ease-out),scale_160ms_var(--ease-out)] hover:bg-primary hover:text-primary-foreground"
 							>
 								{row.action}
 							</Link>

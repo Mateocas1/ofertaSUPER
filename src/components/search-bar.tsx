@@ -144,8 +144,8 @@ export function SearchBar({
         </label>
         <div
           className={cn(
-            "flex items-center gap-3 rounded-2xl border-2 border-foreground/15 bg-card shadow-[var(--elevation-2)] [transition:border-color_200ms_var(--ease-out),box-shadow_200ms_var(--ease-out)] focus-within:border-primary focus-within:shadow-[var(--elevation-3)]",
-            variant === "hero" ? "px-4 py-4 md:px-5" : "px-3 py-3",
+            "flex items-center gap-3 border-2 border-foreground/15 bg-card shadow-[var(--elevation-2)] [transition:border-color_200ms_var(--ease-out),box-shadow_200ms_var(--ease-out)] focus-within:border-primary focus-within:shadow-[var(--elevation-3)]",
+            variant === "hero" ? "rounded-[1.625rem] px-4 py-4 md:px-5" : "rounded-[1.375rem] px-3 py-3",
           )}
         >
           <Search className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -182,7 +182,7 @@ export function SearchBar({
 
           <button
             type="submit"
-            className={cn(buttonVariants({ size: variant === "hero" ? "lg" : "sm" }), "rounded-full px-4")}
+            className={cn(buttonVariants({ size: variant === "hero" ? "lg" : "sm" }), "press px-4")}
             aria-label="Ejecutar búsqueda"
           >
             {isPending ? <LoaderCircle className="size-4 animate-spin" /> : "Buscar"}
@@ -216,7 +216,7 @@ export function SearchBar({
               >
                     <div className="relative size-14 overflow-hidden rounded-xl bg-surface-3/70">
                       {result.imageUrl ? (
-                        <Image src={result.imageUrl} alt={result.name} fill sizes="56px" className="object-cover" unoptimized />
+                        <Image src={result.imageUrl} alt={result.name} fill sizes="56px" className="img-outline object-cover" unoptimized />
                       ) : null}
                     </div>
                     <div className="min-w-0 flex-1">

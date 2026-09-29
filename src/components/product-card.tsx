@@ -65,7 +65,7 @@ function ProductCardImage({ product }: { product: ProductCardProduct }) {
   return (
     <div className="relative size-18 overflow-hidden rounded-xl bg-surface-3/70 md:size-24">
       {product.imageUrl ? (
-        <Image src={product.imageUrl} alt={product.name} fill sizes="96px" className="object-cover" unoptimized />
+        <Image src={product.imageUrl} alt={product.name} fill sizes="96px" className="img-outline object-cover" unoptimized />
       ) : (
         <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.2em] text-muted-foreground">
           Sin foto

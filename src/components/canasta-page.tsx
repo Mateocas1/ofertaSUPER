@@ -113,7 +113,7 @@ function UnavailableCanasta({ clearCanasta }: { clearCanasta: () => void }) {
 }
 
 function BasketItemImage({ product }: { product: CanastaProduct | undefined }) {
-  return <div className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-surface-3/70">{product?.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill sizes="80px" className="object-cover" unoptimized /> : <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.18em] text-muted-foreground">Sin foto</div>}</div>;
+  return <div className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-surface-3/70">{product?.imageUrl ? <Image src={product.imageUrl} alt={product.name} fill sizes="80px" className="img-outline object-cover" unoptimized /> : <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.18em] text-muted-foreground">Sin foto</div>}</div>;
 }
 
 function BasketItemTitle({ item, product }: { item: CanastaItem; product: CanastaProduct | undefined }) {
@@ -126,7 +126,7 @@ function BasketItemTitle({ item, product }: { item: CanastaItem; product: Canast
 
 function BasketItemPrice({ planItem, degradedDemo }: { planItem: BasketPlanItem; degradedDemo: boolean }) {
   const chosen = planItem.chosenName ? `Elegido: ${planItem.chosenName}` : "Sin precio elegible";
-  return <p className="mt-3 text-sm text-muted-foreground">{chosen}: <strong className="text-foreground">{formatCurrency(planItem.lineTotal)}</strong>{degradedDemo ? " (estimación histórica)" : ""}</p>;
+  return <p className="mt-3 text-sm text-muted-foreground">{chosen}: <strong className="tabular-nums text-foreground">{formatCurrency(planItem.lineTotal)}</strong>{degradedDemo ? " (estimación histórica)" : ""}</p>;
 }
 
 function BasketItemIdentity({ item, product, planItem, degradedDemo }: { item: CanastaItem; product: CanastaProduct | undefined; planItem: BasketPlanItem; degradedDemo: boolean }) {
@@ -184,9 +184,9 @@ function BasketMixCard({ plan, degradedDemo }: { plan: ReturnType<typeof compute
   return (
     <section className="surface p-6 md:p-8">
       <div><p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Mezcla automática</p><h2 className="mt-2 text-3xl font-bold text-foreground">Cada producto en su súper más barato</h2></div>
-      <p className="mt-5 text-4xl font-semibold text-foreground">{formatCurrency(plan.mixedTotal)}</p>
+      <p className="price mt-5 text-4xl text-foreground">{formatCurrency(plan.mixedTotal)}</p>
       {savings !== null && bestSingle ? (
-        <p className="mt-3 text-sm font-medium text-primary">Ahorás {formatCurrency(savings)} frente a la mejor canasta en un solo súper ({formatCurrency(bestSingle.total)} en {bestSingle.name}).</p>
+        <p className="mt-3 text-sm font-medium tabular-nums text-primary">Ahorás {formatCurrency(savings)} frente a la mejor canasta en un solo súper ({formatCurrency(bestSingle.total)} en {bestSingle.name}).</p>
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">La mezcla esta incompleta: {plan.mixedMissing} producto(s) sin precio elegible todavia.</p>
       )}

@@ -68,9 +68,9 @@ function PriceComparisonPromoCell({ entry }: { entry: PriceComparisonEntry }) {
 function PriceComparisonDeltaCell({ entry }: { entry: PriceComparisonEntry }) {
   return (
     <div>
-      <p>{formatPercent(entry.deltaPercent)}</p>
+      <p className="tabular-nums">{formatPercent(entry.deltaPercent)}</p>
       {entry.priceDropAlert ? (
-        <p className="mt-1 text-xs text-primary">
+        <p className="mt-1 text-xs tabular-nums text-primary">
           Ahorra {formatCurrency(entry.priceDropAlert.amountDrop)}
         </p>
       ) : null}
