@@ -10,7 +10,7 @@ export function CatalogProvenanceNotice({ degraded }: CatalogProvenanceNoticePro
   return (
     <section
       aria-label="Información de frescura del catálogo"
-      className="rounded-[1.5rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950"
+      className="rounded-xl border-2 border-dashed border-warning/60 bg-deal-soft px-5 py-4 text-sm leading-6 text-foreground"
       role="status"
     >
       <p className="font-semibold">Información histórica del catálogo.</p>

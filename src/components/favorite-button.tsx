@@ -35,7 +35,8 @@ export function FavoriteButton({
       onClick={() => toggleFavorite(ean)}
       className={cn(
         buttonVariants({ variant: active ? "secondary" : "outline", size: size === "sm" ? "sm" : "default" }),
-        "rounded-full",
+        "press rounded-full",
+        active && "text-deal-ink",
         className,
       )}
     >
