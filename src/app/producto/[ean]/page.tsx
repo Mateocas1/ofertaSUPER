@@ -82,15 +82,15 @@ function ProductDetails({ page, product }: { page: EligibleProductPage; product:
             <div className="space-y-6">
               <div className="flex flex-wrap items-center gap-2">
                 {product.category ? (
-                  <Link href={`/categoria/${product.category.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`} className="rounded-full border border-border/70 bg-white/80 px-3 py-1 text-sm text-muted-foreground">
+                  <Link href={`/categoria/${product.category.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`} className="rounded-full bg-surface-3/70 px-3 py-1 text-sm text-muted-foreground">
                     {product.category}
                   </Link>
                 ) : null}
-                <span className="rounded-full border border-border/70 bg-white/80 px-3 py-1 text-sm text-muted-foreground">EAN {product.ean}</span>
+                <span className="rounded-full bg-surface-3/70 px-3 py-1 text-sm text-muted-foreground">EAN {product.ean}</span>
               </div>
 
               <div>
-                <h1 className="max-w-4xl text-4xl font-semibold leading-none text-balance text-foreground md:text-6xl">
+                <h1 className="max-w-4xl text-4xl font-extrabold leading-none text-balance text-foreground md:text-6xl">
                   {product.name}
                 </h1>
                 <p className="mt-3 text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -110,9 +110,9 @@ function ProductDetails({ page, product }: { page: EligibleProductPage; product:
               </div>
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <article className="rounded-[1.5rem] border border-border/70 bg-white/75 p-4">
+                <article className="surface-soft p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{displayPriceLabel}</p>
-                  <p className="mt-2 text-3xl font-semibold text-foreground">{formatCurrency(product.displayPrice)}</p>
+                  <p className="price mt-2 text-3xl text-primary">{formatCurrency(product.displayPrice)}</p>
                   <StruckListPrice
                     price={product.displayPrice}
                     listPrice={product.priceEntries.find((entry) => entry.price === product.displayPrice)?.listPrice ?? null}
@@ -122,24 +122,24 @@ function ProductDetails({ page, product }: { page: EligibleProductPage; product:
                     return displayPromo ? <PromotionBadge type={displayPromo.type === "nth-unit" ? "2nd_50" : "percentage"} label={displayPromo.label} /> : null;
                   })()}
                   {product.bestPriceDropAlert ? (
-                    <p className="mt-2 text-xs font-medium text-emerald-700">
+                    <p className="mt-2 text-xs font-medium text-primary">
                       Bajo {formatPercent(-product.bestPriceDropAlert.percentDrop)} vs ultimo registro
                     </p>
                   ) : null}
                 </article>
-                <article className="rounded-[1.5rem] border border-border/70 bg-white/75 p-4">
+                <article className="surface-soft p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Precio estimado con promo</p>
-                  <p className="mt-2 text-3xl font-semibold text-foreground">
+                  <p className="mt-2 text-3xl font-bold text-foreground">
                     {hasCalculatedPromoPrice ? formatCurrency(product.bestFinalPrice) : "No calculable"}
                   </p>
                 </article>
-                <article className="rounded-[1.5rem] border border-border/70 bg-white/75 p-4">
+                <article className="surface-soft p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Maximo registrado</p>
-                  <p className="mt-2 text-3xl font-semibold text-foreground">{formatCurrency(product.maxPrice)}</p>
+                  <p className="price mt-2 text-3xl text-foreground">{formatCurrency(product.maxPrice)}</p>
                 </article>
-                <article className="rounded-[1.5rem] border border-border/70 bg-white/75 p-4">
+                <article className="surface-soft p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Cobertura</p>
-                  <p className="mt-2 text-3xl font-semibold text-foreground">{product.priceEntries.length} supers</p>
+                  <p className="mt-2 font-display text-3xl font-bold text-foreground">{product.priceEntries.length} supers</p>
                 </article>
               </div>
             </div>

@@ -148,7 +148,7 @@ export function SearchBar({
             variant === "hero" ? "px-4 py-4 md:px-5" : "px-3 py-3",
           )}
         >
-          <Search className="size-5 text-muted-foreground" aria-hidden="true" />
+          <Search className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             id={`${searchId}-${variant}`}
             value={query}

@@ -49,7 +49,7 @@ function SearchHeader({ filters }: { filters: SearchFilters }) {
       <div className="flex flex-col gap-6">
         <div>
           <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Búsqueda</p>
-          <h1 className="mt-2 text-4xl font-semibold text-foreground md:text-6xl">
+          <h1 className="mt-2 text-4xl font-extrabold text-foreground md:text-6xl">
             {query ? `Resultados para "${query}"` : "Encontrá el producto exacto"}
           </h1>
           <p className="mt-3 max-w-2xl text-lg text-muted-foreground">
@@ -62,14 +62,14 @@ function SearchHeader({ filters }: { filters: SearchFilters }) {
         <form className="surface-soft grid gap-3 p-4 md:grid-cols-3" action="/buscar">
           <input type="hidden" name="q" value={query} />
           <label className="sr-only" htmlFor="search-supermarket-filter">Supermercado</label>
-          <select id="search-supermarket-filter" name="super" defaultValue={supermarket ?? ""} className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground">
+          <select id="search-supermarket-filter" name="super" defaultValue={supermarket ?? ""} className="min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground">
             <option value="">Todos los supers</option>
             {SUPERMARKETS.map((item) => (
               <option key={item.slug} value={item.slug}>{item.name}</option>
             ))}
           </select>
           <label className="sr-only" htmlFor="search-sort-filter">Ordenar resultados</label>
-          <select id="search-sort-filter" name="sort" defaultValue={sort ?? "relevance"} className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground">
+          <select id="search-sort-filter" name="sort" defaultValue={sort ?? "relevance"} className="min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground">
             <option value="relevance">Relevancia</option>
             <option value="discount">Mayor descuento</option>
             <option value="price-asc">Precio más bajo</option>
@@ -86,7 +86,7 @@ function SearchHeader({ filters }: { filters: SearchFilters }) {
 function SearchCatalogState({ filters, page }: { filters: SearchFilters; page: SearchPageData }) {
   if (page.availability === "unavailable") {
     return (
-      <section role="alert" className="rounded-[1.5rem] border border-amber-300 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950">
+      <section role="alert" className="rounded-xl border-2 border-dashed border-warning/60 bg-deal-soft px-5 py-4 text-sm leading-6 text-foreground">
         <p className="font-semibold">El catálogo no está disponible.</p>
         <p className="mt-1">No podemos mostrar resultados reales en este momento. Probá de nuevo más tarde.</p>
       </section>

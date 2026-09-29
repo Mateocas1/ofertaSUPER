@@ -56,23 +56,25 @@ export function PriceChart({ data }: PriceChartProps) {
   return (
     <div className="surface p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-semibold text-foreground">Historial de precio</h2>
+        <h2 className="text-2xl font-bold text-foreground">Historial de precio</h2>
         <p className="mt-1 text-sm text-muted-foreground">Evolucion diaria consolidada por supermercado.</p>
       </div>
 
       <div className="h-80 min-h-80 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <LineChart data={data.points} margin={{ top: 16, right: 16, bottom: 8, left: 0 }}>
-            <CartesianGrid stroke="rgba(148, 163, 184, 0.18)" strokeDasharray="3 3" />
+            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
             <XAxis
               dataKey="date"
               tickFormatter={(value: string) => formatDate(value)}
-              stroke="rgba(100, 116, 139, 0.9)"
+              stroke="var(--muted-foreground)"
+              tick={{ fontSize: 12 }}
               tickLine={false}
               axisLine={false}
             />
             <YAxis
-              stroke="rgba(100, 116, 139, 0.9)"
+              stroke="var(--muted-foreground)"
+              tick={{ fontSize: 12 }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(value: number) => formatCurrency(value)}
@@ -81,12 +83,14 @@ export function PriceChart({ data }: PriceChartProps) {
               formatter={(value) => formatCurrency(typeof value === "number" ? value : null)}
               labelFormatter={(value) => formatDate(typeof value === "string" ? value : String(value ?? ""))}
               contentStyle={{
-                borderRadius: 18,
-                border: "1px solid rgba(226, 232, 240, 0.9)",
-                boxShadow: "0 16px 48px rgba(15, 23, 42, 0.10)",
+                borderRadius: 12,
+                border: "1px solid var(--border)",
+                background: "var(--popover)",
+                color: "var(--popover-foreground)",
+                boxShadow: "var(--elevation-3)",
               }}
             />
-            <Legend />
+            <Legend wrapperStyle={{ color: "var(--foreground)" }} />
             {data.series.map((serie) => (
               <Line
                 key={serie.slug}

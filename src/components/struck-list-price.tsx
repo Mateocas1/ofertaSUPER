@@ -12,7 +12,7 @@ export function StruckListPrice({ price, listPrice }: { price: number | null; li
       <s className="text-sm text-muted-foreground" aria-label={`Precio de lista ${formatCurrency(listPrice)}`}>
         {formatCurrency(listPrice)}
       </s>
-      <span className="text-sm font-medium text-emerald-700">{formatPercent(discount.percentOff, 0)} OFF</span>
+      <span className="text-sm font-medium text-primary">{formatPercent(discount.percentOff, 0)} OFF</span>
     </span>
   );
 }

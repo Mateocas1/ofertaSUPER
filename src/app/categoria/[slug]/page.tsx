@@ -62,14 +62,14 @@ function CategoryHeader({ category, filters }: { category: Category; filters: Ca
       <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Categoria</p>
-          <h1 className="mt-2 text-4xl font-semibold text-foreground md:text-6xl">{category.name}</h1>
+          <h1 className="mt-2 text-4xl font-extrabold text-foreground md:text-6xl">{category.name}</h1>
           <p className="mt-3 max-w-2xl text-lg text-muted-foreground">Filtra por supermercado, acota precio maximo y revisa solo items con oferta detectada.</p>
         </div>
         <form className="surface-soft grid gap-3 p-4 md:grid-cols-4" action={`/categoria/${category.slug}`}>
-          <select name="super" defaultValue={filters.supermarket ?? ""} className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground"><option value="">Todos los supers</option>{SUPERMARKETS.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}</select>
-          <select name="sort" defaultValue={filters.sort ?? "discount"} className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground"><option value="discount">Mayor descuento</option><option value="price-asc">Precio mas bajo</option><option value="price-desc">Precio mas alto</option><option value="updated">Mas reciente</option></select>
-          <input type="number" name="maxPrice" min="0" step="1" defaultValue={filters.maxPrice ?? ""} placeholder="Precio maximo" className="rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground" />
-          <label className="flex items-center gap-2 rounded-2xl border border-border/70 bg-white px-3 py-2 text-sm text-foreground"><input type="checkbox" name="offers" value="1" defaultChecked={filters.offers === "1"} className="size-4" />Solo ofertas</label>
+          <select name="super" defaultValue={filters.supermarket ?? ""} className="min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground"><option value="">Todos los supers</option>{SUPERMARKETS.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}</select>
+          <select name="sort" defaultValue={filters.sort ?? "discount"} className="min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground"><option value="discount">Mayor descuento</option><option value="price-asc">Precio mas bajo</option><option value="price-desc">Precio mas alto</option><option value="updated">Mas reciente</option></select>
+          <input type="number" name="maxPrice" min="0" step="1" defaultValue={filters.maxPrice ?? ""} placeholder="Precio maximo" className="min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground" />
+          <label className="flex items-center gap-2 min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground"><input type="checkbox" name="offers" value="1" defaultChecked={filters.offers === "1"} className="size-4" />Solo ofertas</label>
           <button className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground md:col-span-4">Aplicar filtros</button>
         </form>
       </div>
@@ -79,7 +79,7 @@ function CategoryHeader({ category, filters }: { category: Category; filters: Ca
 
 function CategoryCatalogState({ category, page }: { category: Category; page: CategoryPageData }) {
   if (page.availability === "unavailable") {
-    return <section role="alert" className="rounded-[1.5rem] border border-amber-300 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-950"><p className="font-semibold">El catálogo no está disponible.</p><p className="mt-1">No podemos mostrar productos reales en este momento. Probá de nuevo más tarde.</p></section>;
+    return <section role="alert" className="rounded-xl border-2 border-dashed border-warning/60 bg-deal-soft px-5 py-4 text-sm leading-6 text-foreground"><p className="font-semibold">El catálogo no está disponible.</p><p className="mt-1">No podemos mostrar productos reales en este momento. Probá de nuevo más tarde.</p></section>;
   }
 
   const result = page.catalog;
