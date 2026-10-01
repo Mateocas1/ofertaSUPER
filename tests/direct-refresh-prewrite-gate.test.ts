@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseDirectRefreshPrewriteGateCliOptions } from "../scripts/audit-direct-refresh-prewrite-gate";
+import { parseDirectRefreshPrewriteGateCliOptions } from "../scripts/direct-refresh-prewrite-gate";
 import {
 	buildCarrefourDirectRefreshPrewriteGate,
 	buildDirectRefreshPrewriteGate,

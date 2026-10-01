@@ -50,12 +50,25 @@ export const DISCO_ACTIVE_WRITE_LOCK_KEY = 61204510;
 export const JUMBO_ACTIVE_WRITE_LOCK_KEY = 68204510;
 export const MAS_ACTIVE_WRITE_LOCK_KEY = 75204510;
 const MAX_PREWRITE_AGE_MS = 15 * 60 * 1000;
+export const ACTIVE_WRITE_SOURCES = [
+	"carrefour",
+	"vea",
+	"disco",
+	"jumbo",
+	"mas",
+] as const satisfies readonly ActiveWriteSource[];
+
 export const DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS = {
 	maxWait: 20_000,
 	timeout: 60_000,
 } as const;
 
-type ActiveWriteSource = "carrefour" | "vea" | "disco" | "jumbo" | "mas";
+export type ActiveWriteSource =
+	| "carrefour"
+	| "vea"
+	| "disco"
+	| "jumbo"
+	| "mas";
 type SourceConfig = {
 	source: ActiveWriteSource;
 	displayName: string;
@@ -307,7 +320,34 @@ export function parseMasActiveWriteCliOptions(
 	return parseActiveWriteCliOptions(argv, "mas");
 }
 
-function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
+export function isActiveWriteSource(value: string): value is ActiveWriteSource {
+	return (ACTIVE_WRITE_SOURCES as readonly string[]).includes(value);
+}
+
+// The unified writer entry resolves the source from --source before parsing the
+// rest of the flags, so a single script serves every supermarket.
+export function activeWriteSourceFromArgv(
+	argv: string[] = process.argv,
+): ActiveWriteSource {
+	const source = getOptionalSingleFlag(argv, "--source");
+	if (source === null)
+		throw new Error(
+			`active writer requires --source=<${ACTIVE_WRITE_SOURCES.join("|")}>`,
+		);
+	if (!isActiveWriteSource(source))
+		throw new Error(
+			`unknown active writer source ${source}; expected one of ${ACTIVE_WRITE_SOURCES.join(", ")}`,
+		);
+	return source;
+}
+
+export function activeWriteSourceDisplayName(
+	source: ActiveWriteSource,
+): string {
+	return SOURCE_CONFIGS[source].displayName;
+}
+
+export function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 	argv: string[],
 	expectedSource: Source,
 ): ActiveWriteCliOptionsFor<Source> {
@@ -615,16 +655,16 @@ export async function executeMasActiveWrite({
 	return executeActiveWrite({ repository, prewriteReport, options, startedAt });
 }
 
-async function executeActiveWrite({
+export async function executeActiveWrite({
 	repository,
 	prewriteReport,
 	options,
-	startedAt,
+	startedAt = new Date(),
 }: {
 	repository: ActiveWriteRepository;
 	prewriteReport: CarrefourDirectRefreshPrewriteGate;
 	options: ActiveWriteCliOptions;
-	startedAt: Date;
+	startedAt?: Date;
 }): Promise<ActiveWriteReport> {
 	const config = SOURCE_CONFIGS[options.source];
 	validatePrewriteReportForActiveWrite(prewriteReport, options, startedAt);

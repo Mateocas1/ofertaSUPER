@@ -134,55 +134,23 @@ test("static guards inventory mutating workflows and package scripts before cron
 	);
 });
 
-test("active direct-refresh writers are not scheduled and avoid broad ingestion paths", async () => {
-	const carrefourWriter = await readFile(
-		"scripts/direct-refresh-carrefour-write.ts",
-		"utf8",
-	);
-	const veaWriter = await readFile(
-		"scripts/direct-refresh-vea-write.ts",
-		"utf8",
-	);
-	const discoWriter = await readFile(
-		"scripts/direct-refresh-disco-write.ts",
-		"utf8",
-	);
-	const jumboWriter = await readFile(
-		"scripts/direct-refresh-jumbo-write.ts",
-		"utf8",
-	);
-	const masWriter = await readFile(
-		"scripts/direct-refresh-mas-write.ts",
-		"utf8",
-	);
-	const postwriteAudit = await readFile(
-		"scripts/audit-direct-refresh-postwrite.ts",
+test("the unified direct-refresh writer is not scheduled and avoids broad ingestion paths", async () => {
+	const writer = await readFile("scripts/direct-refresh-write.ts", "utf8");
+	const pipeline = await readFile(
+		"scripts/pipeline/direct-refresh-active-write.ts",
 		"utf8",
 	);
 
-	for (const writer of [
-		carrefourWriter,
-		veaWriter,
-		discoWriter,
-		jumboWriter,
-		masWriter,
-	]) {
-		assert.doesNotMatch(
-			writer,
-			/reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
-		);
-		assert.doesNotMatch(writer, /workflow|cron|schedule|deploy|cleanup/);
-		assert.match(
-			writer,
-			/candidateScanSize: prewriteReport\.selection\.candidateScanSize/,
-		);
-		assert.match(
-			writer,
-			/DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS/,
-		);
-	}
 	assert.doesNotMatch(
-		postwriteAudit,
-		/direct-refresh-carrefour-write|direct-refresh-vea-write|direct-refresh-disco-write|direct-refresh-jumbo-write|direct-refresh-mas-write|executeCarrefourActiveWrite|executeVeaActiveWrite|executeDiscoActiveWrite|executeJumboActiveWrite|executeMasActiveWrite|reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
+		writer,
+		/reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
 	);
+	assert.doesNotMatch(writer, /workflow|cron|schedule|deploy|cleanup/);
+	assert.match(
+		writer,
+		/candidateScanSize: prewriteReport\.selection\.candidateScanSize/,
+	);
+	assert.match(writer, /DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS/);
+	assert.match(writer, /activeWriteSourceFromArgv\(\)/);
+	assert.match(pipeline, /ACTIVE_WRITE_SOURCES/);
 });
