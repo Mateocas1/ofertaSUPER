@@ -7,6 +7,13 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { db } from "../src/lib/db";
+import { getSupermarketBySlug } from "../src/lib/supermarkets";
+import {
+  handleVtexHashUnavailable,
+  resolveVtexHashForSource,
+  sendVtexHashUnavailableAlert,
+  VtexHashUnavailableError,
+} from "../src/lib/vtex/hash-resolution";
 import { createDependencies } from "./acquire-cmvp-catalog-batch";
 import { runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
 import { topUpUnobservedOffers, type TopUpSummary } from "./pipeline/topup";
@@ -145,17 +152,38 @@ function printSummary(stamp: string, ok: number, failures: Array<{ batchId: stri
   }
 }
 
-// The acquisition path needs the persisted-query hash; the system stored the
-// last known one on the runs of the previous acquisition. It is read from the
-// database and never printed.
-async function restoreVtexHash() {
+// The acquisition path needs the persisted-query hash and the supermarkets can
+// rotate it at any time. Each source resolves its own hash: the configured
+// hash first, then the last known one from its own runs, then a freshly
+// discovered one (which acquisition then persists as the run's vtex_hash).
+const resolvedHashes = new Map<string, string>();
+
+async function lastKnownVtexHash(source: string) {
   const rows = await db.$queryRaw<Array<{ vtex_hash: string | null }>>`
-    select vtex_hash from ingestion_run where vtex_hash is not null order by started_at desc limit 1`;
-  if (rows[0]?.vtex_hash) process.env.VTEX_SHA256_HASH = rows[0].vtex_hash;
+    select vtex_hash from ingestion_run where source_slug = ${source} and vtex_hash is not null order by started_at desc limit 1`;
+  return rows[0]?.vtex_hash ?? null;
+}
+
+async function resolveHashForSource(source: string, explicitHash: string | null) {
+  const cached = resolvedHashes.get(source);
+  if (cached) return cached;
+
+  const baseUrl = getSupermarketBySlug(source)?.baseUrl;
+  if (!baseUrl) throw new Error(`unknown VTEX source ${source}`);
+
+  const resolved = await resolveVtexHashForSource({
+    source,
+    baseUrl,
+    explicitHash,
+    readLastKnownHash: lastKnownVtexHash,
+  });
+  process.stdout.write(`[refresh] ${source}: VTEX hash resolved from ${resolved.source}\n`);
+  resolvedHashes.set(source, resolved.hash);
+  return resolved.hash;
 }
 
 async function main() {
-  await restoreVtexHash();
+  const explicitHash = process.env.VTEX_SHA256_HASH ?? null;
   const runStartedAt = new Date();
   const plan: { batches: PlanBatch[] } = JSON.parse(await readFile(resolve(PLAN_PATH), "utf8"));
   const stamp = readFlag("date") ?? todayStamp();
@@ -173,6 +201,7 @@ async function main() {
   let promoReadsFailed = 0;
   const failures: Array<{ batchId: string; error: string }> = [];
   for (const batch of batches) {
+    process.env.VTEX_SHA256_HASH = await resolveHashForSource(batch.source, explicitHash);
     const outcome = await runBatch(batch, stamp, artifactsDir);
     if (outcome.ok) ok += 1;
     if (outcome.failure) failures.push(outcome.failure);
@@ -189,7 +218,15 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  void main().catch((error) => {
+  void main().catch(async (error) => {
+    await db.$disconnect().catch(() => undefined);
+    if (error instanceof VtexHashUnavailableError) {
+      process.exitCode = await handleVtexHashUnavailable(error, {
+        log: (message) => console.error(message),
+        alert: (message) => sendVtexHashUnavailableAlert({ baseUrl: error.baseUrl, details: [message] }),
+      });
+      return;
+    }
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
   });
