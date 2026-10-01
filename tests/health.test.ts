@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { catalogHealthStatusCode, createCatalogHealthChecker, createReadinessChecker, createSnapshotCatalogHealthChecker } from "../src/lib/health";
+import { catalogHealthStatusCode, createReadinessChecker, createSnapshotCatalogHealthChecker } from "../src/lib/health";
 import { GET as liveness } from "../src/app/api/health/live/route";
 
 const valid = { DATABASE_URL: "postgresql://private:secret@db.internal/app" };
@@ -39,35 +39,10 @@ test("database failures are generic and Redis never gates readiness", async () =
 	assert.equal((await available({ ...valid, UPSTASH_REDIS_REST_URL: "https://incomplete-private" })).status, "ready");
 });
 
-test("catalog health derives its claim only from the U15 guarded decision", async () => {
-	const now = new Date("2026-08-25T12:00:00.000Z");
-	const decision = (verifiedAt: string) => ({
-		publicationId: "publication-1", promotionId: "promotion-1", target: "production" as const,
-		deploymentId: "deployment-1", commitSha: "a".repeat(40), candidateDigest: `sha256:${"b".repeat(64)}`,
-		verifiedAt, expiresAt: "2026-08-25T13:00:00.000Z", generation: "1", lineage: `sha256:${"c".repeat(64)}`,
-		policyDigest: `sha256:${"d".repeat(64)}`, healthVersion: "2", buildDigest: `sha256:${"e".repeat(64)}`,
-		readerExpiresAt: "2026-08-25T13:00:00.000Z", decisionDeadline: "2026-08-25T12:00:30.000Z",
-	});
-	const guarded = (verifiedAt: string) => async () => ({ available: true as const, decision: decision(verifiedAt), value: undefined });
-
-	assert.deepEqual(await createCatalogHealthChecker(guarded("2026-08-25T11:00:00.000Z") as never, { now: () => now })(), {
-		status: "current", publication: "current",
-	});
-	assert.deepEqual(await createCatalogHealthChecker(guarded("2026-08-24T12:00:00.000Z") as never, { now: () => now })(), {
-		status: "degraded", publication: "unproven",
-	});
-	assert.deepEqual(await createCatalogHealthChecker((async () => ({ available: false as const })) as never, { now: () => now })(), {
-		status: "unavailable", publication: "unproven",
-	});
-	assert.deepEqual(await createCatalogHealthChecker((async () => { throw new Error("guard unavailable"); }) as never, { now: () => now })(), {
-		status: "unavailable", publication: "unproven",
-	});
-});
-
-test("catalog health returns 503 for unavailable guarded authority and preserves eligible degraded status", () => {
-	assert.equal(catalogHealthStatusCode({ status: "current", publication: "current" }), 200);
-	assert.equal(catalogHealthStatusCode({ status: "degraded", publication: "unproven" }), 503);
-	assert.equal(catalogHealthStatusCode({ status: "unavailable", publication: "unproven" }), 503);
+test("catalog health returns 503 unless the snapshot is current", () => {
+	assert.equal(catalogHealthStatusCode({ status: "current", publication: "not_applicable" }), 200);
+	assert.equal(catalogHealthStatusCode({ status: "degraded", publication: "not_applicable" }), 503);
+	assert.equal(catalogHealthStatusCode({ status: "unavailable", publication: "not_applicable" }), 503);
 });
 
 test("database checks use single-flight and short outcome-specific caches", async () => {

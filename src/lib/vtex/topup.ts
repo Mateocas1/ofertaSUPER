@@ -1,3 +1,4 @@
+import { normalizeGtin } from "../identity/gtin";
 import { fetchSearchPayloadByEan } from "../promotions/capture";
 import { normalizeVtexCatalogPayload } from "./client";
 
@@ -20,7 +21,8 @@ function asPrice(value: number | null): number | null {
 }
 
 export function topUpObservationFor(payload: unknown, ean: string, baseUrl: string): TopUpObservation {
-	const product = normalizeVtexCatalogPayload(payload, baseUrl).find((entry) => entry.ean === ean);
+	const key = normalizeGtin(ean) ?? ean;
+	const product = normalizeVtexCatalogPayload(payload, baseUrl).find((entry) => entry.ean === key);
 	if (!product) {
 		return { found: false, price: null, listPrice: null, isAvailable: false, productUrl: null };
 	}

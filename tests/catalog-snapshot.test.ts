@@ -6,6 +6,7 @@ import {
   normalizeQuery,
   offerFreshness,
   searchSnapshotProducts,
+  snapshotMatchRank,
 } from "../src/lib/catalog-snapshot";
 
 const now = new Date("2026-09-27T12:00:00.000Z");
@@ -49,6 +50,17 @@ describe("snapshot search", () => {
     const secondEans = second.products.map((entry) => entry.product.ean);
     assert.deepEqual(secondEans, secondEans.filter((ean) => !firstEans.includes(ean)));
     assert.equal(first.products.length, 24);
+  });
+
+  it("finds a product by any GTIN form of its key, before and after GTIN-14 canonicalization", () => {
+    const { product } = searchSnapshotProducts({ now: fixedNow }).products[0];
+    const canonical = product.ean.padStart(14, "0");
+    const shortForm = canonical.replace(/^0/, "");
+    for (const form of [product.ean, canonical, shortForm]) {
+      assert.equal(getSnapshotProduct(form, fixedNow)?.product.ean, product.ean, form);
+    }
+    assert.equal(snapshotMatchRank(product, canonical), 0);
+    assert.equal(snapshotMatchRank(product, shortForm), 0);
   });
 
   it("returns null for an unknown EAN", () => {

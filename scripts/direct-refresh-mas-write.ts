@@ -87,16 +87,6 @@ export function createMasActiveWriteTransaction(
 	tx: Prisma.TransactionClient,
 ): ActiveWriteTransaction {
 	return {
-		async captureSourceDelta(capture) {
-			if (capture.source !== "mas") throw new Error("MAS capture source policy mismatch");
-			if (!capture.items.length) throw new Error("source capture items are required");
-			const rows = await tx.$queryRaw<Array<{ operationId: string; observedAt: Date }>>`
-				select operation_id as "operationId", observed_at as "observedAt"
-				from public.capture_source_delta(${capture.operationKey}, ${capture.source}, ${JSON.stringify(capture.items)}::jsonb)`;
-			const result = rows[0];
-			if (!result?.operationId || !result.observedAt) throw new Error("capture result is required");
-			return { operationId: result.operationId, observedAt: result.observedAt.toISOString() };
-		},
 		async acquireAdvisoryLock(lockKey) {
 			const rows = await tx.$queryRaw<
 				Array<{ locked: boolean }>

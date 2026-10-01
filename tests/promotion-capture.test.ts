@@ -96,6 +96,40 @@ describe("promotion capture", () => {
 		assert.equal(promo?.percent, 70);
 	});
 
+	it("queries the source with its published EAN-13 form when given the canonical GTIN-14", async () => {
+		const urls: string[] = [];
+		const promo = await fetchSimplePromotionByEan("https://www.carrefour.com.ar", "07791337007260", {
+			http: {
+				get: async (url: string) => {
+					urls.push(url);
+					return { data: JSON.stringify(carrefourPayload), status: 200, headers: { "content-type": "application/json" } };
+				},
+			},
+		});
+		assert.deepEqual(urls, ["https://www.carrefour.com.ar/api/catalog_system/pub/products/search?fq=alternateIds_Ean:7791337007260"]);
+		assert.equal(promo?.label, "2do al 70%");
+	});
+
+	it("falls back to the UPC-12 form when the source has no EAN-13 match", async () => {
+		const urls: string[] = [];
+		const upcPayload = [{ ...carrefourPayload[0], items: [{ ...carrefourPayload[0].items[0], ean: "036000291452" }] }];
+		const promo = await fetchSimplePromotionByEan("https://www.carrefour.com.ar", "00036000291452", {
+			http: {
+				get: async (url: string) => {
+					urls.push(url);
+					const body = url.endsWith(":036000291452") ? upcPayload : [];
+					return { data: JSON.stringify(body), status: 200, headers: { "content-type": "application/json" } };
+				},
+			},
+		});
+		assert.deepEqual(urls.map((url) => url.split(":").at(-1)), ["0036000291452", "036000291452"]);
+		assert.equal(promo?.label, "2do al 70%");
+	});
+
+	it("matches payload items by canonical GTIN whatever form either side uses", () => {
+		assert.equal(extractSimplePromotionFromPayload(carrefourPayload, "07791337007260")?.label, "2do al 70%");
+	});
+
 	it("lets read failures reach the caller so the run can count them", async () => {
 		await assert.rejects(
 			fetchSimplePromotionByEan("https://www.carrefour.com.ar", "7791337007260", {

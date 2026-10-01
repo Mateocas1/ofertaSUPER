@@ -2,23 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { deployMigrations, migrationInvocation, renderBootstrapSql } from "../scripts/postgres-operations";
 
-const names = { database: "ofertasuper", owner: "ofertasuper_owner", app: "ofertasuper_app", runtime: "ofertasuper_runtime" };
+const names = { database: "ofertasuper", owner: "ofertasuper_owner", app: "ofertasuper_app" };
 
 test("renders deterministic least-privilege grants for existing and future objects", () => {
   const sql = renderBootstrapSql(names);
   assert.equal(sql, renderBootstrapSql(names));
-  assert.match(sql, /GRANT CONNECT ON DATABASE "ofertasuper" TO "ofertasuper_app", "ofertasuper_runtime";/);
-  assert.match(sql, /GRANT SELECT ON TABLE "public"\."governed_catalogs".*"public"\."serving_memberships" TO "ofertasuper_runtime";/);
-  assert.match(sql, /REVOKE CREATE ON SCHEMA "public" FROM PUBLIC, "ofertasuper_app", "ofertasuper_runtime";/);
-  assert.match(sql, /REVOKE ALL ON ALL TABLES IN SCHEMA "public" FROM PUBLIC, "ofertasuper_app", "ofertasuper_runtime";/);
-  assert.match(sql, /REVOKE ALL ON ALL SEQUENCES IN SCHEMA "public" FROM PUBLIC, "ofertasuper_app", "ofertasuper_runtime";/);
-  assert.match(sql, /REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA "public" FROM PUBLIC, "ofertasuper_app", "ofertasuper_runtime";/);
+  assert.match(sql, /GRANT CONNECT ON DATABASE "ofertasuper" TO "ofertasuper_app";/);
+  assert.match(sql, /REVOKE CREATE ON SCHEMA "public" FROM PUBLIC, "ofertasuper_app";/);
+  assert.match(sql, /REVOKE ALL ON ALL TABLES IN SCHEMA "public" FROM PUBLIC, "ofertasuper_app";/);
+  assert.match(sql, /REVOKE ALL ON ALL SEQUENCES IN SCHEMA "public" FROM PUBLIC, "ofertasuper_app";/);
+  assert.match(sql, /REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA "public" FROM PUBLIC, "ofertasuper_app";/);
   assert.match(sql, /ALTER DEFAULT PRIVILEGES FOR ROLE "ofertasuper_owner" IN SCHEMA "public" REVOKE ALL ON TABLES FROM PUBLIC, "ofertasuper_app";/);
   assert.match(sql, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"\."products".*"public"\."direct_refresh_run_ledger" TO "ofertasuper_app";/);
   assert.match(sql, /GRANT USAGE, SELECT ON SEQUENCE "public"\."supermarkets_id_seq".*"public"\."source_health_id_seq" TO "ofertasuper_app";/);
-  assert.match(sql, /REVOKE EXECUTE ON FUNCTION "public"\."governed_catalog_begin_baseline"\(text, text, text, bigint\) FROM PUBLIC, "ofertasuper_app", "ofertasuper_runtime";/);
-      assert.doesNotMatch(sql, /GRANT EXECUTE ON FUNCTION "public"\."governed_catalog_begin_baseline"\(text, text, text, bigint\) TO "ofertasuper_app";/);
-      assert.match(sql, /GRANT EXECUTE ON FUNCTION "public"\."governed_catalog_begin_baseline"\(text, text, text, text, bigint, bigint, timestamptz\) TO "ofertasuper_app";/);
+  assert.doesNotMatch(sql, /GRANT EXECUTE/);
   assert.doesNotMatch(sql, /ALL TABLES.*GRANT|ALL SEQUENCES.*GRANT/);
   assert.doesNotMatch(sql, /ALTER (?:TABLE|SEQUENCE) [^;\n]+, [^;\n]+ OWNER/);
   assert.match(sql, /ALTER DEFAULT PRIVILEGES FOR ROLE "ofertasuper_owner"/);
@@ -53,18 +50,10 @@ test("migration launch is injectable and does not run while constructing a plan"
   assert.equal(calls, 1);
 });
 
-test("app receives no baseline function grant; execute is revoked across the public schema", async () => {
+test("app grants revoke execute across the public schema and grant none", async () => {
   const grants = await import("node:fs/promises").then(({ readFile }) => readFile(new URL("../docker/compose/app-grants.sql", import.meta.url), "utf8"));
-  assert.doesNotMatch(grants, /governed_catalog_begin_baseline/);
   assert.match(grants, /REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC, ofertasuper_app;/);
-});
-
-test("app grants execute on exactly five functions, all to the authority principal, and never promote_delta", async () => {
-  const grants = await import("node:fs/promises").then(({ readFile }) => readFile(new URL("../docker/compose/app-grants.sql", import.meta.url), "utf8"));
-  assert.doesNotMatch(grants, /promote_delta/);
-  const executeGrants = grants.match(/^GRANT EXECUTE ON FUNCTION [^;]+;$/gm) ?? [];
-  assert.equal(executeGrants.length, 5);
-  for (const grant of executeGrants) assert.match(grant, / TO ofertasuper_authority;$/);
+  assert.doesNotMatch(grants, /^GRANT EXECUTE/m);
 });
 
 test("migration launch requires DIRECT_URL", () => {

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { normalizeGtin } from "@/lib/identity/gtin";
 import { slugify } from "@/lib/slugify";
 import type { SimplePromotion } from "@/lib/promotions/simple-promos";
 
@@ -105,6 +106,12 @@ function matchesQuery(product: SnapshotProduct, haystack: string): boolean {
     .some((field) => field.includes(haystack));
 }
 
+// Snapshot keys are canonical GTIN-14 (older snapshots hold the source form);
+// any GTIN form of a key, such as an EAN-13 from an old link, matches it.
+function gtinKey(value: string): string {
+  return normalizeGtin(value) ?? value;
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -118,7 +125,7 @@ export function snapshotMatchRank(
   product: { ean: string; name: string },
   query: string,
 ): 0 | 1 | 2 | 3 {
-  if (product.ean === query.trim()) return 0;
+  if (gtinKey(product.ean) === gtinKey(query.trim())) return 0;
   const term = normalizeQuery(query);
   const name = normalizeQuery(product.name);
   if (name.startsWith(term)) return 1;
@@ -222,7 +229,8 @@ export function searchSnapshotProducts(options: {
 
 export function getSnapshotProduct(ean: string, now?: Date): SnapshotProductResult | null {
   const snapshot = readSnapshot();
-  const product = snapshot.products.find((entry) => entry.ean === ean);
+  const key = gtinKey(ean);
+  const product = snapshot.products.find((entry) => gtinKey(entry.ean) === key);
   if (!product) return null;
   return buildProductResult(snapshot, product, now ?? new Date());
 }
