@@ -26,7 +26,6 @@
     "backup:postgres-r2": "node scripts/postgres-backup-r2.mjs",
     "recovery:postgres-r2": "node scripts/postgres-recovery-r2.mjs",
     "probe:vtex": "tsx scripts/probe-vtex.ts",
-    "cleanup:history": "tsx scripts/cleanup-history.ts",
     "ingest": "tsx scripts/ingest.ts",
     "acquire:cmvp-first-batch": "tsx scripts/acquire-cmvp-first-batch.ts",
     "acquire:cmvp-catalog-batch": "tsx scripts/acquire-cmvp-catalog-batch.ts",

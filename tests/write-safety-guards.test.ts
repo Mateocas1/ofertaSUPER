@@ -12,7 +12,6 @@ test("static guards inventory mutating workflows and package scripts before cron
 	);
 
 	assert.deepEqual(mutatingPackageScripts.sort(), [
-		"cleanup:history",
 		"cleanup:staging",
 		"db:seed",
 		"ingest",
@@ -95,4 +94,30 @@ test("the legacy scraper path no longer exists in the repository", async () => {
 	await assert.rejects(readFile("scripts/scrapers/shared.ts", "utf8"));
 	await assert.rejects(readFile("scripts/updatePrices.ts", "utf8"));
 	await assert.rejects(readFile("scripts/populateDb.ts", "utf8"));
+});
+
+test("no script prunes price history by age", async () => {
+	// #547 decision: price history is the product, so no script may delete it
+	// by timestamp. Only an explicit, id-addressed rollback may remove rows.
+	const scriptFiles = ["scripts", "prisma"];
+	const sources = await Promise.all(
+		scriptFiles.map(async (dir) => {
+			const entries = await readdir(dir, { recursive: true });
+			return Promise.all(
+				entries
+					.filter((entry) => /\.(ts|mjs)$/.test(entry))
+					.map(async (entry) => ({
+						path: `${dir}/${entry}`,
+						content: await readFile(`${dir}/${entry}`, "utf8"),
+					})),
+			);
+		}),
+	);
+	for (const file of sources.flat()) {
+		assert.doesNotMatch(
+			file.content,
+			/priceHistory\.deleteMany\(\s*\{[^}]*scraped_at/,
+			`${file.path} must not prune price history by age`,
+		);
+	}
 });
