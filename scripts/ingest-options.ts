@@ -192,135 +192,128 @@ export function validateIngestionSafety(
 		return { ok: true };
 	}
 
+	const gates = validateActiveWriteGates(options);
+	if (!gates.ok) {
+		return gates;
+	}
+
+	return options.writeMode === "refresh-existing"
+		? validateRefreshExistingWrite(options)
+		: validatePhase4Write(options);
+}
+
+function fail(reason: string): IngestionSafetyResult {
+	return { ok: false, reason };
+}
+
+function validateActiveWriteGates(
+	options: IngestionOptions,
+): IngestionSafetyResult {
 	if (!options.activeWriteConfirmed) {
-		return {
-			ok: false,
-			reason:
-				"active ingestion writes require --confirm-write or INGESTION_ACTIVE_WRITE_APPROVED=true",
-		};
+		return fail(
+			"active ingestion writes require --confirm-write or INGESTION_ACTIVE_WRITE_APPROVED=true",
+		);
 	}
 
 	if (options.activeAllSourcesApproved) {
-		return {
-			ok: false,
-			reason: "active all-source writes are disabled for this rollout",
-		};
+		return fail("active all-source writes are disabled for this rollout");
 	}
 
 	if (options.sourceFilter?.length !== 1) {
-		return {
-			ok: false,
-			reason: "active ingestion writes require exactly one --source=<slug>",
-		};
+		return fail("active ingestion writes require exactly one --source=<slug>");
 	}
 
 	if (options.queryTerms?.length !== 1) {
-		return {
-			ok: false,
-			reason: "active ingestion writes require exactly one --terms=<query>",
-		};
+		return fail("active ingestion writes require exactly one --terms=<query>");
 	}
 
-	if (options.writeMode === "refresh-existing") {
-		if (!options.candidateHash) {
-			return {
-				ok: false,
-				reason:
-					"refresh-existing writes require --candidate-hash from the candidate snapshot",
-			};
-		}
+	return { ok: true };
+}
 
-		if (!options.expectedEans || options.expectedEans.length === 0) {
-			return {
-				ok: false,
-				reason:
-					"refresh-existing writes require at least one --expected-eans value",
-			};
-		}
-
-		if (options.count > REFRESH_EXISTING_MAX_COUNT) {
-			return {
-				ok: false,
-				reason:
-					"refresh-existing writes are capped at --count=25 for this rollout",
-			};
-		}
-
-		if (options.count !== options.expectedEans.length) {
-			return {
-				ok: false,
-				reason: "refresh-existing --count must equal --expected-eans length",
-			};
-		}
-
-		if (options.candidateSelection === "existing-only") {
-			if (options.scanCount < options.count) {
-				return {
-					ok: false,
-					reason:
-						"existing-only refresh scan count must be at least --count",
-				};
-			}
-
-			if (options.scanCount > REFRESH_EXISTING_MAX_SCAN_COUNT) {
-				return {
-					ok: false,
-					reason:
-						"existing-only refresh scan count is capped at --scan-count=50 for this rollout",
-				};
-			}
-		}
-
-		if (
-			compareExpectedEans(options.expectedEans, options.expectedEans)
-				.duplicateExpected.length > 0
-		) {
-			return {
-				ok: false,
-				reason: "refresh-existing writes require distinct --expected-eans",
-			};
-		}
-
+function validateRefreshExistingScanWindow(
+	options: IngestionOptions,
+): IngestionSafetyResult {
+	if (options.candidateSelection !== "existing-only") {
 		return { ok: true };
 	}
 
-	if (options.candidateSelection !== "strict") {
-		return {
-			ok: false,
-			reason:
-				"candidate selection modes other than strict require --write-mode=refresh-existing",
-		};
+	if (options.scanCount < options.count) {
+		return fail("existing-only refresh scan count must be at least --count");
 	}
 
-	if (options.queryTerms[0] !== "leche") {
-		return {
-			ok: false,
-			reason: "active Phase 4 writes require --terms=leche",
-		};
+	if (options.scanCount > REFRESH_EXISTING_MAX_SCAN_COUNT) {
+		return fail(
+			"existing-only refresh scan count is capped at --scan-count=50 for this rollout",
+		);
 	}
 
-	if (options.count !== 5) {
-		return {
-			ok: false,
-			reason: "active ingestion writes require --count=5 for Phase 4",
-		};
+	return { ok: true };
+}
+
+function validateRefreshExistingWrite(
+	options: IngestionOptions,
+): IngestionSafetyResult {
+	if (!options.candidateHash) {
+		return fail(
+			"refresh-existing writes require --candidate-hash from the candidate snapshot",
+		);
 	}
 
-	if (options.expectedEans?.length !== 5) {
-		return {
-			ok: false,
-			reason: "active ingestion writes require exactly five --expected-eans",
-		};
+	if (!options.expectedEans || options.expectedEans.length === 0) {
+		return fail(
+			"refresh-existing writes require at least one --expected-eans value",
+		);
+	}
+
+	if (options.count > REFRESH_EXISTING_MAX_COUNT) {
+		return fail(
+			"refresh-existing writes are capped at --count=25 for this rollout",
+		);
+	}
+
+	if (options.count !== options.expectedEans.length) {
+		return fail("refresh-existing --count must equal --expected-eans length");
+	}
+
+	const scanWindow = validateRefreshExistingScanWindow(options);
+	if (!scanWindow.ok) {
+		return scanWindow;
 	}
 
 	if (
 		compareExpectedEans(options.expectedEans, options.expectedEans)
 			.duplicateExpected.length > 0
 	) {
-		return {
-			ok: false,
-			reason: "active ingestion writes require five distinct --expected-eans",
-		};
+		return fail("refresh-existing writes require distinct --expected-eans");
+	}
+
+	return { ok: true };
+}
+
+function validatePhase4Write(options: IngestionOptions): IngestionSafetyResult {
+	if (options.candidateSelection !== "strict") {
+		return fail(
+			"candidate selection modes other than strict require --write-mode=refresh-existing",
+		);
+	}
+
+	if (options.queryTerms?.[0] !== "leche") {
+		return fail("active Phase 4 writes require --terms=leche");
+	}
+
+	if (options.count !== 5) {
+		return fail("active ingestion writes require --count=5 for Phase 4");
+	}
+
+	if (options.expectedEans?.length !== 5) {
+		return fail("active ingestion writes require exactly five --expected-eans");
+	}
+
+	if (
+		compareExpectedEans(options.expectedEans, options.expectedEans)
+			.duplicateExpected.length > 0
+	) {
+		return fail("active ingestion writes require five distinct --expected-eans");
 	}
 
 	return { ok: true };

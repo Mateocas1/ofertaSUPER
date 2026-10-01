@@ -38,12 +38,7 @@ function formatList(values: string[]) {
 	return values.length > 0 ? values.join(",") : "none";
 }
 
-export function assertChunkPreReconcileGate({
-	expectedEans,
-	executions,
-	expectedQueryCount = 1,
-	expectedCandidateHash = null,
-}: ChunkPreReconcileGateOptions) {
+function assertDistinctExpectedEans(expectedEans: string[]) {
 	if (expectedEans.length === 0) {
 		throw new Error("expected at least one expected EAN before reconciliation");
 	}
@@ -55,7 +50,12 @@ export function assertChunkPreReconcileGate({
 			`expected distinct EAN allowlist before reconciliation: duplicate=${formatList(expectedComparison.duplicateExpected)}`,
 		);
 	}
+}
 
+function singleExecution(
+	executions: PreReconcileSourceExecution[],
+	expectedQueryCount: number,
+): PreReconcileSourceExecution {
 	if (executions.length !== 1) {
 		throw new Error("expected exactly one source before reconciliation");
 	}
@@ -70,6 +70,13 @@ export function assertChunkPreReconcileGate({
 		);
 	}
 
+	return execution;
+}
+
+function assertExecutionSummary(
+	execution: PreReconcileSourceExecution,
+	expectedCandidateHash: string | null,
+) {
 	if (
 		expectedCandidateHash &&
 		execution.candidateHash !== expectedCandidateHash
@@ -82,23 +89,28 @@ export function assertChunkPreReconcileGate({
 	if (execution.summary.productsRejected !== 0) {
 		throw new Error("expected zero rejected candidates before reconciliation");
 	}
+}
 
+function assertCandidateSet(execution: PreReconcileSourceExecution, expectedEans: string[]) {
 	if (execution.candidates.length !== expectedEans.length) {
 		throw new Error(
 			`expected exactly ${expectedEans.length} candidates before reconciliation`,
 		);
 	}
 
-	const actualEans = execution.candidates.map((candidate) => candidate.ean);
-	const actualDistinctEans = new Set(actualEans);
+	const actualDistinctEans = new Set(
+		execution.candidates.map((candidate) => candidate.ean),
+	);
 
 	if (actualDistinctEans.size !== expectedEans.length) {
 		throw new Error(
 			`expected ${expectedEans.length} distinct actual EANs before reconciliation`,
 		);
 	}
+}
 
-	for (const candidate of execution.candidates) {
+function assertCandidatesUsable(candidates: PreReconcileCandidate[]) {
+	for (const candidate of candidates) {
 		if (candidate.status !== "PENDING") {
 			throw new Error(
 				"expected all candidates to be PENDING before reconciliation",
@@ -115,8 +127,24 @@ export function assertChunkPreReconcileGate({
 			);
 		}
 	}
+}
 
-	const comparison = compareExpectedEans(expectedEans, actualEans);
+export function assertChunkPreReconcileGate({
+	expectedEans,
+	executions,
+	expectedQueryCount = 1,
+	expectedCandidateHash = null,
+}: ChunkPreReconcileGateOptions) {
+	assertDistinctExpectedEans(expectedEans);
+	const execution = singleExecution(executions, expectedQueryCount);
+	assertExecutionSummary(execution, expectedCandidateHash);
+	assertCandidateSet(execution, expectedEans);
+	assertCandidatesUsable(execution.candidates);
+
+	const comparison = compareExpectedEans(
+		expectedEans,
+		execution.candidates.map((candidate) => candidate.ean),
+	);
 
 	if (!comparison.ok) {
 		throw new Error(
