@@ -436,8 +436,8 @@ describe("ingestion CLI safety options", () => {
 		assert.match(ingestScript, /parseIngestionOptions/);
 		assert.match(ingestScript, /assertSafeIngestionOptions/);
 		assert.match(ingestScript, /shouldFailForRequestedSourceHealth/);
-		assert.match(ingestScript, /queryTerms:\s*queryTerms \?\? undefined/);
-		assert.match(ingestScript, /count:\s*stageFetchCount/);
-		assert.match(ingestScript, /filterEans:\s*stageFilterEans/);
+		assert.match(ingestScript, /queryTerms: context\.queryTerms \?\? undefined/);
+		assert.match(ingestScript, /count: context\.stageFetchCount/);
+		assert.match(ingestScript, /filterEans: context\.stageFilterEans/);
 	});
 });
