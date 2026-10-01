@@ -39,7 +39,7 @@ mechanical; GTIN change kept as its own commit for review.
 - 2026-10-01: T1 done.
 
 - 2026-10-01: T2 done (route: delegated writer), commit ce83699. Evidence below.
-- 2026-10-01: T3 done (route: delegated writer), commit recorded in the T3 commit message log. Evidence below.
+- 2026-10-01: T3 done (route: delegated writer), commit 52b969f. Evidence below.
 
 ### T2 evidence
 - Removed 39 Prisma models + 2 enums (`ProductionReadiness*`, `PublicationGrant`, `Approval*`,
