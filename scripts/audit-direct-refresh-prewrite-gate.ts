@@ -18,6 +18,8 @@ import {
 	parsePositiveIntegerFlag,
 } from "./pipeline/audit-utils";
 
+import { parseFrozenTargetFlags, readDirectRefreshFrozenTarget } from "./pipeline/direct-refresh-frozen-target";
+
 type SupportedPrewriteSource = "carrefour" | "vea" | "disco" | "jumbo" | "mas";
 
 const DEFAULT_SOURCE = "carrefour" as const;
@@ -49,7 +51,7 @@ const FORBIDDEN_FLAGS = [
 	"--refresh",
 ];
 
-type CliOptions = {
+type CliOptions = ReturnType<typeof parseFrozenTargetFlags> & {
 	source: SupportedPrewriteSource;
 	sampleSize: number;
 	candidateScanSize: number;
@@ -107,6 +109,7 @@ export function parseDirectRefreshPrewriteGateCliOptions(
 		throw new Error("--capacity-report requires --issue-number=...");
 	}
 	return {
+		...parseFrozenTargetFlags(argv),
 		source: sources[0] as SupportedPrewriteSource,
 		sampleSize,
 		candidateScanSize,
@@ -234,13 +237,13 @@ export function createDirectRefreshPrewriteRepository(): DirectRefreshPrewriteRe
 				? { id: source.id, slug: source.slug, baseUrl: source.base_url }
 				: null;
 		},
-		async listOldestPublicRankableRows(sourceSlug, sampleSize) {
+		async listOldestPublicRankableRows(sourceSlug, sampleSize, targetEans) {
 			const rows = await db.supermarketProduct.findMany({
 				where: {
 					supermarket: { slug: sourceSlug },
 					is_available: true,
 					price: { gt: 0 },
-					product_ean: { not: "" },
+					product_ean: { not: "", ...(targetEans ? { in: [...targetEans] } : {}) },
 					product: { name: { not: "" } },
 				},
 				orderBy: [{ last_checked_at: "asc" }, { id: "asc" }],
@@ -289,7 +292,9 @@ async function readCapacityEvidence(
 
 async function main() {
 	const options = parseDirectRefreshPrewriteGateCliOptions();
+	const frozenTarget = await readDirectRefreshFrozenTarget(options);
 	const report = await buildDirectRefreshPrewriteGate({
+		frozenTarget,
 		repository: createDirectRefreshPrewriteRepository(),
 		sourceSlug: options.source,
 		sampleSize: options.sampleSize,

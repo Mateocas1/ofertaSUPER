@@ -5,6 +5,14 @@ import {
 	type DirectRefreshCapacityEvidenceLineage,
 } from "./direct-refresh-capacity-lineage";
 
+import {
+	assertFrozenTargetMembership,
+	frozenTargetEvidence,
+	parseDirectRefreshFrozenTarget,
+	type DirectRefreshFrozenTargetInput,
+	type DirectRefreshFrozenTargetEvidence,
+} from "./direct-refresh-frozen-target";
+
 type ManifestStatus = "PASS" | "FAIL";
 type RowGuardStatus = "PASS" | "FAIL";
 
@@ -40,6 +48,7 @@ export type DirectRefreshManifestRepository = {
 	listOldestPublicRankableRows(
 		sourceSlug: string,
 		sampleSize: number,
+		targetEans?: readonly string[],
 	): Promise<DirectRefreshManifestExistingRow[]>;
 	findRowsBySourceSku(
 		sourceSlug: string,
@@ -111,6 +120,7 @@ export type CarrefourDirectRefreshManifestDryRun = {
 		guards: string[];
 	};
 	selection: {
+		frozenTarget?: DirectRefreshFrozenTargetEvidence;
 		strategy:
 			| "oldest-public-rankable-existing-rows"
 			| "oldest-public-rankable-existing-rows-bounded-viable-scan"
@@ -211,6 +221,7 @@ export async function buildDirectRefreshManifestDryRun({
 	candidateScanSize = sampleSize,
 	now = new Date(),
 	capacityEvidence = null,
+	frozenTarget = null,
 }: {
 	repository: DirectRefreshManifestRepository;
 	fetchDirectProducts(
@@ -222,8 +233,10 @@ export async function buildDirectRefreshManifestDryRun({
 	candidateScanSize?: number;
 	now?: Date;
 	capacityEvidence?: DirectRefreshCapacityEvidenceInput | null;
+	frozenTarget?: DirectRefreshFrozenTargetInput | null;
 }): Promise<CarrefourDirectRefreshManifestDryRun> {
 	const config = sourceConfig(sourceSlug);
+	const target = frozenTarget === null ? null : parseDirectRefreshFrozenTarget(frozenTarget);
 	const source = await repository.getSource(config.slug);
 	if (candidateScanSize < sampleSize)
 		throw new Error("candidate scan size must be >= sample size");
@@ -231,8 +244,10 @@ export async function buildDirectRefreshManifestDryRun({
 		? await repository.listOldestPublicRankableRows(
 				config.slug,
 				candidateScanSize,
+				...(target ? [target.eans] : []),
 			)
 		: [];
+	assertFrozenTargetMembership(target, candidateRows.map((row) => row.ean));
 	const candidateEvaluations: DirectRefreshManifestRow[] = [];
 	for (const row of candidateRows) {
 		candidateEvaluations.push(
@@ -272,7 +287,7 @@ export async function buildDirectRefreshManifestDryRun({
 	const selectedFailReasons =
 		candidateRows.length === 0 ? ["no rows selected"] : [];
 	const insufficientViableReasons =
-		shouldFilterSelection && rows.length < sampleSize
+		(shouldFilterSelection || target !== null) && rows.length < sampleSize
 			? [
 					capacityAlignedSelection
 						? `insufficient capacity-PASS rows: selected ${rows.length} of ${sampleSize} from ${candidateRows.length} candidates (${capacityPassRows.length} capacity-PASS candidates)`
@@ -335,6 +350,7 @@ export async function buildDirectRefreshManifestDryRun({
 			guards: identityGuards(config),
 		},
 		selection: {
+			...(target ? { frozenTarget: frozenTargetEvidence(target, rows.map((row) => row.existing.productEan)) } : {}),
 			strategy: capacityAlignedSelection
 				? boundedViableScan
 					? "capacity-pass-existing-rows-bounded-viable-scan"
