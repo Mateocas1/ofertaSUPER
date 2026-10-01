@@ -297,12 +297,9 @@ function mapProductSummary(
   }
 
   const freshEntries = comparableEntries.filter(isFreshComparablePriceEntry);
-  const numericPrices = comparableEntries.map((entry) => entry.price).filter((entry): entry is number => entry !== null);
-  const freshPrices = freshEntries.map((entry) => entry.price).filter((entry): entry is number => entry !== null);
-  const minPrice = numericPrices.length > 0 ? Math.min(...numericPrices) : null;
-  const maxPrice = numericPrices.length > 0 ? Math.max(...numericPrices) : null;
-  const freshMinPrice = freshPrices.length > 0 ? Math.min(...freshPrices) : null;
+  const { minPrice, maxPrice, freshMinPrice } = comparablePriceRange(comparableEntries, freshEntries);
   const displayPriceEntry = getBestDisplayPriceEntry(comparableEntries);
+  const display = displayPriceSummary(displayPriceEntry);
   const automaticDiscountPercent = freshEntries.reduce<number | null>((best, entry) => {
     const discount = detectAutomaticDiscount(entry.price, entry.listPrice);
 
@@ -327,18 +324,51 @@ function mapProductSummary(
     minPrice,
     maxPrice,
     freshMinPrice,
-    displayPrice: displayPriceEntry?.price ?? null,
-    displayPriceCheckedAt: displayPriceEntry?.lastCheckedAt ?? null,
-    displayPriceFreshnessStatus: displayPriceEntry?.freshnessStatus ?? "unknown",
+    displayPrice: display.displayPrice,
+    displayPriceCheckedAt: display.displayPriceCheckedAt,
+    displayPriceFreshnessStatus: display.displayPriceFreshnessStatus,
     hasFreshPrice: freshEntries.length > 0,
     stalePriceCount: comparableEntries.filter((entry) => entry.freshnessStatus === "stale").length,
     rankFreshnessStatus,
     priceCount: comparableEntries.length,
     automaticDiscountPercent,
     latestCheckedAt,
-    bestPriceCheckedAt: displayPriceEntry?.lastCheckedAt ?? null,
-    bestPriceFreshnessStatus: displayPriceEntry?.freshnessStatus ?? "unknown",
+    bestPriceCheckedAt: display.bestPriceCheckedAt,
+    bestPriceFreshnessStatus: display.bestPriceFreshnessStatus,
     entries: comparableEntries,
+  };
+}
+
+function entryFreshnessStatus(entry: ProductPriceEntry | undefined) {
+  return entry?.freshnessStatus ?? "unknown";
+}
+
+function bestPriceSummary(entry: ProductPriceEntry | undefined) {
+  return {
+    bestPriceCheckedAt: entry?.lastCheckedAt ?? null,
+    bestPriceFreshnessStatus: entryFreshnessStatus(entry),
+  };
+}
+
+function displayPriceSummary(entry: ProductPriceEntry | undefined) {
+  return {
+    displayPrice: entry?.price ?? null,
+    displayPriceCheckedAt: entry?.lastCheckedAt ?? null,
+    displayPriceFreshnessStatus: entryFreshnessStatus(entry),
+    ...bestPriceSummary(entry),
+  };
+}
+
+function comparablePriceRange(
+  comparableEntries: ProductPriceEntry[],
+  freshEntries: ProductPriceEntry[],
+) {
+  const numericPrices = comparableEntries.map((entry) => entry.price).filter((entry): entry is number => entry !== null);
+  const freshPrices = freshEntries.map((entry) => entry.price).filter((entry): entry is number => entry !== null);
+  return {
+    minPrice: numericPrices.length > 0 ? Math.min(...numericPrices) : null,
+    maxPrice: numericPrices.length > 0 ? Math.max(...numericPrices) : null,
+    freshMinPrice: freshPrices.length > 0 ? Math.min(...freshPrices) : null,
   };
 }
 
@@ -351,24 +381,28 @@ function sortProducts(items: ProductSummary[], filters: ProductListFilters) {
   );
 }
 
+function matchesOffersOnly(item: ProductSummary, filters: ProductListFilters) {
+  return !filters.offersOnly || Boolean(item.automaticDiscountPercent && item.automaticDiscountPercent > 0);
+}
+
+function matchesPriceBounds(item: ProductSummary, filters: ProductListFilters) {
+  const publicPrice = item.displayPrice ?? item.minPrice;
+
+  if (filters.minPrice !== undefined && (publicPrice === null || publicPrice < filters.minPrice)) {
+    return false;
+  }
+
+  if (filters.maxPrice !== undefined && (publicPrice === null || publicPrice > filters.maxPrice)) {
+    return false;
+  }
+
+  return true;
+}
+
 function filterProducts(items: ProductSummary[], filters: ProductListFilters) {
-  return items.filter((item) => {
-    if (filters.offersOnly && !(item.automaticDiscountPercent && item.automaticDiscountPercent > 0)) {
-      return false;
-    }
-
-    const publicPrice = item.displayPrice ?? item.minPrice;
-
-    if (filters.minPrice !== undefined && (publicPrice === null || publicPrice < filters.minPrice)) {
-      return false;
-    }
-
-    if (filters.maxPrice !== undefined && (publicPrice === null || publicPrice > filters.maxPrice)) {
-      return false;
-    }
-
-    return true;
-  });
+  return items.filter(
+    (item) => matchesOffersOnly(item, filters) && matchesPriceBounds(item, filters),
+  );
 }
 
 function buildProductWhere(filters: ProductListFilters): Prisma.ProductWhereInput {
@@ -916,6 +950,18 @@ export async function getSearchSuggestions(query: string, limit = 8) {
   }));
 }
 
+const PROMOTION_TYPE_MAP = {
+  "2x1": "TWO_FOR_ONE",
+  "2nd_50": "SECOND_HALF",
+  wallet_discount: "WALLET_DISCOUNT",
+  bank_discount: "BANK_DISCOUNT",
+  percentage: "PERCENTAGE",
+} as const;
+
+function promotionTypeEnum(type: NonNullable<PromotionFilters["type"]>) {
+  return PROMOTION_TYPE_MAP[type] ?? "PERCENTAGE";
+}
+
 export async function getPromotions(filters: PromotionFilters = {}) {
   const now = new Date();
   const promotions = await db.promotion.findMany({
@@ -933,18 +979,7 @@ export async function getPromotions(filters: PromotionFilters = {}) {
           }
         : undefined,
       type: filters.type
-        ? {
-            equals:
-              filters.type === "2x1"
-                ? "TWO_FOR_ONE"
-                : filters.type === "2nd_50"
-                  ? "SECOND_HALF"
-                  : filters.type === "wallet_discount"
-                    ? "WALLET_DISCOUNT"
-                    : filters.type === "bank_discount"
-                      ? "BANK_DISCOUNT"
-                      : "PERCENTAGE",
-          }
+        ? { equals: promotionTypeEnum(filters.type) }
         : undefined,
       AND: [
         {

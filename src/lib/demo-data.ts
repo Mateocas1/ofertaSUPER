@@ -333,16 +333,18 @@ function scopeToSupermarket(product: ProductSummary, supermarket?: string) {
   const prices = comparableEntries.map((entry) => entry.price).filter((price): price is number => price !== null);
   const freshPrices = freshEntries.map((entry) => entry.price).filter((price): price is number => price !== null);
   const displayEntry = getBestDisplayPriceEntry(entries);
+  const range = priceRange(prices);
+  const display = displayPriceFields(displayEntry);
 
   return {
     ...product,
     entries,
-    minPrice: prices.length > 0 ? Math.min(...prices) : null,
-    maxPrice: prices.length > 0 ? Math.max(...prices) : null,
-    freshMinPrice: freshPrices.length > 0 ? Math.min(...freshPrices) : null,
-    displayPrice: displayEntry?.price ?? null,
-    displayPriceCheckedAt: displayEntry?.lastCheckedAt ?? null,
-    displayPriceFreshnessStatus: displayEntry?.freshnessStatus ?? "unknown",
+    minPrice: range.min,
+    maxPrice: range.max,
+    freshMinPrice: freshMinPrice(freshPrices),
+    displayPrice: display.displayPrice,
+    displayPriceCheckedAt: display.displayPriceCheckedAt,
+    displayPriceFreshnessStatus: display.displayPriceFreshnessStatus,
     hasFreshPrice: freshEntries.length > 0,
     stalePriceCount: entries.filter((entry) => entry.freshnessStatus === "stale").length,
     rankFreshnessStatus: getRankFreshnessStatus(entries),
@@ -359,8 +361,39 @@ function scopeToSupermarket(product: ProductSummary, supermarket?: string) {
       return best === null ? percentOff : Math.max(best, percentOff);
     }, null),
     latestCheckedAt: entries.map((entry) => entry.lastCheckedAt).sort((left, right) => right.localeCompare(left))[0] ?? null,
+    bestPriceCheckedAt: display.bestPriceCheckedAt,
+    bestPriceFreshnessStatus: display.bestPriceFreshnessStatus,
+  };
+}
+
+function priceRange(prices: number[]) {
+  return {
+    min: prices.length > 0 ? Math.min(...prices) : null,
+    max: prices.length > 0 ? Math.max(...prices) : null,
+  };
+}
+
+function freshMinPrice(freshPrices: number[]) {
+  return freshPrices.length > 0 ? Math.min(...freshPrices) : null;
+}
+
+function freshnessStatusOf(displayEntry: ProductSummary["entries"][number] | undefined) {
+  return displayEntry?.freshnessStatus ?? "unknown";
+}
+
+function bestPriceFields(displayEntry: ProductSummary["entries"][number] | undefined) {
+  return {
     bestPriceCheckedAt: displayEntry?.lastCheckedAt ?? null,
-    bestPriceFreshnessStatus: displayEntry?.freshnessStatus ?? "unknown",
+    bestPriceFreshnessStatus: freshnessStatusOf(displayEntry),
+  };
+}
+
+function displayPriceFields(displayEntry: ProductSummary["entries"][number] | undefined) {
+  return {
+    displayPrice: displayEntry?.price ?? null,
+    displayPriceCheckedAt: displayEntry?.lastCheckedAt ?? null,
+    displayPriceFreshnessStatus: freshnessStatusOf(displayEntry),
+    ...bestPriceFields(displayEntry),
   };
 }
 
