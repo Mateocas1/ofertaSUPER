@@ -246,11 +246,12 @@ Al final del refresh, cada oferta que la corrida no observó se relee por EAN co
 3. **Publicación**: crea la rama `chore/catalog-refresh-<YYYYMMDD>`, commitea SOLO `data/catalog-snapshot.json`, abre PR y corre `gh pr merge --auto --merge --delete-branch`; si el repo no admite auto-merge, espera los checks con `gh pr checks --watch` y mergea solo en verde.
 4. **Frenos**: si el refresh falla (lotes fallidos, frescura <90% o una fuente con >20% de lecturas fallidas), NO abre el PR: escribe el motivo en el log y sale con código ≠0.
 5. **Log**: `~/.local/state/ofertasuper/refresh-<fecha>.log`.
-6. **crontab** (07:00 hora de Argentina = 10:00 UTC; el sistema está en UTC):
+6. **crontab** (desde las 07:00 hora de Argentina = 10:00 UTC; el sistema está en UTC). Corre cada hora hasta las 23:00 UTC para recuperar el día si la PC estaba apagada o Docker caído; el script sale sin hacer nada si ese día ya hubo un intento (marca `~/.local/state/ofertasuper/attempted-<fecha>`, que se escribe justo antes del refresh, así que un freno de frescura no se reintenta):
    ```
-   0 10 * * * /home/picala/code/ofertaSUPER-v1/scripts/cron-refresh.sh
+   0 10-23 * * * $HOME/.local/bin/ofertasuper-refresh
    ```
-   Ver con `crontab -l`; pausar comentando la línea (`crontab -e`); el log de cada corrida queda en el path del punto 5.
+   Ver con `crontab -l`; pausar comentando la línea (`crontab -e`); el log de cada corrida queda en el path del punto 5. Para forzar otra corrida el mismo día, borrar la marca `attempted-<fecha>`.
+7. **Postgres**: el contenedor `ofertasuper-cmvp-local-bootstrap-postgres-1` tiene `restart: unless-stopped` (`docker update --restart unless-stopped ...`) y además el script lo arranca si lo encuentra detenido.
 
 ### Cobertura de frescura (limitación conocida)
 
