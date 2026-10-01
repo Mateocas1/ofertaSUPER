@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseDirectRefreshKillSwitchCliOptions } from "../scripts/audit-direct-refresh-kill-switch";
 import {
 	assertDirectRefreshKillSwitchAllowsSource,
 	evaluateDirectRefreshKillSwitch,
@@ -158,48 +157,4 @@ describe("direct-refresh kill switch", () => {
 		);
 	});
 
-	it("parses CLI defaults and rejects unsafe flags", () => {
-		const options = parseDirectRefreshKillSwitchCliOptions(
-			["node", "script", "--source=vea", "--control=control.json"],
-			now,
-		);
-		assert.equal(options.source, "vea");
-		assert.equal(options.control, "control.json");
-		assert.match(options.output, /audit\/direct-refresh-kill-switch/);
-
-		for (const flag of [
-			"--write",
-			"--confirm-write=1",
-			"--all-source",
-			"--scheduler=true",
-			"--notify",
-			"--notifications=true",
-			"--deploy",
-			"--refresh",
-		]) {
-			assert.throws(
-				() => parseDirectRefreshKillSwitchCliOptions(["node", "script", "--control=x.json", flag]),
-				/direct-refresh kill switch rejects/,
-			);
-		}
-	});
-
-	it("rejects missing control, unknown source, unknown flags, and bare flags", () => {
-		assert.throws(
-			() => parseDirectRefreshKillSwitchCliOptions(["node", "script"]),
-			/requires --control=\.\.\./,
-		);
-		assert.throws(
-			() => parseDirectRefreshKillSwitchCliOptions(["node", "script", "--control=x.json", "--source=unknown"]),
-			/rejects source unknown/,
-		);
-		assert.throws(
-			() => parseDirectRefreshKillSwitchCliOptions(["node", "script", "--control=x.json", "--dry-run"]),
-			/unknown direct-refresh kill switch flag/,
-		);
-		assert.throws(
-			() => parseDirectRefreshKillSwitchCliOptions(["node", "script", "--control"]),
-			/requires --control=\.\.\./,
-		);
-	});
 });

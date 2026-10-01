@@ -11,11 +11,17 @@ test("static guards inventory mutating workflows and package scripts before cron
 			/^(ingest|populate|update:prices|db:seed|cleanup:)/.test(scriptName),
 	);
 
-	assert.deepEqual(mutatingPackageScripts.sort(), [
-		"cleanup:staging",
-		"db:seed",
-		"ingest",
-	]);
+	assert.deepEqual(mutatingPackageScripts.sort(), ["db:seed", "ingest"]);
+	assert.ok(
+		Object.keys(packageJson.scripts).length < 20,
+		`package.json must stay under 20 scripts, found ${Object.keys(packageJson.scripts).length}`,
+	);
+	assert.deepEqual(
+		Object.keys(packageJson.scripts).filter((scriptName) =>
+			/^(?:scrape|smoke|probe|audit):/.test(scriptName),
+		),
+		["audit:complexity"],
+	);
 
 	const workflowNames = (await readdir(".github/workflows")).filter(
 		(fileName) => fileName.endsWith(".yml") || fileName.endsWith(".yaml"),

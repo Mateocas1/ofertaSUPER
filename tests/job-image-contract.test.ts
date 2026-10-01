@@ -34,17 +34,3 @@ test("packages the canonical ingestion entrypoint as a non-root job target", asy
 	assert.match(job, /^CMD \["\.\/node_modules\/\.bin\/tsx", "scripts\/ingest\.ts"\]$/m);
 	assert.doesNotMatch(job, /npm run ingest|npm (?:ci|prune)|db:generate|ENTRYPOINT|\.env/);
 });
-
-test("isolates the disposable runtime proof and always removes its image", async () => {
-	const smoke = await read("scripts/job-image-smoke.mjs");
-	for (const boundary of ["--network=none", "--read-only", "--tmpfs=/tmp", '"--rm"']) {
-		assert.ok(smoke.includes(boundary), `${boundary} must constrain the runtime`);
-	}
-	assert.match(smoke, /INGESTION_V2=off/);
-	assert.match(smoke, /packagesAbsent/);
-	assert.match(smoke, /binariesAbsent/);
-	assert.match(smoke, /fictionalEnvironment/);
-	assert.match(smoke, /check-runtime-contract\.ts", "job"/);
-	assert.match(smoke, /image", "rm", "--force"/);
-	assert.match(smoke, /\["SIGINT", "SIGTERM"\]/);
-});
