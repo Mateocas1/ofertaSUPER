@@ -191,31 +191,34 @@ type ListAdminPromotionsFilters = {
   query?: string;
 };
 
+function statusClauses(
+  status: ListAdminPromotionsFilters["status"],
+  now: Date,
+): Prisma.PromotionWhereInput[] {
+  switch (status) {
+    case "active":
+      return [
+        { is_active: true },
+        { OR: [{ start_date: null }, { start_date: { lte: now } }] },
+        { OR: [{ end_date: null }, { end_date: { gte: now } }] },
+      ];
+    case "scheduled":
+      return [{ is_active: true }, { start_date: { gt: now } }];
+    case "expired":
+      return [{ end_date: { lt: now } }];
+    case "inactive":
+      return [{ is_active: false }];
+    default:
+      return [];
+  }
+}
+
 function buildListAdminPromotionsWhere(filters: ListAdminPromotionsFilters): Prisma.PromotionWhereInput {
   const now = getNow();
   const clauses: Prisma.PromotionWhereInput[] = [];
 
   if (filters.status && filters.status !== "all") {
-    switch (filters.status) {
-      case "active":
-        clauses.push(
-          { is_active: true },
-          { OR: [{ start_date: null }, { start_date: { lte: now } }] },
-          { OR: [{ end_date: null }, { end_date: { gte: now } }] },
-        );
-        break;
-      case "scheduled":
-        clauses.push({ is_active: true }, { start_date: { gt: now } });
-        break;
-      case "expired":
-        clauses.push({ end_date: { lt: now } });
-        break;
-      case "inactive":
-        clauses.push({ is_active: false });
-        break;
-      default:
-        break;
-    }
+    clauses.push(...statusClauses(filters.status, now));
   }
 
   if (filters.supermarket) {

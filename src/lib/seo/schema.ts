@@ -39,31 +39,57 @@ function buildOfferSchema(
     return null;
   }
 
-  const hasSpecialPricing =
-    entry.finalPrice !== null || entry.bestPromotion !== null || entry.automaticDiscountPercent !== null;
   const pageUrl = buildAbsoluteUrl(`/producto/${product.ean}`);
   const priceValidUntil = entry.bestPromotion?.endDate ?? undefined;
-  const description = entry.bestPromotion
-    ? entry.bestPromotion.title
-    : entry.automaticDiscountPercent !== null
-      ? `${entry.automaticDiscountPercent.toFixed(0)}% OFF detectado sobre list price`
-      : undefined;
+  const description = offerDescription(entry);
 
   return {
-    "@type": hasSpecialPricing ? "SpecialOffer" : "Offer",
+    "@type": offerSchemaType(entry),
     "@id": `${pageUrl}#offer-${entry.supermarket.slug}`,
     url: entry.productUrl ?? pageUrl,
     price: toSchemaPrice(resolvedPrice),
     priceCurrency: "ARS",
-    availability: entry.isAvailable ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+    availability: availabilityUrl(entry.isAvailable),
     itemCondition: "https://schema.org/NewCondition",
     seller: {
       "@type": "Organization",
       name: entry.supermarket.name,
     },
-    ...(priceValidUntil ? { priceValidUntil } : {}),
-    ...(description ? { description } : {}),
+    ...optionalField("priceValidUntil", priceValidUntil),
+    ...optionalField("description", description),
   };
+}
+
+function offerSchemaType(
+  entry: ProductDetail["priceEntries"][number],
+): "SpecialOffer" | "Offer" {
+  const hasSpecialPricing =
+    entry.finalPrice !== null ||
+    entry.bestPromotion !== null ||
+    entry.automaticDiscountPercent !== null;
+  return hasSpecialPricing ? "SpecialOffer" : "Offer";
+}
+
+function offerDescription(entry: ProductDetail["priceEntries"][number]) {
+  if (entry.bestPromotion) {
+    return entry.bestPromotion.title;
+  }
+
+  if (entry.automaticDiscountPercent !== null) {
+    return `${entry.automaticDiscountPercent.toFixed(0)}% OFF detectado sobre list price`;
+  }
+
+  return undefined;
+}
+
+function availabilityUrl(isAvailable: boolean) {
+  return isAvailable
+    ? "https://schema.org/InStock"
+    : "https://schema.org/OutOfStock";
+}
+
+function optionalField(key: string, value: unknown) {
+  return value ? { [key]: value } : {};
 }
 
 export function buildProductPageSchema(product: ProductDetail): JsonLdNode {

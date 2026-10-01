@@ -176,57 +176,61 @@ function detectBlockedPayload(payload: unknown) {
 	);
 }
 
-function classifyAxiosError(error: unknown, responseTimeMs: number) {
-  if (axios.isAxiosError(error)) {
-    if (error.code === "ECONNABORTED") {
-      return new VtexRequestError("VTEX request timed out", {
-        errorType: "timeout",
-        hashValid: true,
-        responseTimeMs,
-      });
-    }
-
-    const status = error.response?.status;
-    const data = error.response?.data;
-
-    if (detectHashInvalid(data)) {
-      return new VtexRequestError(getErrorMessage(data), {
-        errorType: "hash_invalid",
-        hashValid: false,
-        responseTimeMs,
-      });
-    }
-
-		if (
-			status === 403 ||
-			status === 429 ||
-			detectBlockedPayload(typeof data === "string" ? data : null)
-		) {
-			return new VtexRequestError(
-				`VTEX source blocked with status ${status ?? "unknown"}`,
-				{
-        errorType: "blocked",
-        hashValid: true,
-        responseTimeMs,
-				},
-			);
-    }
-
-    return new VtexRequestError(error.message, {
-      errorType: "network",
-      hashValid: true,
-      responseTimeMs,
-    });
-  }
-
-	return new VtexRequestError(
-		error instanceof Error ? error.message : "Unknown VTEX error",
-		{
-    errorType: "unknown",
-    hashValid: true,
-    responseTimeMs,
-		},
+function isBlockedStatus(status: number | undefined, data: unknown) {
+	return (
+		status === 403 ||
+		status === 429 ||
+		detectBlockedPayload(typeof data === "string" ? data : null)
 	);
+}
+
+function classifyAxiosError(error: unknown, responseTimeMs: number) {
+  if (!axios.isAxiosError(error)) {
+		return new VtexRequestError(
+			error instanceof Error ? error.message : "Unknown VTEX error",
+			{
+				errorType: "unknown",
+				hashValid: true,
+				responseTimeMs,
+			},
+		);
+	}
+
+	if (error.code === "ECONNABORTED") {
+		return new VtexRequestError("VTEX request timed out", {
+			errorType: "timeout",
+			hashValid: true,
+			responseTimeMs,
+		});
+	}
+
+	const status = error.response?.status;
+	const data = error.response?.data;
+
+	if (detectHashInvalid(data)) {
+		return new VtexRequestError(getErrorMessage(data), {
+			errorType: "hash_invalid",
+			hashValid: false,
+			responseTimeMs,
+		});
+	}
+
+	if (isBlockedStatus(status, data)) {
+		return new VtexRequestError(
+			`VTEX source blocked with status ${status ?? "unknown"}`,
+			{
+				errorType: "blocked",
+				hashValid: true,
+				responseTimeMs,
+			},
+		);
+	}
+
+	return new VtexRequestError(error.message, {
+		errorType: "network",
+		hashValid: true,
+		responseTimeMs,
+	});
 }
 
 function isCandidateProduct(value: unknown): value is LooseRecord {
