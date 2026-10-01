@@ -47,3 +47,31 @@ reduced last, by fixing code.
 
 ## Progress
 - 2026-10-01: map done; baseline recorded (828 tests pass, lint 156 warnings, prisma generate ok).
+
+## Progress (continued)
+
+- T1 unified writer: commit 73658d8. `scripts/direct-refresh-write.ts --source <slug>` replaces the five
+  `direct-refresh-*-write.ts` files; the DB-backed prewrite repository moved to
+  `scripts/pipeline/direct-refresh-prewrite-repository.ts`; the prewrite gate CLI is now
+  `scripts/direct-refresh-prewrite-gate.ts` (`direct-refresh:prewrite`). Per-source tests in
+  `tests/direct-refresh-write.test.ts`.
+- T2 legacy path: commit 4bf1f0f. `scripts/scrapers/**`, `populateDb.ts`, `updatePrices.ts`, `scrape:*`,
+  `populate`, `update:prices` deleted; the `strategy: "legacy"` branch in `resolveIngestionQueryTerms`
+  removed with its only caller.
+- T3 history cleanup: commit b2b41ad. `scripts/cleanup-history.ts` and `cleanup:history` deleted; a
+  static guard fails the suite if any script prunes price history by timestamp.
+- T4/T5 deletions + package.json: commit adfd89d. 75 scripts, 36 test files and ~35k lines removed
+  (audit-direct-refresh-*, audit-cmvp-*, category pagination, coverage, ingest-run, price-drift,
+  freshness baseline, ops freshness, refresh throughput, the direct-refresh discovery family, vtex
+  probes, compose/job-image/postgres recovery smoke harnesses). `package.json` 61 -> 19 scripts.
+  Complexity baseline pruned 131 -> 39 findings.
+- T6 lint: commits 2d4dab1, b34fffa, d40228b, ca9bde2, 887869e, b9cb259, 95c4ad8, 5d5fcb2, c6e6ae8.
+  156 -> 0 warnings, all by extracting named helpers; no rule disabled and no eslint-disable added.
+  Baseline is now empty (0 over-threshold functions).
+
+### Checks
+- `npx tsc --noEmit`: 0 errors.
+- `npm test`: 414/414 pass (was 828; the delta is deleted audit-tooling tests).
+- `npm run lint`: 0 problems (was 156 warnings).
+- `npm run audit:complexity`: PASS, 0 over-threshold.
+- `npx next build --webpack`: see report.
