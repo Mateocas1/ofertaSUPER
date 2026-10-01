@@ -23,6 +23,7 @@ type VtexHttpRequest = {
   headers: {
     "user-agent": string;
     "accept-language": string;
+    accept?: string;
     referer: string;
     origin: string;
   };
@@ -70,6 +71,9 @@ export type VtexProbeResult = {
   errorType: VtexProbeErrorType | null;
   responseTimeMs: number;
   productsReturned: number;
+  // A persisted hash can resolve to a registered query that does not expose the
+  // productSuggestions operation; that hash must not be treated as usable.
+  productSuggestionsFound: boolean;
   hash: string;
 };
 
@@ -284,6 +288,34 @@ function buildVtexHttpRequest(baseUrl: string): VtexHttpRequest {
   };
 }
 
+function readHtmlPayload(response: VtexHttpResponse) {
+  return typeof response.data === "string" ? response.data : "";
+}
+
+// The persisted-query registry that a VTEX IO storefront exposes for discovery
+// lives in the storefront HTML, so discovery needs the raw document.
+export async function fetchVtexStorefrontHtml({
+  baseUrl,
+  dependencies = {},
+}: {
+  baseUrl: string;
+  dependencies?: VtexClientDependencies;
+}): Promise<string> {
+  const origin = new URL(baseUrl).origin;
+  const response = await (dependencies.http ?? http).get(`${origin}/`, {
+    headers: {
+      "user-agent": pickUserAgent(),
+      "accept-language": "es-AR,es;q=0.9,en;q=0.7",
+      accept: "text/html,application/xhtml+xml",
+      referer: `${origin}/`,
+      origin,
+    },
+    transformResponse: [(value: string) => value],
+    responseType: "text",
+  });
+  return readHtmlPayload(response);
+}
+
 function parseVtexJsonPayload(
   response: VtexHttpResponse,
   responseTimeMs: number,
@@ -410,16 +442,32 @@ async function requestVtexPayload({
   return result;
 }
 
+// A wrong persisted hash still answers with HTTP 200; the registered query is
+// simply a different operation. Only the productSuggestions key proves the hash
+// belongs to the query the acquisition path needs.
+function hasProductSuggestionsOperation(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+
+  const data = (payload as { data?: unknown }).data;
+  return Boolean(
+    data && typeof data === "object" && "productSuggestions" in (data as LooseRecord),
+  );
+}
+
 export async function probeVtexHash({
   baseUrl,
   query = "leche",
   hash = process.env.VTEX_SHA256_HASH,
   count = 5,
+  dependencies = {},
 }: {
   baseUrl: string;
   query?: string;
   hash?: string;
   count?: number;
+  dependencies?: VtexClientDependencies;
 }): Promise<VtexProbeResult> {
   if (!hash) {
     throw new Error("VTEX_SHA256_HASH is required");
@@ -431,6 +479,7 @@ export async function probeVtexHash({
       query,
       hash,
       count,
+      dependencies,
     });
     const rawProducts = extractProductRecords(payload);
     const products = rawProducts
@@ -443,6 +492,7 @@ export async function probeVtexHash({
       errorType: null,
       responseTimeMs,
       productsReturned: products.length,
+      productSuggestionsFound: hasProductSuggestionsOperation(payload),
       hash,
     };
   } catch (error) {
@@ -453,6 +503,7 @@ export async function probeVtexHash({
         errorType: error.errorType,
         responseTimeMs: error.responseTimeMs,
         productsReturned: 0,
+        productSuggestionsFound: false,
         hash,
       };
     }

@@ -1,0 +1,27 @@
+<!doctype html>
+<!--
+  Sanitized VTEX IO storefront fixture. It reproduces only the shape that
+  matters for persisted-query discovery: an inline runtime script whose
+  cacheHints object maps a sha256 hash to provider/sender metadata. The
+  account name, hashes and senders are synthetic.
+-->
+<html>
+  <head>
+    <title>Sanitized storefront</title>
+    <script>window.__NOISE__ = "not json"</script>
+  </head>
+  <body>
+    <script>
+      {"account":"sanitized-store","cacheHints":{
+        "1111111111111111111111111111111111111111111111111111111111111111":{"provider":"vtex.store-resources@0.x","sender":"vtex.store-resources@0.x","version":1},
+        "2222222222222222222222222222222222222222222222222222222222222222":{"provider":"vtex.search-graphql@0.x","sender":"vtex.store-resources@0.x","version":1,"maxAge":"SHORT","scope":"SEGMENT"},
+        "3333333333333333333333333333333333333333333333333333333333333333":{"provider":"vtex.search-graphql@0.x","sender":"vtex.store-resources@0.x","version":1,"maxAge":"MEDIUM","scope":"SEGMENT"},
+        "4444444444444444444444444444444444444444444444444444444444444444":{"provider":"vtex.search-graphql@0.x","sender":"vtex.wish-list@1.x","version":1,"maxAge":"SHORT","scope":"SEGMENT"},
+        "5555555555555555555555555555555555555555555555555555555555555555":{"provider":"vtex.catalog-graphql@1.x","sender":"vtex.admin-collections@0.x","version":1},
+        "not-a-hash":{"provider":"vtex.search-graphql@0.x","sender":"vtex.store-resources@0.x"},
+        "6666666666666666666666666666666666666666666666666666666666666666":{"provider":"vtex.search-graphql@0.x","sender":"vtex.store-resources@0.x"},
+        "7777777777777777777777777777777777777777777777777777777777777777":{"provider":"vtex.search-graphql@0.x","sender":"vtex.store-resources@0.x","version":1}
+      },"workspace":"master"}
+    </script>
+  </body>
+</html>
