@@ -109,9 +109,34 @@ export function validateDirectRefreshCapacityEvidence({
 	}
 
 	const candidateArtifact = hydrateArtifactMetadata(baseArtifact, report);
-	const reasons: string[] = [];
 	const typedReport = report as Partial<DirectRefreshCapacityReport>;
+	const reasons = [
+		...reportHeaderReasons(typedReport),
+		...reportScopeReasons(typedReport, evidence, sourceSlug, sampleSize),
+		...reportSourceListReasons(typedReport, sourceSlug),
+	];
+	const source = singleMatchingSource(typedReport, sourceSlug);
+	const artifact = source
+		? hydrateArtifactSource(candidateArtifact, source)
+		: candidateArtifact;
+	if (source) {
+		reasons.push(
+			...sourceEvidenceReasons(source, sampleSize),
+			...selectedRowEvidenceReasons(source, selectedRows),
+		);
+	}
 
+	return finish(artifact, uniqueSorted(reasons));
+}
+
+type CapacityReportSource = NonNullable<
+	Partial<DirectRefreshCapacityReport>["sources"]
+>[number];
+
+function reportHeaderReasons(
+	typedReport: Partial<DirectRefreshCapacityReport>,
+): string[] {
+	const reasons: string[] = [];
 	if (typedReport.schemaVersion !== 1) {
 		reasons.push("capacity report schemaVersion must be 1");
 	}
@@ -127,7 +152,16 @@ export function validateDirectRefreshCapacityEvidence({
 	if (!isReadOnlyCapacityBoundary(typedReport.writeBoundary)) {
 		reasons.push("capacity report write boundary must be read-only");
 	}
+	return reasons;
+}
 
+function reportScopeReasons(
+	typedReport: Partial<DirectRefreshCapacityReport>,
+	evidence: DirectRefreshCapacityEvidenceInput,
+	sourceSlug: string,
+	sampleSize: number,
+): string[] {
+	const reasons: string[] = [];
 	const filtersSources = Array.isArray(typedReport.filters?.sources)
 		? typedReport.filters.sources.filter(
 				(source): source is string => typeof source === "string",
@@ -143,14 +177,30 @@ export function validateDirectRefreshCapacityEvidence({
 			`capacity report targetBatchSize must equal requested sample size ${sampleSize}`,
 		);
 	}
-	if (typeof evidence.expectedIssueNumber !== "number") {
-		reasons.push("capacity evidence expected issue number is required");
-	} else if (typedReport.issue !== evidence.expectedIssueNumber) {
-		reasons.push(
-			`capacity report issue must equal expected issue ${evidence.expectedIssueNumber}`,
-		);
-	}
+	reasons.push(...issueReasons(typedReport, evidence));
+	return reasons;
+}
 
+function issueReasons(
+	typedReport: Partial<DirectRefreshCapacityReport>,
+	evidence: DirectRefreshCapacityEvidenceInput,
+): string[] {
+	if (typeof evidence.expectedIssueNumber !== "number") {
+		return ["capacity evidence expected issue number is required"];
+	}
+	if (typedReport.issue !== evidence.expectedIssueNumber) {
+		return [
+			`capacity report issue must equal expected issue ${evidence.expectedIssueNumber}`,
+		];
+	}
+	return [];
+}
+
+function reportSourceListReasons(
+	typedReport: Partial<DirectRefreshCapacityReport>,
+	sourceSlug: string,
+): string[] {
+	const reasons: string[] = [];
 	const reportSources = Array.isArray(typedReport.sources)
 		? typedReport.sources
 		: [];
@@ -160,61 +210,83 @@ export function validateDirectRefreshCapacityEvidence({
 	if (typedReport.summary?.sourceCount !== 1) {
 		reasons.push("capacity report summary.sourceCount must be 1");
 	}
-	const matchingSources = reportSources.filter(
-		(source) => source?.slug === sourceSlug,
-	);
-	if (matchingSources.length !== 1) {
+	if (matchingCapacitySources(typedReport, sourceSlug).length !== 1) {
 		reasons.push(
 			`capacity report must contain exactly one source entry for ${sourceSlug}`,
 		);
 	}
-	const source = matchingSources[0];
-	const artifact = source
-		? hydrateArtifactSource(candidateArtifact, source)
-		: candidateArtifact;
-	if (source) {
-		if (source.directRefreshSupport !== "writer-supported") {
-			reasons.push("capacity source must be writer-supported");
-		}
-		if (source.classification === "excluded") {
-			reasons.push("capacity source classification must not be excluded");
-		}
-		if (source.status === "FAIL") {
-			reasons.push("capacity source status must not be FAIL");
-		}
-		if ((source.candidateScan?.viableRows ?? -1) < sampleSize) {
-			reasons.push(
-				`capacity source viable rows must be >= requested sample size ${sampleSize}`,
-			);
-		}
-		if ((source.capacity?.recommendedBatchSize ?? -1) < sampleSize) {
-			reasons.push(
-				`capacity source recommended batch size must be >= requested sample size ${sampleSize}`,
-			);
-		}
+	return reasons;
+}
 
-		const capacityRows = new Map(
-			Array.isArray(source.rows)
-				? source.rows
-						.filter((row) => typeof row?.rowId === "string")
-						.map((row) => [row.rowId, row])
-				: [],
+function matchingCapacitySources(
+	typedReport: Partial<DirectRefreshCapacityReport>,
+	sourceSlug: string,
+): CapacityReportSource[] {
+	const reportSources = Array.isArray(typedReport.sources)
+		? typedReport.sources
+		: [];
+	return reportSources.filter((source) => source?.slug === sourceSlug);
+}
+
+function singleMatchingSource(
+	typedReport: Partial<DirectRefreshCapacityReport>,
+	sourceSlug: string,
+): CapacityReportSource | undefined {
+	return matchingCapacitySources(typedReport, sourceSlug)[0];
+}
+
+function sourceEvidenceReasons(
+	source: CapacityReportSource,
+	sampleSize: number,
+): string[] {
+	const reasons: string[] = [];
+	if (source.directRefreshSupport !== "writer-supported") {
+		reasons.push("capacity source must be writer-supported");
+	}
+	if (source.classification === "excluded") {
+		reasons.push("capacity source classification must not be excluded");
+	}
+	if (source.status === "FAIL") {
+		reasons.push("capacity source status must not be FAIL");
+	}
+	if ((source.candidateScan?.viableRows ?? -1) < sampleSize) {
+		reasons.push(
+			`capacity source viable rows must be >= requested sample size ${sampleSize}`,
 		);
-		for (const selectedRow of selectedRows) {
-			const capacityRow = capacityRows.get(selectedRow.rowId);
-			if (!capacityRow) {
-				reasons.push(
-					`selected row ${selectedRow.rowId} is missing from capacity report evidence`,
-				);
-			} else if (capacityRow.status !== "PASS") {
-				reasons.push(
-					`selected row ${selectedRow.rowId} did not PASS capacity evidence`,
-				);
-			}
+	}
+	if ((source.capacity?.recommendedBatchSize ?? -1) < sampleSize) {
+		reasons.push(
+			`capacity source recommended batch size must be >= requested sample size ${sampleSize}`,
+		);
+	}
+	return reasons;
+}
+
+function selectedRowEvidenceReasons(
+	source: CapacityReportSource,
+	selectedRows: Array<{ rowId: string }>,
+): string[] {
+	const reasons: string[] = [];
+	const capacityRows = new Map(
+		Array.isArray(source.rows)
+			? source.rows
+					.filter((row) => typeof row?.rowId === "string")
+					.map((row) => [row.rowId, row])
+			: [],
+	);
+	for (const selectedRow of selectedRows) {
+		const capacityRow = capacityRows.get(selectedRow.rowId);
+		if (!capacityRow) {
+			reasons.push(
+				`selected row ${selectedRow.rowId} is missing from capacity report evidence`,
+			);
+		} else if (capacityRow.status !== "PASS") {
+			reasons.push(
+				`selected row ${selectedRow.rowId} did not PASS capacity evidence`,
+			);
 		}
 	}
-
-	return finish(artifact, uniqueSorted(reasons));
+	return reasons;
 }
 
 function buildBaseArtifact(
