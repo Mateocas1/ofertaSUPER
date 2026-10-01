@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { findSnapshotAdaptedProduct, searchSnapshotSummaries } from "../src/lib/catalog-snapshot-adapters";
-import { normalizeQuery } from "../src/lib/catalog-snapshot";
+import { getSnapshotGeneratedAt, normalizeQuery } from "../src/lib/catalog-snapshot";
 
-// The committed snapshot observes everything on 2026-09-20; one day later the
-// offers are still fresh, a week later none are.
-const freshNow = new Date("2026-09-21T00:00:00.000Z");
-const staleNow = new Date("2026-10-01T00:00:00.000Z");
+// The daily refresh rewrites the committed snapshot, so the clocks follow its
+// generation time: at generation the offers are fresh, a week later none are.
+const generatedAt = new Date(getSnapshotGeneratedAt());
+const freshNow = generatedAt;
+const staleNow = new Date(generatedAt.getTime() + 8 * 24 * 60 * 60 * 1000);
 
 function findAdapted(query: string) {
   const result = searchSnapshotSummaries({ query, now: freshNow });
@@ -69,7 +70,7 @@ describe("snapshot adapters produce the guarded shapes", () => {
     }
     const freshEntry = fresh.products.find((entry) => entry.ean === stale.products[0].ean);
     assert.ok(freshEntry);
-    assert.equal(freshEntry.hasFreshPrice, true, "the same product is fresh one day after the observation");
+    assert.equal(freshEntry.hasFreshPrice, true, "the same product is fresh when the snapshot is generated");
   });
 
   it("keeps pagination and identity stable across adapter and reader", () => {
