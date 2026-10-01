@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 
+import { normalizeGtin } from "@/lib/identity/gtin";
 import { buildAbsoluteUrl } from "@/lib/seo/metadata";
 
 export type SitemapCategory = { slug: string; children?: SitemapCategory[] };
@@ -38,7 +39,7 @@ export async function buildSitemap(
     url: buildAbsoluteUrl(`/categoria/${slug}`), changeFrequency: "weekly", priority: 0.7,
   }));
   const productRoutes: MetadataRoute.Sitemap = (catalog?.products ?? []).map(({ ean }) => ({
-    url: buildAbsoluteUrl(`/producto/${ean}`), changeFrequency: "daily", priority: 0.8,
+    url: buildAbsoluteUrl(`/producto/${normalizeGtin(ean) ?? ean}`), changeFrequency: "daily", priority: 0.8,
   }));
   return [...staticRoutes, ...categoryRoutes, ...productRoutes];
 }

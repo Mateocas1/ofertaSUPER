@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Optional, fail-soft, encrypted off-site copy of the daily pg_dump.
-# Sourced by cron-refresh.sh; see docs/backup-r2-runbook.md.
+# Sourced by cron-refresh.sh; see docs/RUNBOOK.md ("Encrypted off-site backup").
 #
 # Contract: r2_upload_backup NEVER returns non-zero and never prints secrets.
 # It logs one line per outcome and only reports exit codes from rclone.

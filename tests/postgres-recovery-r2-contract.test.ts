@@ -77,7 +77,7 @@ test("mismatch creates neither Docker target nor restore, and contracts keep sec
   }, pipeline: async () => ({}) };
   await assert.rejects(runRecovery({ ...env }, runtime as never), /ciphertext/);
   assert.equal(calls.includes("docker"), false);
-  const script = read("scripts/postgres-recovery-r2.mjs"), docs = read("docs/database-backup-recovery-runbook.md");
+  const script = read("scripts/postgres-recovery-r2.mjs"), docs = read("docs/RUNBOOK.md");
   assert.match(script, /createHash\("sha256"\)|sha256/); assert.match(script, /_prisma_migrations|pg_indexes|products|supermarkets|supermarket_products|price_history|ofertasuper_app/);
   assert.match(script, /\["network", "rm"\]|\["volume", "rm"\]|rm\(state\.workspace/); assert.match(script, /AggregateError|SIGINT|SIGTERM/);
   assert.match(docs, /single.*download|no-Production authority|logical manifest/i);

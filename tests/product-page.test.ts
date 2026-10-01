@@ -52,6 +52,23 @@ test("guarded product page loader rethrows unrelated errors", async () => {
   await assert.rejects(loadPage(ean, 90), (error) => error === unexpected);
 });
 
+test("product page canonical always points at the canonical GTIN-14", () => {
+  const requested = "2505271000004"; // EAN-13 form of the requested URL
+  const canonical = "02505271000004"; // its canonical GTIN-14 key
+  const page = createProductPageResult(requested, {
+    product: { ean: canonical, name: "Yerba test", displayPrice: 1250 } as never,
+    history: { ean: requested, days: 90, series: [], points: [] } as never,
+    dataSource: "database",
+    degraded: false,
+    verifiedAt: "2026-03-01T00:00:00.000Z",
+    latestCheckedAt: null,
+  });
+
+  const metadata = createGuardedProductMetadata(page);
+
+  assert.equal(metadata.alternates?.canonical, `https://ofertas-super.vercel.app/producto/${canonical}`);
+});
+
 test("product page metadata is derived from eligible guarded detail only", () => {
   const page = createProductPageResult(ean, {
     product,
