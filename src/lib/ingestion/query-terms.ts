@@ -2,10 +2,8 @@ import { db } from "@/lib/db";
 import { DEFAULT_SEARCH_TERMS } from "@/lib/vtex/categories";
 
 type ResolveIngestionQueryTermsOptions = {
-  slug: string;
   queryTerms?: string[];
   limit?: number;
-  strategy?: "legacy" | "peer";
 };
 
 const STOP_WORDS = new Set([
@@ -123,19 +121,13 @@ async function buildCatalogDrivenTerms(limit: number) {
 }
 
 export async function resolveIngestionQueryTerms({
-  slug,
   queryTerms,
   limit,
-  strategy = "peer",
 }: ResolveIngestionQueryTermsOptions) {
   const cappedLimit = Math.max(limit ?? DEFAULT_SEARCH_TERMS.length, 1);
 
   if (queryTerms?.length) {
     return expandIngestionQueryTerms(queryTerms).slice(0, cappedLimit);
-  }
-
-  if (strategy === "legacy" && slug === "disco") {
-    return DEFAULT_SEARCH_TERMS.slice(0, cappedLimit);
   }
 
   const catalogTerms = await buildCatalogDrivenTerms(cappedLimit);

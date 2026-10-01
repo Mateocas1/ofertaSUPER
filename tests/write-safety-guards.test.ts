@@ -2,75 +2,6 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { test } from "node:test";
 
-import { readDryRunFlag, runStoreScraper } from "../scripts/scrapers/shared";
-import type { NormalizedProduct } from "../src/lib/vtex/normalize";
-
-const sampleProduct: NormalizedProduct = {
-	ean: "7790000000001",
-	name: "Leche Test",
-	brand: "TEST",
-	description: null,
-	imageUrl: null,
-	images: [],
-	category: "Lacteos",
-	skuId: "sku-test",
-	sellerId: "seller-test",
-	productUrl: "https://example.com/leche-test",
-	price: 1200,
-	listPrice: 1400,
-	referencePrice: null,
-	referenceUnit: null,
-	isAvailable: true,
-};
-
-test("legacy scrapers default to dry-run and reject production freshness writes", () => {
-	assert.equal(readDryRunFlag(["node", "script"], {}), true);
-	assert.equal(readDryRunFlag(["node", "script", "--confirm-write"], {}), true);
-	assert.equal(
-		readDryRunFlag(["node", "script", "--confirm-write", "--dry-run"], {}),
-		true,
-	);
-	assert.equal(
-		readDryRunFlag(["node", "script"], { INGESTION_WRITE_APPROVED: "true" }),
-		true,
-	);
-	assert.equal(
-		readDryRunFlag(["node", "script", "--confirm-write"], {
-			INGESTION_WRITE_APPROVED: "true",
-			LEGACY_PRICE_WRITE_APPROVED: "true",
-		}),
-		false,
-	);
-});
-
-test("runStoreScraper does not persist when dryRun is omitted", async () => {
-	let persistCalls = 0;
-
-	const result = await runStoreScraper({
-		slug: "disco",
-		queryTerms: ["leche"],
-		dependencies: {
-			getSupermarketBySlug: () => ({
-				slug: "disco",
-				name: "Disco",
-				logoUrl: "https://example.com/logo.png",
-				baseUrl: "https://example.com",
-				adapter: "vtex",
-			}),
-			resolveQueryTerms: async () => ["leche"],
-			fetchVtexProducts: async () => [sampleProduct],
-			persistPricing: async () => {
-				persistCalls += 1;
-				return { persisted: 1, skipped: 0 };
-			},
-		},
-	});
-
-	assert.equal(persistCalls, 0);
-	assert.equal(result.persisted, 0);
-	assert.equal(result.fetched, 1);
-});
-
 test("static guards inventory mutating workflows and package scripts before cron enablement", async () => {
 	const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
 		scripts: Record<string, string>;
@@ -85,8 +16,6 @@ test("static guards inventory mutating workflows and package scripts before cron
 		"cleanup:staging",
 		"db:seed",
 		"ingest",
-		"populate",
-		"update:prices",
 	]);
 
 	const workflowNames = (await readdir(".github/workflows")).filter(
@@ -126,7 +55,7 @@ test("static guards inventory mutating workflows and package scripts before cron
 	assert.doesNotMatch(allWorkflows, /INGESTION_V2:\s*["']?active/i);
 	assert.doesNotMatch(
 		allWorkflows,
-		/direct-refresh:(?:carrefour|vea|disco|jumbo|mas)-write|direct-refresh-(?:carrefour|vea|disco|jumbo|mas)-write/i,
+		/direct-refresh:(?:write|prewrite)|direct-refresh-(?:write|prewrite)/i,
 	);
 	assert.equal(
 		workflowEntries.find((entry) => /refresh-existing/i.test(entry.fileName)),
@@ -143,7 +72,7 @@ test("the unified direct-refresh writer is not scheduled and avoids broad ingest
 
 	assert.doesNotMatch(
 		writer,
-		/reconcileStageProducts|scripts\/ingest|scrapers\/shared|stageSourceProducts/,
+		/reconcileStageProducts|scripts\/ingest|stageSourceProducts/,
 	);
 	assert.doesNotMatch(writer, /workflow|cron|schedule|deploy|cleanup/);
 	assert.match(
@@ -153,4 +82,17 @@ test("the unified direct-refresh writer is not scheduled and avoids broad ingest
 	assert.match(writer, /DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS/);
 	assert.match(writer, /activeWriteSourceFromArgv\(\)/);
 	assert.match(pipeline, /ACTIVE_WRITE_SOURCES/);
+});
+
+test("the legacy scraper path no longer exists in the repository", async () => {
+	const packageJson = JSON.parse(await readFile("package.json", "utf8")) as {
+		scripts: Record<string, string>;
+	};
+	const legacyScripts = Object.keys(packageJson.scripts).filter((scriptName) =>
+		/^scrape:/.test(scriptName),
+	);
+	assert.deepEqual(legacyScripts, []);
+	await assert.rejects(readFile("scripts/scrapers/shared.ts", "utf8"));
+	await assert.rejects(readFile("scripts/updatePrices.ts", "utf8"));
+	await assert.rejects(readFile("scripts/populateDb.ts", "utf8"));
 });
