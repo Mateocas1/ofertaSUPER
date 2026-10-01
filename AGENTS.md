@@ -1,6 +1,6 @@
 # Plan de trabajo vigente
 
-Antes de cualquier tarea, leer [`docs/v1-plan.md`](docs/v1-plan.md): objetivo final, gates en orden, guardrails y cuándo parar. Es la única autoridad de ejecución; `goal.md` y `odd/tasks/*` son historia.
+Antes de cualquier tarea, leer [`ARCHITECTURE.md`](ARCHITECTURE.md) (flujo de datos y módulos clave) y [`docs/RUNBOOK.md`](docs/RUNBOOK.md) (actualización diaria, cron, Postgres, backups): son la autoridad de ejecución vigente. Los planes largos y los specs de governance quedaron archivados en el tag `archive/full-governance`.
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know

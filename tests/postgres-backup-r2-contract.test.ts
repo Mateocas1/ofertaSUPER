@@ -323,7 +323,7 @@ test("formats only a strict logical manifest basename for operator output", () =
 });
 
 test("script keeps its no-plaintext contract and docs document failure semantics", () => {
-  const script = read("scripts/postgres-backup-r2.mjs"), docs = read("docs/database-backup-recovery-runbook.md");
+  const script = read("scripts/postgres-backup-r2.mjs"), docs = read("docs/RUNBOOK.md");
   assert.match(script, /createHash|--immutable|manifest\.uploading|BACKUP_DATABASE_ROLE/); assert.doesNotMatch(script, /--file=|writeFile|createWriteStream|\bhashsum\b/);
   assert.match(docs, /BACKUP_CRYPT_REMOTE.*logical/i); assert.match(docs, /RCLONE_CRYPT_REMOTE.*reserved/i); assert.match(docs, /RCLONE_CONFIG=\/dev\/null/); assert.match(docs, /upload.*validation.*source.*destination/i); assert.match(docs, /retention failure.*fails/i); assert.match(docs, /never writes a plaintext dump/i); assert.match(docs, /plaintext.*do not pre-obscure|do not pre-obscure.*plaintext/i);
 });

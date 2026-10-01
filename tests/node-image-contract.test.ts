@@ -36,7 +36,7 @@ test("runs as non-root with writable cache and direct Node signal handling", asy
 test("keeps required build inputs and excludes local or secret material", async () => {
 	const ignored = (await read(".dockerignore")).split(/\r?\n/);
 
-	for (const path of [".git", ".next", "node_modules", "audit", "docs/reports", ".env", ".env.*", "*.pem"]) {
+	for (const path of [".git", ".next", "node_modules", "audit", ".env", ".env.*", "*.pem"]) {
 		assert.ok(ignored.includes(path), `${path} must be excluded`);
 	}
 	for (const path of ["package.json", "package-lock.json", "next.config.ts", "src", "public", "prisma"]) {
