@@ -175,6 +175,180 @@ type CandidateMetadataField =
 	| "category"
 	| "referenceUnit";
 
+function assertAuditScope(source: string, term: string) {
+	if (!source || source.includes(",")) {
+		throw new Error("candidate audit requires exactly one source");
+	}
+
+	if (!term || term.includes(",")) {
+		throw new Error("candidate audit requires exactly one term");
+	}
+}
+
+function assertAuditWriteMode(count: number, writeMode: CandidateWriteMode) {
+	if (writeMode === "phase4-count5" && count !== EXPECTED_CANDIDATE_COUNT) {
+		throw new Error("candidate audit requires --count=5");
+	}
+
+	if (writeMode === "refresh-existing" && count > 25) {
+		throw new Error(
+			"candidate audit refresh-existing count must be at most 25",
+		);
+	}
+}
+
+async function loadActiveVtexSource(
+	repository: CandidateAuditRepository,
+	source: string,
+) {
+	const sourceSnapshot = await repository.getSourceBySlug(source);
+
+	if (!sourceSnapshot) {
+		throw new Error(`candidate audit source not found: ${source}`);
+	}
+
+	if (!sourceSnapshot.isActive || !sourceSnapshot.isVtex) {
+		throw new Error(`candidate audit source must be active VTEX: ${source}`);
+	}
+
+	return sourceSnapshot;
+}
+
+function assertCandidateCountForSelection({
+	selectionMode,
+	writeMode,
+	scanCount,
+	count,
+	candidates,
+}: {
+	selectionMode: CandidateSelectionMode;
+	writeMode: CandidateWriteMode;
+	scanCount: number;
+	count: number;
+	candidates: NormalizedProduct[];
+}) {
+	if (selectionMode === "existing-only") {
+		requireDistinctCandidateCount(candidates, scanCount);
+	} else if (writeMode === "phase4-count5") {
+		requireExactlyFiveDistinctCandidates(candidates);
+	} else {
+		requireDistinctCandidateCount(candidates, count);
+	}
+}
+
+function selectExistingCandidates(
+	candidates: NormalizedProduct[],
+	count: number,
+	productEans: Set<string>,
+	supermarketProductEans: Set<string>,
+) {
+	const selectableCandidates: NormalizedProduct[] = [];
+	const skippedCandidates: CandidateSkippedCandidate[] = [];
+
+	for (const candidate of candidates) {
+		const reasons: CandidateSkipReason[] = [];
+
+		if (!productEans.has(candidate.ean)) {
+			reasons.push("missing_product");
+		} else if (!supermarketProductEans.has(candidate.ean)) {
+			reasons.push("missing_supermarket_product");
+		}
+
+		if (reasons.length > 0) {
+			skippedCandidates.push(buildSkippedCandidate(candidate, reasons));
+		} else {
+			selectableCandidates.push(candidate);
+		}
+	}
+
+	return {
+		selected: selectableCandidates.slice(0, count),
+		skipped: [
+			...skippedCandidates,
+			...selectableCandidates
+				.slice(count)
+				.map((candidate) =>
+					buildSkippedCandidate(candidate, ["not_selected_overflow"]),
+				),
+		],
+	};
+}
+
+function assertCandidateSetPresent({
+	writeMode,
+	source,
+	term,
+	count,
+	queryLimit,
+	selectionMode,
+	candidates,
+	missingProductEans,
+	missingSupermarketProductEans,
+	allowMissingSupermarketProductEans,
+	now,
+}: {
+	writeMode: CandidateWriteMode;
+	source: string;
+	term: string;
+	count: number;
+	queryLimit: number;
+	selectionMode: CandidateSelectionMode;
+	candidates: NormalizedProduct[];
+	missingProductEans: string[];
+	missingSupermarketProductEans: string[];
+	allowMissingSupermarketProductEans: string[];
+	now: () => Date;
+}) {
+	const selection = (): CandidateAuditSelection => ({
+		mode: selectionMode,
+		scanCount: candidates.length,
+		selectedCount: candidates.length,
+		skippedCandidates: [],
+	});
+
+	if (missingProductEans.length > 0) {
+		throwCandidateAuditError({
+			message: `candidate audit missing existing products: ${missingProductEans.join(",")}`,
+			writeMode,
+			source,
+			term,
+			count,
+			queryLimit,
+			selection: selection(),
+			selectedCandidates: candidates,
+			missingProducts: missingProductEans,
+			missingSupermarketProducts: missingSupermarketProductEans,
+			candidates,
+			now,
+		});
+	}
+
+	if (writeMode === "refresh-existing") {
+		if (missingSupermarketProductEans.length > 0) {
+			throwCandidateAuditError({
+				message: `candidate audit missing existing supermarket_products: ${missingSupermarketProductEans.join(",")}`,
+				writeMode,
+				source,
+				term,
+				count,
+				queryLimit,
+				selection: selection(),
+				selectedCandidates: candidates,
+				missingProducts: missingProductEans,
+				missingSupermarketProducts: missingSupermarketProductEans,
+				candidates,
+				now,
+			});
+		}
+		return;
+	}
+
+	requireAllowedMissingSupermarketProducts(
+		missingSupermarketProductEans,
+		allowMissingSupermarketProductEans,
+	);
+}
+
 function uniqueSorted(values: string[]) {
 	return Array.from(new Set(values)).sort();
 }
@@ -420,45 +594,21 @@ export async function buildCandidateAudit({
 	selectionMode = "strict",
 	scanCount = count,
 }: CandidateAuditOptions): Promise<CandidateAudit> {
-	if (!source || source.includes(",")) {
-		throw new Error("candidate audit requires exactly one source");
-	}
-
-	if (!term || term.includes(",")) {
-		throw new Error("candidate audit requires exactly one term");
-	}
-
-	if (writeMode === "phase4-count5" && count !== EXPECTED_CANDIDATE_COUNT) {
-		throw new Error("candidate audit requires --count=5");
-	}
-
-	if (writeMode === "refresh-existing" && count > 25) {
-		throw new Error(
-			"candidate audit refresh-existing count must be at most 25",
-		);
-	}
-
+	assertAuditScope(source, term);
+	assertAuditWriteMode(count, writeMode);
 	assertSelectionOptions({ writeMode, selectionMode, count, scanCount });
 
-	const sourceSnapshot = await repository.getSourceBySlug(source);
-
-	if (!sourceSnapshot) {
-		throw new Error(`candidate audit source not found: ${source}`);
-	}
-
-	if (!sourceSnapshot.isActive || !sourceSnapshot.isVtex) {
-		throw new Error(`candidate audit source must be active VTEX: ${source}`);
-	}
+	const sourceSnapshot = await loadActiveVtexSource(repository, source);
 
 	assertAllowedWaivers(source, mojibakeWaivers);
 	const candidates = await fetchCandidates();
-	if (selectionMode === "existing-only") {
-		requireDistinctCandidateCount(candidates, scanCount);
-	} else if (writeMode === "phase4-count5") {
-		requireExactlyFiveDistinctCandidates(candidates);
-	} else {
-		requireDistinctCandidateCount(candidates, count);
-	}
+	assertCandidateCountForSelection({
+		selectionMode,
+		writeMode,
+		scanCount,
+		count,
+		candidates,
+	});
 	requirePositiveCandidatePrices(candidates);
 	requireNoUnwaivedMojibake(candidates, mojibakeWaivers);
 
@@ -482,64 +632,17 @@ export async function buildCandidateAudit({
 	let skippedCandidates: CandidateSkippedCandidate[] = [];
 
 	if (selectionMode === "existing-only") {
-		const selectableCandidates: NormalizedProduct[] = [];
-
-		for (const candidate of candidates) {
-			const reasons: CandidateSkipReason[] = [];
-
-			if (!productEans.has(candidate.ean)) {
-				reasons.push("missing_product");
-			} else if (!supermarketProductEans.has(candidate.ean)) {
-				reasons.push("missing_supermarket_product");
-			}
-
-			if (reasons.length > 0) {
-				skippedCandidates.push(buildSkippedCandidate(candidate, reasons));
-			} else {
-				selectableCandidates.push(candidate);
-			}
-		}
-
-		selectedCandidates = selectableCandidates.slice(0, count);
-		skippedCandidates = [
-			...skippedCandidates,
-			...selectableCandidates
-				.slice(count)
-				.map((candidate) =>
-					buildSkippedCandidate(candidate, ["not_selected_overflow"]),
-				),
-		];
+		({ selected: selectedCandidates, skipped: skippedCandidates } =
+			selectExistingCandidates(
+				candidates,
+				count,
+				productEans,
+				supermarketProductEans,
+			));
 
 		if (selectedCandidates.length !== count) {
-			const selection: CandidateAuditSelection = {
-				mode: selectionMode,
-				scanCount: candidates.length,
-				selectedCount: selectedCandidates.length,
-				skippedCandidates,
-			};
-			const message = `candidate audit existing-only selected ${selectedCandidates.length} of ${count} existing candidates`;
-
 			throwCandidateAuditError({
-				message,
-				writeMode,
-				source,
-				term,
-				count,
-				queryLimit,
-				selection,
-				selectedCandidates,
-				missingProducts: missingProductEans,
-				missingSupermarketProducts: missingSupermarketProductEans,
-				candidates,
-				now,
-			});
-		}
-	} else {
-		if (missingProductEans.length > 0) {
-			const message = `candidate audit missing existing products: ${missingProductEans.join(",")}`;
-
-			throwCandidateAuditError({
-				message,
+				message: `candidate audit existing-only selected ${selectedCandidates.length} of ${count} existing candidates`,
 				writeMode,
 				source,
 				term,
@@ -548,47 +651,30 @@ export async function buildCandidateAudit({
 				selection: {
 					mode: selectionMode,
 					scanCount: candidates.length,
-					selectedCount: candidates.length,
-					skippedCandidates: [],
+					selectedCount: selectedCandidates.length,
+					skippedCandidates,
 				},
-				selectedCandidates: candidates,
+				selectedCandidates,
 				missingProducts: missingProductEans,
 				missingSupermarketProducts: missingSupermarketProductEans,
 				candidates,
 				now,
 			});
 		}
-
-		if (writeMode === "refresh-existing") {
-			if (missingSupermarketProductEans.length > 0) {
-				const message = `candidate audit missing existing supermarket_products: ${missingSupermarketProductEans.join(",")}`;
-
-				throwCandidateAuditError({
-					message,
-					writeMode,
-					source,
-					term,
-					count,
-					queryLimit,
-					selection: {
-						mode: selectionMode,
-						scanCount: candidates.length,
-						selectedCount: candidates.length,
-						skippedCandidates: [],
-					},
-					selectedCandidates: candidates,
-					missingProducts: missingProductEans,
-					missingSupermarketProducts: missingSupermarketProductEans,
-					candidates,
-					now,
-				});
-			}
-		} else {
-			requireAllowedMissingSupermarketProducts(
-				missingSupermarketProductEans,
-				allowMissingSupermarketProductEans,
-			);
-		}
+	} else {
+		assertCandidateSetPresent({
+			writeMode,
+			source,
+			term,
+			count,
+			queryLimit,
+			selectionMode,
+			candidates,
+			missingProductEans,
+			missingSupermarketProductEans,
+			allowMissingSupermarketProductEans,
+			now,
+		});
 	}
 
 	const selectedCandidateEans = selectedCandidates.map(
