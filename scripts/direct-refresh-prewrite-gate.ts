@@ -4,7 +4,6 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { db } from "../src/lib/db";
 import { getSourceAdapter } from "../src/lib/ingestion/adapters/registry";
 import { buildDirectRefreshPrewriteGate } from "./pipeline/direct-refresh-prewrite-gate";
 import { createDirectRefreshPrewriteRepository } from "./pipeline/direct-refresh-prewrite-repository";

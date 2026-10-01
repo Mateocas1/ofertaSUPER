@@ -6,9 +6,6 @@ import { createRecoveryPlan, runRecovery } from "../scripts/postgres-recovery-r2
 const root = new URL("../", import.meta.url), read = (path: string) => readFileSync(new URL(path, root), "utf8");
 const env = { RECOVERY_MANIFEST_KEY: "postgres-r2-20260301T020304Z-abcdef123456.manifest.json", BACKUP_CRYPT_REMOTE: "crypt:ofertasuper-r2", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", RCLONE_CONFIG_CRYPT_PASSWORD: "canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "canary2" };
 const manifest = { schemaVersion: 2, archive: "postgres-r2-20260301T020304Z-abcdef123456.dump", timestamp: "2026-03-01T02:03:04.000Z", format: "custom", validation: "pg_restore --list", bytes: 3, sha256: "a".repeat(64), ciphertext: { key: "enc/archive", sha256: "d7439bee24773bcbfa2d0a97947ee36227b10d1022b1a55847e928965bb6bfde" } };
-const count = (text: string, value: string) => text.split(value).length - 1;
-
-
 
 test("unsafe manifest input makes zero rclone or Docker calls", async () => {
   for (const key of ["../x", "dir/x", "x\\y", "x\u0000y"]) {

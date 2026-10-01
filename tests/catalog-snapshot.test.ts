@@ -9,7 +9,6 @@ import {
   snapshotMatchRank,
 } from "../src/lib/catalog-snapshot";
 
-const now = new Date("2026-09-27T12:00:00.000Z");
 // The snapshot is generated from the local database; every committed offer is
 // observed on 2026-09-20, so anything inside 24 h of the injected clock must
 // be proven with an explicit observedAt rather than assumed.
