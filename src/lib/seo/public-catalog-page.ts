@@ -1,7 +1,7 @@
 import { cache } from "react";
 
 import type { ProductDetail, ProductHistory } from "@/lib/catalog";
-import { loadProductPageData } from "@/lib/product-history";
+import type { ProductPageLoader } from "@/lib/product-history";
 import {
   PublicCatalogUnavailableError,
   type PublicCatalogData,
@@ -15,7 +15,6 @@ export type ProductPageCatalog = {
 
 export type ProductCatalogPageResult = PublicCatalogPageResult<ProductPageCatalog, { ean: string }>;
 
-type ProductPageDataLoader = (ean: string, days: number) => ReturnType<typeof loadProductPageData>;
 type ProductPageResultLoader = (ean: string, days: number) => Promise<ProductCatalogPageResult>;
 type ProductPageResultMemoizer = (loader: ProductPageResultLoader) => ProductPageResultLoader;
 
@@ -58,7 +57,7 @@ export function createProductPageResult(
  * It does not create a durable or cross-request cache entry.
  */
 export function createGuardedProductPageLoader(
-  loadData: ProductPageDataLoader = loadProductPageData,
+  loadData: ProductPageLoader,
   memoize: ProductPageResultMemoizer = cache,
 ): ProductPageResultLoader {
   return memoize(async (ean, days) => {

@@ -1,17 +1,20 @@
 import { ZodError } from "zod";
 
-import { PublicCatalogUnavailableError } from "@/lib/public-catalog-api";
-import { resolveProductPageData } from "@/lib/portfolio-catalog";
+import type { ProductDetail, ProductHistory } from "@/lib/catalog";
+import { PublicCatalogUnavailableError, type PublicCatalogData } from "@/lib/public-catalog-api";
 import { productHistoryQuerySchema } from "@/lib/schemas/product";
 
 const unavailableBody = { error: "Price history temporarily unavailable" } as const;
 
-type ProductPageLoader = typeof resolveProductPageData;
+export type ProductPageLoader = (
+  ean: string,
+  days: number,
+) => Promise<PublicCatalogData<{ product: ProductDetail | null; history: ProductHistory }>>;
 
 export async function loadProductPageData(
   ean: string,
   days: number,
-  loadData: ProductPageLoader = resolveProductPageData,
+  loadData: ProductPageLoader,
 ) {
   return loadData(ean, days);
 }
@@ -19,7 +22,7 @@ export async function loadProductPageData(
 export async function handleProductHistoryRequest(
   ean: string,
   query: Record<string, string>,
-  loadData: ProductPageLoader = resolveProductPageData,
+  loadData: ProductPageLoader,
 ) {
   let parsed: { days: number };
   try {

@@ -39,18 +39,8 @@ test("CMVP local bootstrap grants the app role only core catalog and ingestion C
   assert.match(grants, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public\.products, public\.supermarkets, public\.supermarket_products, public\.price_history, public\.promotions, public\.promotion_products, public\.categories, public\.ingestion_run, public\.staging_product, public\.source_health, public\.direct_refresh_run_ledger TO ofertasuper_app;/);
   assert.match(grants, /GRANT USAGE, SELECT ON SEQUENCE public\.supermarkets_id_seq, public\.supermarket_products_id_seq, public\.price_history_id_seq, public\.promotions_id_seq, public\.categories_id_seq, public\.ingestion_run_id_seq, public\.staging_product_id_seq, public\.source_health_id_seq TO ofertasuper_app;/);
   assert.doesNotMatch(grants, /CREATE ROLE|ALTER ROLE|ALTER TABLE|ALTER SEQUENCE|ALTER FUNCTION|GRANT CONNECT|GRANT SELECT ON TABLE public\.(?:authority_candidates|governed_catalogs|serving_)/i);
-  const authorityFunctions = [
-    "create_approval_challenge(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ, TIMESTAMPTZ)",
-    "consume_approval_challenge(TEXT)",
-    "record_candidate_approval_receipt(TEXT, TEXT, TEXT, TIMESTAMPTZ, TEXT)",
-    "prepare_authority_revoke_consent(JSONB)",
-    "record_authority_revoke_consent(JSONB)",
-  ];
-  for (const signature of authorityFunctions) {
-    const escaped = signature.replace(/[()]/g, "\\$&");
-    assert.match(grants, new RegExp(`REVOKE EXECUTE ON FUNCTION public\\.${escaped} FROM PUBLIC, ofertasuper_app, ofertasuper_runtime, ofertasuper_verifier;`));
-    assert.match(grants, new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${escaped} TO ofertasuper_authority;`));
-  }
+  assert.doesNotMatch(grants, /GRANT EXECUTE ON FUNCTION/, "the app role is never granted function execution");
+  assert.match(grants, /REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC, ofertasuper_app;/);
 });
 
 test("CMVP local bootstrap takes credentials from the environment and commits no secret literal", () => {

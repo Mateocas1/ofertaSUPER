@@ -1,4 +1,3 @@
-import type { PublicCatalogGuardedReader } from "./public-catalog-api";
 import { classifyPublicCatalogReadiness } from "./public-catalog-readiness";
 import { validateRuntimeContract, type RuntimeEnvironment } from "./runtime-contract";
 
@@ -44,7 +43,7 @@ type Cache = { expiresAt: number; database: "ok" | "error" } | undefined;
 
 export type CatalogHealth = {
 	status: "current" | "degraded" | "unavailable";
-	publication: "current" | "unproven" | "not_applicable";
+	publication: "not_applicable";
 	source?: "snapshot";
 	generatedAt?: string;
 };
@@ -62,26 +61,6 @@ export function createSnapshotCatalogHealthChecker(probe: SnapshotProbe, options
 
 export function catalogHealthStatusCode(health: CatalogHealth) {
 	return health.status === "current" ? 200 : 503;
-}
-
-export function createCatalogHealthChecker(guardedRead: PublicCatalogGuardedReader, options: { now?: () => Date } = {}) {
-	return async (): Promise<CatalogHealth> => {
-		try {
-			const result = await guardedRead(async () => undefined);
-			if (!result.available) return { status: "unavailable", publication: "unproven" };
-
-			const readiness = classifyPublicCatalogReadiness(
-				{ verified_at: new Date(result.decision.verifiedAt) },
-				{ now: options.now?.() },
-			);
-			if (readiness.status === "fresh") return { status: "current", publication: "current" };
-			return readiness.status === "degraded"
-				? { status: "degraded", publication: "unproven" }
-				: { status: "unavailable", publication: "unproven" };
-		} catch {
-			return { status: "unavailable", publication: "unproven" };
-		}
-	};
 }
 
 export function createReadinessChecker(
