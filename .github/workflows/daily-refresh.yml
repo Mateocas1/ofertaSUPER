@@ -1,0 +1,140 @@
+name: Daily catalog refresh
+
+on:
+  schedule:
+    # 10:00 UTC every day (07:00 Argentina). One writer only: the local crontab
+    # line is removed once this job is green (see docs/RUNBOOK.md).
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Restore and refresh with the gates, but do not upload state or commit the snapshot
+        type: boolean
+        default: false
+
+concurrency:
+  group: daily-refresh
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  refresh:
+    name: Restore, refresh and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_DB: ofertasuper
+          POSTGRES_USER: ofertasuper_owner
+          # Throwaway password for the ephemeral runner container; never printed.
+          POSTGRES_PASSWORD: ofertasuper-cloud
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ofertasuper_owner -d ofertasuper"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ofertasuper_owner:ofertasuper-cloud@localhost:5432/ofertasuper
+      DIRECT_URL: postgresql://ofertasuper_owner:ofertasuper-cloud@localhost:5432/ofertasuper
+      PGPASSWORD: ofertasuper-cloud
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Download and restore the database state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          LOG_FILE="$RUNNER_TEMP/cloud-refresh.log"
+          echo restore > "$RUNNER_TEMP/cloud-refresh-stage.txt"
+          scripts/db-state.sh download "$RUNNER_TEMP/state" 2>&1 | tee -a "$LOG_FILE"
+          STATE_DUMP=$(find "$RUNNER_TEMP/state" -maxdepth 1 -name 'ofertasuper-*.dump' | head -n1)
+          scripts/db-state.sh restore "$STATE_DUMP" 2>&1 | tee -a "$LOG_FILE"
+
+      - name: Apply migrations
+        run: |
+          set -o pipefail
+          LOG_FILE="$RUNNER_TEMP/cloud-refresh.log"
+          echo migrate > "$RUNNER_TEMP/cloud-refresh-stage.txt"
+          npx prisma migrate deploy 2>&1 | tee -a "$LOG_FILE"
+
+      - name: Refresh the catalog (gates enforced)
+        run: |
+          set -o pipefail
+          LOG_FILE="$RUNNER_TEMP/cloud-refresh.log"
+          echo refresh > "$RUNNER_TEMP/cloud-refresh-stage.txt"
+          npm run refresh:catalog 2>&1 | tee -a "$LOG_FILE"
+
+      - name: Dump, upload and prune the state
+        if: ${{ success() && inputs.dry_run != true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          LOG_FILE="$RUNNER_TEMP/cloud-refresh.log"
+          echo upload > "$RUNNER_TEMP/cloud-refresh-stage.txt"
+          scripts/db-state.sh dump "$RUNNER_TEMP/state.dump" 2>&1 | tee -a "$LOG_FILE"
+          scripts/db-state.sh upload "$RUNNER_TEMP/state.dump" 2>&1 | tee -a "$LOG_FILE"
+          scripts/db-state.sh prune 2>&1 | tee -a "$LOG_FILE"
+
+      - name: Commit the snapshot to master
+        if: ${{ success() && inputs.dry_run != true }}
+        run: |
+          set -euo pipefail
+          LOG_FILE="$RUNNER_TEMP/cloud-refresh.log"
+          echo commit > "$RUNNER_TEMP/cloud-refresh-stage.txt"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/catalog-snapshot.json
+          if git diff --cached --quiet; then
+            echo "snapshot unchanged; nothing to publish" | tee -a "$LOG_FILE"
+          else
+            git commit -m "chore(catalog): refresh $(date -u +%F) [cloud]"
+            git push origin HEAD:master 2>&1 | tee -a "$LOG_FILE"
+          fi
+
+      - name: Close the failure tracking issue
+        if: ${{ success() && inputs.dry_run != true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUD_REFRESH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo resolve > "$RUNNER_TEMP/cloud-refresh-stage.txt"
+          npx tsx scripts/cloud-refresh-report.ts resolve
+
+      - name: Report failure
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUD_REFRESH_LOG: ${{ runner.temp }}/cloud-refresh.log
+          CLOUD_REFRESH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          STAGE_FILE="$RUNNER_TEMP/cloud-refresh-stage.txt"
+          if [ -f "$STAGE_FILE" ]; then
+            STAGE_NAME="$(cat "$STAGE_FILE")"
+            export CLOUD_REFRESH_STAGE="$STAGE_NAME"
+          fi
+          npx tsx scripts/cloud-refresh-report.ts fail

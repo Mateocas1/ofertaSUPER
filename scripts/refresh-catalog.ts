@@ -15,6 +15,7 @@ import {
   VtexHashUnavailableError,
 } from "../src/lib/vtex/hash-resolution";
 import { createDependencies } from "./acquire-cmvp-catalog-batch";
+import { evaluateRefreshGates } from "./lib/refresh-gates";
 import { runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
 import { topUpUnobservedOffers, type TopUpSummary } from "./pipeline/topup";
 
@@ -141,14 +142,17 @@ function printSummary(stamp: string, ok: number, failures: Array<{ batchId: stri
   if (failures.length > 0) {
     process.stdout.write(`[refresh] failures: ${JSON.stringify(failures, null, 2)}\n`);
   }
-  const worst = Math.min(...freshness.map((entry) => entry.under24hPercent));
-  // A source whose reads fail more than 20% of the time takes the whole run
-  // down with it: the cron must not publish a partially refreshed catalog.
-  const sourceFailure = [...topUp.perSource, { slug: "carrefour", readsOk: promosCaptured, readsFailed: promoReadsFailed }]
-    .find(({ readsOk, readsFailed }) => readsOk + readsFailed > 0 && readsFailed / (readsOk + readsFailed) > 0.2);
-  if (failures.length > 0 || worst < 90 || sourceFailure) {
-    console.error(`[refresh] gate check failed: failedBatches=${failures.length}, worstFreshness=${worst}%${sourceFailure ? `, sourceReadFailures=${sourceFailure.slug}` : ""}`);
-    process.exitCode = 1;
+  // A failed batch, a supermarket below 90% freshness, or a source whose reads
+  // fail more than 20% of the time takes the whole run down with it: neither
+  // the cron nor the cloud job may publish a partially refreshed catalog.
+  const gate = evaluateRefreshGates({
+    failedBatches: failures.length,
+    freshness,
+    sourceReads: [...topUp.perSource, { slug: "carrefour", readsOk: promosCaptured, readsFailed: promoReadsFailed }],
+  });
+  if (!gate.ok) {
+    console.error(`[refresh] gate check failed: ${gate.message}`);
+    process.exitCode = gate.exitCode;
   }
 }
 
