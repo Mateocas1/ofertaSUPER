@@ -172,6 +172,40 @@ export function directRefreshSupportForSource(
 		: "audit-only-no-writer";
 }
 
+function writerSupportedReport(
+	sourceReports: DirectRefreshSourceHealthSourceReport[],
+): {
+	writerReports: DirectRefreshSourceHealthSourceReport[];
+	writerSupportedStatus: DirectRefreshSourceHealthStatus;
+} {
+	const writerReports = sourceReports.filter(
+		(source) => source.directRefreshSupport === "writer-supported",
+	);
+	return {
+		writerReports,
+		writerSupportedStatus: aggregateStatus(
+			writerReports.map((source) => source.status),
+		),
+	};
+}
+
+function capacitySourcesBySlug(
+	capacityReport: DirectRefreshSourceHealthCapacityReport | null,
+) {
+	return new Map(
+		(capacityReport?.sources ?? []).map((source) => [source.slug, source]),
+	);
+}
+
+function stagingStatusFor(stagingState: {
+	runningRuns: number;
+	pendingStagingRows: number;
+}): DirectRefreshSourceHealthStatus {
+	return stagingState.runningRuns > 0 || stagingState.pendingStagingRows > 0
+		? "WARN"
+		: "PASS";
+}
+
 export async function buildDirectRefreshSourceHealthReport({
 	repository,
 	sources = [...DIRECT_REFRESH_HEALTH_SOURCES],
@@ -194,9 +228,7 @@ export async function buildDirectRefreshSourceHealthReport({
 	const stagingState = repository.getStagingState
 		? await repository.getStagingState()
 		: { runningRuns: 0, pendingStagingRows: 0 };
-	const capacityBySlug = new Map(
-		(capacityReport?.sources ?? []).map((source) => [source.slug, source]),
-	);
+	const capacityBySlug = capacitySourcesBySlug(capacityReport);
 	const sourceReports = sources.map((slug) =>
 		buildSourceReport({
 			slug,
@@ -210,16 +242,9 @@ export async function buildDirectRefreshSourceHealthReport({
 			now,
 		}),
 	);
-	const writerReports = sourceReports.filter(
-		(source) => source.directRefreshSupport === "writer-supported",
-	);
-	const writerSupportedStatus = aggregateStatus(
-		writerReports.map((s) => s.status),
-	);
-	const stagingStatus: DirectRefreshSourceHealthStatus =
-		stagingState.runningRuns > 0 || stagingState.pendingStagingRows > 0
-			? "WARN"
-			: "PASS";
+	const { writerReports, writerSupportedStatus } =
+		writerSupportedReport(sourceReports);
+	const stagingStatus = stagingStatusFor(stagingState);
 	const status = aggregateStatus([
 		...sourceReports.map((source) => source.status),
 		stagingStatus,
@@ -384,38 +409,51 @@ function buildFreshnessReport({
 	};
 }
 
+function capacityStatus(
+	capacitySource: CapacitySource | null,
+	capacityReportProvided: boolean,
+) {
+	return capacitySource?.status ?? (capacityReportProvided ? "WARN" : "WARN");
+}
+
+function capacityScanMetrics(capacitySource: CapacitySource | null) {
+	return {
+		viableRows: capacitySource?.candidateScan?.viableRows ?? null,
+		blockedRows: capacitySource?.candidateScan?.blockedRows ?? null,
+	};
+}
+
+function capacityBatchMetrics(capacitySource: CapacitySource | null) {
+	return {
+		recommendedBatchSize:
+			capacitySource?.capacity?.recommendedBatchSize ?? null,
+		recommendedCandidateScanSize:
+			capacitySource?.capacity?.recommendedCandidateScanSize ?? null,
+	};
+}
+
 function buildCapacityReport(
 	capacitySource: CapacitySource | null,
 	capacityReportProvided: boolean,
 ): DirectRefreshSourceHealthSourceReport["capacity"] {
 	return {
 		source: capacitySource ? "input-report" : "not-provided",
-		status:
-			capacitySource?.status ?? (capacityReportProvided ? "WARN" : "WARN"),
+		status: capacityStatus(capacitySource, capacityReportProvided),
 		classification: capacitySource?.classification ?? null,
-		viableRows: capacitySource?.candidateScan?.viableRows ?? null,
-		blockedRows: capacitySource?.candidateScan?.blockedRows ?? null,
-		recommendedBatchSize:
-			capacitySource?.capacity?.recommendedBatchSize ?? null,
-		recommendedCandidateScanSize:
-			capacitySource?.capacity?.recommendedCandidateScanSize ?? null,
+		...capacityScanMetrics(capacitySource),
+		...capacityBatchMetrics(capacitySource),
 		blockers: capacitySource?.blockers ?? [],
 	};
 }
 
-function sourceReasons({
-	slug,
-	directRefreshSupport,
-	sourceRecord,
-	freshness,
-	capacity,
-}: {
-	slug: DirectRefreshHealthSourceSlug;
-	directRefreshSupport: DirectRefreshSupport;
-	sourceRecord: DirectRefreshSourceHealthSourceReport["sourceRecord"];
-	freshness: DirectRefreshSourceHealthSourceReport["freshness"];
-	capacity: DirectRefreshSourceHealthSourceReport["capacity"];
-}) {
+type SourceRecordReport =
+	DirectRefreshSourceHealthSourceReport["sourceRecord"];
+type SourceFreshnessReport =
+	DirectRefreshSourceHealthSourceReport["freshness"];
+type SourceCapacityReport =
+	DirectRefreshSourceHealthSourceReport["capacity"];
+
+function sourceRecordReasons(sourceRecord: SourceRecordReport): string[] {
 	const reasons: string[] = [];
 	if (!sourceRecord.exists) reasons.push("FAIL: source record is missing");
 	if (sourceRecord.exists && sourceRecord.isActive !== true)
@@ -428,11 +466,27 @@ function sourceReasons({
 		reasons.push(
 			`FAIL: source base URL host ${sourceRecord.baseUrlHost} does not match expected ${sourceRecord.expectedHost}`,
 		);
-	if (directRefreshSupport === "audit-only-no-writer")
-		reasons.push("WARN: source is audit-only/no-writer");
+	return reasons;
+}
+
+function directRefreshSupportReasons(
+	directRefreshSupport: DirectRefreshSupport,
+): string[] {
+	return directRefreshSupport === "audit-only-no-writer"
+		? ["WARN: source is audit-only/no-writer"]
+		: [];
+}
+
+function freshnessReasons(freshness: SourceFreshnessReport): string[] {
+	const reasons: string[] = [];
 	if (freshness.status === "FAIL")
 		reasons.push("FAIL: freshness failed threshold");
 	if (freshness.status === "WARN") reasons.push("WARN: freshness below target");
+	return reasons;
+}
+
+function capacityReasons(capacity: SourceCapacityReport): string[] {
+	const reasons: string[] = [];
 	if (capacity.source === "not-provided")
 		reasons.push("WARN: capacity/readiness report not provided");
 	if (capacity.status === "FAIL") reasons.push("FAIL: capacity status is FAIL");
@@ -441,11 +495,38 @@ function sourceReasons({
 		reasons.push("WARN: capacity classification is mixed");
 	if ((capacity.blockedRows ?? 0) > 0)
 		reasons.push(`WARN: capacity has ${capacity.blockedRows} blocked rows`);
-	if (slug === "mas" && (capacity.recommendedCandidateScanSize ?? 0) >= 100)
-		reasons.push(
-			"WARN: MAS requires rapid-confirmation protocol for large scans",
-		);
-	return uniqueSorted(reasons);
+	return reasons;
+}
+
+function masScanReasons(
+	slug: DirectRefreshHealthSourceSlug,
+	capacity: SourceCapacityReport,
+): string[] {
+	return slug === "mas" && (capacity.recommendedCandidateScanSize ?? 0) >= 100
+		? ["WARN: MAS requires rapid-confirmation protocol for large scans"]
+		: [];
+}
+
+function sourceReasons({
+	slug,
+	directRefreshSupport,
+	sourceRecord,
+	freshness,
+	capacity,
+}: {
+	slug: DirectRefreshHealthSourceSlug;
+	directRefreshSupport: DirectRefreshSupport;
+	sourceRecord: SourceRecordReport;
+	freshness: SourceFreshnessReport;
+	capacity: SourceCapacityReport;
+}) {
+	return uniqueSorted([
+		...sourceRecordReasons(sourceRecord),
+		...directRefreshSupportReasons(directRefreshSupport),
+		...freshnessReasons(freshness),
+		...capacityReasons(capacity),
+		...masScanReasons(slug, capacity),
+	]);
 }
 
 function recommendation(

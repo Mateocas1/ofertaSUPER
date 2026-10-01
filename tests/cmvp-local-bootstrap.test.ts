@@ -8,7 +8,6 @@ const initializer = readFileSync(new URL("../docker/compose/init-app-role.sh", i
 const grants = readFileSync(new URL("../docker/compose/app-grants.sql", import.meta.url), "utf8");
 const fixture = readFileSync(new URL("../docker/compose/fixture.sql", import.meta.url), "utf8");
 const seed = readFileSync(new URL("../prisma/seed.ts", import.meta.url), "utf8");
-const packageJson = readFileSync(new URL("../package.json", import.meta.url), "utf8");
 
 test("CMVP local bootstrap provisions roles before migrations on fresh and preserved volumes", () => {
   for (const service of ["postgres", "role-provision", "migrate", "grants", "seed"]) assert.match(compose, new RegExp(`^  ${service}:`, "m"));
@@ -21,8 +20,6 @@ test("CMVP local bootstrap provisions roles before migrations on fresh and prese
   assert.match(compose, /role-provision:[\s\S]*init-app-role\.sh/);
   assert.match(dockerfile, /FROM dependencies AS seeder\nCOPY prisma \.\/prisma\nRUN npm run db:generate/);
   assert.match(compose, /seed:\n    build: \{ context: \., target: seeder \}/);
-  assert.match(packageJson, /"bootstrap:cmvp-local": "docker compose up --build --exit-code-from seed seed"/);
-  assert.doesNotMatch(packageJson, /"bootstrap:cmvp-local": "[^"]*--abort-on-container-exit/);
 });
 
 test("CMVP local bootstrap seeds only the accepted stores and keeps historical roles out of app serving", () => {

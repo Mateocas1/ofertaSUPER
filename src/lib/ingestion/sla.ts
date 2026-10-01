@@ -52,6 +52,73 @@ type ShadowFreshnessMetricRow = {
   latest_run_at: Date | null;
 };
 
+function shadowTotals(shadow: ShadowFreshnessMetricRow | undefined) {
+  return {
+    totalProducts: toNumber(shadow?.total_products ?? 0),
+    freshProducts: toNumber(shadow?.fresh_products ?? 0),
+    latestRunAt: shadow?.latest_run_at ?? null,
+  };
+}
+
+function shouldUseShadowFallback(
+  shadowTotalProducts: number,
+  productionLatestCheckAt: Date | null,
+  shadowLatestRunAt: Date | null,
+) {
+  if (shadowTotalProducts <= 0) return false;
+  if (!productionLatestCheckAt) return true;
+  return shadowLatestRunAt !== null && shadowLatestRunAt > productionLatestCheckAt;
+}
+
+function selectedFreshnessValues(
+  fallback: boolean,
+  productionTotalProducts: number,
+  productionFreshProducts: number,
+  shadow: { totalProducts: number; freshProducts: number },
+) {
+  return fallback
+    ? { totalProducts: shadow.totalProducts, freshProducts: shadow.freshProducts }
+    : { totalProducts: productionTotalProducts, freshProducts: productionFreshProducts };
+}
+
+function buildFreshnessSourceMetric(
+  row: ProductionFreshnessMetricRow,
+  shadow: ShadowFreshnessMetricRow | undefined,
+  targetPercent: number,
+  alertThresholdPercent: number,
+): FreshnessSourceMetric {
+  const productionTotalProducts = toNumber(row.total_products);
+  const productionFreshProducts = toNumber(row.fresh_products);
+  const shadowValues = shadowTotals(shadow);
+  const productionLatestCheckAt = row.latest_check_at;
+  const fallback = shouldUseShadowFallback(
+    shadowValues.totalProducts,
+    productionLatestCheckAt,
+    shadowValues.latestRunAt,
+  );
+  const { totalProducts, freshProducts } = selectedFreshnessValues(
+    fallback,
+    productionTotalProducts,
+    productionFreshProducts,
+    shadowValues,
+  );
+  const freshnessPercent = totalProducts > 0 ? roundPercentage((freshProducts / totalProducts) * 100) : 0;
+
+  return {
+    supermarketId: row.supermarket_id,
+    name: row.name,
+    slug: row.slug,
+    slaHours: row.sla_hours,
+    totalProducts,
+    freshProducts,
+    freshnessPercent,
+    isBelowTarget: freshnessPercent < targetPercent,
+    isBelowAlertThreshold: freshnessPercent < alertThresholdPercent,
+    latestCheckAt: (fallback ? shadowValues.latestRunAt : productionLatestCheckAt)?.toISOString() ?? null,
+    measurementBasis: fallback ? "shadow" : "production",
+  };
+}
+
 function toNumber(value: bigint | number) {
   return typeof value === "bigint" ? Number(value) : value;
 }
@@ -117,35 +184,14 @@ export async function getFreshnessSnapshot(
 
   const shadowBySupermarketId = new Map(shadowRows.map((row) => [row.supermarket_id, row]));
 
-  const sources = productionRows.map((row) => {
-    const productionTotalProducts = toNumber(row.total_products);
-    const productionFreshProducts = toNumber(row.fresh_products);
-    const shadow = shadowBySupermarketId.get(row.supermarket_id);
-    const shadowTotalProducts = toNumber(shadow?.total_products ?? 0);
-    const shadowFreshProducts = toNumber(shadow?.fresh_products ?? 0);
-    const productionLatestCheckAt = row.latest_check_at;
-    const shadowLatestRunAt = shadow?.latest_run_at ?? null;
-    const useShadowFallback =
-      shadowTotalProducts > 0 &&
-      (!productionLatestCheckAt || (shadowLatestRunAt !== null && shadowLatestRunAt > productionLatestCheckAt));
-    const totalProducts = useShadowFallback ? shadowTotalProducts : productionTotalProducts;
-    const freshProducts = useShadowFallback ? shadowFreshProducts : productionFreshProducts;
-    const freshnessPercent = totalProducts > 0 ? roundPercentage((freshProducts / totalProducts) * 100) : 0;
-
-    return {
-      supermarketId: row.supermarket_id,
-      name: row.name,
-      slug: row.slug,
-      slaHours: row.sla_hours,
-      totalProducts,
-      freshProducts,
-      freshnessPercent,
-      isBelowTarget: freshnessPercent < targetPercent,
-      isBelowAlertThreshold: freshnessPercent < alertThresholdPercent,
-      latestCheckAt: (useShadowFallback ? shadowLatestRunAt : productionLatestCheckAt)?.toISOString() ?? null,
-      measurementBasis: useShadowFallback ? "shadow" : "production",
-    } satisfies FreshnessSourceMetric;
-  });
+  const sources = productionRows.map((row) =>
+    buildFreshnessSourceMetric(
+      row,
+      shadowBySupermarketId.get(row.supermarket_id),
+      targetPercent,
+      alertThresholdPercent,
+    ),
+  );
 
   const totalProducts = sources.reduce((total, source) => total + source.totalProducts, 0);
   const freshProducts = sources.reduce((total, source) => total + source.freshProducts, 0);

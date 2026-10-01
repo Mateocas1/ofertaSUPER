@@ -21,7 +21,7 @@ function isPostgresUrl(value: string) {
 	}
 }
 
-export function validateRuntimeContract(role: RuntimeRole, env: RuntimeEnvironment): RuntimeContractResult {
+function requiredNames(role: RuntimeRole, env: RuntimeEnvironment): string[] {
 	const required = [...REQUIRED_BY_ROLE[role]];
 	if (role === "web" && env.ADMIN_ENABLED === "true") {
 		required.push("CLERK_SECRET_KEY", "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
@@ -34,10 +34,27 @@ export function validateRuntimeContract(role: RuntimeRole, env: RuntimeEnvironme
 			if (isPresent(env[first]) || isPresent(env[second])) required.push("configure_only_one_redis_provider");
 		}
 	}
-	const missing = required.filter((name) => !isPresent(env[name])).sort();
-	const invalid = (role === "migration" ? ["DIRECT_URL"] : ["DATABASE_URL"])
-		.filter((name) => isPresent(env[name]) && !isPostgresUrl(env[name] as string)).sort();
-	return { role, missing, invalid };
+	return required;
+}
+
+function missingNames(required: string[], env: RuntimeEnvironment) {
+	return required.filter((name) => !isPresent(env[name])).sort();
+}
+
+function invalidNames(role: RuntimeRole, env: RuntimeEnvironment) {
+	const urlNames = role === "migration" ? ["DIRECT_URL"] : ["DATABASE_URL"];
+	return urlNames
+		.filter((name) => isPresent(env[name]) && !isPostgresUrl(env[name] as string))
+		.sort();
+}
+
+export function validateRuntimeContract(role: RuntimeRole, env: RuntimeEnvironment): RuntimeContractResult {
+	const required = requiredNames(role, env);
+	return {
+		role,
+		missing: missingNames(required, env),
+		invalid: invalidNames(role, env),
+	};
 }
 
 export function formatRuntimeContractErrors(result: RuntimeContractResult) {

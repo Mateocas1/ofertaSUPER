@@ -243,11 +243,11 @@ async function getQualityDistribution(days: number): Promise<QualityDistribution
   `);
 
   return [
-    { id: "0-24", label: "0.00-0.24", min: 0, max: 0.24, count: toNumber(row?.bucket_0_24 ?? 0) },
-    { id: "25-49", label: "0.25-0.49", min: 0.25, max: 0.49, count: toNumber(row?.bucket_25_49 ?? 0) },
-    { id: "50-74", label: "0.50-0.74", min: 0.5, max: 0.74, count: toNumber(row?.bucket_50_74 ?? 0) },
-    { id: "75-89", label: "0.75-0.89", min: 0.75, max: 0.89, count: toNumber(row?.bucket_75_89 ?? 0) },
-    { id: "90-100", label: "0.90-1.00", min: 0.9, max: 1, count: toNumber(row?.bucket_90_100 ?? 0) },
+    qualityBucket("0-24", "0.00-0.24", 0, 0.24, row?.bucket_0_24),
+    qualityBucket("25-49", "0.25-0.49", 0.25, 0.49, row?.bucket_25_49),
+    qualityBucket("50-74", "0.50-0.74", 0.5, 0.74, row?.bucket_50_74),
+    qualityBucket("75-89", "0.75-0.89", 0.75, 0.89, row?.bucket_75_89),
+    qualityBucket("90-100", "0.90-1.00", 0.9, 1, row?.bucket_90_100),
   ];
 }
 
@@ -306,6 +306,95 @@ async function getTrend(days: number): Promise<IngestionTrendPoint[]> {
   });
 }
 
+type SupermarketSummary = { id: number; name: string; slug: string };
+
+function qualityBucket(
+  id: string,
+  label: string,
+  min: number,
+  max: number,
+  count: bigint | number | undefined,
+): QualityDistributionBucket {
+  return { id, label, min, max, count: toNumber(count ?? 0) };
+}
+
+function runRejectionRate(run: LatestRunRecord) {
+  return run.products_staged > 0
+    ? roundPercentage((run.products_rejected / run.products_staged) * 100)
+    : 0;
+}
+
+function buildRunStat(
+  supermarket: SupermarketSummary,
+  run: LatestRunRecord | undefined,
+): AdminIngestionRunStat {
+  const base: AdminIngestionRunStat = {
+    supermarketId: supermarket.id,
+    name: supermarket.name,
+    slug: supermarket.slug,
+    batchId: null,
+    status: "NO_DATA",
+    startedAt: null,
+    finishedAt: null,
+    durationMs: null,
+    queriesSent: 0,
+    productsFetched: 0,
+    productsStaged: 0,
+    productsPromoted: 0,
+    productsRejected: 0,
+    rejectionRate: 0,
+    errorSummary: null,
+  };
+
+  if (!run) return base;
+
+  return {
+    ...base,
+    batchId: run.batch_id,
+    status: run.status,
+    startedAt: run.started_at.toISOString(),
+    finishedAt: run.finished_at?.toISOString() ?? null,
+    durationMs: run.duration_ms,
+    queriesSent: run.queries_sent,
+    productsFetched: run.products_fetched,
+    productsStaged: run.products_staged,
+    productsPromoted: run.products_promoted,
+    productsRejected: run.products_rejected,
+    rejectionRate: runRejectionRate(run),
+    errorSummary: run.error_summary,
+  };
+}
+
+function buildHealthStat(
+  supermarket: SupermarketSummary,
+  record: LatestHealthRecord | undefined,
+): AdminIngestionHealthStat {
+  const base: AdminIngestionHealthStat = {
+    supermarketId: supermarket.id,
+    name: supermarket.name,
+    slug: supermarket.slug,
+    state: getHealthState(record),
+    isHealthy: false,
+    hashValid: false,
+    checkedAt: null,
+    responseTimeMs: null,
+    productsReturned: 0,
+    errorType: null,
+  };
+
+  if (!record) return base;
+
+  return {
+    ...base,
+    isHealthy: record.is_healthy,
+    hashValid: record.hash_valid,
+    checkedAt: record.checked_at.toISOString(),
+    responseTimeMs: record.response_time_ms,
+    productsReturned: record.products_returned,
+    errorType: record.error_type,
+  };
+}
+
 export const getAdminIngestionDashboard = cache(
   async (options: { trendDays?: number; qualityWindowDays?: number } = {}): Promise<AdminIngestionDashboard> => {
     const trendDays = options.trendDays ?? 30;
@@ -337,45 +426,13 @@ export const getAdminIngestionDashboard = cache(
       }),
     ]);
 
-    const runs = supermarkets.map((supermarket) => {
-      const run = latestRunsBySource.get(supermarket.slug);
-      const rejectionRate = run && run.products_staged > 0 ? roundPercentage((run.products_rejected / run.products_staged) * 100) : 0;
+    const runs = supermarkets.map((supermarket) =>
+      buildRunStat(supermarket, latestRunsBySource.get(supermarket.slug)),
+    );
 
-      return {
-        supermarketId: supermarket.id,
-        name: supermarket.name,
-        slug: supermarket.slug,
-        batchId: run?.batch_id ?? null,
-        status: run?.status ?? "NO_DATA",
-        startedAt: run?.started_at.toISOString() ?? null,
-        finishedAt: run?.finished_at?.toISOString() ?? null,
-        durationMs: run?.duration_ms ?? null,
-        queriesSent: run?.queries_sent ?? 0,
-        productsFetched: run?.products_fetched ?? 0,
-        productsStaged: run?.products_staged ?? 0,
-        productsPromoted: run?.products_promoted ?? 0,
-        productsRejected: run?.products_rejected ?? 0,
-        rejectionRate,
-        errorSummary: run?.error_summary ?? null,
-      } satisfies AdminIngestionRunStat;
-    });
-
-    const health = supermarkets.map((supermarket) => {
-      const record = latestHealthBySource.get(supermarket.slug);
-
-      return {
-        supermarketId: supermarket.id,
-        name: supermarket.name,
-        slug: supermarket.slug,
-        state: getHealthState(record),
-        isHealthy: record?.is_healthy ?? false,
-        hashValid: record?.hash_valid ?? false,
-        checkedAt: record?.checked_at.toISOString() ?? null,
-        responseTimeMs: record?.response_time_ms ?? null,
-        productsReturned: record?.products_returned ?? 0,
-        errorType: record?.error_type ?? null,
-      } satisfies AdminIngestionHealthStat;
-    });
+    const health = supermarkets.map((supermarket) =>
+      buildHealthStat(supermarket, latestHealthBySource.get(supermarket.slug)),
+    );
 
     const overview = {
       latestRunAt: runs.map((run) => run.startedAt).filter((value): value is string => Boolean(value)).sort((left, right) => right.localeCompare(left))[0] ?? null,

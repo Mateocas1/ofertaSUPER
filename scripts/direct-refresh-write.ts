@@ -10,67 +10,112 @@ import { db } from "../src/lib/db";
 import { getSourceAdapter } from "../src/lib/ingestion/adapters/registry";
 import {
 	DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS,
+	activeWriteSourceDisplayName,
+	activeWriteSourceFromArgv,
 	assertFreshPrewriteRerunMatches,
+	executeActiveWrite,
+	parseActiveWriteCliOptions,
 	readActiveWriteCapacityEvidence,
-	executeDiscoActiveWrite,
-	parseDiscoActiveWriteCliOptions,
 	readPrewriteReport,
+	type ActiveWriteCliOptions,
 	type ActiveWriteRepository,
+	type ActiveWriteSource,
 	type ActiveWriteTransaction,
-	type DiscoActiveWriteCliOptions,
 } from "./pipeline/direct-refresh-active-write";
-import { createDirectRefreshPrewriteRepository } from "./audit-direct-refresh-prewrite-gate";
+import { createDirectRefreshPrewriteRepository } from "./pipeline/direct-refresh-prewrite-repository";
 import {
 	buildDirectRefreshPrewriteGate,
 	type DirectRefreshPrewriteChange,
 } from "./pipeline/direct-refresh-prewrite-gate";
 
+// Active direct-refresh writer: the single parameterized entry for the five
+// supermarkets (--source carrefour|vea|disco|jumbo|mas). It re-runs the
+// pre-write gate against live source data, refuses to write when the fresh
+// rerun drifts from the supplied report, and commits one row-at-a-time update
+// per selected offer inside a single advisory-locked transaction.
+
+type ProductFieldApplier = (
+	data: Prisma.ProductUpdateInput,
+	after: unknown,
+) => void;
+
+const PRODUCT_FIELD_APPLIERS: Record<string, ProductFieldApplier> = {
+	name: (data, after) => {
+		data.name = String(after);
+	},
+	brand: (data, after) => {
+		data.brand = after === null ? null : String(after);
+	},
+	description: (data, after) => {
+		data.description = after === null ? null : String(after);
+	},
+	imageUrl: (data, after) => {
+		data.image_url = after === null ? null : String(after);
+	},
+	images: (data, after) => {
+		data.images = Array.isArray(after) ? after : [];
+	},
+	category: (data, after) => {
+		data.category = after === null ? null : String(after);
+	},
+};
+
+type SupermarketProductFieldApplier = (
+	data: Prisma.SupermarketProductUpdateInput,
+	after: unknown,
+) => void;
+
+function optionalDecimal(after: unknown) {
+	return after === null ? null : new Prisma.Decimal(String(after));
+}
+
+const SUPERMARKET_PRODUCT_FIELD_APPLIERS: Record<
+	string,
+	SupermarketProductFieldApplier
+> = {
+	price: (data, after) => {
+		data.price = optionalDecimal(after);
+	},
+	listPrice: (data, after) => {
+		data.list_price = optionalDecimal(after);
+	},
+	referencePrice: (data, after) => {
+		data.reference_price = optionalDecimal(after);
+	},
+	referenceUnit: (data, after) => {
+		data.reference_unit = after === null ? null : String(after);
+	},
+	isAvailable: (data, after) => {
+		data.is_available = Boolean(after);
+	},
+	skuId: (data, after) => {
+		data.sku_id = after === null ? null : String(after);
+	},
+	sellerId: (data, after) => {
+		data.seller_id = after === null ? null : String(after);
+	},
+	productUrl: (data, after) => {
+		data.product_url = after === null ? null : String(after);
+	},
+	lastCheckedAt: (data, after) => {
+		data.last_checked_at = new Date(String(after));
+	},
+};
+
 function productUpdateData(
 	changes: DirectRefreshPrewriteChange[],
 ): Prisma.ProductUpdateInput {
 	const data: Prisma.ProductUpdateInput = {};
-	for (const change of changes) {
-		if (change.field === "name") data.name = String(change.after);
-		if (change.field === "brand")
-			data.brand = change.after === null ? null : String(change.after);
-		if (change.field === "description")
-			data.description = change.after === null ? null : String(change.after);
-		if (change.field === "imageUrl")
-			data.image_url = change.after === null ? null : String(change.after);
-		if (change.field === "images")
-			data.images = Array.isArray(change.after) ? change.after : [];
-		if (change.field === "category")
-			data.category = change.after === null ? null : String(change.after);
-	}
+	for (const change of changes) PRODUCT_FIELD_APPLIERS[change.field]?.(data, change.after);
 	return data;
 }
+
 function supermarketProductUpdateData(
 	changes: DirectRefreshPrewriteChange[],
 ): Prisma.SupermarketProductUpdateInput {
 	const data: Prisma.SupermarketProductUpdateInput = {};
-	for (const change of changes) {
-		if (change.field === "price")
-			data.price =
-				change.after === null ? null : new Prisma.Decimal(String(change.after));
-		if (change.field === "listPrice")
-			data.list_price =
-				change.after === null ? null : new Prisma.Decimal(String(change.after));
-		if (change.field === "referencePrice")
-			data.reference_price =
-				change.after === null ? null : new Prisma.Decimal(String(change.after));
-		if (change.field === "referenceUnit")
-			data.reference_unit = change.after === null ? null : String(change.after);
-		if (change.field === "isAvailable")
-			data.is_available = Boolean(change.after);
-		if (change.field === "skuId")
-			data.sku_id = change.after === null ? null : String(change.after);
-		if (change.field === "sellerId")
-			data.seller_id = change.after === null ? null : String(change.after);
-		if (change.field === "productUrl")
-			data.product_url = change.after === null ? null : String(change.after);
-		if (change.field === "lastCheckedAt")
-			data.last_checked_at = new Date(String(change.after));
-	}
+	for (const change of changes)
+		SUPERMARKET_PRODUCT_FIELD_APPLIERS[change.field]?.(data, change.after);
 	return data;
 }
 
@@ -78,12 +123,12 @@ function createActiveWriteRepository(): ActiveWriteRepository {
 	return {
 		withTransaction: (fn) =>
 			db.$transaction(
-				async (tx) => fn(createDiscoActiveWriteTransaction(tx)),
+				async (tx) => fn(createActiveWriteTransaction(tx)),
 				DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS,
 			),
 	};
 }
-export function createDiscoActiveWriteTransaction(
+function createActiveWriteTransaction(
 	tx: Prisma.TransactionClient,
 ): ActiveWriteTransaction {
 	return {
@@ -240,15 +285,21 @@ export function createDiscoActiveWriteTransaction(
 	};
 }
 
-async function writeJson(output: string, report: unknown) {
+async function writeJson(
+	source: ActiveWriteSource,
+	output: string,
+	report: unknown,
+) {
 	const serialized = `${JSON.stringify(report, null, 2)}\n`;
 	await mkdir(dirname(output), { recursive: true });
 	await writeFile(output, serialized, "utf8");
-	process.stdout.write(`Wrote Disco active refresh report to ${output}\n`);
+	process.stdout.write(
+		`Wrote ${activeWriteSourceDisplayName(source)} active refresh report to ${output}\n`,
+	);
 }
 
 async function buildFreshPrewrite(
-	options: DiscoActiveWriteCliOptions,
+	options: ActiveWriteCliOptions,
 	prewriteReport: Awaited<ReturnType<typeof readPrewriteReport>>,
 ) {
 	const capacityEvidence = await readActiveWriteCapacityEvidence(
@@ -263,24 +314,24 @@ async function buildFreshPrewrite(
 		now: new Date(prewriteReport.generatedAt),
 		capacityEvidence,
 		fetchDirectProducts: async (_sourceSlug, lookup) =>
-			getSourceAdapter("disco").fetchDirectProducts(lookup),
+			getSourceAdapter(options.source).fetchDirectProducts(lookup),
 	});
 }
 
 async function main() {
-	const options = parseDiscoActiveWriteCliOptions();
-	const prewriteReport = await readPrewriteReport(options.prewriteReport);
-	const freshPrewriteReport = await buildFreshPrewrite(
-		options,
-		prewriteReport,
+	const options = parseActiveWriteCliOptions(
+		process.argv,
+		activeWriteSourceFromArgv(),
 	);
+	const prewriteReport = await readPrewriteReport(options.prewriteReport);
+	const freshPrewriteReport = await buildFreshPrewrite(options, prewriteReport);
 	assertFreshPrewriteRerunMatches(prewriteReport, freshPrewriteReport, options);
-	const report = await executeDiscoActiveWrite({
+	const report = await executeActiveWrite({
 		repository: createActiveWriteRepository(),
 		prewriteReport: freshPrewriteReport,
 		options,
 	});
-	await writeJson(options.output, report);
+	await writeJson(options.source, options.output, report);
 }
 
 if (

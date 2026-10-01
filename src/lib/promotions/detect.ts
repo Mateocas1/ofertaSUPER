@@ -30,6 +30,21 @@ export function detectAutomaticDiscount(price: number | null, listPrice: number 
   };
 }
 
+function percentageUnitPrice(
+  basePrice: number,
+  discountValue: number | null,
+): number | null {
+  if (
+    discountValue === null ||
+    discountValue <= 0 ||
+    discountValue > 100
+  ) {
+    return null;
+  }
+
+  return roundCurrency(basePrice * (1 - discountValue / 100));
+}
+
 export function calculatePromotionalUnitPrice(
   basePrice: number | null,
   promotion: CalculablePromotion,
@@ -45,13 +60,8 @@ export function calculatePromotionalUnitPrice(
       return roundCurrency(basePrice * 0.75);
     case "wallet_discount":
     case "bank_discount":
-    case "percentage": {
-      if (promotion.discountValue === null || promotion.discountValue <= 0 || promotion.discountValue > 100) {
-        return null;
-      }
-
-      return roundCurrency(basePrice * (1 - promotion.discountValue / 100));
-    }
+    case "percentage":
+      return percentageUnitPrice(basePrice, promotion.discountValue);
     default:
       return null;
   }

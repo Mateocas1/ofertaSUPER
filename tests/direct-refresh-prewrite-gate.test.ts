@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseDirectRefreshPrewriteGateCliOptions } from "../scripts/audit-direct-refresh-prewrite-gate";
+import { parseDirectRefreshPrewriteGateCliOptions } from "../scripts/direct-refresh-prewrite-gate";
 import {
 	buildCarrefourDirectRefreshPrewriteGate,
 	buildDirectRefreshPrewriteGate,
@@ -113,19 +113,19 @@ function masLikeRows(count: number): DirectRefreshPrewriteExistingRow[] {
 	}));
 }
 
-function capacityEvidence({
-	source = "vea",
-	targetBatchSize = 10,
-	viableRows = 10,
-	recommendedBatchSize = 10,
-	issue = 169,
-	expectedIssueNumber = issue,
-	filtersSources,
-	summarySourceCount = 1,
-	extraSources = [],
-	writeBoundary = "read-only operating capacity audit; no production writes, no staging/ingestion runs, no scheduler/cron/workflow side effects",
-	rows,
-}: {
+const CAPACITY_EVIDENCE_DEFAULTS = {
+	source: "vea",
+	targetBatchSize: 10,
+	viableRows: 10,
+	recommendedBatchSize: 10,
+	issue: 169,
+	summarySourceCount: 1,
+	extraSources: [] as Array<{ slug: string }>,
+	writeBoundary:
+		"read-only operating capacity audit; no production writes, no staging/ingestion runs, no scheduler/cron/workflow side effects",
+} as const;
+
+type CapacityEvidenceOptions = {
 	source?: string;
 	targetBatchSize?: number;
 	viableRows?: number;
@@ -137,7 +137,22 @@ function capacityEvidence({
 	extraSources?: Array<{ slug: string }>;
 	writeBoundary?: string;
 	rows: Array<{ rowId: string; status: "PASS" | "FAIL" }>;
-}) {
+};
+
+function capacityEvidence(options: CapacityEvidenceOptions) {
+	const {
+		source,
+		targetBatchSize,
+		viableRows,
+		recommendedBatchSize,
+		issue,
+		summarySourceCount,
+		extraSources,
+		writeBoundary,
+		rows,
+	} = { ...CAPACITY_EVIDENCE_DEFAULTS, ...options };
+	const filtersSources = options.filtersSources ?? [source];
+	const expectedIssueNumber = options.expectedIssueNumber ?? issue;
 	const report = {
 		schemaVersion: 1,
 		audit: "direct-refresh-operating-capacity",

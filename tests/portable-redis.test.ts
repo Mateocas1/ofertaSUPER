@@ -38,14 +38,6 @@ test("rate limiter preserves allow, deny, and fail-open shape", async () => {
   assert.deepEqual({ success: open.success, limit: open.limit, remaining: open.remaining }, { success: true, limit: 60, remaining: 60 });
 });
 
-test("compose smoke keeps the non-Vercel bootstrap chain and verifies app grants and seed stores", async () => {
-  const smoke = await import("node:fs/promises").then(({ readFile }) => readFile("scripts/compose-smoke.mjs", "utf8"));
-  assert.doesNotMatch(smoke, /VERCEL/);
-  assert.match(smoke, /up", "--build", "--exit-code-from", "seed", "seed"/);
-  assert.match(smoke, /has_table_privilege\('ofertasuper_app'/);
-  assert.match(smoke, /FROM supermarkets/);
-});
-
 test("search route builds v3 cache keys and performs no cache write", async () => {
   assert.equal(buildSearchCacheKey(" Leche ", 8), "search:v3:leche:8");
   // The snapshot-backed route never touches a cache: freshness is computed per

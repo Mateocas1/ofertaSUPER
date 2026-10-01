@@ -219,7 +219,7 @@ function CanastaCatalog({
   const [selections, setSelections] = useState<Record<string, string>>({});
   const { productsByEan, degradedDemo, loadError, isPending } = data;
   const plan = computeBasketPlan(items, productsByEan, selections, degradedDemo);
-  const { summaries, bestSingle, savings } = plan;
+  const { summaries, bestSingle } = plan;
   const unresolvedItems = items.filter((item) => !productsByEan[item.ean]);
 
   function selectSupermarket(ean: string, slug: string) {

@@ -50,12 +50,25 @@ export const DISCO_ACTIVE_WRITE_LOCK_KEY = 61204510;
 export const JUMBO_ACTIVE_WRITE_LOCK_KEY = 68204510;
 export const MAS_ACTIVE_WRITE_LOCK_KEY = 75204510;
 const MAX_PREWRITE_AGE_MS = 15 * 60 * 1000;
+export const ACTIVE_WRITE_SOURCES = [
+	"carrefour",
+	"vea",
+	"disco",
+	"jumbo",
+	"mas",
+] as const satisfies readonly ActiveWriteSource[];
+
 export const DIRECT_REFRESH_ACTIVE_WRITE_TRANSACTION_OPTIONS = {
 	maxWait: 20_000,
 	timeout: 60_000,
 } as const;
 
-type ActiveWriteSource = "carrefour" | "vea" | "disco" | "jumbo" | "mas";
+export type ActiveWriteSource =
+	| "carrefour"
+	| "vea"
+	| "disco"
+	| "jumbo"
+	| "mas";
 type SourceConfig = {
 	source: ActiveWriteSource;
 	displayName: string;
@@ -307,11 +320,36 @@ export function parseMasActiveWriteCliOptions(
 	return parseActiveWriteCliOptions(argv, "mas");
 }
 
-function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
-	argv: string[],
-	expectedSource: Source,
-): ActiveWriteCliOptionsFor<Source> {
-	const config = SOURCE_CONFIGS[expectedSource];
+export function isActiveWriteSource(value: string): value is ActiveWriteSource {
+	return (ACTIVE_WRITE_SOURCES as readonly string[]).includes(value);
+}
+
+// The unified writer entry resolves the source from --source before parsing the
+// rest of the flags, so a single script serves every supermarket.
+export function activeWriteSourceFromArgv(
+	argv: string[] = process.argv,
+): ActiveWriteSource {
+	const source = getOptionalSingleFlag(argv, "--source");
+	if (source === null)
+		throw new Error(
+			`active writer requires --source=<${ACTIVE_WRITE_SOURCES.join("|")}>`,
+		);
+	if (!isActiveWriteSource(source))
+		throw new Error(
+			`unknown active writer source ${source}; expected one of ${ACTIVE_WRITE_SOURCES.join(", ")}`,
+		);
+	return source;
+}
+
+export function activeWriteSourceDisplayName(
+	source: ActiveWriteSource,
+): string {
+	return SOURCE_CONFIGS[source].displayName;
+}
+
+type SourceConfigEntry = (typeof SOURCE_CONFIGS)[ActiveWriteSource];
+
+function assertNoForbiddenFlags(argv: string[], config: SourceConfigEntry) {
 	const foundForbidden = argv.find((entry) =>
 		FORBIDDEN_FLAGS.some(
 			(flag) => entry === flag || entry.startsWith(`${flag}=`),
@@ -321,6 +359,9 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 		throw new Error(
 			`${config.displayName} active writer rejects ${foundForbidden}`,
 		);
+}
+
+function assertOnlyKnownFlags(argv: string[], config: SourceConfigEntry) {
 	const allowedFlags = new Set([...REQUIRED_FLAGS, ...OPTIONAL_FLAGS]);
 	const unknownFlag = argv
 		.slice(2)
@@ -339,38 +380,22 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 		throw new Error(
 			`${config.displayName} active writer requires ${bareOptionalFlag}=...`,
 		);
+}
+
+function assertRequiredFlags(argv: string[]) {
 	for (const flag of REQUIRED_FLAGS) {
 		const matches = argv.filter((entry) => entry.startsWith(`${flag}=`));
 		if (matches.length !== 1) throw new Error(`expected exactly one ${flag}`);
 	}
+}
+
+function assertSourceFlag(argv: string[], config: SourceConfigEntry) {
 	const source = getOptionalSingleFlag(argv, "--source");
 	if (source !== config.source)
 		throw new Error(`active writer only accepts --source=${config.source}`);
-	const count = assertDirectRefreshAllowedBatchCount(
-		parsePositiveIntegerFlag(argv, "--count", 0),
-		"active writer --count",
-	);
-	const hash = getOptionalSingleFlag(argv, "--prewrite-report-hash") ?? "";
-	if (!/^[a-f0-9]{64}$/.test(hash))
-		throw new Error("prewrite report hash must be lowercase 64 hex");
-	const expectedConfirmation = directRefreshConfirmationToken(
-		config.source,
-		count,
-	);
-	const confirmWrite = getOptionalSingleFlag(argv, "--confirm-write");
-	if (confirmWrite !== expectedConfirmation)
-		throw new Error(
-			`missing exact ${config.displayName} active write confirmation`,
-		);
-	const killSwitchControl = getOptionalSingleFlag(
-		argv,
-		"--kill-switch-control",
-	);
-	if (killSwitchControl !== null && !killSwitchControl.trim()) {
-		throw new Error(
-			`${config.displayName} active writer requires --kill-switch-control=...`,
-		);
-	}
+}
+
+function resolveCapacityOptions(argv: string[]) {
 	const rawCapacityReport = getOptionalSingleFlag(argv, "--capacity-report");
 	if (rawCapacityReport !== null && !rawCapacityReport.trim()) {
 		throw new Error("--capacity-report requires a non-empty path");
@@ -389,6 +414,49 @@ function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
 	) {
 		throw new Error("--issue-number requires --capacity-report=...");
 	}
+	return { capacityReport, issueNumber };
+}
+
+function resolveKillSwitchControl(argv: string[], config: SourceConfigEntry) {
+	const killSwitchControl = getOptionalSingleFlag(
+		argv,
+		"--kill-switch-control",
+	);
+	if (killSwitchControl !== null && !killSwitchControl.trim()) {
+		throw new Error(
+			`${config.displayName} active writer requires --kill-switch-control=...`,
+		);
+	}
+	return killSwitchControl;
+}
+
+export function parseActiveWriteCliOptions<Source extends ActiveWriteSource>(
+	argv: string[],
+	expectedSource: Source,
+): ActiveWriteCliOptionsFor<Source> {
+	const config = SOURCE_CONFIGS[expectedSource];
+	assertNoForbiddenFlags(argv, config);
+	assertOnlyKnownFlags(argv, config);
+	assertRequiredFlags(argv);
+	assertSourceFlag(argv, config);
+	const count = assertDirectRefreshAllowedBatchCount(
+		parsePositiveIntegerFlag(argv, "--count", 0),
+		"active writer --count",
+	);
+	const hash = getOptionalSingleFlag(argv, "--prewrite-report-hash") ?? "";
+	if (!/^[a-f0-9]{64}$/.test(hash))
+		throw new Error("prewrite report hash must be lowercase 64 hex");
+	const expectedConfirmation = directRefreshConfirmationToken(
+		config.source,
+		count,
+	);
+	const confirmWrite = getOptionalSingleFlag(argv, "--confirm-write");
+	if (confirmWrite !== expectedConfirmation)
+		throw new Error(
+			`missing exact ${config.displayName} active write confirmation`,
+		);
+	const killSwitchControl = resolveKillSwitchControl(argv, config);
+	const { capacityReport, issueNumber } = resolveCapacityOptions(argv);
 	return {
 		source: config.source,
 		count,
@@ -452,12 +520,10 @@ export async function readActiveWriteCapacityEvidence(
 	};
 }
 
-export function validatePrewriteReportForActiveWrite(
+function assertPrewriteReportIdentity(
 	report: CarrefourDirectRefreshPrewriteGate,
-	options: ActiveWriteCliOptions,
-	now = new Date(),
+	config: SourceConfigEntry,
 ) {
-	const config = SOURCE_CONFIGS[options.source];
 	if (
 		report.schemaVersion !== 1 ||
 		report.audit !== `${config.source}-direct-refresh-prewrite-gate`
@@ -475,6 +541,13 @@ export function validatePrewriteReportForActiveWrite(
 		report.primitive.lookupKind !== "sku-id"
 	)
 		throw new Error("prewrite report scope/primitive mismatch");
+}
+
+function assertPrewriteReportSelection(
+	report: CarrefourDirectRefreshPrewriteGate,
+	options: ActiveWriteCliOptions,
+	now: Date,
+) {
 	if (
 		report.selection.requestedSampleSize !== options.count ||
 		report.selection.selectedRows !== options.count ||
@@ -487,8 +560,14 @@ export function validatePrewriteReportForActiveWrite(
 	const ageMs = now.getTime() - new Date(report.generatedAt).getTime();
 	if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_PREWRITE_AGE_MS)
 		throw new Error("prewrite report is stale; maximum age is 15 minutes");
-	const payload = hashPayload(report);
-	const computed = buildPrewriteReportHash(payload);
+}
+
+function assertPrewriteReportConfirmation(
+	report: CarrefourDirectRefreshPrewriteGate,
+	options: ActiveWriteCliOptions,
+	config: SourceConfigEntry,
+) {
+	const computed = buildPrewriteReportHash(hashPayload(report));
 	if (
 		computed !== report.futureConfirmation.shape.reportHash ||
 		computed !== options.prewriteReportHash
@@ -511,6 +590,17 @@ export function validatePrewriteReportForActiveWrite(
 		options.skuIds,
 		report.futureConfirmation.shape.skuIds,
 	);
+}
+
+export function validatePrewriteReportForActiveWrite(
+	report: CarrefourDirectRefreshPrewriteGate,
+	options: ActiveWriteCliOptions,
+	now = new Date(),
+) {
+	const config = SOURCE_CONFIGS[options.source];
+	assertPrewriteReportIdentity(report, config);
+	assertPrewriteReportSelection(report, options, now);
+	assertPrewriteReportConfirmation(report, options, config);
 }
 
 export function assertFreshPrewriteRerunMatches(
@@ -615,16 +705,16 @@ export async function executeMasActiveWrite({
 	return executeActiveWrite({ repository, prewriteReport, options, startedAt });
 }
 
-async function executeActiveWrite({
+export async function executeActiveWrite({
 	repository,
 	prewriteReport,
 	options,
-	startedAt,
+	startedAt = new Date(),
 }: {
 	repository: ActiveWriteRepository;
 	prewriteReport: CarrefourDirectRefreshPrewriteGate;
 	options: ActiveWriteCliOptions;
-	startedAt: Date;
+	startedAt?: Date;
 }): Promise<ActiveWriteReport> {
 	const config = SOURCE_CONFIGS[options.source];
 	validatePrewriteReportForActiveWrite(prewriteReport, options, startedAt);

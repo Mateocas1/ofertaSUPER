@@ -78,10 +78,6 @@ export class VtexSourceAdapter implements SourceAdapter {
 	}
 
   getDefaultTerms(limit?: number) {
-    return resolveIngestionQueryTerms({
-      slug: this.slug,
-      limit,
-      strategy: "peer",
-    });
+    return resolveIngestionQueryTerms({ limit });
   }
 }

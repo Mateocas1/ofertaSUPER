@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import {
 	defaultDirectRefreshCapacityOutput,
 	parseDirectRefreshCapacityCliOptions,
-} from "../scripts/audit-direct-refresh-capacity";
+} from "../scripts/direct-refresh-capacity-report";
 import {
 	buildDirectRefreshCapacityReport,
 	type DirectRefreshCapacityRepository,

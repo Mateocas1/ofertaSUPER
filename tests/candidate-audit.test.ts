@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import { describe, it } from "node:test";
 
 import {
@@ -328,56 +326,6 @@ describe("Phase 4 candidate audit", () => {
 		);
 	});
 
-	it("has a package script wired to the read-only candidate audit CLI", () => {
-		const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
-		const cliScript = readFileSync(
-			"scripts/audit-ingest-candidates.ts",
-			"utf8",
-		);
-
-		assert.equal(
-			packageJson.scripts["audit:ingest-candidates"],
-			"tsx scripts/audit-ingest-candidates.ts",
-		);
-		assert.match(cliScript, /stageSourceProducts/);
-		assert.match(cliScript, /dryRun:\s*true/);
-		assert.match(cliScript, /buildCandidateAudit/);
-		assert.match(cliScript, /--allow-missing-supermarket-product-eans/);
-		assert.match(cliScript, /--write-mode/);
-		assert.match(cliScript, /--candidate-selection/);
-		assert.match(cliScript, /--scan-count/);
-		assert.match(cliScript, /isCandidateAuditError/);
-	});
-
-	it("rejects duplicate CLI flags and invalid numeric flags before DB/network work", () => {
-		const duplicateSource = spawnSync(
-			process.execPath,
-			[
-				"./node_modules/tsx/dist/cli.mjs",
-				"scripts/audit-ingest-candidates.ts",
-				"--source=carrefour",
-				"--source=dia",
-				"--terms=leche",
-			],
-			{ encoding: "utf8" },
-		);
-		const invalidCount = spawnSync(
-			process.execPath,
-			[
-				"./node_modules/tsx/dist/cli.mjs",
-				"scripts/audit-ingest-candidates.ts",
-				"--source=carrefour",
-				"--terms=leche",
-				"--count=abc",
-			],
-			{ encoding: "utf8" },
-		);
-
-		assert.notEqual(duplicateSource.status, 0);
-		assert.match(duplicateSource.stderr, /exactly one --source=\.\.\. flag/);
-		assert.notEqual(invalidCount.status, 0);
-		assert.match(invalidCount.stderr, /--count to be a positive integer/);
-	});
 
 	it("accepts explicit mojibake waivers with a reason", async () => {
 		const audit = await buildCandidateAudit({

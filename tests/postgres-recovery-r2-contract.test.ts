@@ -6,9 +6,6 @@ import { createRecoveryPlan, runRecovery } from "../scripts/postgres-recovery-r2
 const root = new URL("../", import.meta.url), read = (path: string) => readFileSync(new URL(path, root), "utf8");
 const env = { RECOVERY_MANIFEST_KEY: "postgres-r2-20260301T020304Z-abcdef123456.manifest.json", BACKUP_CRYPT_REMOTE: "crypt:ofertasuper-r2", RCLONE_CONFIG_CRYPT_REMOTE: "r2:bucket", RCLONE_CONFIG_CRYPT_PASSWORD: "canary", RCLONE_CONFIG_CRYPT_PASSWORD2: "canary2" };
 const manifest = { schemaVersion: 2, archive: "postgres-r2-20260301T020304Z-abcdef123456.dump", timestamp: "2026-03-01T02:03:04.000Z", format: "custom", validation: "pg_restore --list", bytes: 3, sha256: "a".repeat(64), ciphertext: { key: "enc/archive", sha256: "d7439bee24773bcbfa2d0a97947ee36227b10d1022b1a55847e928965bb6bfde" } };
-const count = (text: string, value: string) => text.split(value).length - 1;
-
-
 
 test("unsafe manifest input makes zero rclone or Docker calls", async () => {
   for (const key of ["../x", "dir/x", "x\\y", "x\u0000y"]) {
@@ -19,21 +16,33 @@ test("unsafe manifest input makes zero rclone or Docker calls", async () => {
   assert.throws(() => createRecoveryPlan({ ...env, RECOVERY_MANIFEST_KEY: "../x" }), /manifest key/);
 });
 
+function cannedExternalCommand(args: string[]): { stdout: string; status?: number } {
+  const rclone = rcloneCannedResponse(args);
+  if (rclone) return rclone;
+  if (args.includes("pg_isready")) return { stdout: "", status: 0 };
+  return { stdout: args.includes("psql") ? cannedPsqlResponse(args.at(-1) || "") : "" };
+}
+
+const CANNED_MIGRATIONS = "20260320_init\n20260322_ingestion_sprint1\n20260322_price_history_avg_idx\n20260322_staging_unlogged\n20260605_direct_refresh_run_ledger\n20260606_discovery_prewrite_foundation\n20260823_production_readiness_state\n20260824_catalog_publication_verification\n20260825_governed_projection_primitives\n20260826_baseline_build_seal\n20260827_baseline_abandon_archive_cleanup\n20260828_evidence_custody_integrity\n20260829_controlled_source_capture\n20260830_independent_source_verification\n20260831_durable_approval_persistence\n20260901_candidate_technical_admission\n20260902_approval_grant_expiry_binding\n20260903_atomic_authority_lifecycle\n20260904_verifier_envelope_commitment\n20260905_promotion_ready_delta_admission\n20260906_atomic_verified_delta_promotion\n20260907_delta_recovery_observation\n20260908_existing_live_adoption\n20260909_reader_adoption\n20260910_forward_corrective_generation\n20260928003127_promo_capture\n20261001000000_drop_governance_models\n20261001000100_canonicalize_gtin14\n";
+
+function cannedPsqlResponse(sql: string) {
+  if (sql.includes("UNION")) return "products|1\nsupermarkets|1\nsupermarket_products|1\nprice_history|1\n";
+  if (sql.includes("server_version")) return "17.6\n";
+  if (sql.includes("migration_name")) return CANNED_MIGRATIONS;
+  if (sql.includes("information_schema")) return "price_history\nproducts\nsupermarket_products\nsupermarkets\n";
+  if (sql.includes("pg_indexes")) return "price_history_supermarket_product_id_scraped_at_idx\nproducts_category_idx\nsupermarket_products_product_ean_supermarket_id_key\nsupermarkets_slug_key\n";
+  return "0\n";
+}
+
 test("RED: recovery rejects every non-owned manifest basename before runtime", () => {
   for (const key of ["x.manifest.json", "postgres-r2-20260301T020304Z-abcdef123456.dump", "postgres-r2-20260301T020304Z-abcdef123456.manifest.json/", "postgres-r2-20260301T020304Z-ABCDEF123456.manifest.json"]) assert.throws(() => createRecoveryPlan({ ...env, RECOVERY_MANIFEST_KEY: key }), /manifest key/);
 });
 
 test("recovery verifies one downloaded ciphertext before creating a unique disposable target", async () => {
   const calls: string[][] = [], childEnvs: Record<string, string>[] = [], pipelineEnvs: Record<string, string>[] = [];
-  const psql = (sql: string) => [[sql.includes("UNION"), "products|1\nsupermarkets|1\nsupermarket_products|1\nprice_history|1\n"], [sql.includes("server_version"), "17.6\n"], [sql.includes("migration_name"), "20260320_init\n20260322_ingestion_sprint1\n20260322_price_history_avg_idx\n20260322_staging_unlogged\n20260605_direct_refresh_run_ledger\n20260606_discovery_prewrite_foundation\n20260823_production_readiness_state\n20260824_catalog_publication_verification\n20260825_governed_projection_primitives\n20260826_baseline_build_seal\n20260827_baseline_abandon_archive_cleanup\n20260828_evidence_custody_integrity\n20260829_controlled_source_capture\n20260830_independent_source_verification\n20260831_durable_approval_persistence\n20260901_candidate_technical_admission\n20260902_approval_grant_expiry_binding\n20260903_atomic_authority_lifecycle\n20260904_verifier_envelope_commitment\n20260905_promotion_ready_delta_admission\n20260906_atomic_verified_delta_promotion\n20260907_delta_recovery_observation\n20260908_existing_live_adoption\n20260909_reader_adoption\n20260910_forward_corrective_generation\n20260928003127_promo_capture\n20261001000000_drop_governance_models\n20261001000100_canonicalize_gtin14\n"], [sql.includes("information_schema"), "price_history\nproducts\nsupermarket_products\nsupermarkets\n"], [sql.includes("pg_indexes"), "price_history_supermarket_product_id_scraped_at_idx\nproducts_category_idx\nsupermarket_products_product_ean_supermarket_id_key\nsupermarkets_slug_key\n"]].find(([match]) => match)?.[1] || "0\n";
   const runtime = { command: async (program: string, args: string[], options: { env?: Record<string, string> } = {}) => {
     calls.push([program, ...args]); if (options.env) childEnvs.push({ ...options.env });
-    if (args[0] === "version") return { stdout: "rclone v1.75.0\n" };
-    if (args[0] === "cat" && args[1].startsWith("crypt:")) return { stdout: JSON.stringify(manifest) };
-    if (args[0] === "cryptdecode") return { stdout: " ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump \t enc/archive \n" };
-    if (args[0] === "copyto") { writeFileSync(args.at(-1)!, "raw"); return { stdout: "" }; }
-    if (args.includes("pg_isready")) return { stdout: "", status: 0 };
-    return { stdout: args.includes("psql") ? psql(args.at(-1) || "") : "" };
+    return cannedExternalCommand(args);
   }, pipeline: async (source: { args: string[] }, destination: { args: string[] }, options: { env?: Record<string, string> }) => { calls.push(["pipe", ...source.args, "=>", ...destination.args]); if (options.env) pipelineEnvs.push({ ...options.env }); return {}; } };
   const externalDatabase = "postgres://external.example/ofertasuper", receipt = await runRecovery({ ...env, DATABASE_URL: externalDatabase, RCLONE_CONFIG: "/hostile/rclone.conf", RCLONE_CRYPT_REMOTE: "crypt:reserved-collision" }, runtime as never, () => "a".repeat(32));
   assert.deepEqual(receipt!.counts, { products: 1, supermarkets: 1, supermarket_products: 1, price_history: 1 }); assert.equal(receipt!.migrations, 28);
@@ -83,11 +92,96 @@ test("mismatch creates neither Docker target nor restore, and contracts keep sec
   assert.match(docs, /single.*download|no-Production authority|logical manifest/i);
 });
 
+type CannedCommandResult = { stdout: string; status?: number };
+type CannedRuntimeOptions = { input?: string; signal?: AbortSignal; acceptStatuses?: number[] };
+
+function rcloneCannedResponse(args: string[]): CannedCommandResult | null {
+  if (args[0] === "version") return { stdout: "rclone v1.75.0\n" };
+  if (args[0] === "cat" && args[1].startsWith("crypt:")) return { stdout: JSON.stringify(manifest) };
+  if (args[0] === "cryptdecode") return { stdout: " ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump \t enc/archive \n" };
+  if (args[0] === "copyto") { writeFileSync(args.at(-1)!, "raw"); return { stdout: "" }; }
+  return null;
+}
+
+function pgIsReadyCannedResponse(
+  option: Record<string, unknown>,
+  readiness: number[],
+  options: CannedRuntimeOptions,
+): CannedCommandResult {
+  if (option.readyCommandFailure) throw new Error("Docker command failed");
+  const status = readiness.length > 1 ? readiness.shift() : readiness[0];
+  if (typeof status !== "number" || !options.acceptStatuses?.includes(status)) throw new Error(`Docker command failed with status ${status}`);
+  return { stdout: "", status };
+}
+
+function dockerCannedResponse(
+  option: Record<string, unknown>,
+  readiness: number[],
+  args: string[],
+  options: CannedRuntimeOptions,
+): CannedCommandResult | null {
+  if (args.includes("inspect")) return { stdout: "", status: option.collision ? 0 : 1 };
+  if (args.includes("pg_isready")) return pgIsReadyCannedResponse(option, readiness, options);
+  if (option.grant && options.input?.includes("CREATE ROLE")) throw new Error("grant failed");
+  return null;
+}
+
+function psqlCannedResponse(
+  option: Record<string, unknown>,
+  migrations: string,
+  sql: string,
+): CannedCommandResult | null {
+  if (sql.includes("server_version")) return { stdout: "17.6\n" };
+  if (sql.includes("migration_name")) return { stdout: String(option.migrations ?? migrations) };
+  if (sql.includes("finished_at IS NULL")) return { stdout: `${option.unfinished || 0}\n` };
+  return psqlCatalogCannedResponse(option, sql);
+}
+
+function psqlCatalogCannedResponse(
+  option: Record<string, unknown>,
+  sql: string,
+): CannedCommandResult | null {
+  if (sql.includes("information_schema")) return { stdout: "price_history\nproducts\nsupermarket_products\nsupermarkets\n" };
+  if (sql.includes("pg_indexes")) return { stdout: String(option.indexes ?? "price_history_supermarket_product_id_scraped_at_idx\nproducts_category_idx\nsupermarket_products_product_ean_supermarket_id_key\nsupermarkets_slug_key\n") };
+  if (sql.includes("UNION")) return { stdout: String(option.counts ?? "products|1\nsupermarkets|1\nsupermarket_products|1\nprice_history|1\n") };
+  if (option.app && options_inputIncludesSetRole(option, sql)) throw new Error("app read failed");
+  return null;
+}
+
+function options_inputIncludesSetRole(_option: Record<string, unknown>, _sql: string) {
+  return _sql.includes("SET ROLE");
+}
+
+function resolveCannedCommand({
+  option,
+  readiness,
+  args,
+  options,
+  sql,
+  migrations,
+}: {
+  option: Record<string, unknown>;
+  readiness: number[];
+  args: string[];
+  options: CannedRuntimeOptions;
+  sql: string;
+  migrations: string;
+}): CannedCommandResult {
+  const rclone = rcloneCannedResponse(args);
+  if (rclone) return rclone;
+  const docker = dockerCannedResponse(option, readiness, args, options);
+  if (docker) return docker;
+  const psql = psqlCannedResponse(option, migrations, sql);
+  if (psql) return psql;
+  return { stdout: "" };
+}
+
 function runtimeFor(option: Record<string, unknown> = {}) {
   const calls: { program: string; args: string[]; options?: { input?: string; signal?: AbortSignal; acceptStatuses?: number[] } }[] = [], migrations = "20260320_init\n20260322_ingestion_sprint1\n20260322_price_history_avg_idx\n20260322_staging_unlogged\n20260605_direct_refresh_run_ledger\n20260606_discovery_prewrite_foundation\n20260823_production_readiness_state\n20260824_catalog_publication_verification\n20260825_governed_projection_primitives\n20260826_baseline_build_seal\n20260827_baseline_abandon_archive_cleanup\n20260828_evidence_custody_integrity\n20260829_controlled_source_capture\n20260830_independent_source_verification\n20260831_durable_approval_persistence\n20260901_candidate_technical_admission\n20260902_approval_grant_expiry_binding\n20260903_atomic_authority_lifecycle\n20260904_verifier_envelope_commitment\n20260905_promotion_ready_delta_admission\n20260906_atomic_verified_delta_promotion\n20260907_delta_recovery_observation\n20260908_existing_live_adoption\n20260909_reader_adoption\n20260910_forward_corrective_generation\n20260928003127_promo_capture\n20261001000000_drop_governance_models\n20261001000100_canonicalize_gtin14\n", readiness = Array.isArray(option.readyStatuses) ? [...option.readyStatuses] : [option.ready ? 1 : 0];
-  const command = async (program: string, args: string[], options: { input?: string; signal?: AbortSignal; acceptStatuses?: number[] } = {}) => { calls.push({ program, args, options }); const sql = options.input || args.at(-1) || "";
-    if (args[0] === "version") return { stdout: "rclone v1.75.0\n" }; if (args[0] === "cat" && args[1].startsWith("crypt:")) return { stdout: JSON.stringify(manifest) }; if (args[0] === "cryptdecode") return { stdout: " ofertasuper-r2/postgres-r2-20260301T020304Z-abcdef123456.dump \t enc/archive \n" }; if (args[0] === "copyto") { writeFileSync(args.at(-1)!, "raw"); return { stdout: "" }; }
-    if (args.includes("inspect")) return { stdout: "", status: option.collision ? 0 : 1 }; if (args.includes("pg_isready")) { if (option.readyCommandFailure) throw new Error("Docker command failed"); const status = readiness.length > 1 ? readiness.shift() : readiness[0]; if (typeof status !== "number" || !options.acceptStatuses?.includes(status)) throw new Error(`Docker command failed with status ${status}`); return { stdout: "", status }; } if (option.grant && options.input?.includes("CREATE ROLE")) throw new Error("grant failed"); if (sql.includes("server_version")) return { stdout: "17.6\n" }; if (sql.includes("migration_name")) return { stdout: String(option.migrations ?? migrations) }; if (sql.includes("finished_at IS NULL")) return { stdout: `${option.unfinished || 0}\n` }; if (sql.includes("information_schema")) return { stdout: "price_history\nproducts\nsupermarket_products\nsupermarkets\n" }; if (sql.includes("pg_indexes")) return { stdout: String(option.indexes ?? "price_history_supermarket_product_id_scraped_at_idx\nproducts_category_idx\nsupermarket_products_product_ean_supermarket_id_key\nsupermarkets_slug_key\n") }; if (sql.includes("UNION")) return { stdout: String(option.counts ?? "products|1\nsupermarkets|1\nsupermarket_products|1\nprice_history|1\n") }; if (option.app && options.input?.includes("SET ROLE")) throw new Error("app read failed"); return { stdout: "" };
+  const command = async (program: string, args: string[], options: { input?: string; signal?: AbortSignal; acceptStatuses?: number[] } = {}) => {
+    calls.push({ program, args, options });
+    const sql = options.input || args.at(-1) || "";
+    return resolveCannedCommand({ option, readiness, args, options, sql, migrations });
   };
   return { calls, runtime: { command, pipeline: async (_left: unknown, _right: unknown, options: { signal?: AbortSignal }) => { if (option.abort) (options.signal as AbortSignal).dispatchEvent(new Event("abort")); if (option.archive) throw new Error("archive failed"); return {}; } } };
 }

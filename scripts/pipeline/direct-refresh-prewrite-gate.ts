@@ -302,42 +302,49 @@ export async function buildCarrefourDirectRefreshPrewriteGate(
 	});
 }
 
-export async function buildDirectRefreshPrewriteGate({
+async function loadPrewriteSource({
+	repository,
+	config,
+	sampleSize,
+	candidateScanSize,
+}: {
+	repository: DirectRefreshPrewriteRepository;
+	config: DirectRefreshSourceConfig;
+	sampleSize: number;
+	candidateScanSize: number;
+}) {
+	if (candidateScanSize < sampleSize)
+		throw new Error("candidate scan size must be >= sample size");
+	const source = await repository.getSource(config.slug);
+	if (!source) return { source, candidateRows: [], maxPriceHistoryId: null };
+	const candidateRows = await repository.listOldestPublicRankableRows(
+		config.slug,
+		candidateScanSize,
+	);
+	const maxPriceHistoryId = await repository.getMaxPriceHistoryId();
+	return { source, candidateRows, maxPriceHistoryId };
+}
+
+// Candidate rows are evaluated one at a time on purpose: the repository pool is
+// small and a parallel fan-out exhausts it.
+async function evaluateCandidateRows({
+	candidateRows,
 	repository,
 	fetchDirectProducts,
-	sourceSlug = CARREFOUR_SOURCE,
-	sampleSize = 10,
-	candidateScanSize = sampleSize,
-	now = new Date(),
-	maxPriceDeltaPercent = MAX_PRICE_DELTA_PERCENT,
-	capacityEvidence = null,
+	generatedAt,
+	maxPriceDeltaPercent,
+	config,
 }: {
+	candidateRows: DirectRefreshPrewriteExistingRow[];
 	repository: DirectRefreshPrewriteRepository;
 	fetchDirectProducts(
 		sourceSlug: DirectRefreshSourceSlug,
 		lookup: { kind: "sku-id"; value: string },
 	): Promise<NormalizedProduct[]>;
-	sourceSlug?: string;
-	sampleSize?: number;
-	candidateScanSize?: number;
-	now?: Date;
-	maxPriceDeltaPercent?: number;
-	capacityEvidence?: DirectRefreshCapacityEvidenceInput | null;
-}): Promise<CarrefourDirectRefreshPrewriteGate> {
-	const config = sourceConfig(sourceSlug);
-	const generatedAt = now.toISOString();
-	const source = await repository.getSource(config.slug);
-	if (candidateScanSize < sampleSize)
-		throw new Error("candidate scan size must be >= sample size");
-	const candidateRows = source
-		? await repository.listOldestPublicRankableRows(
-				config.slug,
-				candidateScanSize,
-			)
-		: [];
-	const maxPriceHistoryId = source
-		? await repository.getMaxPriceHistoryId()
-		: null;
+	generatedAt: string;
+	maxPriceDeltaPercent: number;
+	config: DirectRefreshSourceConfig;
+}) {
 	const candidateEvaluations: DirectRefreshPrewriteRow[] = [];
 	for (const row of candidateRows) {
 		candidateEvaluations.push(
@@ -351,6 +358,22 @@ export async function buildDirectRefreshPrewriteGate({
 			}),
 		);
 	}
+	return candidateEvaluations;
+}
+
+function selectPrewriteRows({
+	candidateEvaluations,
+	sampleSize,
+	candidateScanSize,
+	capacityEvidence,
+	config,
+}: {
+	candidateEvaluations: DirectRefreshPrewriteRow[];
+	sampleSize: number;
+	candidateScanSize: number;
+	capacityEvidence: DirectRefreshCapacityEvidenceInput | null;
+	config: DirectRefreshSourceConfig;
+}) {
 	const boundedViableScan = candidateScanSize > sampleSize;
 	const capacityPassRowIds = getDirectRefreshCapacityPassRowIds(
 		capacityEvidence,
@@ -376,20 +399,52 @@ export async function buildDirectRefreshPrewriteGate({
 	const rows = shouldFilterSelection
 		? selectionPoolRows.slice(0, sampleSize)
 		: candidateEvaluations;
+	return {
+		rows,
+		capacityPassRows,
+		capacityExcludedRows,
+		skippedRows,
+		skippedBlockedReasons: uniqueSorted(
+			skippedRows.flatMap((row) => row.guards.reasons),
+		),
+		capacityAlignedSelection,
+		boundedViableScan,
+	};
+}
+
+function prewriteFailClosedReasonGroups({
+	source,
+	config,
+	candidateRows,
+	rows,
+	skippedBlockedReasons,
+	sampleSize,
+	boundedViableScan,
+	capacityAlignedSelection,
+	capacityPassRows,
+}: {
+	source: { id: number; slug: string; baseUrl: string } | null;
+	config: DirectRefreshSourceConfig;
+	candidateRows: DirectRefreshPrewriteExistingRow[];
+	rows: DirectRefreshPrewriteRow[];
+	skippedBlockedReasons: string[];
+	sampleSize: number;
+	boundedViableScan: boolean;
+	capacityAlignedSelection: boolean;
+	capacityPassRows: DirectRefreshPrewriteRow[];
+}) {
 	const sourceFailReasons = source ? [] : [`source ${config.slug} not found`];
 	const selectedFailReasons =
 		candidateRows.length === 0 ? ["no rows selected"] : [];
 	const insufficientViableReasons =
-		shouldFilterSelection && rows.length < sampleSize
+		(boundedViableScan || capacityAlignedSelection) &&
+		rows.length < sampleSize
 			? [
 					capacityAlignedSelection
 						? `insufficient capacity-PASS rows: selected ${rows.length} of ${sampleSize} from ${candidateRows.length} candidates (${capacityPassRows.length} capacity-PASS candidates)`
 						: `insufficient viable rows: selected ${rows.length} of ${sampleSize} from ${candidateRows.length} candidates`,
 				]
 			: [];
-	const skippedBlockedReasons = uniqueSorted(
-		skippedRows.flatMap((row) => row.guards.reasons),
-	);
 	const rowFailReasons = boundedViableScan
 		? insufficientViableReasons.length > 0
 			? skippedBlockedReasons
@@ -397,22 +452,19 @@ export async function buildDirectRefreshPrewriteGate({
 		: rows.flatMap((row) =>
 				row.guards.status === "FAIL" ? row.guards.reasons : [],
 			);
-	const capacityValidation = validateDirectRefreshCapacityEvidence({
-		evidence: capacityEvidence,
-		sourceSlug: config.slug,
-		sampleSize,
-		selectedRows: rows,
-	});
-	const failClosedReasons = uniqueSorted([
-		...sourceFailReasons,
-		...selectedFailReasons,
-		...insufficientViableReasons,
-		...rowFailReasons,
-		...capacityValidation.failClosedReasons,
-	]);
-	const passRows = rows.filter((row) => row.guards.status === "PASS");
-	const failRows = rows.length - passRows.length;
-	const rollbackSnapshot = {
+	return {
+		sourceFailReasons,
+		selectedFailReasons,
+		insufficientViableReasons,
+		rowFailReasons,
+	};
+}
+
+function buildPrewriteRollbackSnapshot(
+	passRows: DirectRefreshPrewriteRow[],
+	maxPriceHistoryId: number | null,
+) {
+	return {
 		requiresConfirmation: true as const,
 		touchedProductEans: uniqueSorted(
 			passRows.map((row) => row.currentDb.supermarketProduct.productEan ?? ""),
@@ -433,7 +485,22 @@ export async function buildDirectRefreshPrewriteGate({
 				),
 		},
 	};
-	const summary = {
+}
+
+function buildPrewriteSummary({
+	passRows,
+	failRows,
+	skippedRows,
+	skippedBlockedReasons,
+	failClosedReasons,
+}: {
+	passRows: DirectRefreshPrewriteRow[];
+	failRows: number;
+	skippedRows: DirectRefreshPrewriteRow[];
+	skippedBlockedReasons: string[];
+	failClosedReasons: string[];
+}) {
+	return {
 		passRows: passRows.length,
 		failRows,
 		skippedBlockedRows: skippedRows.length,
@@ -449,25 +516,183 @@ export async function buildDirectRefreshPrewriteGate({
 		).length,
 		failClosedReasons,
 	};
+}
+
+function prewriteSourceSnapshot(
+	source: { id: number; slug: string; baseUrl: string } | null,
+	config: DirectRefreshSourceConfig,
+) {
+	return {
+		slug: config.slug,
+		supermarketId: source?.id ?? null,
+		baseUrl: source?.baseUrl ?? null,
+		expectedHost: config.expectedHost,
+	};
+}
+
+function buildPrewriteConfirmationShape({
+	reportWithoutConfirmation,
+	passRows,
+	config,
+}: {
+	reportWithoutConfirmation: Record<string, unknown>;
+	passRows: DirectRefreshPrewriteRow[];
+	config: DirectRefreshSourceConfig;
+}) {
+	return {
+		source: config.slug,
+		reportHash: buildPrewriteReportHash(reportWithoutConfirmation),
+		rowIds: passRows.map((row) => row.rowId).sort(),
+		skuIds: uniqueSorted(passRows.map((row) => row.lookup.value ?? "")).filter(
+			Boolean,
+		),
+		productEans: uniqueSorted(
+			passRows.map((row) => row.currentDb.supermarketProduct.productEan ?? ""),
+		).filter(Boolean),
+	};
+}
+
+function prewriteSelectionStrategy({
+	capacityAlignedSelection,
+	boundedViableScan,
+}: {
+	capacityAlignedSelection: boolean;
+	boundedViableScan: boolean;
+}) {
+	if (capacityAlignedSelection) {
+		return boundedViableScan
+			? ("capacity-pass-existing-rows-bounded-viable-scan" as const)
+			: ("capacity-pass-existing-rows" as const);
+	}
+	return boundedViableScan
+		? ("oldest-public-rankable-existing-rows-bounded-viable-scan" as const)
+		: ("oldest-public-rankable-existing-rows" as const);
+}
+
+function prewriteGateStatus({
+	failClosedReasons,
+	boundedViableScan,
+	rows,
+	sampleSize,
+}: {
+	failClosedReasons: string[];
+	boundedViableScan: boolean;
+	rows: DirectRefreshPrewriteRow[];
+	sampleSize: number;
+}) {
+	const completeScan = !boundedViableScan || rows.length === sampleSize;
+	return failClosedReasons.length === 0 &&
+		completeScan &&
+		rows.every((row) => row.guards.status === "PASS")
+		? ("PASS" as const)
+		: ("FAIL" as const);
+}
+
+export async function buildDirectRefreshPrewriteGate({
+	repository,
+	fetchDirectProducts,
+	sourceSlug = CARREFOUR_SOURCE,
+	sampleSize = 10,
+	candidateScanSize = sampleSize,
+	now = new Date(),
+	maxPriceDeltaPercent = MAX_PRICE_DELTA_PERCENT,
+	capacityEvidence = null,
+}: {
+	repository: DirectRefreshPrewriteRepository;
+	fetchDirectProducts(
+		sourceSlug: DirectRefreshSourceSlug,
+		lookup: { kind: "sku-id"; value: string },
+	): Promise<NormalizedProduct[]>;
+	sourceSlug?: string;
+	sampleSize?: number;
+	candidateScanSize?: number;
+	now?: Date;
+	maxPriceDeltaPercent?: number;
+	capacityEvidence?: DirectRefreshCapacityEvidenceInput | null;
+}): Promise<CarrefourDirectRefreshPrewriteGate> {
+	const config = sourceConfig(sourceSlug);
+	const generatedAt = now.toISOString();
+	const { source, candidateRows, maxPriceHistoryId } = await loadPrewriteSource({
+		repository,
+		config,
+		sampleSize,
+		candidateScanSize,
+	});
+	const candidateEvaluations = await evaluateCandidateRows({
+		candidateRows,
+		repository,
+		fetchDirectProducts,
+		generatedAt,
+		maxPriceDeltaPercent,
+		config,
+	});
+	const selection = selectPrewriteRows({
+		candidateEvaluations,
+		sampleSize,
+		candidateScanSize,
+		capacityEvidence,
+		config,
+	});
+	const {
+		rows,
+		capacityPassRows,
+		capacityExcludedRows,
+		skippedRows,
+		skippedBlockedReasons,
+		capacityAlignedSelection,
+		boundedViableScan,
+	} = selection;
+	const reasonGroups = prewriteFailClosedReasonGroups({
+		source,
+		config,
+		candidateRows,
+		rows,
+		skippedBlockedReasons,
+		sampleSize,
+		boundedViableScan,
+		capacityAlignedSelection,
+		capacityPassRows,
+	});
+	const capacityValidation = validateDirectRefreshCapacityEvidence({
+		evidence: capacityEvidence,
+		sourceSlug: config.slug,
+		sampleSize,
+		selectedRows: rows,
+	});
+	const failClosedReasons = uniqueSorted([
+		...reasonGroups.sourceFailReasons,
+		...reasonGroups.selectedFailReasons,
+		...reasonGroups.insufficientViableReasons,
+		...reasonGroups.rowFailReasons,
+		...capacityValidation.failClosedReasons,
+	]);
+	const passRows = rows.filter((row) => row.guards.status === "PASS");
+	const failRows = rows.length - passRows.length;
+	const rollbackSnapshot = buildPrewriteRollbackSnapshot(
+		passRows,
+		maxPriceHistoryId,
+	);
+	const summary = buildPrewriteSummary({
+		passRows,
+		failRows,
+		skippedRows,
+		skippedBlockedReasons,
+		failClosedReasons,
+	});
 	const reportWithoutConfirmation = {
 		schemaVersion: 1 as const,
 		audit: `${config.slug}-direct-refresh-prewrite-gate` as const,
-		status:
-			failClosedReasons.length === 0 &&
-			(!boundedViableScan || rows.length === sampleSize) &&
-			rows.every((row) => row.guards.status === "PASS")
-				? ("PASS" as const)
-				: ("FAIL" as const),
+		status: prewriteGateStatus({
+			failClosedReasons,
+			boundedViableScan,
+			rows,
+			sampleSize,
+		}),
 		generatedAt,
 		basis: "production" as const,
 		dryRun: true as const,
 		writeBoundary: WRITE_BOUNDARY,
-		source: {
-			slug: config.slug,
-			supermarketId: source?.id ?? null,
-			baseUrl: source?.baseUrl ?? null,
-			expectedHost: config.expectedHost,
-		},
+		source: prewriteSourceSnapshot(source, config),
 		primitive: {
 			kind: "vtex-catalog-direct-lookup" as const,
 			lookupKind: "sku-id" as const,
@@ -479,13 +704,10 @@ export async function buildDirectRefreshPrewriteGate({
 			guards: identityGuards(config),
 		},
 		selection: {
-			strategy: capacityAlignedSelection
-				? boundedViableScan
-					? ("capacity-pass-existing-rows-bounded-viable-scan" as const)
-					: ("capacity-pass-existing-rows" as const)
-				: boundedViableScan
-					? ("oldest-public-rankable-existing-rows-bounded-viable-scan" as const)
-					: ("oldest-public-rankable-existing-rows" as const),
+			strategy: prewriteSelectionStrategy({
+				capacityAlignedSelection,
+				boundedViableScan,
+			}),
 			requestedSampleSize: sampleSize,
 			candidateScanSize,
 			candidateRows: candidateRows.length,
@@ -503,17 +725,11 @@ export async function buildDirectRefreshPrewriteGate({
 		rows,
 		skippedRows,
 	};
-	const confirmationShape = {
-		source: config.slug,
-		reportHash: buildPrewriteReportHash(reportWithoutConfirmation),
-		rowIds: passRows.map((row) => row.rowId).sort(),
-		skuIds: uniqueSorted(passRows.map((row) => row.lookup.value ?? "")).filter(
-			Boolean,
-		),
-		productEans: uniqueSorted(
-			passRows.map((row) => row.currentDb.supermarketProduct.productEan ?? ""),
-		).filter(Boolean),
-	};
+	const confirmationShape = buildPrewriteConfirmationShape({
+		reportWithoutConfirmation,
+		passRows,
+		config,
+	});
 
 	return {
 		...reportWithoutConfirmation,
@@ -523,6 +739,133 @@ export async function buildDirectRefreshPrewriteGate({
 				"exact timestamped evidence hash; rerun the gate and use the new hash before any future write",
 			shape: confirmationShape,
 		},
+	};
+}
+
+function existingRowPresence(row: DirectRefreshPrewriteExistingRow) {
+	return {
+		hasProductSnapshot: Boolean(row.product),
+		hasEan: Boolean(row.ean?.trim()),
+		hasSkuId: Boolean(row.skuId?.trim()),
+	};
+}
+
+async function findSkuMatches({
+	repository,
+	config,
+	row,
+	hasSkuId,
+}: {
+	repository: DirectRefreshPrewriteRepository;
+	config: DirectRefreshSourceConfig;
+	row: DirectRefreshPrewriteExistingRow;
+	hasSkuId: boolean;
+}) {
+	if (!hasSkuId) return [];
+	return repository.findRowsBySourceSku(config.slug, row.skuId ?? "");
+}
+
+function isSourceSkuUnique(
+	hasSkuId: boolean,
+	skuMatches: Array<{ id: string }>,
+	row: DirectRefreshPrewriteExistingRow,
+) {
+	return hasSkuId && skuMatches.length === 1 && skuMatches[0]?.id === row.id;
+}
+
+function singleLiveProduct(liveProducts: NormalizedProduct[]) {
+	return liveProducts.length === 1 ? liveProducts[0] : null;
+}
+
+function liveSnapshot(
+	liveProduct: NormalizedProduct | null,
+	lookupResultCount: number,
+	productUrlHost: string | null,
+) {
+	if (!liveProduct) return null;
+	return { ...liveProduct, lookupResultCount, productUrlHost };
+}
+
+function prewriteRowAction(status: DirectRefreshPrewriteRow["guards"]["status"]) {
+	return status === "PASS" ? "would-refresh-existing-row" : "blocked";
+}
+
+async function fetchPrewriteLiveProducts({
+	row,
+	fetchDirectProducts,
+	config,
+	hasSkuId,
+}: {
+	row: DirectRefreshPrewriteExistingRow;
+	fetchDirectProducts(
+		sourceSlug: DirectRefreshSourceSlug,
+		lookup: { kind: "sku-id"; value: string },
+	): Promise<NormalizedProduct[]>;
+	config: DirectRefreshSourceConfig;
+	hasSkuId: boolean;
+}): Promise<{ liveProducts: NormalizedProduct[]; lookupError: string | null }> {
+	if (!hasSkuId || row.sourceSlug !== config.slug) {
+		return { liveProducts: [], lookupError: null };
+	}
+	try {
+		const liveProducts = await fetchDirectProducts(config.slug, {
+			kind: "sku-id",
+			value: row.skuId ?? "",
+		});
+		return { liveProducts, lookupError: null };
+	} catch (error) {
+		return {
+			liveProducts: [],
+			lookupError:
+				error instanceof Error ? error.message : "unknown direct lookup error",
+		};
+	}
+}
+
+function hostFlags(
+	row: DirectRefreshPrewriteExistingRow,
+	liveProduct: NormalizedProduct | null,
+	config: DirectRefreshSourceConfig,
+) {
+	const existingHost = host(row.productUrl);
+	const liveHost = host(liveProduct?.productUrl ?? null);
+	return {
+		existingHost,
+		liveHost,
+		carrefourHostOnly: liveHost === config.expectedHost,
+		hostDrift: Boolean(existingHost && liveHost && existingHost !== liveHost),
+	};
+}
+
+function identityMatchFlags(
+	row: DirectRefreshPrewriteExistingRow,
+	liveProduct: NormalizedProduct | null,
+) {
+	return {
+		exactEanMatch: Boolean(
+			liveProduct && row.ean && liveProduct.ean === row.ean,
+		),
+		exactSkuMatch: Boolean(
+			liveProduct && row.skuId && liveProduct.skuId === row.skuId,
+		),
+	};
+}
+
+function isPositivePrice(price: number | null | undefined) {
+	return price !== null && price !== undefined && price > 0;
+}
+
+function priceFlags(
+	row: DirectRefreshPrewriteExistingRow,
+	liveProduct: NormalizedProduct | null,
+	maxPriceDeltaPercent: number,
+) {
+	const priceDeltaPercent = priceDelta(row.price, liveProduct?.price ?? null);
+	return {
+		positiveLivePrice: isPositivePrice(liveProduct?.price ?? null),
+		priceDeltaPercent,
+		priceDeltaWithinLimit:
+			priceDeltaPercent === null || priceDeltaPercent <= maxPriceDeltaPercent,
 	};
 }
 
@@ -544,48 +887,29 @@ async function evaluatePrewriteRow({
 	maxPriceDeltaPercent: number;
 	config: DirectRefreshSourceConfig;
 }): Promise<DirectRefreshPrewriteRow> {
-	const hasProductSnapshot = Boolean(row.product);
-	const hasEan = Boolean(row.ean?.trim());
-	const hasSkuId = Boolean(row.skuId?.trim());
-	const skuMatches = hasSkuId
-		? await repository.findRowsBySourceSku(config.slug, row.skuId ?? "")
-		: [];
-	const sourceSkuUnique =
-		hasSkuId && skuMatches.length === 1 && skuMatches[0]?.id === row.id;
-	let lookupError: string | null = null;
-	let liveProducts: NormalizedProduct[] = [];
-	if (hasSkuId && row.sourceSlug === config.slug) {
-		try {
-			liveProducts = await fetchDirectProducts(config.slug, {
-				kind: "sku-id",
-				value: row.skuId ?? "",
-			});
-		} catch (error) {
-			lookupError =
-				error instanceof Error ? error.message : "unknown direct lookup error";
-		}
-	}
-	const liveProduct = liveProducts.length === 1 ? liveProducts[0] : null;
-	const existingHost = host(row.productUrl);
-	const liveHost = host(liveProduct?.productUrl ?? null);
-	const exactEanMatch = Boolean(
-		liveProduct && row.ean && liveProduct.ean === row.ean,
+	const { hasProductSnapshot, hasEan, hasSkuId } = existingRowPresence(row);
+	const skuMatches = await findSkuMatches({
+		repository,
+		config,
+		row,
+		hasSkuId,
+	});
+	const sourceSkuUnique = isSourceSkuUnique(hasSkuId, skuMatches, row);
+	const { liveProducts, lookupError } = await fetchPrewriteLiveProducts({
+		row,
+		fetchDirectProducts,
+		config,
+		hasSkuId,
+	});
+	const liveProduct = singleLiveProduct(liveProducts);
+	const { existingHost, liveHost, carrefourHostOnly, hostDrift } = hostFlags(
+		row,
+		liveProduct,
+		config,
 	);
-	const exactSkuMatch = Boolean(
-		liveProduct && row.skuId && liveProduct.skuId === row.skuId,
-	);
-	const carrefourHostOnly = liveHost === config.expectedHost;
-	const hostDrift = Boolean(
-		existingHost && liveHost && existingHost !== liveHost,
-	);
-	const positiveLivePrice = Boolean(
-		liveProduct?.price !== null &&
-			liveProduct?.price !== undefined &&
-			liveProduct.price > 0,
-	);
-	const priceDeltaPercent = priceDelta(row.price, liveProduct?.price ?? null);
-	const priceDeltaWithinLimit =
-		priceDeltaPercent === null || priceDeltaPercent <= maxPriceDeltaPercent;
+	const { exactEanMatch, exactSkuMatch } = identityMatchFlags(row, liveProduct);
+	const { positiveLivePrice, priceDeltaPercent, priceDeltaWithinLimit } =
+		priceFlags(row, liveProduct, maxPriceDeltaPercent);
 	const reasons = guardReasons({
 		row,
 		hasProductSnapshot,
@@ -629,13 +953,7 @@ async function evaluatePrewriteRow({
 			},
 			latestPriceHistory: row.latestPriceHistory,
 		},
-		live: liveProduct
-			? {
-					...liveProduct,
-					lookupResultCount: liveProducts.length,
-					productUrlHost: liveHost,
-				}
-			: null,
+		live: liveSnapshot(liveProduct, liveProducts.length, liveHost),
 		expectedChanges,
 		rollbackSnapshotFields: ROLLBACK_FIELDS,
 		guards: {
@@ -656,7 +974,7 @@ async function evaluatePrewriteRow({
 			priceDeltaWithinLimit,
 		},
 		stopConditions: reasons,
-		action: status === "PASS" ? "would-refresh-existing-row" : "blocked",
+		action: prewriteRowAction(status),
 	};
 }
 
@@ -693,6 +1011,48 @@ function guardReasons({
 	maxPriceDeltaPercent: number;
 	config: DirectRefreshSourceConfig;
 }) {
+	return [
+		...rowIdentityReasons({
+			row,
+			config,
+			hasProductSnapshot,
+			hasEan,
+			hasSkuId,
+			sourceSkuUnique,
+		}),
+		...lookupReasons({ hasSkuId, directLookupCount, lookupError }),
+		...liveMatchReasons({
+			directLookupCount,
+			exactEanMatch,
+			exactSkuMatch,
+			carrefourHostOnly,
+			hostDrift,
+			config,
+		}),
+		...livePriceReasons({
+			directLookupCount,
+			positiveLivePrice,
+			priceDeltaWithinLimit,
+			maxPriceDeltaPercent,
+		}),
+	];
+}
+
+function rowIdentityReasons({
+	row,
+	config,
+	hasProductSnapshot,
+	hasEan,
+	hasSkuId,
+	sourceSkuUnique,
+}: {
+	row: DirectRefreshPrewriteExistingRow;
+	config: DirectRefreshSourceConfig;
+	hasProductSnapshot: boolean;
+	hasEan: boolean;
+	hasSkuId: boolean;
+	sourceSkuUnique: boolean;
+}) {
 	const reasons: string[] = [];
 	if (row.sourceSlug !== config.slug)
 		reasons.push(`row source is not ${config.slug}`);
@@ -701,13 +1061,43 @@ function guardReasons({
 	if (!hasSkuId) reasons.push("existing row lacks SKU id");
 	if (hasSkuId && !sourceSkuUnique)
 		reasons.push("sourceSlug+skuId is not unique for the existing row");
+	return reasons;
+}
+
+function lookupReasons({
+	hasSkuId,
+	directLookupCount,
+	lookupError,
+}: {
+	hasSkuId: boolean;
+	directLookupCount: number;
+	lookupError: string | null;
+}) {
 	if (lookupError) {
-		reasons.push(`direct sku-id lookup failed: ${lookupError}`);
-	} else if (hasSkuId && directLookupCount !== 1) {
-		reasons.push(
-			`direct sku-id lookup returned ${directLookupCount} live products`,
-		);
+		return [`direct sku-id lookup failed: ${lookupError}`];
 	}
+	if (hasSkuId && directLookupCount !== 1) {
+		return [`direct sku-id lookup returned ${directLookupCount} live products`];
+	}
+	return [];
+}
+
+function liveMatchReasons({
+	directLookupCount,
+	exactEanMatch,
+	exactSkuMatch,
+	carrefourHostOnly,
+	hostDrift,
+	config,
+}: {
+	directLookupCount: number;
+	exactEanMatch: boolean;
+	exactSkuMatch: boolean;
+	carrefourHostOnly: boolean;
+	hostDrift: boolean;
+	config: DirectRefreshSourceConfig;
+}) {
+	const reasons: string[] = [];
 	if (directLookupCount === 1 && !exactEanMatch)
 		reasons.push("direct lookup EAN does not match existing EAN");
 	if (directLookupCount === 1 && !exactSkuMatch)
@@ -715,6 +1105,21 @@ function guardReasons({
 	if (directLookupCount === 1 && !carrefourHostOnly)
 		reasons.push(`live product URL host is not ${config.expectedHost}`);
 	if (hostDrift) reasons.push("existing/live product URL host drift");
+	return reasons;
+}
+
+function livePriceReasons({
+	directLookupCount,
+	positiveLivePrice,
+	priceDeltaWithinLimit,
+	maxPriceDeltaPercent,
+}: {
+	directLookupCount: number;
+	positiveLivePrice: boolean;
+	priceDeltaWithinLimit: boolean;
+	maxPriceDeltaPercent: number;
+}) {
+	const reasons: string[] = [];
 	if (directLookupCount === 1 && !positiveLivePrice)
 		reasons.push("live price is not positive");
 	if (!priceDeltaWithinLimit)

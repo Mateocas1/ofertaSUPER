@@ -118,15 +118,86 @@ function getErrorMessage(payload: unknown) {
     return record.issues.formErrors[0];
   }
 
-  if (record.issues?.fieldErrors) {
-    for (const messages of Object.values(record.issues.fieldErrors)) {
-      if (messages?.[0]) {
-        return messages[0];
-      }
-    }
+  const fieldError = firstFieldErrorMessage(record.issues?.fieldErrors);
+  if (fieldError) {
+    return fieldError;
   }
 
   return record.error ?? "No se pudo completar la operacion.";
+}
+
+type PromotionMutationOutcome =
+  | { ok: true; message: string }
+  | { ok: false; message: string };
+
+function promotionMutationTarget(editingId: number | null) {
+  return editingId === null
+    ? { url: "/api/admin/promotions", method: "POST" as const }
+    : { url: `/api/admin/promotions/${editingId}`, method: "PUT" as const };
+}
+
+function promotionSuccessMessage(isEditing: boolean) {
+  return isEditing ? "Promocion actualizada." : "Promocion creada.";
+}
+
+async function readResponsePayload(response: Response) {
+  return (await response.json().catch(() => null)) as unknown;
+}
+
+async function sendPromotionMutation({
+  url,
+  method,
+  payload,
+  successMessage,
+}: {
+  url: string;
+  method: "POST" | "PUT";
+  payload: unknown;
+  successMessage: string;
+}): Promise<PromotionMutationOutcome> {
+  const response = await fetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const result = await readResponsePayload(response);
+    return { ok: false, message: getErrorMessage(result) };
+  }
+
+  return { ok: true, message: successMessage };
+}
+
+async function deletePromotionRequest(id: number): Promise<PromotionMutationOutcome> {
+  const response = await fetch(`/api/admin/promotions/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    const result = await readResponsePayload(response);
+    return { ok: false, message: getErrorMessage(result) };
+  }
+
+  return { ok: true, message: "Promocion eliminada." };
+}
+
+function firstFieldErrorMessage(
+  fieldErrors: Record<string, string[] | undefined> | undefined,
+) {
+  if (!fieldErrors) {
+    return null;
+  }
+
+  for (const messages of Object.values(fieldErrors)) {
+    if (messages?.[0]) {
+      return messages[0];
+    }
+  }
+
+  return null;
 }
 
 function formatDateRange(startDate: string | null, endDate: string | null) {
@@ -170,30 +241,23 @@ export function AdminPromotionsManager({ promotions, supermarkets, showList = tr
 
     const payload = toPayload(form);
     const isEditing = editingId !== null;
-    const url = isEditing ? `/api/admin/promotions/${editingId}` : "/api/admin/promotions";
-    const method = isEditing ? "PUT" : "POST";
+    const { url, method } = promotionMutationTarget(editingId);
 
     startTransition(() => {
       void (async () => {
-        const response = await fetch(url, {
+        const outcome = await sendPromotionMutation({
+          url,
           method,
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
+          payload,
+          successMessage: promotionSuccessMessage(isEditing),
         });
 
-        const result = (await response.json().catch(() => null)) as unknown;
-
-        if (!response.ok) {
-          setFeedback({ tone: "error", text: getErrorMessage(result) });
+        if (!outcome.ok) {
+          setFeedback({ tone: "error", text: outcome.message });
           return;
         }
 
-        setFeedback({
-          tone: "success",
-          text: isEditing ? "Promocion actualizada." : "Promocion creada.",
-        });
+        setFeedback({ tone: "success", text: outcome.message });
         resetForm();
         router.refresh();
       })();
@@ -211,14 +275,10 @@ export function AdminPromotionsManager({ promotions, supermarkets, showList = tr
 
     startTransition(() => {
       void (async () => {
-        const response = await fetch(`/api/admin/promotions/${id}`, {
-          method: "DELETE",
-        });
+        const outcome = await deletePromotionRequest(id);
 
-        const result = (await response.json().catch(() => null)) as unknown;
-
-        if (!response.ok) {
-          setFeedback({ tone: "error", text: getErrorMessage(result) });
+        if (!outcome.ok) {
+          setFeedback({ tone: "error", text: outcome.message });
           return;
         }
 
@@ -226,7 +286,7 @@ export function AdminPromotionsManager({ promotions, supermarkets, showList = tr
           resetForm();
         }
 
-        setFeedback({ tone: "success", text: "Promocion eliminada." });
+        setFeedback({ tone: "success", text: outcome.message });
         router.refresh();
       })();
     });
@@ -234,6 +294,51 @@ export function AdminPromotionsManager({ promotions, supermarkets, showList = tr
 
   return (
     <div className={cn("grid gap-6", showList && "xl:grid-cols-[0.92fr_1.08fr]")}>
+      <PromotionEditorSection
+        form={form}
+        feedback={feedback}
+        supermarkets={supermarkets}
+        editingId={editingId}
+        isPending={isPending}
+        updateForm={updateForm}
+        resetForm={resetForm}
+        onSubmit={handleSubmit}
+      />
+
+      {showList ? (
+        <PromotionsListSection
+          promotions={promotions}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function PromotionEditorSection({
+  form,
+  feedback,
+  supermarkets,
+  editingId,
+  isPending,
+  updateForm,
+  resetForm,
+  onSubmit,
+}: {
+  form: PromotionFormState;
+  feedback: { tone: "success" | "error"; text: string } | null;
+  supermarkets: AdminSupermarketOption[];
+  editingId: number | null;
+  isPending: boolean;
+  updateForm: <K extends keyof PromotionFormState>(
+    key: K,
+    value: PromotionFormState[K],
+  ) => void;
+  resetForm: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
       <section className="surface p-6 md:p-8">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -253,7 +358,7 @@ export function AdminPromotionsManager({ promotions, supermarkets, showList = tr
           ) : null}
         </div>
 
-        <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+        <form className="mt-6 space-y-5" onSubmit={onSubmit}>
           <fieldset disabled={isPending} className="space-y-5 disabled:opacity-70">
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2 text-sm font-medium text-foreground">
@@ -415,8 +520,30 @@ export function AdminPromotionsManager({ promotions, supermarkets, showList = tr
           </fieldset>
         </form>
       </section>
+  );
+}
 
-      {showList ? (
+function PromotionConditions({ promotion }: { promotion: AdminPromotionRecord }) {
+  const conditions = [
+    promotion.walletProvider,
+    promotion.bankName,
+    promotion.conditions,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+  return <>{conditions || "Sin condiciones adicionales"}</>;
+}
+
+function PromotionsListSection({
+  promotions,
+  onEdit,
+  onDelete,
+}: {
+  promotions: AdminPromotionRecord[];
+  onEdit: (promotion: AdminPromotionRecord) => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
         <section className="surface p-6 md:p-8">
           <div>
             <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Listado</p>
@@ -444,8 +571,7 @@ export function AdminPromotionsManager({ promotions, supermarkets, showList = tr
                     <td className="px-4 py-3">
                       <p className="font-medium text-foreground">{promotion.title}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {[promotion.walletProvider, promotion.bankName, promotion.conditions].filter(Boolean).join(" • ") ||
-                          "Sin condiciones adicionales"}
+                        <PromotionConditions promotion={promotion} />
                       </p>
                     </td>
                     <td className="px-4 py-3">
@@ -466,14 +592,14 @@ export function AdminPromotionsManager({ promotions, supermarkets, showList = tr
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => handleEdit(promotion)}
+                          onClick={() => onEdit(promotion)}
                           className={cn(buttonVariants({ variant: "outline", size: "sm" }), "rounded-full")}
                         >
                           Editar
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(promotion.id)}
+                          onClick={() => onDelete(promotion.id)}
                           className={cn(buttonVariants({ variant: "destructive", size: "sm" }), "rounded-full")}
                         >
                           Eliminar
@@ -494,7 +620,5 @@ export function AdminPromotionsManager({ promotions, supermarkets, showList = tr
             </table>
           </div>
         </section>
-      ) : null}
-    </div>
   );
 }

@@ -205,25 +205,36 @@ const WRITER_SUPPORTED_SOURCES = new Set([
 	"mas",
 ]);
 
-export async function buildDirectRefreshCapacityReport({
+function assertPositiveInteger(value: number, name: string) {
+	if (value <= 0 || !Number.isInteger(value)) {
+		throw new Error(`${name} must be a positive integer`);
+	}
+}
+
+async function buildCapacitySourceReports({
+	sources,
 	repository,
 	fetchDirectProducts,
-	sourceSlugs,
-	candidateScanSize = DEFAULT_CANDIDATE_SCAN_SIZE,
-	targetBatchSize = DEFAULT_TARGET_BATCH_SIZE,
-	freshnessTargetsPercent = DEFAULT_FRESHNESS_TARGETS,
-	slaHours = DEFAULT_SLA_HOURS,
-	maxPriceDeltaPercent = DEFAULT_MAX_PRICE_DELTA_PERCENT,
-	now = new Date(),
-	issue = 82,
-}: DirectRefreshCapacityOptions): Promise<DirectRefreshCapacityReport> {
-	if (candidateScanSize <= 0 || !Number.isInteger(candidateScanSize)) {
-		throw new Error("candidateScanSize must be a positive integer");
-	}
-	if (targetBatchSize <= 0 || !Number.isInteger(targetBatchSize)) {
-		throw new Error("targetBatchSize must be a positive integer");
-	}
-	const sources = await repository.listSources(sourceSlugs);
+	candidateScanSize,
+	targetBatchSize,
+	freshnessTargetsPercent,
+	slaHours,
+	maxPriceDeltaPercent,
+	now,
+}: {
+	sources: DirectRefreshCapacitySource[];
+	repository: DirectRefreshCapacityRepository;
+	fetchDirectProducts(
+		sourceSlug: string,
+		lookup: { kind: "sku-id"; value: string },
+	): Promise<NormalizedProduct[]>;
+	candidateScanSize: number;
+	targetBatchSize: number;
+	freshnessTargetsPercent: number[];
+	slaHours: number;
+	maxPriceDeltaPercent: number;
+	now: Date;
+}) {
 	const sourceReports: DirectRefreshCapacitySourceReport[] = [];
 	for (const source of sources) {
 		const allRows = await repository.listRowsForDenominator(source.slug);
@@ -256,14 +267,19 @@ export async function buildDirectRefreshCapacityReport({
 			}),
 		);
 	}
+	return sourceReports;
+}
+
+function capacityFailConditions(
+	sourceReports: DirectRefreshCapacitySourceReport[],
+): string[] {
 	const failConditions: string[] = [];
+	const publicRankableRows = sourceReports.reduce(
+		(sum, source) => sum + source.denominator.publicRankableRows,
+		0,
+	);
 	if (sourceReports.length === 0) failConditions.push("no sources selected");
-	if (
-		sourceReports.reduce(
-			(sum, source) => sum + source.denominator.publicRankableRows,
-			0,
-		) === 0
-	) {
+	if (publicRankableRows === 0) {
 		failConditions.push("no public-rankable rows found in selected sources");
 	}
 	if (
@@ -274,18 +290,68 @@ export async function buildDirectRefreshCapacityReport({
 			"no viable direct-refresh rows found in selected candidate scans",
 		);
 	}
-	const failSources = sourceReports
-		.filter((source) => source.status === "FAIL")
+	return failConditions;
+}
+
+function sourcesByStatus(
+	sourceReports: DirectRefreshCapacitySourceReport[],
+	status: AuditStatus,
+): string[] {
+	return sourceReports
+		.filter((source) => source.status === status)
 		.map((source) => source.slug);
-	const warnSources = sourceReports
-		.filter((source) => source.status === "WARN")
-		.map((source) => source.slug);
-	const status: AuditStatus =
-		failConditions.length > 0 || failSources.length > 0
-			? "FAIL"
-			: warnSources.length > 0
-				? "WARN"
-				: "PASS";
+}
+
+function capacityStatus(
+	failConditions: string[],
+	failSources: string[],
+	warnSources: string[],
+): AuditStatus {
+	if (failConditions.length > 0 || failSources.length > 0) return "FAIL";
+	if (warnSources.length > 0) return "WARN";
+	return "PASS";
+}
+
+function recommendedNextPhase(status: AuditStatus) {
+	return status === "FAIL"
+		? "stop-and-resolve-capacity-blockers"
+		: "phase-2-batch-size-generalization";
+}
+
+export async function buildDirectRefreshCapacityReport({
+	repository,
+	fetchDirectProducts,
+	sourceSlugs,
+	candidateScanSize = DEFAULT_CANDIDATE_SCAN_SIZE,
+	targetBatchSize = DEFAULT_TARGET_BATCH_SIZE,
+	freshnessTargetsPercent = DEFAULT_FRESHNESS_TARGETS,
+	slaHours = DEFAULT_SLA_HOURS,
+	maxPriceDeltaPercent = DEFAULT_MAX_PRICE_DELTA_PERCENT,
+	now = new Date(),
+	issue = 82,
+}: DirectRefreshCapacityOptions): Promise<DirectRefreshCapacityReport> {
+	assertPositiveInteger(candidateScanSize, "candidateScanSize");
+	assertPositiveInteger(targetBatchSize, "targetBatchSize");
+	const sources = await repository.listSources(sourceSlugs);
+	const sourceReports = await buildCapacitySourceReports({
+		sources,
+		repository,
+		fetchDirectProducts,
+		candidateScanSize,
+		targetBatchSize,
+		freshnessTargetsPercent,
+		slaHours,
+		maxPriceDeltaPercent,
+		now,
+	});
+	const failConditions = capacityFailConditions(sourceReports);
+	const failSources = sourcesByStatus(sourceReports, "FAIL");
+	const warnSources = sourcesByStatus(sourceReports, "WARN");
+	const status: AuditStatus = capacityStatus(
+		failConditions,
+		failSources,
+		warnSources,
+	);
 	const stopConditions = uniqueSorted([
 		...failConditions,
 		...sourceReports.flatMap((source) =>
@@ -337,13 +403,147 @@ export async function buildDirectRefreshCapacityReport({
 				.map((source) => source.slug),
 			warnSources,
 			failSources,
-			recommendedNextPhase:
-				status === "FAIL"
-					? "stop-and-resolve-capacity-blockers"
-					: "phase-2-batch-size-generalization",
+			recommendedNextPhase: recommendedNextPhase(status),
 		},
 		sources: sourceReports,
 		stopConditions,
+	};
+}
+
+function capacityRowPresence(row: DirectRefreshCapacityRow) {
+	return {
+		hasProductSnapshot: Boolean(row.product),
+		hasEan: Boolean(row.ean?.trim()),
+		hasSkuId: Boolean(row.skuId?.trim()),
+	};
+}
+
+async function findCapacitySkuMatches({
+	repository,
+	sourceSlug,
+	row,
+	hasSkuId,
+}: {
+	repository: DirectRefreshCapacityRepository;
+	sourceSlug: string;
+	row: DirectRefreshCapacityRow;
+	hasSkuId: boolean;
+}) {
+	if (!hasSkuId) return [];
+	return repository.findRowsBySourceSku(sourceSlug, row.skuId ?? "");
+}
+
+function isCapacitySkuUnique(
+	hasSkuId: boolean,
+	skuMatches: Array<{ id: string }>,
+	row: DirectRefreshCapacityRow,
+) {
+	return hasSkuId && skuMatches.length === 1 && skuMatches[0]?.id === row.id;
+}
+
+async function fetchCapacityLiveProducts({
+	row,
+	fetchDirectProducts,
+	sourceSlug,
+	hasSkuId,
+}: {
+	row: DirectRefreshCapacityRow;
+	fetchDirectProducts(
+		sourceSlug: string,
+		lookup: { kind: "sku-id"; value: string },
+	): Promise<NormalizedProduct[]>;
+	sourceSlug: string;
+	hasSkuId: boolean;
+}): Promise<{ liveProducts: NormalizedProduct[]; lookupError: string | null }> {
+	if (!hasSkuId || row.sourceSlug !== sourceSlug) {
+		return { liveProducts: [], lookupError: null };
+	}
+	try {
+		const liveProducts = await fetchDirectProducts(sourceSlug, {
+			kind: "sku-id",
+			value: row.skuId ?? "",
+		});
+		return { liveProducts, lookupError: null };
+	} catch (error) {
+		return {
+			liveProducts: [],
+			lookupError:
+				error instanceof Error ? error.message : "unknown direct lookup error",
+		};
+	}
+}
+
+function singleCapacityLiveProduct(liveProducts: NormalizedProduct[]) {
+	return liveProducts.length === 1 ? liveProducts[0] : null;
+}
+
+function capacityHostFlags(
+	row: DirectRefreshCapacityRow,
+	liveProduct: NormalizedProduct | null,
+	sourceSlug: string,
+) {
+	const existingHost = host(row.productUrl);
+	const liveHost = host(liveProduct?.productUrl ?? null);
+	const expectedHostValue = sourceExpectedHost(sourceSlug);
+	return {
+		liveHost,
+		expectedHostValue,
+		expectedHost: Boolean(liveHost && liveHost === expectedHostValue),
+		hostDrift: Boolean(existingHost && liveHost && existingHost !== liveHost),
+	};
+}
+
+function capacityIdentityFlags(
+	row: DirectRefreshCapacityRow,
+	liveProduct: NormalizedProduct | null,
+) {
+	return {
+		exactEanMatch: Boolean(
+			liveProduct && row.ean && liveProduct.ean === row.ean,
+		),
+		exactSkuMatch: Boolean(
+			liveProduct && row.skuId && liveProduct.skuId === row.skuId,
+		),
+	};
+}
+
+function capacityPriceFlags(
+	row: DirectRefreshCapacityRow,
+	liveProduct: NormalizedProduct | null,
+	maxPriceDeltaPercent: number,
+) {
+	const priceDeltaPercent = priceDelta(row.price, liveProduct?.price ?? null);
+	return {
+		liveAvailable: Boolean(liveProduct?.isAvailable),
+		positiveLivePrice: isPositiveCapacityPrice(liveProduct?.price ?? null),
+		priceDeltaPercent,
+		priceDeltaWithinLimit:
+			priceDeltaPercent === null || priceDeltaPercent <= maxPriceDeltaPercent,
+	};
+}
+
+function isPositiveCapacityPrice(price: number | null | undefined) {
+	return price !== null && price !== undefined && price > 0;
+}
+
+function capacityRowAction(status: RowStatus) {
+	return status === "PASS" ? "would-refresh-existing-row" : "blocked";
+}
+
+function capacityLiveSnapshot(
+	liveProduct: NormalizedProduct | null,
+	lookupResultCount: number,
+	productUrlHost: string | null,
+) {
+	if (!liveProduct) return null;
+	return {
+		lookupResultCount,
+		ean: liveProduct.ean,
+		skuId: liveProduct.skuId,
+		productUrlHost,
+		price: liveProduct.price,
+		listPrice: liveProduct.listPrice,
+		isAvailable: liveProduct.isAvailable,
 	};
 }
 
@@ -363,50 +563,29 @@ export async function evaluateCapacityRow({
 	sourceSlug: string;
 	maxPriceDeltaPercent?: number;
 }): Promise<DirectRefreshCapacityRowReport> {
-	const hasProductSnapshot = Boolean(row.product);
-	const hasEan = Boolean(row.ean?.trim());
-	const hasSkuId = Boolean(row.skuId?.trim());
-	const skuMatches = hasSkuId
-		? await repository.findRowsBySourceSku(sourceSlug, row.skuId ?? "")
-		: [];
-	const sourceSkuUnique =
-		hasSkuId && skuMatches.length === 1 && skuMatches[0]?.id === row.id;
-	let lookupError: string | null = null;
-	let liveProducts: NormalizedProduct[] = [];
-	if (hasSkuId && row.sourceSlug === sourceSlug) {
-		try {
-			liveProducts = await fetchDirectProducts(sourceSlug, {
-				kind: "sku-id",
-				value: row.skuId ?? "",
-			});
-		} catch (error) {
-			lookupError =
-				error instanceof Error ? error.message : "unknown direct lookup error";
-		}
-	}
-	const liveProduct = liveProducts.length === 1 ? liveProducts[0] : null;
-	const existingHost = host(row.productUrl);
-	const liveHost = host(liveProduct?.productUrl ?? null);
-	const expectedHostValue = sourceExpectedHost(sourceSlug);
-	const exactEanMatch = Boolean(
-		liveProduct && row.ean && liveProduct.ean === row.ean,
+	const { hasProductSnapshot, hasEan, hasSkuId } = capacityRowPresence(row);
+	const skuMatches = await findCapacitySkuMatches({
+		repository,
+		sourceSlug,
+		row,
+		hasSkuId,
+	});
+	const sourceSkuUnique = isCapacitySkuUnique(hasSkuId, skuMatches, row);
+	const { liveProducts, lookupError } = await fetchCapacityLiveProducts({
+		row,
+		fetchDirectProducts,
+		sourceSlug,
+		hasSkuId,
+	});
+	const liveProduct = singleCapacityLiveProduct(liveProducts);
+	const { liveHost, expectedHostValue, expectedHost, hostDrift } =
+		capacityHostFlags(row, liveProduct, sourceSlug);
+	const { exactEanMatch, exactSkuMatch } = capacityIdentityFlags(
+		row,
+		liveProduct,
 	);
-	const exactSkuMatch = Boolean(
-		liveProduct && row.skuId && liveProduct.skuId === row.skuId,
-	);
-	const expectedHost = Boolean(liveHost && liveHost === expectedHostValue);
-	const hostDrift = Boolean(
-		existingHost && liveHost && existingHost !== liveHost,
-	);
-	const liveAvailable = Boolean(liveProduct?.isAvailable);
-	const positiveLivePrice = Boolean(
-		liveProduct?.price !== null &&
-			liveProduct?.price !== undefined &&
-			liveProduct.price > 0,
-	);
-	const priceDeltaPercent = priceDelta(row.price, liveProduct?.price ?? null);
-	const priceDeltaWithinLimit =
-		priceDeltaPercent === null || priceDeltaPercent <= maxPriceDeltaPercent;
+	const { liveAvailable, positiveLivePrice, priceDeltaPercent, priceDeltaWithinLimit } =
+		capacityPriceFlags(row, liveProduct, maxPriceDeltaPercent);
 	const reasons = guardReasons({
 		row,
 		sourceSlug,
@@ -434,18 +613,8 @@ export async function evaluateCapacityRow({
 		lastCheckedAt: row.lastCheckedAt,
 		currentPrice: row.price,
 		status,
-		action: status === "PASS" ? "would-refresh-existing-row" : "blocked",
-		live: liveProduct
-			? {
-					lookupResultCount: liveProducts.length,
-					ean: liveProduct.ean,
-					skuId: liveProduct.skuId,
-					productUrlHost: liveHost,
-					price: liveProduct.price,
-					listPrice: liveProduct.listPrice,
-					isAvailable: liveProduct.isAvailable,
-				}
-			: null,
+		action: capacityRowAction(status),
+		live: capacityLiveSnapshot(liveProduct, liveProducts.length, liveHost),
 		guards: {
 			reasons,
 			existingRow: row.sourceSlug === sourceSlug,
@@ -656,6 +825,52 @@ function guardReasons({
 	priceDeltaWithinLimit: boolean;
 	maxPriceDeltaPercent: number;
 }) {
+	return [
+		...capacityRowIdentityReasons({
+			row,
+			sourceSlug,
+			hasProductSnapshot,
+			hasEan,
+			hasSkuId,
+			sourceSkuUnique,
+		}),
+		...capacityLookupReasons({ hasSkuId, directLookupCount, lookupError }),
+		...capacityIdentityMatchReasons({
+			directLookupCount,
+			exactEanMatch,
+			exactSkuMatch,
+		}),
+		...capacityHostReasons({
+			directLookupCount,
+			expectedHost,
+			expectedHostValue,
+			hostDrift,
+		}),
+		...capacityAvailabilityReasons({ directLookupCount, liveAvailable }),
+		...capacityPriceReasons({
+			directLookupCount,
+			positiveLivePrice,
+			priceDeltaWithinLimit,
+			maxPriceDeltaPercent,
+		}),
+	];
+}
+
+function capacityRowIdentityReasons({
+	row,
+	sourceSlug,
+	hasProductSnapshot,
+	hasEan,
+	hasSkuId,
+	sourceSkuUnique,
+}: {
+	row: DirectRefreshCapacityRow;
+	sourceSlug: string;
+	hasProductSnapshot: boolean;
+	hasEan: boolean;
+	hasSkuId: boolean;
+	sourceSkuUnique: boolean;
+}) {
 	const reasons: string[] = [];
 	if (row.sourceSlug !== sourceSlug)
 		reasons.push(`row source is not ${sourceSlug}`);
@@ -665,26 +880,89 @@ function guardReasons({
 	if (hasSkuId && !sourceSkuUnique) {
 		reasons.push("sourceSlug+skuId is not unique for the existing row");
 	}
+	return reasons;
+}
+
+function capacityLookupReasons({
+	hasSkuId,
+	directLookupCount,
+	lookupError,
+}: {
+	hasSkuId: boolean;
+	directLookupCount: number;
+	lookupError: string | null;
+}) {
 	if (lookupError) {
-		reasons.push(`direct sku-id lookup failed: ${lookupError}`);
-	} else if (hasSkuId && directLookupCount !== 1) {
-		reasons.push(
-			`direct sku-id lookup returned ${directLookupCount} live products`,
-		);
+		return [`direct sku-id lookup failed: ${lookupError}`];
 	}
+	if (hasSkuId && directLookupCount !== 1) {
+		return [`direct sku-id lookup returned ${directLookupCount} live products`];
+	}
+	return [];
+}
+
+function capacityIdentityMatchReasons({
+	directLookupCount,
+	exactEanMatch,
+	exactSkuMatch,
+}: {
+	directLookupCount: number;
+	exactEanMatch: boolean;
+	exactSkuMatch: boolean;
+}) {
+	const reasons: string[] = [];
 	if (directLookupCount === 1 && !exactEanMatch) {
 		reasons.push("direct lookup EAN does not match existing EAN");
 	}
 	if (directLookupCount === 1 && !exactSkuMatch) {
 		reasons.push("direct lookup SKU does not match existing SKU");
 	}
+	return reasons;
+}
+
+function capacityHostReasons({
+	directLookupCount,
+	expectedHost,
+	expectedHostValue,
+	hostDrift,
+}: {
+	directLookupCount: number;
+	expectedHost: boolean;
+	expectedHostValue: string;
+	hostDrift: boolean;
+}) {
+	const reasons: string[] = [];
 	if (directLookupCount === 1 && !expectedHost) {
 		reasons.push(`live product URL host is not ${expectedHostValue}`);
 	}
 	if (hostDrift) reasons.push("existing/live product URL host drift");
-	if (directLookupCount === 1 && !liveAvailable) {
-		reasons.push("live product is unavailable");
-	}
+	return reasons;
+}
+
+function capacityAvailabilityReasons({
+	directLookupCount,
+	liveAvailable,
+}: {
+	directLookupCount: number;
+	liveAvailable: boolean;
+}) {
+	return directLookupCount === 1 && !liveAvailable
+		? ["live product is unavailable"]
+		: [];
+}
+
+function capacityPriceReasons({
+	directLookupCount,
+	positiveLivePrice,
+	priceDeltaWithinLimit,
+	maxPriceDeltaPercent,
+}: {
+	directLookupCount: number;
+	positiveLivePrice: boolean;
+	priceDeltaWithinLimit: boolean;
+	maxPriceDeltaPercent: number;
+}) {
+	const reasons: string[] = [];
 	if (directLookupCount === 1 && !positiveLivePrice) {
 		reasons.push("live price is not positive");
 	}

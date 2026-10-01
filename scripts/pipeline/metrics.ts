@@ -93,6 +93,27 @@ async function sendWebhookAlert(title: string, details: string[], options: { ded
   return true;
 }
 
+async function sendAlertIfNeeded({
+  title,
+  details,
+  dedupeKey,
+  dryRun,
+  alertName,
+  sentAlerts,
+}: {
+  title: string;
+  details: string[];
+  dedupeKey: string;
+  dryRun?: boolean;
+  alertName: string;
+  sentAlerts: string[];
+}) {
+  const sent = await sendWebhookAlert(title, details, { dedupeKey, dryRun });
+  if (sent) {
+    sentAlerts.push(alertName);
+  }
+}
+
 export async function evaluateAndSendIngestionAlerts(options: {
   sourceSummaries?: PipelineMetricsSourceSummary[];
   dryRun?: boolean;
@@ -116,69 +137,50 @@ export async function evaluateAndSendIngestionAlerts(options: {
     sourceSummaries.length > 0 &&
     sourceSummaries.every((summary) => !summary.health.isHealthy && summary.health.errorType === "hash_invalid");
   const sentAlerts: string[] = [];
+  const alertContext = { dryRun: options.dryRun, sentAlerts };
 
   if (allHashInvalid) {
-    const sent = await sendWebhookAlert(
-      "Ingestion alert: todas las fuentes VTEX fallaron con hash invalido.",
-      sourceSummaries.map((summary) => `- ${summary.slug}: ${summary.health.errorType}`),
-      {
-        dedupeKey: "alerts:ingestion:hash-invalid:all",
-        dryRun: options.dryRun,
-      },
-    );
-
-    if (sent) {
-      sentAlerts.push("hash_invalid_all_sources");
-    }
+    await sendAlertIfNeeded({
+      ...alertContext,
+      title: "Ingestion alert: todas las fuentes VTEX fallaron con hash invalido.",
+      details: sourceSummaries.map((summary) => `- ${summary.slug}: ${summary.health.errorType}`),
+      dedupeKey: "alerts:ingestion:hash-invalid:all",
+      alertName: "hash_invalid_all_sources",
+    });
   }
 
   if (blockedSources.length > 0) {
-    const sent = await sendWebhookAlert(
-      "Ingestion alert: una o mas fuentes quedaron bloqueadas.",
-      blockedSources.map((source) => `- ${source}`),
-      {
-        dedupeKey: `alerts:ingestion:blocked:${blockedSources.sort().join(",")}`,
-        dryRun: options.dryRun,
-      },
-    );
-
-    if (sent) {
-      sentAlerts.push("blocked_sources");
-    }
+    await sendAlertIfNeeded({
+      ...alertContext,
+      title: "Ingestion alert: una o mas fuentes quedaron bloqueadas.",
+      details: blockedSources.map((source) => `- ${source}`),
+      dedupeKey: `alerts:ingestion:blocked:${blockedSources.sort().join(",")}`,
+      alertName: "blocked_sources",
+    });
   }
 
   if (degradedSources.length > 0) {
-    const sent = await sendWebhookAlert(
-      "Ingestion alert: degradacion de calidad detectada (>10% rejected).",
-      degradedSources.map((source) => `- ${source}`),
-      {
-        dedupeKey: `alerts:ingestion:quality:${degradedSources.sort().join(",")}`,
-        dryRun: options.dryRun,
-      },
-    );
-
-    if (sent) {
-      sentAlerts.push("quality_degradation");
-    }
+    await sendAlertIfNeeded({
+      ...alertContext,
+      title: "Ingestion alert: degradacion de calidad detectada (>10% rejected).",
+      details: degradedSources.map((source) => `- ${source}`),
+      dedupeKey: `alerts:ingestion:quality:${degradedSources.sort().join(",")}`,
+      alertName: "quality_degradation",
+    });
   }
 
   if (violatingSources.length > 0) {
-    const sent = await sendWebhookAlert(
-      "Ingestion alert: freshness por debajo del umbral operativo.",
-      [
+    await sendAlertIfNeeded({
+      ...alertContext,
+      title: "Ingestion alert: freshness por debajo del umbral operativo.",
+      details: [
         `Freshness global: ${freshness.overallFreshnessPercent.toFixed(1)}%`,
         `Base: ${freshness.measurementMode}`,
         ...violatingSources.map((source) => `- ${source}`),
       ],
-      {
-        dedupeKey: `alerts:ingestion:sla:${violatingSources.sort().join(",")}`,
-        dryRun: options.dryRun,
-      },
-    );
-
-    if (sent) {
-      sentAlerts.push("freshness_sla_violation");
-    }
+      dedupeKey: `alerts:ingestion:sla:${violatingSources.sort().join(",")}`,
+      alertName: "freshness_sla_violation",
+    });
   }
 
   return {

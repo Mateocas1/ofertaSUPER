@@ -177,6 +177,16 @@ function buildNewProduct(candidate: EvaluatedStageCandidate) {
   };
 }
 
+function preferMissingValue<T>(
+  existingValue: T | null | undefined,
+  candidateValue: T | null | undefined,
+  hasValue: (value: T | null | undefined) => boolean,
+): T | null {
+  return !hasValue(existingValue) && hasValue(candidateValue)
+    ? (candidateValue ?? null)
+    : null;
+}
+
 function buildProtectiveMerge(
   existingProduct: ExistingProductRecord,
   candidate: EvaluatedStageCandidate,
@@ -187,35 +197,33 @@ function buildProtectiveMerge(
   images: string[] | null;
   category: string | null;
 } {
-  const data = {
-    brand: null as string | null,
-    description: null as string | null,
-    image_url: null as string | null,
-    images: null as string[] | null,
-    category: null as string | null,
+  return {
+    brand: preferMissingValue(
+      existingProduct.brand,
+      candidate.brand,
+      hasText,
+    ),
+    description: preferMissingValue(
+      existingProduct.description,
+      candidate.description,
+      hasText,
+    ),
+    image_url: preferMissingValue(
+      existingProduct.image_url,
+      candidate.imageUrl,
+      hasText,
+    ),
+    images: preferMissingValue(
+      existingProduct.images,
+      candidate.images,
+      hasImages,
+    ),
+    category: preferMissingValue(
+      existingProduct.category,
+      candidate.category,
+      hasText,
+    ),
   };
-
-  if (!hasText(existingProduct.brand) && hasText(candidate.brand)) {
-    data.brand = candidate.brand;
-  }
-
-  if (!hasText(existingProduct.description) && hasText(candidate.description)) {
-    data.description = candidate.description;
-  }
-
-  if (!hasText(existingProduct.image_url) && hasText(candidate.imageUrl)) {
-    data.image_url = candidate.imageUrl;
-  }
-
-  if (!hasImages(existingProduct.images) && hasImages(candidate.images)) {
-    data.images = candidate.images;
-  }
-
-  if (!hasText(existingProduct.category) && hasText(candidate.category)) {
-    data.category = candidate.category;
-  }
-
-  return data;
 }
 
 function supermarketProductKey(ean: string, supermarketId: number) {

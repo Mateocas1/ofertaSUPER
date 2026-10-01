@@ -35,29 +35,19 @@ function psqlRows(sql: string): string[][] {
     .map((line) => line.split("\u0001"));
 }
 
-async function prismaRows(sql: string): Promise<string[][]> {
-  const { db } = await import("../src/lib/db");
-  const rows = await db.$queryRawUnsafe<Record<string, unknown>[]>(sql);
-  return rows.map((row) =>
-    Object.values(row).map((value) => {
-      if (value === null || value === undefined) return "";
-      if (typeof value === "boolean") return value ? "t" : "f";
-      return String(value);
-    }),
-  );
+function rowFields(row: Record<string, unknown>): string[] {
+  return Object.values(row).map((value) => {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "boolean") return value ? "t" : "f";
+    return String(value);
+  });
 }
 
 async function readRows(sql: string): Promise<string[][]> {
   if (process.env.DATABASE_URL) {
     const { db } = await import("../src/lib/db");
     const rows = await db.$queryRawUnsafe<Record<string, unknown>[]>(sql);
-    return rows.map((row) =>
-      Object.values(row).map((value) => {
-        if (value === null || value === undefined) return "";
-        if (typeof value === "boolean") return value ? "t" : "f";
-        return String(value);
-      }),
-    );
+    return rows.map(rowFields);
   }
   return psqlRows(sql);
 }

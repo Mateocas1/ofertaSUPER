@@ -18,6 +18,26 @@ function normalizeQuantity(value: number) {
   return Math.max(1, Math.min(99, Math.round(value)));
 }
 
+function readCanastaQuantity(value: unknown) {
+  return typeof value === "number" ? value : Number(value ?? 0);
+}
+
+function isUsableCanastaEntry(ean: string, qty: number) {
+  return /^\d{8,18}$/.test(ean) && Number.isFinite(qty) && qty > 0;
+}
+
+function parseCanastaEntry(entry: unknown) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const candidate = entry as { ean?: unknown; qty?: unknown };
+  const ean = typeof candidate.ean === "string" ? candidate.ean.trim() : "";
+  const qty = readCanastaQuantity(candidate.qty);
+
+  return isUsableCanastaEntry(ean, qty) ? { ean, qty } : null;
+}
+
 function sanitizeCanasta(value: unknown) {
   if (!Array.isArray(value)) {
     return [] as CanastaItem[];
@@ -26,19 +46,15 @@ function sanitizeCanasta(value: unknown) {
   const quantities = new Map<string, number>();
 
   for (const entry of value) {
-    if (!entry || typeof entry !== "object") {
+    const parsed = parseCanastaEntry(entry);
+    if (!parsed) {
       continue;
     }
 
-    const candidate = entry as { ean?: unknown; qty?: unknown };
-    const ean = typeof candidate.ean === "string" ? candidate.ean.trim() : "";
-    const qty = typeof candidate.qty === "number" ? candidate.qty : Number(candidate.qty ?? 0);
-
-    if (!/^\d{8,18}$/.test(ean) || !Number.isFinite(qty) || qty <= 0) {
-      continue;
-    }
-
-    quantities.set(ean, (quantities.get(ean) ?? 0) + normalizeQuantity(qty));
+    quantities.set(
+      parsed.ean,
+      (quantities.get(parsed.ean) ?? 0) + normalizeQuantity(parsed.qty),
+    );
   }
 
   return Array.from(quantities.entries()).map(([ean, qty]) => ({

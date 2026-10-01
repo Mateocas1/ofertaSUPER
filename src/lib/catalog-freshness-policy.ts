@@ -130,44 +130,76 @@ function compareDisplayPriceDesc(left: RankableProduct, right: RankableProduct) 
   return (getPublicPrice(right) ?? Number.NEGATIVE_INFINITY) - (getPublicPrice(left) ?? Number.NEGATIVE_INFINITY);
 }
 
+function compareName(left: RankableProduct, right: RankableProduct) {
+  return left.name.localeCompare(right.name, "es");
+}
+
+function comparePriceAscending(left: RankableProduct, right: RankableProduct) {
+  return compareFreshness(left, right) || compareDisplayPriceAsc(left, right) || compareName(left, right);
+}
+
+function comparePriceDescending(left: RankableProduct, right: RankableProduct) {
+  return compareFreshness(left, right) || compareDisplayPriceDesc(left, right) || compareName(left, right);
+}
+
+function compareUpdated(left: RankableProduct, right: RankableProduct) {
+  return (
+    compareFreshness(left, right) ||
+    (right.latestCheckedAt ?? "").localeCompare(left.latestCheckedAt ?? "") ||
+    compareName(left, right)
+  );
+}
+
+function compareRelevance(
+  left: RankableProduct,
+  right: RankableProduct,
+  query: string | undefined,
+) {
+  const freshnessDiff = compareFreshness(left, right);
+  if (freshnessDiff !== 0) {
+    return freshnessDiff;
+  }
+
+  const rightScore = query ? scoreProduct(right, query) : 0;
+  const leftScore = query ? scoreProduct(left, query) : 0;
+
+  return (rightScore - leftScore) || compareDisplayPriceAsc(left, right) || compareName(left, right);
+}
+
+function compareDiscount(left: RankableProduct, right: RankableProduct) {
+  const freshnessDiff = compareFreshness(left, right);
+  if (freshnessDiff !== 0) {
+    return freshnessDiff;
+  }
+
+  const rightDiscount = right.automaticDiscountPercent ?? -1;
+  const leftDiscount = left.automaticDiscountPercent ?? -1;
+
+  return (rightDiscount - leftDiscount) || compareDisplayPriceAsc(left, right) || compareName(left, right);
+}
+
+function resolvePublicSort(options: PublicProductSortOptions) {
+  const query = options.query?.trim();
+  return { query, sort: options.sort ?? (query ? "relevance" : "discount") };
+}
+
 export function comparePublicProducts(
   left: RankableProduct,
   right: RankableProduct,
   options: PublicProductSortOptions = {},
 ) {
-  const query = options.query?.trim();
-  const sort = options.sort ?? (query ? "relevance" : "discount");
+  const { query, sort } = resolvePublicSort(options);
 
   switch (sort) {
     case "price-asc":
-      return compareFreshness(left, right) || compareDisplayPriceAsc(left, right) || left.name.localeCompare(right.name, "es");
+      return comparePriceAscending(left, right);
     case "price-desc":
-      return compareFreshness(left, right) || compareDisplayPriceDesc(left, right) || left.name.localeCompare(right.name, "es");
+      return comparePriceDescending(left, right);
     case "updated":
-      return compareFreshness(left, right) || (right.latestCheckedAt ?? "").localeCompare(left.latestCheckedAt ?? "") || left.name.localeCompare(right.name, "es");
-    case "relevance": {
-      const freshnessDiff = compareFreshness(left, right);
-
-      if (freshnessDiff !== 0) {
-        return freshnessDiff;
-      }
-
-      const rightScore = query ? scoreProduct(right, query) : 0;
-      const leftScore = query ? scoreProduct(left, query) : 0;
-
-      return (rightScore - leftScore) || compareDisplayPriceAsc(left, right) || left.name.localeCompare(right.name, "es");
-    }
-    default: {
-      const freshnessDiff = compareFreshness(left, right);
-
-      if (freshnessDiff !== 0) {
-        return freshnessDiff;
-      }
-
-      const rightDiscount = right.automaticDiscountPercent ?? -1;
-      const leftDiscount = left.automaticDiscountPercent ?? -1;
-
-      return (rightDiscount - leftDiscount) || compareDisplayPriceAsc(left, right) || left.name.localeCompare(right.name, "es");
-    }
+      return compareUpdated(left, right);
+    case "relevance":
+      return compareRelevance(left, right, query);
+    default:
+      return compareDiscount(left, right);
   }
 }

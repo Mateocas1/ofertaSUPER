@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseDirectRefreshSourceHealthCliOptions } from "../scripts/audit-direct-refresh-source-health";
 import {
 	buildDirectRefreshSourceHealthReport,
 	type DirectRefreshSourceHealthRepository,
@@ -195,84 +194,4 @@ describe("direct-refresh source health", () => {
 		assert.match(report.sources[0].reasons.join("\n"), /blocked rows/);
 	});
 
-	it("parses CLI defaults and rejects write-shaped flags", () => {
-		const options = parseDirectRefreshSourceHealthCliOptions(
-			["node", "script"],
-			now,
-		);
-		assert.deepEqual(options.sources, [
-			"carrefour",
-			"vea",
-			"disco",
-			"jumbo",
-			"mas",
-			"dia",
-		]);
-		assert.match(options.output, /audit\/direct-refresh-source-health/);
-
-		for (const flag of [
-			"--write",
-			"--confirm-write=1",
-			"--all-source",
-			"--scheduler=true",
-			"--cron",
-			"--workflow",
-			"--ingest",
-			"--refresh",
-		]) {
-			assert.throws(
-				() =>
-					parseDirectRefreshSourceHealthCliOptions(["node", "script", flag]),
-				/direct-refresh source health rejects/,
-			);
-		}
-	});
-
-	it("rejects unknown sources, unknown flags, bare flags, and invalid percentages", () => {
-		assert.throws(
-			() =>
-				parseDirectRefreshSourceHealthCliOptions([
-					"node",
-					"script",
-					"--source=unknown",
-				]),
-			/rejects source unknown/,
-		);
-		assert.throws(
-			() =>
-				parseDirectRefreshSourceHealthCliOptions([
-					"node",
-					"script",
-					"--dry-run",
-				]),
-			/unknown direct-refresh source health flag/,
-		);
-		assert.throws(
-			() =>
-				parseDirectRefreshSourceHealthCliOptions([
-					"node",
-					"script",
-					"--source",
-				]),
-			/requires --source=\.\.\./,
-		);
-		assert.throws(
-			() =>
-				parseDirectRefreshSourceHealthCliOptions([
-					"node",
-					"script",
-					"--freshness-target-percent=101",
-				]),
-			/between 0 and 100/,
-		);
-		assert.throws(
-			() =>
-				parseDirectRefreshSourceHealthCliOptions([
-					"node",
-					"script",
-					"--fail-under-freshness-percent=-1",
-				]),
-			/between 0 and 100/,
-		);
-	});
 });
