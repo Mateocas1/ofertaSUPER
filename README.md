@@ -40,9 +40,14 @@ npm run lint              # ESLint
 npm run typecheck         # tsc --noEmit
 ```
 
-La actualización diaria en esta máquina corre por cron (`scripts/cron-refresh.sh`);
-el comando exacto, los frenos y la restauración del Postgres están en
-[docs/RUNBOOK.md](docs/RUNBOOK.md).
+La actualización diaria corre sola en la nube con GitHub Actions
+(`.github/workflows/daily-refresh.yml`): restaura el estado desde un dump de
+Postgres adjunto al release `db-state`, corre el mismo `npm run refresh:catalog`
+con sus frenos y commitea el snapshot a `master`. No depende de la PC y no
+necesita cuentas ni secretos extra (presupuesto USD 0). El cron local
+(`scripts/cron-refresh.sh`) queda como fallback manual, y solo puede haber UN
+escritor activo a la vez. El comando exacto, los frenos y la restauración del
+Postgres están en [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 ## Limitaciones honestas
 

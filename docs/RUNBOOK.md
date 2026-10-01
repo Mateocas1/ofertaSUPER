@@ -71,6 +71,73 @@ term). The first refresh (2026-09-28) landed at 79.6% / 85.5% / 84.1% per
 supermarket, below the 90% target: it was reported and the options were widening
 the coverage by EAN or accepting partial coverage in v1.
 
+## Cloud refresh (GitHub Actions)
+
+`.github/workflows/daily-refresh.yml` runs the same refresh on GitHub, so the
+catalog updates without the owner's PC. Budget is USD 0 and the repository is
+public: the state travels as a Postgres custom-format dump attached to the
+GitHub Release `db-state`, managed only with the workflow's built-in
+`GITHUB_TOKEN`. No new accounts or repository secrets are needed.
+
+Each run (10:00 UTC daily, plus `workflow_dispatch` with a `dry_run` input that
+restores and refreshes but never uploads or commits):
+
+1. Starts an ephemeral `postgres:16-bookworm` service container.
+2. `scripts/db-state.sh download` fetches the newest `ofertasuper-<date>.dump`
+   asset of the `db-state` release and `scripts/db-state.sh restore` loads it
+   with `pg_restore --no-owner --no-acl`. A missing release or asset fails the
+   run with `db-state: NO_STATE_ASSET`; the first asset is seeded from the local
+   database (below).
+3. `npx prisma migrate deploy`, then `npm run refresh:catalog` with exactly the
+   same gates as the local run (failed batches, freshness <90%, a source with
+   >20% failed reads, `VTEX_HASH_UNAVAILABLE`). A tripped gate publishes
+   nothing.
+4. On success: `scripts/db-state.sh dump` writes the new state, `upload` stores
+   it as `ofertasuper-<UTC date>.dump`, and `prune` keeps the newest 14 assets.
+   Only then the workflow commits `data/catalog-snapshot.json` to `master` as
+   `github-actions[bot]` (`chore(catalog): refresh <date> [cloud]`). The dump is
+   uploaded before the push, so database state and snapshot never diverge.
+5. On failure: the job fails (GitHub emails the owner for scheduled runs) and a
+   step opens, or comments on, the single open issue labelled
+   `refresh-failure`, with the run URL and the greppable reason; the next
+   successful run closes it.
+
+The workflow serializes runs with `concurrency: daily-refresh`, requests only
+`contents: write` and `issues: write`, times out after 60 minutes, pins every
+action by commit SHA and takes Node from `.nvmrc`. It never prints the database
+URL or any credential.
+
+**Only one writer may be active.** Once the cloud job is green, the owner
+removes the local crontab line (`crontab -e`) so the PC and the cloud never race
+for the same snapshot; `scripts/cron-refresh.sh` stays available for manual
+runs. The `db-state` release holds the one writer's state and must never be
+written from two places at once.
+
+### Seeding the first `db-state` asset
+
+One-time, from the local machine with the local Postgres running:
+
+```bash
+mkdir -p ~/backups && docker exec ofertasuper-cmvp-local-bootstrap-postgres-1 \
+  pg_dump -U ofertasuper_owner -d ofertasuper -Fc --no-owner --no-acl \
+  > ~/backups/ofertasuper-$(date +%F).dump
+gh release create db-state --title "Catalog database state" \
+  --notes "Rolling Postgres state for the cloud refresh."
+gh release upload db-state ~/backups/ofertasuper-$(date +%F).dump
+```
+
+If the release already exists, `scripts/db-state.sh upload <dump>` does the same
+with `--clobber` and creates the release when it is missing.
+
+### Inspecting the cloud state
+
+```bash
+GH_TOKEN=$(gh auth token) scripts/db-state.sh download /tmp/db-state
+pg_restore --list /tmp/db-state/ofertasuper-*.dump | head
+```
+
+The dump contains only the public catalog data: no roles, no ACLs, no secrets.
+
 ## Daily cron
 
 1. **Script:** `scripts/cron-refresh.sh`. It works in a dedicated worktree
@@ -78,6 +145,10 @@ the coverage by EAN or accepting partial coverage in v1.
    guardrail) that returns to `origin/master` before each run (fetch + detach
    checkout; it never touches other worktrees). It uses `flock` to avoid
    overlapping runs.
+
+   **Retired once the cloud job is green.** The cloud workflow is the only
+   writer; the local crontab line is removed (see "Cloud refresh" above) and
+   this section becomes the manual fallback.
 2. **Backup:** the script runs the day's `pg_dump` before writing.
 3. **Publication:** it creates branch `chore/catalog-refresh-<YYYYMMDD>`,
    commits only `data/catalog-snapshot.json`, opens a PR and runs
