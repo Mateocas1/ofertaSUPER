@@ -14,6 +14,8 @@ const expectedGtins = [
   "7790000000034",
   "7790000000041",
 ];
+// Artifacts record the canonical GTIN-14 identity of every requested EAN-13.
+const canonicalGtins = expectedGtins.map((gtin) => gtin.padStart(14, "0"));
 
 function request(overrides: Partial<CmvpFirstBatchRequest> = {}): CmvpFirstBatchRequest {
   return {
@@ -119,8 +121,8 @@ describe("CMVP first-batch acquisition", () => {
     const result = await runCmvpFirstBatch(request(), deps);
 
     assert.deepEqual(deps.calls, ["acquire"]);
-    assert.deepEqual(result.artifact.fetchedGtins, expectedGtins);
-    assert.deepEqual(result.artifact.admittedGtins, expectedGtins);
+    assert.deepEqual(result.artifact.fetchedGtins, canonicalGtins);
+    assert.deepEqual(result.artifact.admittedGtins, canonicalGtins);
     assert.equal(result.artifact.dryRun, true);
     assert.equal(result.artifact.contractDigest.length, 64);
     assert.deepEqual(result.artifact.runs, [{
@@ -178,7 +180,7 @@ describe("CMVP first-batch acquisition", () => {
     assert.equal(mismatched.artifact.state, "blocked");
     assert.deepEqual(mismatch.calls, ["save", "save", "finalize:FAILED", "save"]);
     assert.equal(mismatchCheckpoint.value?.state, "blocked");
-    assert.deepEqual(mismatchCheckpoint.value?.fetchedGtins, expectedGtins);
+    assert.deepEqual(mismatchCheckpoint.value?.fetchedGtins, canonicalGtins);
     const mismatchReplay = dependencies({ loadArtifact: async () => mismatchCheckpoint.value });
     await runCmvpFirstBatch(request({ dryRun: false, confirmWrite: true }), mismatchReplay);
     assert.deepEqual(mismatchReplay.calls, []);

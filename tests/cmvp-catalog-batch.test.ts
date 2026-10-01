@@ -9,6 +9,8 @@ import {
 import { replaceCheckpointAtomically } from "../scripts/acquire-cmvp-catalog-batch";
 
 const expectedGtins = ["7790000000003", "7790000000010"];
+// Artifacts record the canonical GTIN-14 identity of every requested EAN-13.
+const canonicalGtins = expectedGtins.map((gtin) => gtin.padStart(14, "0"));
 
 function request(overrides: Partial<CmvpCatalogBatchRequest> = {}): CmvpCatalogBatchRequest {
   return {
@@ -98,8 +100,8 @@ describe("CMVP catalog batch", () => {
     const result = await runCmvpCatalogBatch(request(), dependencies());
     assert.equal(result.artifact.state, "completed");
     assert.equal(result.artifact.contractDigest.length, 64);
-    assert.deepEqual(result.artifact.expectedGtins, expectedGtins);
-    assert.deepEqual(result.artifact.fetchedGtins, expectedGtins);
+    assert.deepEqual(result.artifact.expectedGtins, canonicalGtins);
+    assert.deepEqual(result.artifact.fetchedGtins, canonicalGtins);
   });
 
   it("persists a durable pre-acquisition checkpoint and resumes reconciliation without reacquiring", async () => {

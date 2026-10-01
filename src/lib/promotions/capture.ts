@@ -1,5 +1,6 @@
 import axios from "axios";
 
+import { gtinLookupForms, normalizeGtin } from "../identity/gtin";
 import { parseSimplePromotion, type SimplePromotion } from "./simple-promos";
 
 export type { SimplePromotion };
@@ -48,7 +49,8 @@ function recordsOf(payload: unknown): Record<string, unknown>[] {
 
 function sellerTeasers(record: Record<string, unknown>, ean: string | null): Record<string, unknown>[] {
 	const items = Array.isArray(record.items) ? record.items.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object") : [];
-	const matchingItems = items.filter((item) => ean === null || item.ean === ean);
+	const key = ean === null ? null : normalizeGtin(ean) ?? ean;
+	const matchingItems = items.filter((item) => key === null || (typeof item.ean === "string" && (normalizeGtin(item.ean) ?? item.ean) === key));
 	const teasers: Record<string, unknown>[] = [];
 	for (const item of matchingItems) {
 		const sellers = Array.isArray(item.sellers) ? item.sellers.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object") : [];
@@ -77,14 +79,9 @@ export function extractSimplePromotionFromPayload(payload: unknown, ean: string 
 	return null;
 }
 
-export async function fetchSearchPayloadByEan(
-	baseUrl: string,
-	ean: string,
-	dependencies: PromoCaptureDependencies = {},
-): Promise<unknown> {
-	const http = dependencies.http ?? defaultHttp(baseUrl);
+async function fetchSearchPayloadByForm(http: VtexPromoHttpClient, baseUrl: string, form: string): Promise<unknown> {
 	const url = new URL("/api/catalog_system/pub/products/search", baseUrl);
-	url.search = `fq=alternateIds_Ean:${encodeURIComponent(ean)}`;
+	url.search = `fq=alternateIds_Ean:${encodeURIComponent(form)}`;
 	const response = await http.get(url.toString(), {
 		headers: {
 			"user-agent": "Mozilla/5.0 (X11; Linux x86_64) ofertaSUPER capture/1.0",
@@ -99,6 +96,23 @@ export async function fetchSearchPayloadByEan(
 
 	const raw = response.data;
 	return typeof raw === "string" ? JSON.parse(raw) : raw;
+}
+
+// Stored keys are canonical GTIN-14; sources publish the short form, so each
+// lookup form is tried in order until one returns products.
+export async function fetchSearchPayloadByEan(
+	baseUrl: string,
+	ean: string,
+	dependencies: PromoCaptureDependencies = {},
+): Promise<unknown> {
+	const http = dependencies.http ?? defaultHttp(baseUrl);
+	const forms = gtinLookupForms(ean);
+	let payload: unknown = [];
+	for (const form of forms.length > 0 ? forms : [ean]) {
+		payload = await fetchSearchPayloadByForm(http, baseUrl, form);
+		if (recordsOf(payload).length > 0) return payload;
+	}
+	return payload;
 }
 
 export async function fetchSimplePromotionByEan(

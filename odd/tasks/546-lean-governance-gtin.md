@@ -23,7 +23,7 @@ UPC-12 / EAN-13 / GTIN-14 of the same product share one key.
 - [x] T1 Archive tag `archive/full-governance` pushed (664674d). Route: inline.
 - [x] T2 Remove governance models, their scripts, tests and `package.json` entries; add a Prisma
       migration that drops the tables. Route: delegated writer (writer trigger: 2+ non-trivial files).
-- [ ] T3 GTIN-14 canonicalization in the identity module + data migration that rewrites and
+- [x] T3 GTIN-14 canonicalization in the identity module + data migration that rewrites and
       merges existing rows. Test-first (RED → GREEN). Route: delegated writer (same worker).
 - [ ] T4 Dump local DB, apply migrations, verify row counts and app tests. Route: inline.
 
@@ -38,7 +38,8 @@ mechanical; GTIN change kept as its own commit for review.
 ## Progress
 - 2026-10-01: T1 done.
 
-- 2026-10-01: T2 done (route: delegated writer). Evidence below.
+- 2026-10-01: T2 done (route: delegated writer), commit ce83699. Evidence below.
+- 2026-10-01: T3 done (route: delegated writer), commit recorded in the T3 commit message log. Evidence below.
 
 ### T2 evidence
 - Removed 39 Prisma models + 2 enums (`ProductionReadiness*`, `PublicationGrant`, `Approval*`,
@@ -61,5 +62,29 @@ mechanical; GTIN change kept as its own commit for review.
   17 DB-only skips), lint 178 → 156 warnings (0 new, diffed per rule), `audit:complexity` PASS,
   `next build --webpack` ok.
 
+### T3 evidence
+- `normalizeGtin` (src/lib/identity/gtin.ts) now returns the zero-left-padded GTIN-14 after the
+  checksum check; `gtinLookupForms` gives the short forms sources publish (EAN-13; UPC 13 then 12;
+  EAN-8 8 then 13). RED observed first: 6/8 new identity tests failing, then 7 more RED tests on
+  write paths (capture, top-up, VTEX direct lookup, reconcile, admin promotions, snapshot lookup,
+  basket batch) before each fix.
+- Write paths on the canonical key: VTEX normalization (stage, reconcile, legacy scraper,
+  discovery create), reconcile re-canonicalizes staged rows, admin promotion memberships.
+  Source reads (promo capture, top-up, direct lookups) query the short forms with fallback.
+  Reads accept any form (snapshot lookup, exact-EAN search rank, basket batch echoes the stored
+  key), so 13-digit links and baskets keep working while the committed snapshot changes.
+- Migration `prisma/migrations/20261001000100_canonicalize_gtin14`: under the reconcile advisory
+  lock, rewrites checksum-valid 8/12/13-digit keys in products, supermarket_products,
+  promotion_products and staging_product; merges collapsing products (attributes coalesced),
+  keeps the most recently checked offer per (GTIN-14, supermarket), moves price history onto it.
+  Scratch DB seeded with EAN-13 + existing GTIN-14, UPC-12 + EAN-13, EAN-8 and an invalid key:
+  products 7 → 5, offers 9 → 7, price history 10 rows preserved (3 merged onto offer 103, 2 onto
+  105), promotion memberships 3 → 2, invalid key untouched; second run changed nothing; all 28
+  migrations replay on an empty DB with no schema drift.
+- Checks: `prisma validate` ok, `tsc --noEmit` 0 errors, `npm test` 828/828 pass, lint 156
+  warnings (0 new vs T2), `audit:complexity` PASS, `next build --webpack` ok.
+- Not done here: the committed `data/catalog-snapshot.json` keeps 13-digit keys until the next
+  refresh after the migration runs (T4); product URLs then switch to 14 digits.
+
 ## Next step
-T3.
+T4: dump the local DB, apply both migrations, verify row counts, refresh the snapshot.

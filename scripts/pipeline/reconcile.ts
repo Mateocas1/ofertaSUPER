@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { db } from "../../src/lib/db";
+import { normalizeGtin } from "../../src/lib/identity/gtin";
 import type { EvaluatedStageCandidate } from "./validate";
 import type { SimplePromotion } from "../../src/lib/promotions/simple-promos";
 
@@ -354,7 +355,9 @@ export async function ensureReconcileAdvisoryLock(tx: AdvisoryLockClient) {
   }
 }
 
-async function loadCandidates(
+// Staged rows written before GTIN-14 canonicalization still carry their source
+// form; every reconcile write keys on the canonical GTIN-14.
+export async function loadCandidates(
   batchId: string,
   runId: number | undefined,
   client: CandidateLoaderClient,
@@ -398,7 +401,7 @@ async function loadCandidates(
     runId: product.run_id,
     acquiredAt: product.run?.started_at ?? null,
     sourceSlug: product.source_slug,
-    ean: product.ean,
+    ean: normalizeGtin(product.ean) ?? product.ean,
     name: product.name,
     brand: product.brand,
     description: product.description,

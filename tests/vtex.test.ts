@@ -95,7 +95,7 @@ describe("VTEX request builder", () => {
 		);
 
 		assert.equal(products.length, 1);
-		assert.equal(products[0].ean, "7790000000003");
+		assert.equal(products[0].ean, "07790000000003");
 		assert.equal(products[0].skuId, "sku-direct");
 		assert.equal(
 			products[0].productUrl,
@@ -216,7 +216,7 @@ describe("VTEX persisted-query term-search fallback", () => {
     assert.equal(dependency.urls.length, 2);
     assert.match(dependency.urls[0], /\/_v\/segment\/graphql\/v1\?/);
     assert.equal(dependency.urls[1], "https://www.example.com/api/catalog_system/pub/products/search?ft=leche+%26+crema&_from=0&_to=1");
-    assert.deepEqual(products.map((product) => product.ean), ["7790000000003"]);
+    assert.deepEqual(products.map((product) => product.ean), ["07790000000003"]);
     assert.equal(products.fallbackUsed, true);
   });
 
@@ -303,6 +303,18 @@ describe("VTEX persisted-query term-search fallback", () => {
     ]);
     assert.equal(eanProducts.fallbackUsed, undefined);
     assert.equal(skuProducts.fallbackUsed, undefined);
+  });
+
+  it("queries a stored canonical GTIN-14 by its source form and tries the UPC-12 form only when needed", async () => {
+    const ean13 = client({ data: JSON.stringify([catalogProduct("7790000000003")]) });
+    const found = await fetchVtexDirectProducts({ baseUrl, lookup: { kind: "ean", value: "07790000000003" }, dependencies: ean13 });
+    assert.deepEqual(ean13.urls, ["https://www.example.com/api/catalog_system/pub/products/search?fq=alternateIds_Ean:7790000000003"]);
+    assert.deepEqual(found.map((product) => product.ean), ["07790000000003"]);
+
+    const upc = client({ data: "[]" }, { data: JSON.stringify([catalogProduct("036000291452")]) });
+    const upcProducts = await fetchVtexDirectProducts({ baseUrl, lookup: { kind: "ean", value: "00036000291452" }, dependencies: upc });
+    assert.deepEqual(upc.urls.map((url) => url.split(":").at(-1)), ["0036000291452", "036000291452"]);
+    assert.deepEqual(upcProducts.map((product) => product.ean), ["00036000291452"]);
   });
 });
 
@@ -500,7 +512,7 @@ describe("VTEX product normalizer", () => {
       "https://www.disco.com.ar",
     );
 
-    assert.equal(product?.ean, "7790000000003");
+    assert.equal(product?.ean, "07790000000003");
     assert.equal(product?.name, "Leche Entera 1L");
     assert.equal(product?.brand, "La Serenisima");
     assert.equal(product?.price, 1200);
@@ -524,7 +536,7 @@ describe("VTEX product normalizer", () => {
       "https://www.disco.com.ar",
     );
 
-    assert.equal(product?.ean, "7790000000003");
+    assert.equal(product?.ean, "07790000000003");
   });
 
   it("rejects products without a valid checksummed EAN", () => {

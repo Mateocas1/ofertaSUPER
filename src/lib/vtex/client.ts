@@ -5,6 +5,7 @@ import {
 	buildVtexRequest,
 	type VtexCatalogLookup,
 } from "./encode";
+import { gtinLookupForms } from "../identity/gtin";
 import { normalizeProduct, type NormalizedProduct } from "./normalize";
 
 type LooseRecord = Record<string, unknown>;
@@ -467,12 +468,34 @@ export function normalizeVtexCatalogPayload(payload: unknown, baseUrl: string) {
 		.filter((product): product is NormalizedProduct => Boolean(product));
 }
 
+// Stored EAN keys are canonical GTIN-14; the source is asked for its published
+// short forms in order, stopping at the first form that returns products.
+function directLookups(lookup: VtexCatalogLookup): VtexCatalogLookup[] {
+	if (lookup.kind !== "ean") return [lookup];
+	const forms = gtinLookupForms(lookup.value);
+	return forms.length > 0 ? forms.map((value) => ({ kind: "ean", value })) : [lookup];
+}
+
 export async function fetchVtexDirectProducts({
 	baseUrl,
 	lookup,
 	retries = 3,
   dependencies = {},
 }: FetchVtexDirectProductsOptions): Promise<VtexProductsResult> {
+	let products: VtexProductsResult = [];
+	for (const sourceLookup of directLookups(lookup)) {
+		products = await fetchVtexDirectLookup(baseUrl, sourceLookup, retries, dependencies);
+		if (products.length > 0) return products;
+	}
+	return products;
+}
+
+async function fetchVtexDirectLookup(
+	baseUrl: string,
+	lookup: VtexCatalogLookup,
+	retries: number,
+	dependencies: VtexClientDependencies,
+): Promise<VtexProductsResult> {
 	let lastError: unknown;
 
 	for (let attempt = 1; attempt <= retries; attempt += 1) {

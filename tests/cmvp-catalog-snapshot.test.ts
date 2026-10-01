@@ -10,6 +10,8 @@ import { buildCmvpCatalogGateReport } from "../scripts/pipeline/cmvp-catalog-gat
 import { buildCmvpCatalogSnapshot, type CmvpCatalogSnapshotRepository, type CmvpTargetManifest } from "../scripts/pipeline/cmvp-catalog-snapshot";
 
 const ean = "7790000000003";
+// Snapshot rows and DB lookups use the canonical GTIN-14 of the manifest EAN-13.
+const canonicalEan = "07790000000003";
 const fixedNow = "2026-09-19T12:00:00.000Z";
 type GateInput = Omit<Parameters<typeof buildCmvpCatalogGateReport>[0], "now"> & { now?: string };
 const gate = (input: GateInput) => buildCmvpCatalogGateReport({ ...input, now: input.now ?? fixedNow });
@@ -24,7 +26,7 @@ describe("CMVP catalog snapshot", () => {
 	it("represents a valid normalized EAN with null optional observations and passes it to the gate", async () => {
 		const repository: CmvpCatalogSnapshotRepository = {
 			async listOffers(input) {
-				assert.deepEqual(input, { sources: ["carrefour", "disco", "jumbo"], productEans: [ean] });
+				assert.deepEqual(input, { sources: ["carrefour", "disco", "jumbo"], productEans: [canonicalEan] });
 				return [
 					{ source: "jumbo", productEan: "779 000000000-3", available: true, price: 1200, observedAt: "2026-09-19T11:00:00.000Z" },
 					{ source: "disco", productEan: ean, available: true, price: 1100, observedAt: "2026-09-19T10:00:00.000Z" },
@@ -49,8 +51,8 @@ describe("CMVP catalog snapshot", () => {
 				{ source: "jumbo", ean: "malformed", pack: "copied?", quantity: "9", measurementUnit: "kg", variant: "wrong" },
 			],
 		});
-		assert.deepEqual(generated.offers[0], { source: "disco", targetId: "milk-1l", ean, pack: null, quantity: "1 l", measurementUnit: "l", variant: "whole", available: true, price: 100, observedAt: "2026-09-19T11:00:00.000Z" });
-		assert.deepEqual(generated.identity.attributeConflicts, [{ source: "disco", ean, attributes: ["pack"] }]);
+		assert.deepEqual(generated.offers[0], { source: "disco", targetId: "milk-1l", ean: canonicalEan, pack: null, quantity: "1 l", measurementUnit: "l", variant: "whole", available: true, price: 100, observedAt: "2026-09-19T11:00:00.000Z" });
+		assert.deepEqual(generated.identity.attributeConflicts, [{ source: "disco", ean: canonicalEan, attributes: ["pack"] }]);
 	});
 
 	it("rejects invalid and mismatched EAN rows while retaining deterministic output ordering", async () => {
@@ -89,7 +91,7 @@ describe("CMVP catalog snapshot", () => {
 			schemaVersion: 1,
 			cycleId: "cycle-003",
 			observedAt: "2026-09-19T12:00:00.000Z",
-			offers: [{ source: "disco", targetId: "milk-1l", ean, pack: null, quantity: null, measurementUnit: null, variant: null, available: true, price: 100, observedAt: "2026-09-19T11:00:00.000Z" }],
+			offers: [{ source: "disco", targetId: "milk-1l", ean: canonicalEan, pack: null, quantity: null, measurementUnit: null, variant: null, available: true, price: 100, observedAt: "2026-09-19T11:00:00.000Z" }],
 			readOnly: true,
 			identity: { missingStructuredEvidenceIsUnproven: false, attributeConflicts: [] },
 		});

@@ -65,6 +65,21 @@ describe("offer top-up read", () => {	it("returns the observation for a successf
 		assert.equal(read.observation?.price, 2870);
 	});
 
+	it("reads a stored canonical GTIN-14 offer against the source EAN-13 payload", async () => {
+		const urls: string[] = [];
+		const read = await readTopUpOffer("https://www.carrefour.com.ar", "07791337007260", {
+			http: {
+				get: async (url: string) => {
+					urls.push(url);
+					return { data: JSON.stringify(carrefourPayload), status: 200, headers: { "content-type": "application/json" } };
+				},
+			},
+		});
+		assert.equal(urls[0]?.endsWith("fq=alternateIds_Ean:7791337007260"), true);
+		assert.equal(read.observation?.found, true);
+		assert.equal(read.observation?.price, 2870);
+	});
+
 	it("returns ok:false for a failed read so the offer stays untouched", async () => {
 		const read = await readTopUpOffer("https://www.carrefour.com.ar", "7791337007260", {
 			http: {

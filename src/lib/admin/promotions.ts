@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma, type PromotionType as PrismaPromotionType } from "@prisma/client";
 
 import { db } from "@/lib/db";
+import { normalizeGtin } from "@/lib/identity/gtin";
 import type {
   AdminPromotionRecord,
   AdminPromotionStatus,
@@ -86,8 +87,17 @@ function getPromotionLifecycleStatus(
   return "active";
 }
 
-function normalizeProductEans(productEans: string[]) {
-  return [...new Set(productEans.map((entry) => entry.trim()).filter(Boolean))];
+// Memberships key on the canonical GTIN-14; an invalid entry is kept verbatim so
+// the existence check names it back to the admin.
+export function normalizeProductEans(productEans: string[]) {
+  return [
+    ...new Set(
+      productEans
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .map((entry) => normalizeGtin(entry) ?? entry),
+    ),
+  ];
 }
 
 function toDate(value: string | undefined) {

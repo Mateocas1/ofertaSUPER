@@ -237,9 +237,11 @@ export async function handleProductsBatch(request: NextRequest, deps: PublicApiD
   try {
     const { eans } = basketProductsBodySchema.parse(await request.json());
     const now = deps.now();
+    // A basket may hold any GTIN form of a product (EAN-13 from before the
+    // GTIN-14 canonicalization); each item answers under the key it was asked by.
     const items = eans.flatMap((ean) => {
       const detail = findSnapshotAdaptedProduct(ean, now);
-      return detail ? [toBasketProduct(detail)] : [];
+      return detail ? [{ ...toBasketProduct(detail), ean }] : [];
     });
     body = {
       items,

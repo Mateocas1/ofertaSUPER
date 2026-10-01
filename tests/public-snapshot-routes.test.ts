@@ -215,6 +215,19 @@ describe("public catalog handlers serve the committed snapshot", () => {
     }
   });
 
+  it("products batch answers each basket key in the form the client stored it", async () => {
+    const canonical = SNAPSHOT_EAN.padStart(14, "0");
+    for (const stored of [SNAPSHOT_EAN, canonical]) {
+      const response = await handleProductsBatch(
+        request("/api/products/batch", { method: "POST", body: JSON.stringify({ eans: [stored] }) }),
+        deps("admit"),
+      );
+      const body = basketProductsResponseSchema.parse(await response.json());
+      assert.deepEqual(body.items.map((item) => item.ean), [stored], stored);
+      assert.deepEqual(body.missing, [], stored);
+    }
+  });
+
   it("products batch rejects invalid bodies with 400 and exhausted budgets with 429", async () => {
     const invalid = await handleProductsBatch(
       request("/api/products/batch", { method: "POST", body: "not json" }),
