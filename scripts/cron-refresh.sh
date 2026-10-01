@@ -16,6 +16,16 @@ NETWORK="ofertasuper-cmvp-local-bootstrap_default"
 MIGRATE_IMAGE="ofertasuper-cmvp-local-bootstrap-migrate:latest"
 
 mkdir -p "$LOG_DIR" "$HOME/backups"
+
+# The crontab fires every hour from 10:00 to 23:00 UTC so a day missed while
+# the machine was off or Docker was down still gets its refresh. Only the
+# first run that reaches the catalog refresh counts: a gate failure is not
+# retried, so the supermarkets are scraped at most once a day.
+ATTEMPTED="$LOG_DIR/attempted-$DATE"
+if [ -e "$ATTEMPTED" ]; then
+  exit 0
+fi
+
 LOG="$LOG_DIR/refresh-$DATE.log"
 exec >>"$LOG" 2>&1
 echo "=== refresh $STAMP started $(date -Is) ==="
@@ -30,10 +40,25 @@ fi
 
 cd "$REFRESH_WORKTREE"
 
+# The container has restart=unless-stopped, but a WSL/PC shutdown can still
+# leave it exited; start it and wait until it accepts connections.
+if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null)" != "true" ]; then
+  echo "starting $CONTAINER"
+  docker start "$CONTAINER" > /dev/null
+fi
+for _ in $(seq 1 30); do
+  if docker exec "$CONTAINER" pg_isready -q -U ofertasuper_owner -d ofertasuper; then
+    break
+  fi
+  sleep 2
+done
+
 # Guardrail 10: backup before the first write of the day.
 BACKUP="$HOME/backups/ofertasuper-$DATE.dump"
 if [ ! -s "$BACKUP" ]; then
-  docker exec "$CONTAINER" pg_dump -U ofertasuper_owner -d ofertasuper -Fc > "$BACKUP"
+  # Dump to a temporary file so a failed pg_dump never leaves an empty backup.
+  docker exec "$CONTAINER" pg_dump -U ofertasuper_owner -d ofertasuper -Fc > "$BACKUP.tmp"
+  mv "$BACKUP.tmp" "$BACKUP"
 fi
 if [ ! -s "$BACKUP" ]; then
   echo "backup is empty; aborting"
@@ -63,6 +88,7 @@ if [ ! -d node_modules ] || [ ! -f node_modules/.lock-hash ] || [ "$(cat node_mo
 fi
 npx prisma generate
 
+touch "$ATTEMPTED"
 if ! docker run --rm --network "$NETWORK" -v "$REFRESH_WORKTREE":/app -w /app \
   -e DATABASE_URL -e DIRECT_URL \
   --entrypoint npm "$MIGRATE_IMAGE" run refresh:catalog; then
