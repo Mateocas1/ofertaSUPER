@@ -72,6 +72,29 @@ export type DirectRefreshKillSwitchInactiveControl = {
 const WRITE_BOUNDARY =
 	"read-only direct-refresh kill switch evaluation; no production writes, no scheduler/cron/workflow/all-source/retry side effects, no notification delivery" as const;
 
+function evaluatedSourcesFor(source: DirectRefreshHealthSourceSlug | null) {
+	return source ? [source] : [...DIRECT_REFRESH_HEALTH_SOURCES];
+}
+
+function killSwitchStatus(
+	activeControlCount: number,
+	invalidControlCount: number,
+): DirectRefreshKillSwitchStatus {
+	return activeControlCount > 0 || invalidControlCount > 0 ? "FAIL" : "PASS";
+}
+
+function killSwitchRecommendation(status: DirectRefreshKillSwitchStatus) {
+	return status === "PASS"
+		? "No active kill switch stop applies; continue only through approved controlled manual gates."
+		: "Stop direct-refresh operation until active or invalid kill switch controls are resolved.";
+}
+
+function expiredStopCount(
+	inactiveControls: DirectRefreshKillSwitchInactiveControl[],
+) {
+	return inactiveControls.filter((control) => control.expired).length;
+}
+
 export function evaluateDirectRefreshKillSwitch({
 	control,
 	source = null,
@@ -83,48 +106,36 @@ export function evaluateDirectRefreshKillSwitch({
 	controlPath?: string | null;
 	now?: Date;
 }): DirectRefreshKillSwitchReport {
-	const evaluatedSources = source ? [source] : [...DIRECT_REFRESH_HEALTH_SOURCES];
+	const evaluatedSources = evaluatedSourcesFor(source);
 	const invalidControls: Array<{ path: string | null; message: string }> = [];
 	const activeControls: DirectRefreshKillSwitchActiveControl[] = [];
 	const inactiveControls: DirectRefreshKillSwitchInactiveControl[] = [];
 	const parsed = parseControl(control, controlPath, invalidControls);
 
 	if (parsed) {
-		collectControl({
+		collectGlobalControl({
 			entry: parsed.global ?? null,
-			scope: "global",
-			source: null,
-			applies: true,
 			now,
 			controlPath,
 			activeControls,
 			inactiveControls,
 			invalidControls,
 		});
-		const sources = parsed.sources ?? {};
-		for (const key of Object.keys(sources)) {
-			if (!isDirectRefreshSource(key)) {
-				invalidControls.push({
-					path: controlPath,
-					message: `unknown direct-refresh kill switch source ${key}`,
-				});
-				continue;
-			}
-			collectControl({
-				entry: sources[key] ?? null,
-				scope: "source",
-				source: key,
-				applies: evaluatedSources.includes(key),
-				now,
-				controlPath,
-				activeControls,
-				inactiveControls,
-				invalidControls,
-			});
-		}
+		collectSourceControls({
+			sources: parsed.sources ?? {},
+			evaluatedSources,
+			now,
+			controlPath,
+			activeControls,
+			inactiveControls,
+			invalidControls,
+		});
 	}
 
-	const status = activeControls.length > 0 || invalidControls.length > 0 ? "FAIL" : "PASS";
+	const status = killSwitchStatus(
+		activeControls.length,
+		invalidControls.length,
+	);
 	return {
 		schemaVersion: 1,
 		audit: "direct-refresh-kill-switch",
@@ -137,17 +148,14 @@ export function evaluateDirectRefreshKillSwitch({
 		summary: {
 			evaluatedSources,
 			activeStopCount: activeControls.length,
-			expiredStopCount: inactiveControls.filter((control) => control.expired).length,
+			expiredStopCount: expiredStopCount(inactiveControls),
 			invalidControlCount: invalidControls.length,
 			schedulerGate: "blocked",
 		},
 		activeControls,
 		inactiveControls,
 		invalidControls,
-		recommendation:
-			status === "PASS"
-				? "No active kill switch stop applies; continue only through approved controlled manual gates."
-				: "Stop direct-refresh operation until active or invalid kill switch controls are resolved.",
+		recommendation: killSwitchRecommendation(status),
 	};
 }
 
@@ -173,6 +181,18 @@ export function assertDirectRefreshKillSwitchAllowsSource({
 	);
 }
 
+function pushInvalidControl(
+	invalidControls: Array<{ path: string | null; message: string }>,
+	controlPath: string | null,
+	message: string,
+) {
+	invalidControls.push({ path: controlPath, message });
+}
+
+function isOptionalRecord(value: unknown) {
+	return value === undefined || value === null || asRecord(value) !== null;
+}
+
 function parseControl(
 	control: unknown,
 	controlPath: string | null,
@@ -180,23 +200,106 @@ function parseControl(
 ) {
 	const object = asRecord(control);
 	if (!object) {
-		invalidControls.push({ path: controlPath, message: "kill switch control must be an object" });
+		pushInvalidControl(
+			invalidControls,
+			controlPath,
+			"kill switch control must be an object",
+		);
 		return null;
 	}
 	if (object.schemaVersion !== 1 || object.control !== "direct-refresh-kill-switch") {
-		invalidControls.push({ path: controlPath, message: "invalid direct-refresh kill switch schema" });
+		pushInvalidControl(
+			invalidControls,
+			controlPath,
+			"invalid direct-refresh kill switch schema",
+		);
 		return null;
 	}
-	if (object.global !== undefined && object.global !== null && !asRecord(object.global)) {
-		invalidControls.push({ path: controlPath, message: "global kill switch control must be an object" });
+	if (!isOptionalRecord(object.global)) {
+		pushInvalidControl(
+			invalidControls,
+			controlPath,
+			"global kill switch control must be an object",
+		);
 	}
-	if (object.sources !== undefined && object.sources !== null && !asRecord(object.sources)) {
-		invalidControls.push({ path: controlPath, message: "sources kill switch controls must be an object" });
+	if (!isOptionalRecord(object.sources)) {
+		pushInvalidControl(
+			invalidControls,
+			controlPath,
+			"sources kill switch controls must be an object",
+		);
 	}
 	return {
 		global: asRecord(object.global) as DirectRefreshKillSwitchControlEntry | null,
 		sources: (asRecord(object.sources) ?? {}) as Record<string, DirectRefreshKillSwitchControlEntry>,
 	};
+}
+
+function collectGlobalControl({
+	entry,
+	now,
+	controlPath,
+	activeControls,
+	inactiveControls,
+	invalidControls,
+}: {
+	entry: DirectRefreshKillSwitchControlEntry | null;
+	now: Date;
+	controlPath: string | null;
+	activeControls: DirectRefreshKillSwitchActiveControl[];
+	inactiveControls: DirectRefreshKillSwitchInactiveControl[];
+	invalidControls: Array<{ path: string | null; message: string }>;
+}) {
+	collectControl({
+		entry,
+		scope: "global",
+		source: null,
+		applies: true,
+		now,
+		controlPath,
+		activeControls,
+		inactiveControls,
+		invalidControls,
+	});
+}
+
+function collectSourceControls({
+	sources,
+	evaluatedSources,
+	now,
+	controlPath,
+	activeControls,
+	inactiveControls,
+	invalidControls,
+}: {
+	sources: Record<string, DirectRefreshKillSwitchControlEntry>;
+	evaluatedSources: DirectRefreshHealthSourceSlug[];
+	now: Date;
+	controlPath: string | null;
+	activeControls: DirectRefreshKillSwitchActiveControl[];
+	inactiveControls: DirectRefreshKillSwitchInactiveControl[];
+	invalidControls: Array<{ path: string | null; message: string }>;
+}) {
+	for (const key of Object.keys(sources)) {
+		if (!isDirectRefreshSource(key)) {
+			invalidControls.push({
+				path: controlPath,
+				message: `unknown direct-refresh kill switch source ${key}`,
+			});
+			continue;
+		}
+		collectControl({
+			entry: sources[key] ?? null,
+			scope: "source",
+			source: key,
+			applies: evaluatedSources.includes(key),
+			now,
+			controlPath,
+			activeControls,
+			inactiveControls,
+			invalidControls,
+		});
+	}
 }
 
 function collectControl({
@@ -229,17 +332,68 @@ function collectControl({
 	const expiresAt = normalizeOptionalIso(entry.expiresAt, `${controlLabel(scope, source)} expiresAt`, controlPath, invalidControls);
 	const expired = expiresAt ? new Date(expiresAt).getTime() <= now.getTime() : false;
 	if (!entry.stop || !applies || expired) {
-		inactiveControls.push({
-			scope,
-			source,
-			reason: stringOrNull(entry.reason),
-			owner: stringOrNull(entry.owner),
-			createdAt,
-			expiresAt,
-			expired,
-		});
+		pushInactiveControl({ scope, source, entry, createdAt, expiresAt, expired, inactiveControls });
 		return;
 	}
+	pushActiveControl({
+		scope,
+		source,
+		entry,
+		createdAt,
+		expiresAt,
+		controlPath,
+		activeControls,
+		invalidControls,
+	});
+}
+
+function pushInactiveControl({
+	scope,
+	source,
+	entry,
+	createdAt,
+	expiresAt,
+	expired,
+	inactiveControls,
+}: {
+	scope: DirectRefreshKillSwitchScope;
+	source: DirectRefreshHealthSourceSlug | null;
+	entry: DirectRefreshKillSwitchControlEntry;
+	createdAt: string | null;
+	expiresAt: string | null;
+	expired: boolean;
+	inactiveControls: DirectRefreshKillSwitchInactiveControl[];
+}) {
+	inactiveControls.push({
+		scope,
+		source,
+		reason: stringOrNull(entry.reason),
+		owner: stringOrNull(entry.owner),
+		createdAt,
+		expiresAt,
+		expired,
+	});
+}
+
+function pushActiveControl({
+	scope,
+	source,
+	entry,
+	createdAt,
+	expiresAt,
+	controlPath,
+	activeControls,
+	invalidControls,
+}: {
+	scope: DirectRefreshKillSwitchScope;
+	source: DirectRefreshHealthSourceSlug | null;
+	entry: DirectRefreshKillSwitchControlEntry;
+	createdAt: string | null;
+	expiresAt: string | null;
+	controlPath: string | null;
+	activeControls: DirectRefreshKillSwitchActiveControl[];
+	invalidControls: Array<{ path: string | null; message: string }>;
+}) {
 	const reason = stringOrNull(entry.reason);
 	const owner = stringOrNull(entry.owner);
 	if (!reason) invalidControls.push({ path: controlPath, message: `${controlLabel(scope, source)} active stop requires reason` });
