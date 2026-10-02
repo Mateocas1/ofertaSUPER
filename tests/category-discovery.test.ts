@@ -11,7 +11,6 @@ import {
   normalizeCategoryName,
   parseCategoryTree,
   parseDiscoveryConfig,
-  type CategoryTreeNode,
   type DiscoveryConfig,
 } from "../src/lib/discovery/category-plan";
 

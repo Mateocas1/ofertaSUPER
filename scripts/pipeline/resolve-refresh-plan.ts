@@ -38,29 +38,35 @@ export type ResolveRefreshPlanDependencies = {
   baseUrlFor?: (source: string) => string;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isNonBlankString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function parseFrozenBatch(entry: unknown, index: number): RefreshPlanBatch {
-  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+  if (!isRecord(entry)) {
     throw new Error(`invalid frozen plan: batch ${index} must be an object`);
   }
-  const batch = entry as Record<string, unknown>;
-  if (
-    !Number.isInteger(batch.ordinal) ||
-    typeof batch.source !== "string" ||
-    !batch.source.trim() ||
-    typeof batch.term !== "string" ||
-    !batch.term.trim() ||
-    !Number.isInteger(batch.count) ||
-    (batch.count as number) < 1 ||
-    !Array.isArray(batch.expectedGtins)
-  ) {
+  const { ordinal, source, term, count, expectedGtins } = entry;
+  const malformed =
+    !Number.isInteger(ordinal) ||
+    !isNonBlankString(source) ||
+    !isNonBlankString(term) ||
+    !Number.isInteger(count) ||
+    (count as number) < 1 ||
+    !Array.isArray(expectedGtins);
+  if (malformed) {
     throw new Error(`invalid frozen plan: batch ${index} is malformed`);
   }
   return {
-    ordinal: batch.ordinal as number,
-    source: batch.source,
-    term: batch.term,
-    count: batch.count as number,
-    expectedGtins: batch.expectedGtins.map((gtin) => String(gtin)),
+    ordinal: ordinal as number,
+    source,
+    term,
+    count: count as number,
+    expectedGtins: expectedGtins.map((gtin) => String(gtin)),
   };
 }
 
@@ -74,6 +80,39 @@ export function parseFrozenPlan(payload: unknown): RefreshPlanBatch[] {
 
 function isSupportedSource(source: string): boolean {
   return (CMVP_CATALOG_SOURCES as readonly string[]).includes(source);
+}
+
+async function discoverRefreshPlan({
+  read,
+  fetchTree,
+  baseUrlFor,
+  configPath,
+}: {
+  read: (path: string) => Promise<string>;
+  fetchTree: (args: { source: string; baseUrl: string }) => Promise<unknown>;
+  baseUrlFor: (source: string) => string;
+  configPath: string;
+}): Promise<RefreshPlanResolution> {
+  const config = parseDiscoveryConfig(JSON.parse(await read(configPath)));
+  const treesBySource: Record<string, CategoryTreeNode[]> = {};
+  for (const source of Object.keys(config.departments)) {
+    if (!isSupportedSource(source)) {
+      throw new Error(`source ${source} is not an acquisition source`);
+    }
+    treesBySource[source] = parseCategoryTree(await fetchTree({ source, baseUrl: baseUrlFor(source) }));
+  }
+  const plan = buildDiscoveryPlan({ config, treesBySource });
+  if (plan.batches.length === 0) {
+    throw new Error("discovery matched no allowlisted category");
+  }
+  return {
+    mode: "discovered",
+    batches: plan.batches.map((batch) => ({ ...batch, expectedGtins: [] })),
+    reason: null,
+    categoriesConsidered: plan.categoriesConsidered,
+    departmentsMatched: plan.departmentsMatched,
+    truncated: plan.truncated,
+  };
 }
 
 export async function resolveRefreshPlan({
@@ -95,26 +134,7 @@ export async function resolveRefreshPlan({
   };
 
   try {
-    const config = parseDiscoveryConfig(JSON.parse(await read(configPath)));
-    const treesBySource: Record<string, CategoryTreeNode[]> = {};
-    for (const source of Object.keys(config.departments)) {
-      if (!isSupportedSource(source)) {
-        throw new Error(`source ${source} is not an acquisition source`);
-      }
-      treesBySource[source] = parseCategoryTree(await fetchTree({ source, baseUrl: baseUrlFor(source) }));
-    }
-    const plan = buildDiscoveryPlan({ config, treesBySource });
-    if (plan.batches.length === 0) {
-      throw new Error("discovery matched no allowlisted category");
-    }
-    return {
-      mode: "discovered",
-      batches: plan.batches.map((batch) => ({ ...batch, expectedGtins: [] })),
-      reason: null,
-      categoriesConsidered: plan.categoriesConsidered,
-      departmentsMatched: plan.departmentsMatched,
-      truncated: plan.truncated,
-    };
+    return await discoverRefreshPlan({ read, fetchTree, baseUrlFor, configPath });
   } catch (error) {
     return fallback(error instanceof Error ? error.message : String(error));
   }

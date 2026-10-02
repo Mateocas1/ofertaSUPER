@@ -195,9 +195,7 @@ async function resolveHashForSource(source: string, explicitHash: string | null)
   return resolved.hash;
 }
 
-async function main() {
-  const explicitHash = process.env.VTEX_SHA256_HASH ?? null;
-  const runStartedAt = new Date();
+async function resolvePlanForRun(): Promise<PlanBatch[]> {
   const resolution = await resolveRefreshPlan({ configPath: DISCOVERY_CONFIG_PATH, frozenPlanPath: FALLBACK_PLAN_PATH });
   process.stdout.write(`[refresh] plan: ${resolution.mode}\n`);
   if (resolution.mode === "discovered") {
@@ -205,7 +203,25 @@ async function main() {
   } else {
     process.stdout.write(`[refresh] discovery failed (using the frozen plan): ${resolution.reason}\n`);
   }
-  const plan: { batches: PlanBatch[] } = { batches: resolution.batches };
+  return resolution.batches;
+}
+
+// Staging retention (#547) runs only after a publishable refresh: the run
+// already produced a snapshot, so a retention hiccup must never block the
+// publish. It deletes only `staging_product` rows older than the window.
+async function runStagingRetention() {
+  try {
+    const retention = await pruneStagingProducts({ client: db });
+    process.stdout.write(`[refresh] staging retention: deleted=${retention.deleted} olderThanDays=${retention.retentionDays} batches=${retention.batches}\n`);
+  } catch (error) {
+    process.stdout.write(`[refresh] staging retention failed: ${error instanceof Error ? error.message : String(error)}\n`);
+  }
+}
+
+async function main() {
+  const explicitHash = process.env.VTEX_SHA256_HASH ?? null;
+  const runStartedAt = new Date();
+  const plan: { batches: PlanBatch[] } = { batches: await resolvePlanForRun() };
   const stamp = readFlag("date") ?? todayStamp();
   const only = readFlag("batch") !== undefined ? Number(readFlag("batch")) : null;
   const batches = only !== null ? plan.batches.filter((batch) => batch.ordinal === only) : plan.batches;
@@ -237,17 +253,7 @@ async function main() {
   const freshness = await freshnessBySupermarket();
   const publishable = printSummary(stamp, ok, failures, promosCaptured, promoReadsFailed, topUp, freshness, rejected);
 
-  // Staging retention (#547) runs only after a publishable refresh: the run
-  // already produced a snapshot, so a retention hiccup must never block the
-  // publish. It deletes only `staging_product` rows older than the window.
-  if (publishable) {
-    try {
-      const retention = await pruneStagingProducts({ client: db });
-      process.stdout.write(`[refresh] staging retention: deleted=${retention.deleted} olderThanDays=${retention.retentionDays} batches=${retention.batches}\n`);
-    } catch (error) {
-      process.stdout.write(`[refresh] staging retention failed: ${error instanceof Error ? error.message : String(error)}\n`);
-    }
-  }
+  if (publishable) await runStagingRetention();
 
   await db.$disconnect();
 }
