@@ -84,7 +84,7 @@ describe("CMVP catalog batch", () => {
     }
   });
 
-  it("enforces one source, one nonblank term, and 1..25 distinct normalized expected GTINs before effects", async () => {
+  it("enforces one source, one nonblank term, and 1..25 distinct normalized expected GTINs for a frozen-plan batch", async () => {
     const deps = dependencies();
     for (const invalid of [
       request({ source: "disco,jumbo" }),
@@ -95,6 +95,24 @@ describe("CMVP catalog batch", () => {
       request({ expectedGtins: [expectedGtins[0]], count: 2 }),
     ]) await assert.rejects(() => runCmvpCatalogBatch(invalid, deps));
     assert.deepEqual(deps.calls, []);
+  });
+
+  it("lets a discovered refresh batch search up to 50 results with no expected GTINs", async () => {
+    const admitted = ["7790000000003"];
+    const refreshDependencies = () => dependencies({
+      acquire: async () => ({ runId: 12, startedAt: "2026-03-11T00:00:00.000Z", finishedAt: "2026-03-11T00:00:01.000Z", fetchedGtins: [...admitted], admittedGtins: [...admitted], rejectedCount: 0, rejectedProducts: [], error: null }),
+    });
+
+    const result = await runCmvpCatalogBatch(request({ refresh: true, count: 50, expectedGtins: [] }), refreshDependencies());
+    assert.equal(result.artifact.state, "completed");
+    assert.equal(result.artifact.count, 50);
+    assert.deepEqual(result.artifact.expectedGtins, []);
+
+    for (const invalid of [
+      request({ refresh: true, count: 51, expectedGtins: [] }),
+      request({ refresh: false, count: 50, expectedGtins: [] }),
+      request({ refresh: true, count: 2, expectedGtins: [expectedGtins[0]] }),
+    ]) await assert.rejects(() => runCmvpCatalogBatch(invalid, dependencies()));
   });
 
   it("creates deterministic dry-run artifacts without persistence", async () => {

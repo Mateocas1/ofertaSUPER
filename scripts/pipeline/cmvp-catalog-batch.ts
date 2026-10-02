@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 
 import { normalizeGtin } from "../../src/lib/identity/gtin";
 
-const SOURCES = new Set(["disco", "jumbo", "carrefour"]);
+// The acquisition contract accepts exactly these stores (the staged sources of
+// the daily refresh). Discovery refuses to plan for anything else.
+export const CMVP_CATALOG_SOURCES = ["disco", "jumbo", "carrefour"] as const;
+
+const SOURCES = new Set<string>(CMVP_CATALOG_SOURCES);
 
 export type CmvpCatalogBatchRequest = {
   batchId: string;
@@ -79,8 +83,20 @@ function normalizeContractText(input: CmvpCatalogBatchRequest) {
   return { batchId, term };
 }
 
-function validateContractCountAndGtins(input: CmvpCatalogBatchRequest) {
-  if (!Number.isInteger(input.count) || input.count < 1 || input.count > 25) throw new Error("count must be an integer from 1 through 25");
+// A frozen-plan batch pins its exact 25-result contract; a discovered refresh
+// batch searches a live category and may take up to 50 results, with no known
+// expected GTINs (the plan is built from the category tree at run time).
+const MAX_PLAN_COUNT = 25;
+const MAX_REFRESH_COUNT = 50;
+
+export function validateContractCountAndGtins(input: CmvpCatalogBatchRequest) {
+  const max = input.refresh ? MAX_REFRESH_COUNT : MAX_PLAN_COUNT;
+  if (!Number.isInteger(input.count) || input.count < 1 || input.count > max) throw new Error(`count must be an integer from 1 through ${max}`);
+  if (input.expectedGtins.length === 0) {
+    // Only a discovered refresh batch may leave the expected set open.
+    if (!input.refresh) throw new Error("expected GTIN count must match count");
+    return [];
+  }
   if (input.expectedGtins.length !== input.count) throw new Error("expected GTIN count must match count");
   const expectedGtins = normalizeGtins(input.expectedGtins, "expected");
   if (new Set(expectedGtins).size !== input.count) throw new Error("expected GTINs must be distinct normalized values");
