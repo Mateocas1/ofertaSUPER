@@ -154,13 +154,14 @@ URL or any credential.
 
 The price drops travel with the snapshot: right after the refresh,
 `npx tsx scripts/export-price-drops.ts` reads the snapshot it just wrote,
-regenerates `data/price-drops.json` (top 100, schema v1) and the commit step
-adds both files, so the published drops can never disagree with the served
-catalog. The step is `continue-on-error`: a drop export failure leaves the
-previous payload in place (the page and the feed always state the day they
-cover) and never undoes a healthy snapshot. After the commit, a second
-best-effort step posts the day's digest to the Telegram channel (see "Price drop
-alerts" below).
+regenerates `data/price-drops.json` (top 100 published, schema v2, suspects
+recorded but withheld) and the commit step adds both files, so the published
+drops can never disagree with the served catalog. The step is
+`continue-on-error`: a drop export failure leaves the previous payload in place
+(the page and the feed always state the day they cover) and never undoes a
+healthy snapshot. After the commit, a second best-effort step posts the day's
+digest to the Telegram channel (see "Price drop alerts" below); it runs only on
+the scheduled run, so a manual re-run never double-posts.
 
 **Only one writer may be active.** Once the cloud job is green, the owner
 removes the local crontab line (`crontab -e`) so the PC and the cloud never race
@@ -209,16 +210,44 @@ observation inside the window** (14 days by default) and publishes the drop only
 when it clears **both** thresholds: at least 10% and at least ARS 100. Offers
 whose observation is older than 24 h (stale) never produce a drop, and a drop a
 captured percentage promotion fully explains is treated as a promo artifact, not
-as a price cut. Rules are deterministic and configurable:
+as a price cut.
+
+A suspicious movement is never published:
+
+- **Unit price evidence wins.** When the snapshot carries a unit price for both
+the current offer and the reference observation (`unitPrice`, the price per the
+offer's reference unit), the fall must survive the comparison per unit: a smaller
+pack at a lower absolute price is not a price cut, and a fall per unit proves
+even a very large drop.
+- **Without that evidence**, any fall above `--max-percent` (60% by default) is
+withheld: a jump that big is better explained by a pack-size change or a loading
+error than by a real cut.
+
+Withheld movements are recorded in the payload's `suspect` array with their
+reason (`unit_price_did_not_fall`, `drop_above_max_percent`) for the audit trail,
+and they are never rendered on `/bajas`, never emitted in the feed and never
+posted to Telegram. `totalDrops` counts the published ones and `suspectDrops` the
+withheld ones, so the file always says how much it left out.
+
+Rules are deterministic and configurable:
 
 ```bash
-npx tsx scripts/export-price-drops.ts --min-percent=15 --min-amount=250 --window-days=7
+npx tsx scripts/export-price-drops.ts --min-percent=15 --min-amount=250 --window-days=7 --max-percent=50
 # or through the environment: PRICE_DROP_MIN_PERCENT, PRICE_DROP_MIN_AMOUNT,
-# PRICE_DROP_WINDOW_DAYS, PRICE_DROP_MAX_AGE_HOURS, PRICE_DROP_LIMIT
+# PRICE_DROP_WINDOW_DAYS, PRICE_DROP_MAX_AGE_HOURS, PRICE_DROP_MAX_PERCENT,
+# PRICE_DROP_LIMIT
 ```
 
 The file keeps the top 100 by percentage, records the rules it was produced with
 and states its own date, so the page can always say which refresh it covers.
+
+**Known limitation.** The snapshot does not export a unit price yet
+(`supermarket_products.reference_price` / the VTEX `measurementUnit` exist in the
+database but not in `data/catalog-snapshot.json`), so today the unit-price branch
+is inert and the 60% rule governs. Wiring it is one change in
+`scripts/export-catalog-snapshot.ts`: select those two columns per offer, add
+them to the offer and to each history point as `unitPrice`, and the branch starts
+working without touching the drop rules.
 
 ### Telegram channel setup (one time)
 

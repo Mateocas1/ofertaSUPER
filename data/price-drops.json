@@ -1,48 +1,17 @@
 {
-  "schemaVersion": 1,
-  "generatedAt": "2026-10-02T07:41:05.250Z",
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-02T08:16:07.849Z",
   "date": "2026-10-02",
   "rules": {
     "minPercentDrop": 10,
     "minAmountDrop": 100,
     "windowDays": 14,
     "maxAgeHours": 24,
+    "maxPercentDrop": 60,
     "limit": 100
   },
-  "totalDrops": 24,
+  "totalDrops": 22,
   "drops": [
-    {
-      "ean": "07790170901957",
-      "date": "2026-10-02",
-      "source": "carrefour",
-      "name": "Café molido torrado intenso la Morenita 125 g.",
-      "brand": "Morenita",
-      "category": "Desayuno y Merienda",
-      "imageUrl": "https://carrefourar.vteximg.com.br/arquivos/ids/324393/7790170901957_01.jpg?v=638197801237530000",
-      "previousPrice": 3765,
-      "currentPrice": 753,
-      "amountDrop": 3012,
-      "percentDrop": 80,
-      "previousObservedAt": "2026-09-28T04:13:28.260Z",
-      "observedAt": "2026-10-02T02:00:09.558Z",
-      "productUrl": "https://www.carrefour.com.ar/cafe-molido-torrado-intenso-la-morenita-125-g/p"
-    },
-    {
-      "ean": "07790150006306",
-      "date": "2026-10-02",
-      "source": "carrefour",
-      "name": "Café molido torrado La Virginia 125 g.",
-      "brand": "La Virginia",
-      "category": "Café molido y en grano",
-      "imageUrl": "https://carrefourar.vteximg.com.br/arquivos/ids/324286/7790150006306_01.jpg?v=638197800857370000",
-      "previousPrice": 2363.4,
-      "currentPrice": 788,
-      "amountDrop": 1575.4,
-      "percentDrop": 66.66,
-      "previousObservedAt": "2026-09-28T05:40:15.181Z",
-      "observedAt": "2026-10-02T02:00:09.558Z",
-      "productUrl": "https://www.carrefour.com.ar/cafe-molido-torrado-la-virginia-125-g-56497/p"
-    },
     {
       "ean": "02509912000002",
       "date": "2026-10-02",
@@ -394,6 +363,43 @@
       "previousObservedAt": "2026-09-28T01:29:16.546Z",
       "observedAt": "2026-10-02T02:00:09.558Z",
       "productUrl": "https://www.carrefour.com.ar/queso-provolone-vaquero-fraccionado-749831/p"
+    }
+  ],
+  "suspectDrops": 2,
+  "suspect": [
+    {
+      "ean": "07790170901957",
+      "date": "2026-10-02",
+      "source": "carrefour",
+      "name": "Café molido torrado intenso la Morenita 125 g.",
+      "brand": "Morenita",
+      "category": "Desayuno y Merienda",
+      "imageUrl": "https://carrefourar.vteximg.com.br/arquivos/ids/324393/7790170901957_01.jpg?v=638197801237530000",
+      "previousPrice": 3765,
+      "currentPrice": 753,
+      "amountDrop": 3012,
+      "percentDrop": 80,
+      "previousObservedAt": "2026-09-28T04:13:28.260Z",
+      "observedAt": "2026-10-02T02:00:09.558Z",
+      "productUrl": "https://www.carrefour.com.ar/cafe-molido-torrado-intenso-la-morenita-125-g/p",
+      "reason": "drop_above_max_percent"
+    },
+    {
+      "ean": "07790150006306",
+      "date": "2026-10-02",
+      "source": "carrefour",
+      "name": "Café molido torrado La Virginia 125 g.",
+      "brand": "La Virginia",
+      "category": "Café molido y en grano",
+      "imageUrl": "https://carrefourar.vteximg.com.br/arquivos/ids/324286/7790150006306_01.jpg?v=638197800857370000",
+      "previousPrice": 2363.4,
+      "currentPrice": 788,
+      "amountDrop": 1575.4,
+      "percentDrop": 66.66,
+      "previousObservedAt": "2026-09-28T05:40:15.181Z",
+      "observedAt": "2026-10-02T02:00:09.558Z",
+      "productUrl": "https://www.carrefour.com.ar/cafe-molido-torrado-la-virginia-125-g-56497/p",
+      "reason": "drop_above_max_percent"
     }
   ]
 }

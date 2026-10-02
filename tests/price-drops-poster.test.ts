@@ -48,12 +48,14 @@ function drop(index: number, overrides: Partial<PriceDrop> = {}): PriceDrop {
 function payload(count: number): PriceDropsPayload {
   const drops = Array.from({ length: count }, (_, index) => drop(index + 1));
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: "2027-01-15T12:00:00.000Z",
     date: DATE,
-    rules: { minPercentDrop: 10, minAmountDrop: 100, windowDays: 14, maxAgeHours: 24, limit: 100 },
+    rules: { minPercentDrop: 10, minAmountDrop: 100, windowDays: 14, maxAgeHours: 24, maxPercentDrop: 60, limit: 100 },
     totalDrops: drops.length,
     drops,
+    suspectDrops: 0,
+    suspect: [],
   };
 }
 

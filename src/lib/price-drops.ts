@@ -9,7 +9,7 @@ import priceDropsJson from "../../data/price-drops.json";
 // feed and the Telegram digest all render that one payload, so no reader ever
 // recomputes a movement with its own rules.
 
-export const PRICE_DROPS_SCHEMA_VERSION = 1;
+export const PRICE_DROPS_SCHEMA_VERSION = 2;
 
 export type PriceDropRules = {
   /** Minimum drop against the reference price, in percent. */
@@ -20,6 +20,8 @@ export type PriceDropRules = {
   windowDays: number;
   /** An offer observed longer ago than this is stale and never produces a drop. */
   maxAgeHours: number;
+  /** A drop above this percentage is suspicious on its own and is never published. */
+  maxPercentDrop: number;
   /** How many drops the payload publishes after sorting. */
   limit: number;
 };
@@ -29,6 +31,7 @@ export const DEFAULT_PRICE_DROP_RULES: PriceDropRules = {
   minAmountDrop: 100,
   windowDays: 14,
   maxAgeHours: 24,
+  maxPercentDrop: 60,
   limit: 100,
 };
 
@@ -47,6 +50,8 @@ export type PriceDropHistoryPoint = {
   price: number | null;
   listPrice: number | null;
   observedAt: string;
+  /** Price per the offer's reference unit, when the source publishes one. */
+  unitPrice?: number | null;
 };
 
 export type PriceDropSnapshotOffer = {
@@ -58,6 +63,8 @@ export type PriceDropSnapshotOffer = {
   available: boolean;
   productUrl: string | null;
   observedAt: string;
+  /** Price per the offer's reference unit, when the source publishes one. */
+  unitPrice?: number | null;
   history: PriceDropHistoryPoint[];
 };
 
@@ -84,13 +91,23 @@ export type PriceDrop = {
   productUrl: string | null;
 };
 
+/** Why a movement was withheld instead of published. */
+export type SuspectReason = "drop_above_max_percent" | "unit_price_did_not_fall";
+
+/** Recorded for the audit trail, never rendered, parsed or posted publicly. */
+export type SuspectPriceDrop = PriceDrop & { reason: SuspectReason };
+
 export type PriceDropsPayload = {
   schemaVersion: number;
   generatedAt: string;
   date: string;
   rules: PriceDropRules;
+  /** Published drops detected before the limit. */
   totalDrops: number;
   drops: PriceDrop[];
+  /** Suspect drops detected before the limit (0 keeps older payloads parseable). */
+  suspectDrops: number;
+  suspect: SuspectPriceDrop[];
 };
 
 export class PriceDropsUnavailableError extends Error {}
@@ -114,7 +131,12 @@ function isUsableOffer(offer: PriceDropSnapshotOffer, now: Date, rules: PriceDro
   return (now.getTime() - observed) / 3_600_000 <= rules.maxAgeHours;
 }
 
-type ReferencePrice = { price: number; observedAt: string };
+type ReferencePrice = { price: number; observedAt: string; unitPrice: number | null };
+
+function unitPriceOf(point: { unitPrice?: number | null }): number | null {
+  const value = point.unitPrice;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
 
 // The reference is the most recent observation strictly before the current one
 // whose price differs from it, inside the configured window.
@@ -131,10 +153,22 @@ function lastDifferentPrice(
     const observed = Date.parse(point.observedAt);
     if (Number.isNaN(observed) || observed < cutoff || observed >= currentObserved) continue;
     if (reference === null || observed > Date.parse(reference.observedAt)) {
-      reference = { price: point.price, observedAt: point.observedAt };
+      reference = { price: point.price, observedAt: point.observedAt, unitPrice: unitPriceOf(point) };
     }
   }
   return reference;
+}
+
+// When both points carry a unit price, it decides: a smaller pack at a lower
+// absolute price is not a price cut, and a fall per unit proves a large drop.
+// "unknown" means the snapshot exposes no unit price for one of the points.
+function unitPriceVerdict(
+  offer: PriceDropSnapshotOffer,
+  reference: ReferencePrice,
+): "unknown" | "fell" | "did_not_fall" {
+  const current = unitPriceOf(offer);
+  if (current === null || reference.unitPrice === null) return "unknown";
+  return current < reference.unitPrice ? "fell" : "did_not_fall";
 }
 
 // A captured percentage promotion that by itself reproduces the current price
@@ -182,13 +216,33 @@ function compareDrops(left: PriceDrop, right: PriceDrop): number {
   );
 }
 
-function dropForOffer(
+type Candidate = { kind: "published"; drop: PriceDrop } | { kind: "suspect"; drop: SuspectPriceDrop };
+
+function meetsThresholds(alert: { percentDrop: number; amountDrop: number }, rules: PriceDropRules): boolean {
+  return (
+    alert.percentDrop + EPSILON >= rules.minPercentDrop &&
+    alert.amountDrop + EPSILON >= rules.minAmountDrop
+  );
+}
+
+function classify(offer: PriceDropSnapshotOffer, reference: ReferencePrice, drop: PriceDrop, rules: PriceDropRules): Candidate {
+  const verdict = unitPriceVerdict(offer, reference);
+  if (verdict === "did_not_fall") {
+    return { kind: "suspect", drop: { ...drop, reason: "unit_price_did_not_fall" } };
+  }
+  const untrusted = verdict === "unknown" && drop.percentDrop > rules.maxPercentDrop;
+  return untrusted
+    ? { kind: "suspect", drop: { ...drop, reason: "drop_above_max_percent" } }
+    : { kind: "published", drop };
+}
+
+function candidateForOffer(
   offer: PriceDropSnapshotOffer,
   product: PriceDropSnapshotProduct,
   rules: PriceDropRules,
   now: Date,
   date: string,
-): PriceDrop | null {
+): Candidate | null {
   const currentPrice = offer.price;
   if (currentPrice === null || !isUsableOffer(offer, now, rules)) return null;
 
@@ -198,32 +252,42 @@ function dropForOffer(
 
   // The shared movement helper owns the rounding and the "is it a drop" rule.
   const alert = comparePriceAgainstHistory(currentPrice, reference.price).priceDropAlert;
-  if (alert === null) return null;
-  if (alert.percentDrop + EPSILON < rules.minPercentDrop) return null;
-  if (alert.amountDrop + EPSILON < rules.minAmountDrop) return null;
+  if (alert === null || !meetsThresholds(alert, rules)) return null;
   if (isPromoOnlyArtifact(offer, reference.price, currentPrice)) return null;
 
-  return toDrop(offer, product, reference, alert, date);
+  return classify(offer, reference, toDrop(offer, product, reference, alert, date), rules);
 }
 
-/** Every drop the rules accept, in deterministic order (the limit is not applied here). */
+export type PriceDropDetection = {
+  /** Public drops, in deterministic order (the limit is not applied here). */
+  published: PriceDrop[];
+  /** Suspected movements: recorded for the audit trail, never published. */
+  suspect: SuspectPriceDrop[];
+};
+
 export function detectPriceDrops(
   snapshot: PriceDropSnapshot,
   rules: PriceDropRules = DEFAULT_PRICE_DROP_RULES,
   now: Date = new Date(),
-): PriceDrop[] {
+): PriceDropDetection {
   const products = new Map(snapshot.products.map((product) => [product.ean, product]));
   const date = utcDate(now);
-  const drops: PriceDrop[] = [];
+  const published: PriceDrop[] = [];
+  const suspect: SuspectPriceDrop[] = [];
 
   for (const offer of snapshot.offers) {
     const product = products.get(offer.ean);
     if (!product) continue;
-    const drop = dropForOffer(offer, product, rules, now, date);
-    if (drop !== null) drops.push(drop);
+    const candidate = candidateForOffer(offer, product, rules, now, date);
+    if (candidate === null) continue;
+    if (candidate.kind === "published") {
+      published.push(candidate.drop);
+    } else {
+      suspect.push(candidate.drop);
+    }
   }
 
-  return drops.sort(compareDrops);
+  return { published: published.sort(compareDrops), suspect: suspect.sort(compareDrops) };
 }
 
 export function buildPriceDropsPayload(
@@ -231,14 +295,16 @@ export function buildPriceDropsPayload(
   rules: PriceDropRules = DEFAULT_PRICE_DROP_RULES,
   now: Date = new Date(),
 ): PriceDropsPayload {
-  const detected = detectPriceDrops(snapshot, rules, now);
+  const detection = detectPriceDrops(snapshot, rules, now);
   return {
     schemaVersion: PRICE_DROPS_SCHEMA_VERSION,
     generatedAt: now.toISOString(),
     date: utcDate(now),
     rules: { ...rules },
-    totalDrops: detected.length,
-    drops: detected.slice(0, rules.limit),
+    totalDrops: detection.published.length,
+    drops: detection.published.slice(0, rules.limit),
+    suspectDrops: detection.suspect.length,
+    suspect: detection.suspect.slice(0, rules.limit),
   };
 }
 
@@ -263,23 +329,41 @@ function isDrop(value: unknown): value is PriceDrop {
   );
 }
 
-const RULE_FIELDS = ["minPercentDrop", "minAmountDrop", "windowDays", "maxAgeHours", "limit"] as const;
+const RULE_FIELDS = ["minPercentDrop", "minAmountDrop", "windowDays", "maxAgeHours", "maxPercentDrop", "limit"] as const;
 
 function isRules(value: unknown): value is PriceDropRules {
   return isRecord(value) && RULE_FIELDS.every((field) => isFiniteNumber(value[field]));
 }
 
-function isPayload(value: unknown): value is PriceDropsPayload {
+export const SUSPECT_REASONS: readonly SuspectReason[] = ["drop_above_max_percent", "unit_price_did_not_fall"];
+
+function isSuspectDrop(value: unknown): value is SuspectPriceDrop {
   if (!isRecord(value)) return false;
-  return (
-    value.schemaVersion === PRICE_DROPS_SCHEMA_VERSION &&
-    typeof value.generatedAt === "string" &&
-    typeof value.date === "string" &&
-    isRules(value.rules) &&
-    isFiniteNumber(value.totalDrops) &&
-    Array.isArray(value.drops) &&
-    value.drops.every(isDrop)
-  );
+  const reason = value.reason;
+  return isDrop(value) && typeof reason === "string" && (SUSPECT_REASONS as readonly string[]).includes(reason);
+}
+
+function isDropList(value: unknown): value is PriceDrop[] {
+  return Array.isArray(value) && value.every(isDrop);
+}
+
+function isSuspectList(value: unknown): value is SuspectPriceDrop[] {
+  return Array.isArray(value) && value.every(isSuspectDrop);
+}
+
+const PAYLOAD_STRUCTURE_CHECKS: ((value: Record<string, unknown>) => boolean)[] = [
+  (value) => value.schemaVersion === PRICE_DROPS_SCHEMA_VERSION,
+  (value) => typeof value.generatedAt === "string",
+  (value) => typeof value.date === "string",
+  (value) => isRules(value.rules),
+  (value) => isFiniteNumber(value.totalDrops),
+  (value) => isFiniteNumber(value.suspectDrops),
+  (value) => isDropList(value.drops),
+  (value) => isSuspectList(value.suspect),
+];
+
+function isPayload(value: unknown): value is PriceDropsPayload {
+  return isRecord(value) && PAYLOAD_STRUCTURE_CHECKS.every((check) => check(value));
 }
 
 export function parsePriceDrops(value: unknown): PriceDropsPayload {
@@ -319,7 +403,11 @@ export type PriceDropsView = {
 };
 
 function thresholdsNote(rules: PriceDropRules): string {
-  return `Umbrales publicados: caída de al menos ${percentFormatter.format(rules.minPercentDrop)}% y ${formatDropAmount(rules.minAmountDrop)}, contra la última observación distinta dentro de ${rules.windowDays} días.`;
+  return (
+    `Umbrales publicados: caída de al menos ${percentFormatter.format(rules.minPercentDrop)}% y ` +
+    `${formatDropAmount(rules.minAmountDrop)}, contra la última observación distinta dentro de ${rules.windowDays} días. ` +
+    "Los movimientos sospechosos (por ejemplo, caídas que un cambio de presentación o un error de carga explican mejor) no se publican."
+  );
 }
 
 /** Everything the page renders, computed once from the committed payload. */

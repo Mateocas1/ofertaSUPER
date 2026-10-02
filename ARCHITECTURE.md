@@ -28,9 +28,10 @@ snapshot export                                   scripts/pipeline/cmvp-catalog-
 data/catalog-snapshot.json (committed, schemaVersion 2)
         │
         ├─► price drops export                    scripts/export-price-drops.ts
-        │        │  current price vs last different observation (>=10% and >=ARS 100)
+        │        │  current price vs last different observation (>=10% and >=ARS 100);
+        │        │  unit-price evidence or >60% -> suspect, recorded but never published
         │        ▼
-        │   data/price-drops.json (committed, schemaVersion 1)
+        │   data/price-drops.json (committed, schemaVersion 2)
         │        ▼
         │   /bajas · /bajas/feed.xml (Atom) · Telegram digest   src/lib/price-drops*.ts
         │

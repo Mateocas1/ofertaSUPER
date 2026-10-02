@@ -65,6 +65,7 @@ export function resolveRules(
     minAmountDrop: pick("min-amount", "PRICE_DROP_MIN_AMOUNT", DEFAULT_PRICE_DROP_RULES.minAmountDrop),
     windowDays: pick("window-days", "PRICE_DROP_WINDOW_DAYS", DEFAULT_PRICE_DROP_RULES.windowDays),
     maxAgeHours: pick("max-age-hours", "PRICE_DROP_MAX_AGE_HOURS", DEFAULT_PRICE_DROP_RULES.maxAgeHours),
+    maxPercentDrop: pick("max-percent", "PRICE_DROP_MAX_PERCENT", DEFAULT_PRICE_DROP_RULES.maxPercentDrop),
     limit: pick("limit", "PRICE_DROP_LIMIT", DEFAULT_PRICE_DROP_RULES.limit),
   };
 }
@@ -87,7 +88,7 @@ export function runExport(options: ExportPriceDropsOptions = {}): { payload: Pri
 }
 
 function formatRules(rules: PriceDropRules): string {
-  return `>=${rules.minPercentDrop}% and >=ARS ${rules.minAmountDrop} within ${rules.windowDays}d, freshness ${rules.maxAgeHours}h, top ${rules.limit}`;
+  return `>=${rules.minPercentDrop}% and >=ARS ${rules.minAmountDrop} within ${rules.windowDays}d, freshness ${rules.maxAgeHours}h, suspect >${rules.maxPercentDrop}%, top ${rules.limit}`;
 }
 
 function main(): void {
@@ -101,7 +102,7 @@ function main(): void {
     now,
   });
   console.log(
-    `export-price-drops: ${payload.totalDrops} drops detected, ${payload.drops.length} published ` +
+    `export-price-drops: ${payload.totalDrops} drops published, ${payload.suspectDrops} suspect withheld ` +
       `(${formatRules(rules)}) -> ${outputPath.replace(repoRoot, ".")}`,
   );
 }

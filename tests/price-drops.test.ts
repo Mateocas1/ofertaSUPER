@@ -13,13 +13,14 @@ import {
   loadPriceDrops,
   parsePriceDrops,
   PriceDropsUnavailableError,
+  type PriceDropDetection,
   type PriceDropRules,
   type PriceDropsPayload,
   type PriceDropSnapshot,
   type PriceDropSnapshotOffer,
 } from "../src/lib/price-drops";
 import { parseFlags, resolveRules, runExport } from "../scripts/export-price-drops";
-import { buildPriceDropsDigest } from "../scripts/lib/price-drops-poster";
+import { buildPriceDropsDigest, postPriceDropsDigest } from "../scripts/lib/price-drops-poster";
 import { buildPriceDropsFeed } from "../src/lib/price-drops-feed";
 
 // Detection is proven against synthetic snapshots with explicit clocks: the
@@ -73,7 +74,7 @@ function snapshot(offers: PriceDropSnapshotOffer[], generatedAt = NOW.toISOStrin
 }
 
 function detect(offers: PriceDropSnapshotOffer[], rules: Partial<PriceDropRules> = {}) {
-  return detectPriceDrops(snapshot(offers), { ...DEFAULT_PRICE_DROP_RULES, ...rules }, NOW);
+  return detectPriceDrops(snapshot(offers), { ...DEFAULT_PRICE_DROP_RULES, ...rules }, NOW).published;
 }
 
 describe("price drop detection", () => {
@@ -184,7 +185,7 @@ describe("price drop detection", () => {
     const orphan = offer();
     assert.deepEqual(
       detectPriceDrops({ generatedAt: NOW.toISOString(), products: [], offers: [orphan] }, DEFAULT_PRICE_DROP_RULES, NOW),
-      [],
+      { published: [], suspect: [] },
     );
   });
 
@@ -221,7 +222,7 @@ describe("price drop detection", () => {
     const payload = buildPriceDropsPayload(snapshot(offers), { ...DEFAULT_PRICE_DROP_RULES, limit: 3 }, NOW);
     assert.equal(payload.totalDrops, 5);
     assert.equal(payload.drops.length, 3);
-    assert.equal(payload.schemaVersion, 1);
+    assert.equal(payload.schemaVersion, 2);
     assert.equal(payload.date, "2027-01-15");
     assert.equal(payload.generatedAt, NOW.toISOString());
     assert.deepEqual(payload.rules, { ...DEFAULT_PRICE_DROP_RULES, limit: 3 });
@@ -233,17 +234,20 @@ describe("price drops payload contract", () => {
     const payload = buildPriceDropsPayload(snapshot([offer()]), DEFAULT_PRICE_DROP_RULES, NOW);
     assert.deepEqual(parsePriceDrops(JSON.parse(JSON.stringify(payload))), payload);
     assert.throws(() => parsePriceDrops({}), PriceDropsUnavailableError);
-    assert.throws(() => parsePriceDrops({ ...payload, schemaVersion: 2 }), PriceDropsUnavailableError);
+    assert.throws(() => parsePriceDrops({ ...payload, schemaVersion: 1 }), PriceDropsUnavailableError);
     assert.throws(() => parsePriceDrops({ ...payload, drops: [{ ean: "1" }] }), PriceDropsUnavailableError);
     assert.throws(() => parsePriceDrops({ ...payload, rules: { minPercentDrop: 10 } }), PriceDropsUnavailableError);
+    assert.throws(() => parsePriceDrops({ ...payload, suspect: "not-an-array" }), PriceDropsUnavailableError);
+    assert.throws(() => parsePriceDrops({ ...payload, suspectDrops: "many" }), PriceDropsUnavailableError);
   });
 
   it("loads the committed payload through the same gate, without pinning its values", () => {
     const payload = loadPriceDrops();
-    assert.equal(payload.schemaVersion, 1);
+    assert.equal(payload.schemaVersion, 2);
     assert.ok(!Number.isNaN(Date.parse(payload.generatedAt)));
     assert.match(payload.date, /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(payload.drops.length <= payload.rules.limit);
+    assert.equal(payload.suspectDrops >= payload.suspect.length, true);
     for (const drop of payload.drops) {
       assert.ok(drop.previousPrice > drop.currentPrice, `${drop.ean} must be a real drop`);
       assert.ok(drop.percentDrop >= payload.rules.minPercentDrop - 1e-9);
@@ -269,6 +273,8 @@ describe("price drops view", () => {
       rules: DEFAULT_PRICE_DROP_RULES,
       totalDrops: 0,
       drops: [],
+      suspectDrops: 0,
+      suspect: [],
     });
     assert.equal(view.unavailable, false);
     assert.equal(view.isEmpty, true);
@@ -348,14 +354,6 @@ describe("price drops export flags", () => {
 // with the price and no unit price recorded for either point.
 // ---------------------------------------------------------------------------
 
-type SuspectDrop = PriceDrop & { reason: string };
-type Detection = { published: PriceDrop[]; suspect: SuspectDrop[] };
-type PayloadWithSuspects = {
-  suspect?: SuspectDrop[];
-  suspectDrops?: number;
-  rules: { maxPercentDrop?: number } & Record<string, unknown>;
-};
-
 const COFFEE = {
   price: 753,
   listPrice: 753,
@@ -380,7 +378,7 @@ function rawOffer(overrides: Record<string, unknown> = {}): Record<string, unkno
 function detectRaw(
   offers: Array<Record<string, unknown>>,
   rules: Partial<PriceDropRules> = {},
-): Detection {
+): PriceDropDetection {
   const rawSnapshot = {
     generatedAt: NOW.toISOString(),
     products: offers.map((entry) => ({
@@ -393,11 +391,7 @@ function detectRaw(
     })),
     offers,
   } as unknown as PriceDropSnapshot;
-  return detectPriceDrops(
-    rawSnapshot,
-    { ...DEFAULT_PRICE_DROP_RULES, ...rules },
-    NOW,
-  ) as unknown as Detection;
+  return detectPriceDrops(rawSnapshot, { ...DEFAULT_PRICE_DROP_RULES, ...rules }, NOW);
 }
 
 function payloadWith(offers: Array<Record<string, unknown>>, rules: Partial<PriceDropRules> = {}) {
@@ -476,7 +470,7 @@ describe("suspicious drops are never published", () => {
     const payload = payloadWith([
       rawOffer({ ean: VALID_EANS[1], ...COFFEE }),
       rawOffer({ ean: VALID_EANS[2] }),
-    ]) as unknown as PriceDropsPayload & PayloadWithSuspects;
+    ]);
 
     assert.equal(payload.schemaVersion, 2);
     assert.equal(payload.rules.maxPercentDrop, 60);
@@ -489,7 +483,7 @@ describe("suspicious drops are never published", () => {
   });
 
   it("rejects a payload whose suspect entry carries an unknown reason", () => {
-    const payload = payloadWith([rawOffer({ ...COFFEE })]) as unknown as PriceDropsPayload & PayloadWithSuspects;
+    const payload = payloadWith([rawOffer({ ...COFFEE })]);
     const suspect = payload.suspect ?? [];
 
     assert.throws(
@@ -544,8 +538,8 @@ describe("suspicious drops are never published", () => {
   });
 
   it("never publishes a suspect movement from the committed payload", () => {
-    const payload = loadPriceDrops() as unknown as PriceDropsPayload & PayloadWithSuspects;
-    const maxPercent = payload.rules.maxPercentDrop ?? 60;
+    const payload = loadPriceDrops();
+    const maxPercent = payload.rules.maxPercentDrop;
 
     for (const drop of payload.drops) {
       assert.ok(
@@ -553,7 +547,7 @@ describe("suspicious drops are never published", () => {
         `published drop ${drop.ean} at ${drop.percentDrop}% must not exceed the suspect threshold`,
       );
     }
-    for (const suspect of payload.suspect ?? []) {
+    for (const suspect of payload.suspect) {
       assert.ok(["drop_above_max_percent", "unit_price_did_not_fall"].includes(suspect.reason));
       assert.ok(
         suspect.percentDrop > maxPercent,
