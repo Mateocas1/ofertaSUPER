@@ -20,6 +20,8 @@ export type RefreshFailureReason =
   | "migrate-failed"
   | "vtex-hash-unavailable"
   | "refresh-gate-failed"
+  | "refresh-rejections-exceeded"
+  | "refresh-no-admitted-products"
   | "refresh-failed"
   | "state-upload-failed"
   | "snapshot-commit-failed"
@@ -55,25 +57,42 @@ export function logExcerpt(log: string, maxLines = FAILURE_LOG_EXCERPT_LINES): s
   return redactSecrets(lines.slice(-maxLines).join("\n"));
 }
 
+// Each stage resolves against ordered token -> reason entries (first match
+// wins), with a fallback for the stage. Keeping it as data avoids a growing
+// branch chain.
+const STAGE_FAILURE_TOKENS: Record<RefreshStage, ReadonlyArray<readonly [token: string, reason: RefreshFailureReason]>> = {
+  restore: [
+    ["NO_STATE_RELEASE:", "no-state-release"],
+    ["NO_STATE_ASSET:", "no-state-asset"],
+  ],
+  migrate: [],
+  refresh: [
+    ["VTEX_HASH_UNAVAILABLE", "vtex-hash-unavailable"],
+    // Isolated rejects are tolerated; these two tokens mean a batch crossed
+    // the rule (too many rejects, or nothing admitted).
+    ["acquisition_rejected_products", "refresh-rejections-exceeded"],
+    ["acquisition_no_admitted_products", "refresh-no-admitted-products"],
+    ["gate check failed", "refresh-gate-failed"],
+  ],
+  upload: [],
+  commit: [],
+  resolve: [],
+  unknown: [],
+};
+
+const STAGE_FALLBACK_REASON: Record<RefreshStage, RefreshFailureReason> = {
+  restore: "restore-failed",
+  migrate: "migrate-failed",
+  refresh: "refresh-failed",
+  upload: "state-upload-failed",
+  commit: "snapshot-commit-failed",
+  resolve: "unknown",
+  unknown: "unknown",
+};
+
 export function classifyRefreshFailure(stage: RefreshStage, log: string): RefreshFailureReason {
-  switch (stage) {
-    case "restore":
-      if (log.includes("NO_STATE_RELEASE:")) return "no-state-release";
-      if (log.includes("NO_STATE_ASSET:")) return "no-state-asset";
-      return "restore-failed";
-    case "migrate":
-      return "migrate-failed";
-    case "refresh":
-      if (log.includes("VTEX_HASH_UNAVAILABLE")) return "vtex-hash-unavailable";
-      if (log.includes("gate check failed")) return "refresh-gate-failed";
-      return "refresh-failed";
-    case "upload":
-      return "state-upload-failed";
-    case "commit":
-      return "snapshot-commit-failed";
-    default:
-      return "unknown";
-  }
+  const matched = STAGE_FAILURE_TOKENS[stage].find(([token]) => log.includes(token));
+  return matched ? matched[1] : STAGE_FALLBACK_REASON[stage];
 }
 
 export function buildFailureIssueBody({ reason, stage, runUrl, date, logExcerpt: excerpt = "" }: FailureIssueBodyInput): string {
