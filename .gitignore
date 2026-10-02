@@ -72,7 +72,8 @@ supabase/.temp/
 test-results/
 *:Zone.Identifier
 
-certificatesartifacts/refresh/
+certificates
+artifacts/refresh/
 
 # analytics: generated Parquet, dbt artifacts and the local DuckDB
 analytics/data/

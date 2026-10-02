@@ -215,7 +215,8 @@ describe("VTEX persisted-query term-search fallback", () => {
 
     assert.equal(dependency.urls.length, 2);
     assert.match(dependency.urls[0], /\/_v\/segment\/graphql\/v1\?/);
-    assert.equal(dependency.urls[1], "https://www.example.com/api/catalog_system/pub/products/search?ft=leche+%26+crema&_from=0&_to=1");
+    assert.equal(dependency.urls[1], "https://www.example.com/api/catalog_system/pub/products/search?ft=leche%20%26%20crema&_from=0&_to=1");
+    assert.doesNotMatch(dependency.urls[1], /\+/, "VTEX answers 400 when a space is encoded as +");
     assert.deepEqual(products.map((product) => product.ean), ["07790000000003"]);
     assert.equal(products.fallbackUsed, true);
   });

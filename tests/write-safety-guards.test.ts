@@ -127,3 +127,41 @@ test("no script prunes price history by age", async () => {
 		);
 	}
 });
+
+test("no script or app module issues a DELETE against price_history", async () => {
+	// #547 decision: price history is never deleted. This guard is stricter
+	// than the age check above: any Prisma delete on the model or raw SQL
+	// `delete from price_history` in scripts/ or src/ fails it. Migrations are
+	// schema history, not runtime scripts, and none of them deletes the table.
+	const roots = ["scripts", "src"];
+	const sources = await Promise.all(
+		roots.map(async (dir) => {
+			const entries = await readdir(dir, { recursive: true });
+			return Promise.all(
+				entries
+					.filter((entry) => /\.(ts|mjs)$/.test(entry))
+					.map(async (entry) => ({
+						path: `${dir}/${entry}`,
+						content: await readFile(`${dir}/${entry}`, "utf8"),
+					})),
+			);
+		}),
+	);
+	for (const file of sources.flat()) {
+		assert.doesNotMatch(
+			file.content,
+			/priceHistory\s*\.\s*(?:delete|deleteMany)\s*\(/,
+			`${file.path} must not delete price history`,
+		);
+		assert.doesNotMatch(
+			file.content,
+			/delete\s+from\s+(?:[\w".]*\.)?"?price_history"?/i,
+			`${file.path} must not delete price history`,
+		);
+	}
+
+	// The only row DELETE in scripts/ is staging retention, and it targets
+	// staging_product. If that changes, the guard test above already fires.
+	const retention = await readFile("scripts/pipeline/staging-retention.ts", "utf8");
+	assert.match(retention, /delete from staging_product/);
+});

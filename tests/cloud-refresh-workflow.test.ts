@@ -86,4 +86,12 @@ describe("db-state helper contract", () => {
     assert.match(dbState, /"NO_STATE_RELEASE" "release \$RELEASE_TAG not found or not readable" 2/);
     assert.doesNotMatch(dbState, /echo .*DATABASE_URL/);
   });
+
+  it("publishes only from master; a manual dry run may test its own branch", () => {
+    const workflow = readFileSync(".github/workflows/daily-refresh.yml", "utf8");
+    assert.match(
+      workflow,
+      /ref: \$\{\{ \(github\.event_name == 'workflow_dispatch' && inputs\.dry_run\) && github\.ref \|\| 'master' \}\}/,
+    );
+  });
 });

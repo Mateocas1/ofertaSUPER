@@ -28,9 +28,27 @@ lock, applies the freshness gate, and regenerates the snapshot.
    npm run refresh:catalog
    ```
 
-   - Walks the 36 batches of `acquisition-plan-cycle2.json` with a per-day
-     `batchId` (`v1-refresh-<YYYYMMDD>-<ordinal>`); a completed batch replays
-     from its checkpoint and does not query again.
+   - Builds the plan at run time: reads `config/catalog-discovery.json` (the
+     allowlisted grocery departments per store, `maxBatchesPerRun` and
+     `resultsPerBatch`) and reads each store's public VTEX category tree, then
+     turns the departments' child categories into search batches. The sampled
+     children rotate deterministically by UTC date, so every child of every
+     allowlisted department is searched within the logged rotation window
+     (`[refresh] plan rotation: utcDay=<n> windowDays=<n>`); a smaller
+     department roster keeps the quota from starving any one department. The
+     log says `[refresh] plan: discovered` with the batch/category counts. When
+     anything in that path fails (config, tree read, no allowlisted category),
+     it logs `[refresh] plan: fallback`, names the discovery error and walks the
+     frozen plan `artifacts/cmvp/catalog/expansion-20260920-discovery-25/acquisition-plan-cycle2.json`
+     instead, so one bad category read never blocks the day.
+   - Walks the batches with a per-day `batchId` that also carries the plan mode
+     (`v1-refresh-<YYYYMMDD>-d-<ordinal>` for a discovered plan,
+     `v1-refresh-<YYYYMMDD>-f-<ordinal>` for the fallback); a completed batch
+     replays from its checkpoint and does not query again. The mode keeps a
+     same-day discovered/fallback flip from colliding with the other plan's
+     checkpoints. A discovered batch searches up to 50 results
+     (`resultsPerBatch`) and carries no expected GTINs; a frozen-plan batch
+     keeps its 25-result contract.
    - Captures simple Carrefour promos (PromotionTeasers by EAN, public REST
      read) during staging; a failed promo read leaves the promo null, counts in
      the summary, and does not abort the batch.
@@ -42,6 +60,13 @@ lock, applies the freshness gate, and regenerates the snapshot.
      isolated rejected product is tolerated and does not block the publish.
      Exits with an error if a batch failed or the worst supermarket falls below
      90%.
+   - Only when the run is publishable (no failed batch, freshness ≥90%), prunes
+     `staging_product`: deletes the rows older than `STAGING_RETENTION_DAYS`
+     (default 14; `STAGING_RETENTION_BATCH_SIZE` default 2000) in id-ordered
+     batches, and prints `[refresh] staging retention: deleted=...`. It never
+     touches `price_history`, `products` or `supermarket_products`; a retention
+     failure is logged and does not undo the refresh. **Price history is never
+     deleted** (see "History retention" below).
    - It reads the VTEX persisted-query hash from `ingestion_run.vtex_hash`
      (the acquisition stores it); it is never asked for or printed.
 
@@ -68,12 +93,23 @@ top-up, the first day reached 100% <24 h in the three supermarkets (327 reads,
 
 ### Freshness coverage (known limitation)
 
-The 36 batches search by term and take the first 25 results per search. With
-each supermarket's ranking rotation, roughly 15% of the catalog offers can fall
-outside the day's coverage (products that today are not in the top-25 for their
-term). The first refresh (2026-09-28) landed at 79.6% / 85.5% / 84.1% per
+A batch searches by term and takes at most its configured results
+(25 for a frozen-plan batch, up to 50 for a discovered one). With each
+supermarket's ranking rotation, some offers can fall outside the day's
+coverage. The first refresh (2026-09-28) landed at 79.6% / 85.5% / 84.1% per
 supermarket, below the 90% target: it was reported and the options were widening
-the coverage by EAN or accepting partial coverage in v1.
+the coverage by EAN or accepting partial coverage in v1. Runtime category
+discovery replaces the frozen 12 broad terms with the allowlisted departments'
+child categories, which widens the day's coverage; the EAN top-up still re-reads
+every offer the run did not observe.
+
+## History retention
+
+Price history is the product and is never deleted. `cleanup-history.ts` (90-day
+pruning) was removed and `cleanup:staging` no longer exists; no script or app
+module issues a DELETE against `price_history`, and `tests/write-safety-guards.test.ts`
+fails if one appears. If the history ever needs to shrink, it is archived (for
+example to Parquet), never dropped.
 
 ## Cloud refresh (GitHub Actions)
 

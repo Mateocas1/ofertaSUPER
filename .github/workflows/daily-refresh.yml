@@ -48,7 +48,9 @@ jobs:
       - name: Checkout master
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: master
+          # Publishing runs always use master. A manual dry run may test the
+          # branch it was dispatched from, since it never uploads or commits.
+          ref: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && github.ref || 'master' }}
           fetch-depth: 0
 
       - name: Set up Node
