@@ -113,7 +113,15 @@ jobs:
           echo analytics > "$RUNNER_TEMP/cloud-refresh-stage.txt"
           scripts/export-analytics.sh 2>&1 | tee -a "$LOG_FILE"
 
-      - name: Commit the snapshot to master
+      - name: Export the price drops
+        if: ${{ success() && inputs.dry_run != true }}
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          LOG_FILE="$RUNNER_TEMP/cloud-refresh.log"
+          npx tsx scripts/export-price-drops.ts 2>&1 | tee -a "$LOG_FILE"
+
+      - name: Commit the snapshot and the price drops to master
         if: ${{ success() && inputs.dry_run != true }}
         run: |
           set -euo pipefail
@@ -121,13 +129,24 @@ jobs:
           echo commit > "$RUNNER_TEMP/cloud-refresh-stage.txt"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/catalog-snapshot.json
+          git add data/catalog-snapshot.json data/price-drops.json
           if git diff --cached --quiet; then
-            echo "snapshot unchanged; nothing to publish" | tee -a "$LOG_FILE"
+            echo "snapshot and price drops unchanged; nothing to publish" | tee -a "$LOG_FILE"
           else
             git commit -m "chore(catalog): refresh $(date -u +%F) [cloud]"
             git push origin HEAD:master 2>&1 | tee -a "$LOG_FILE"
           fi
+
+      - name: Post the price drops digest to Telegram
+        if: ${{ success() && inputs.dry_run != true }}
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+        run: |
+          set -o pipefail
+          LOG_FILE="$RUNNER_TEMP/cloud-refresh.log"
+          npx tsx scripts/post-price-drops.ts 2>&1 | tee -a "$LOG_FILE"
 
       - name: Close the failure tracking issue
         if: ${{ success() && inputs.dry_run != true }}

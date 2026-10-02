@@ -152,6 +152,16 @@ The workflow serializes runs with `concurrency: daily-refresh`, requests only
 action by commit SHA and takes Node from `.nvmrc`. It never prints the database
 URL or any credential.
 
+The price drops travel with the snapshot: right after the refresh,
+`npx tsx scripts/export-price-drops.ts` reads the snapshot it just wrote,
+regenerates `data/price-drops.json` (top 100, schema v1) and the commit step
+adds both files, so the published drops can never disagree with the served
+catalog. The step is `continue-on-error`: a drop export failure leaves the
+previous payload in place (the page and the feed always state the day they
+cover) and never undoes a healthy snapshot. After the commit, a second
+best-effort step posts the day's digest to the Telegram channel (see "Price drop
+alerts" below).
+
 **Only one writer may be active.** Once the cloud job is green, the owner
 removes the local crontab line (`crontab -e`) so the PC and the cloud never race
 for the same snapshot; `scripts/cron-refresh.sh` stays available for manual
@@ -182,6 +192,60 @@ pg_restore --list /tmp/db-state/ofertasuper-*.dump | head
 ```
 
 The dump contains only the public catalog data: no roles, no ACLs, no secrets.
+
+## Price drop alerts (bajas)
+
+The catalog tells its own story: `/bajas` lists the price drops of the day,
+`/bajas/feed.xml` is the same list as an Atom feed, and the Telegram channel
+posts a short digest. All three render `data/price-drops.json`, which the cloud
+job regenerates from the committed snapshot (see "Cloud refresh" above); no
+surface recomputes a movement on its own and no per-user storage is involved, so
+there are no accounts and nothing to subscribe to server-side.
+
+### What counts as a drop
+
+The export compares each offer's current price against its **last different
+observation inside the window** (14 days by default) and publishes the drop only
+when it clears **both** thresholds: at least 10% and at least ARS 100. Offers
+whose observation is older than 24 h (stale) never produce a drop, and a drop a
+captured percentage promotion fully explains is treated as a promo artifact, not
+as a price cut. Rules are deterministic and configurable:
+
+```bash
+npx tsx scripts/export-price-drops.ts --min-percent=15 --min-amount=250 --window-days=7
+# or through the environment: PRICE_DROP_MIN_PERCENT, PRICE_DROP_MIN_AMOUNT,
+# PRICE_DROP_WINDOW_DAYS, PRICE_DROP_MAX_AGE_HOURS, PRICE_DROP_LIMIT
+```
+
+The file keeps the top 100 by percentage, records the rules it was produced with
+and states its own date, so the page can always say which refresh it covers.
+
+### Telegram channel setup (one time)
+
+1. In Telegram, talk to **@BotFather**: `/newbot`, give it a name and a username,
+   and copy the **bot token** (`123456:ABC-...`).
+2. Create the public channel (or reuse one) and add the bot as an **admin with
+   "Post messages"** permission. Without that permission Telegram answers
+   `403`/`400` and the run logs `telegram responded <status>`.
+3. Get the **channel id**: post any message in the channel, then open
+   `https://api.telegram.org/bot<token>/getUpdates` and read `result[].channel_post.chat.id`
+   (channels use the `-100...` form). Forwarding a channel message to
+   `@userinfobot` also shows the id.
+4. In the GitHub repository, add the secrets **`TELEGRAM_BOT_TOKEN`** and
+   **`TELEGRAM_CHANNEL_ID`** (Settings → Secrets and variables → Actions). No
+   other account or paid tier is required.
+
+Until both secrets exist the workflow step runs
+`npx tsx scripts/post-price-drops.ts`, which logs
+`post-price-drops: skipped: not configured` and exits 0 (`continue-on-error`
+on top). The channel is never posted twice for the same day: the digest is
+built from the committed payload, and a day with no published drops is skipped
+instead of posting a noise message. Test the poster by hand with the token in
+the environment (never commit it):
+
+```bash
+TELEGRAM_BOT_TOKEN=... TELEGRAM_CHANNEL_ID=-100... npx tsx scripts/post-price-drops.ts
+```
 
 ## Analytics product (dense series and basket index)
 

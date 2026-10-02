@@ -27,6 +27,13 @@ snapshot export                                   scripts/pipeline/cmvp-catalog-
         ▼
 data/catalog-snapshot.json (committed, schemaVersion 2)
         │
+        ├─► price drops export                    scripts/export-price-drops.ts
+        │        │  current price vs last different observation (>=10% and >=ARS 100)
+        │        ▼
+        │   data/price-drops.json (committed, schemaVersion 1)
+        │        ▼
+        │   /bajas · /bajas/feed.xml (Atom) · Telegram digest   src/lib/price-drops*.ts
+        │
         ▼
 Next.js app + public API (read-only)   src/lib/catalog-snapshot.ts · src/lib/public-api.ts · src/app/**
 ```
@@ -73,6 +80,11 @@ product page and sitemap always declare the GTIN-14 URL as canonical.
 | `scripts/pipeline/topup.ts` | EAN re-read of unobserved offers |
 | `scripts/pipeline/cmvp-catalog-snapshot.ts` | Export the committed snapshot |
 | `data/catalog-snapshot.json` | The served catalog (products, offers, history) |
+| `src/lib/price-drops.ts` | Drop rules + the committed `data/price-drops.json` read API |
+| `src/lib/price-drops-feed.ts` | Atom feed over the price-drops payload |
+| `scripts/export-price-drops.ts` | Export the day's drops from the snapshot |
+| `scripts/post-price-drops.ts` | Optional Telegram channel digest (no-op unconfigured) |
+| `src/app/bajas/**` | `/bajas` page and `/bajas/feed.xml` |
 | `src/lib/catalog-snapshot.ts` | Read API over the snapshot (search, lookup, freshness) |
 | `src/lib/public-pages.ts` | Page loaders over the snapshot |
 | `src/lib/public-api.ts` | `/api/*` handlers |
