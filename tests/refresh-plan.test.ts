@@ -7,6 +7,7 @@ import { fetchVtexCategoryTree } from "../src/lib/vtex/category-tree";
 import {
   DISCOVERY_CONFIG_PATH,
   parseFrozenPlan,
+  refreshBatchId,
   resolveRefreshPlan,
 } from "../scripts/pipeline/resolve-refresh-plan";
 
@@ -98,6 +99,25 @@ test("parseFrozenPlan rejects a malformed plan instead of silently publishing no
   }
   const parsed = parseFrozenPlan({ batches: [{ ordinal: 2, source: "disco", term: "leche", count: 1, expectedGtins: [7790000000003] }] });
   assert.deepEqual(parsed, [{ ordinal: 2, source: "disco", term: "leche", count: 1, expectedGtins: ["7790000000003"] }]);
+});
+
+test("resolveRefreshPlan rotates by UTC date and reports the rotation window", async () => {
+  const dependencies = { readFile: readerWith(CONFIG), fetchTree: treeFetcher(), baseUrlFor: () => "https://example.test" };
+  const first = await resolveRefreshPlan({ now: new Date("2026-10-02T23:59:00.000Z"), dependencies });
+  const second = await resolveRefreshPlan({ now: new Date("2026-10-03T00:01:00.000Z"), dependencies });
+
+  assert.equal(first.rotation.dayIndex, Math.floor(Date.parse("2026-10-02T23:59:00.000Z") / 86_400_000));
+  assert.equal(second.rotation.dayIndex, first.rotation.dayIndex + 1);
+  assert.ok(first.rotation.windowDays > 0);
+  assert.equal(second.rotation.windowDays, first.rotation.windowDays);
+  assert.notDeepEqual(second.batches.map((batch) => batch.term), first.batches.map((batch) => batch.term));
+});
+
+test("refreshBatchId separates discovered and fallback plans for the same day", () => {
+  assert.equal(refreshBatchId("20261002", "discovered", 1), "v1-refresh-20261002-d-01");
+  assert.equal(refreshBatchId("20261002", "fallback", 1), "v1-refresh-20261002-f-01");
+  assert.equal(refreshBatchId("20261002", "discovered", 12), "v1-refresh-20261002-d-12");
+  assert.notEqual(refreshBatchId("20261002", "discovered", 3), refreshBatchId("20261002", "fallback", 3));
 });
 
 test("fetchVtexCategoryTree retries transient failures and gives up with the last error", async () => {

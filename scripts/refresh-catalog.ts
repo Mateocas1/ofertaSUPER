@@ -18,7 +18,7 @@ import { createDependencies } from "./acquire-cmvp-catalog-batch";
 import { evaluateRefreshGates } from "./lib/refresh-gates";
 import { formatRejectedSummary, type RejectedRecord } from "./lib/refresh-summary";
 import { runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
-import { DISCOVERY_CONFIG_PATH, FALLBACK_PLAN_PATH, resolveRefreshPlan } from "./pipeline/resolve-refresh-plan";
+import { DISCOVERY_CONFIG_PATH, FALLBACK_PLAN_PATH, refreshBatchId, resolveRefreshPlan, type RefreshPlanBatch, type RefreshPlanResolution } from "./pipeline/resolve-refresh-plan";
 import { pruneStagingProducts } from "./pipeline/staging-retention";
 import { topUpUnobservedOffers, type TopUpSummary } from "./pipeline/topup";
 
@@ -28,8 +28,6 @@ import { topUpUnobservedOffers, type TopUpSummary } from "./pipeline/topup";
 // re-querying), captures Carrefour simple promotions during staging,
 // regenerates the snapshot, and prints the run summary (batches ok/failed and
 // the under-24h offer share per supermarket).
-
-type PlanBatch = { ordinal: number; source: string; term: string; count: number; expectedGtins: string[] };
 
 type BatchOutcome = {
   ok: boolean;
@@ -49,8 +47,8 @@ function todayStamp() {
   return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function batchIdFor(batch: PlanBatch, stamp: string) {
-  return `v1-refresh-${stamp}-${String(batch.ordinal).padStart(2, "0")}`;
+function batchIdFor(batch: RefreshPlanBatch, stamp: string, mode: RefreshPlanResolution["mode"]) {
+  return refreshBatchId(stamp, mode, batch.ordinal);
 }
 
 function checkpointState(artifactsDir: string, batchId: string): string | null {
@@ -73,13 +71,13 @@ function runSummary(artifact: CmvpCatalogBatchArtifact) {
   };
 }
 
-async function runBatch(batch: PlanBatch, stamp: string, artifactsDir: string): Promise<BatchOutcome> {
+async function runBatch(batch: RefreshPlanBatch, stamp: string, mode: RefreshPlanResolution["mode"], artifactsDir: string): Promise<BatchOutcome> {
   // A completed checkpoint replays without re-querying; a failed one gets a
   // fresh batch id so the retry does not double-stage the same products.
-  let batchId = batchIdFor(batch, stamp);
+  let batchId = batchIdFor(batch, stamp, mode);
   let attempt = 2;
   while (checkpointState(artifactsDir, batchId) !== null && checkpointState(artifactsDir, batchId) !== "completed") {
-    batchId = `${batchIdFor(batch, stamp)}-r${attempt}`;
+    batchId = `${batchIdFor(batch, stamp, mode)}-r${attempt}`;
     attempt += 1;
     if (attempt > 10) throw new Error(`batch ${batch.ordinal} kept failing checkpoint validation`);
   }
@@ -195,15 +193,16 @@ async function resolveHashForSource(source: string, explicitHash: string | null)
   return resolved.hash;
 }
 
-async function resolvePlanForRun(): Promise<PlanBatch[]> {
+async function resolvePlanForRun(): Promise<RefreshPlanResolution> {
   const resolution = await resolveRefreshPlan({ configPath: DISCOVERY_CONFIG_PATH, frozenPlanPath: FALLBACK_PLAN_PATH });
   process.stdout.write(`[refresh] plan: ${resolution.mode}\n`);
   if (resolution.mode === "discovered") {
     process.stdout.write(`[refresh] plan detail: batches=${resolution.batches.length} categories=${resolution.categoriesConsidered} departments=${resolution.departmentsMatched} truncated=${resolution.truncated}\n`);
+    process.stdout.write(`[refresh] plan rotation: utcDay=${resolution.rotation.dayIndex} windowDays=${resolution.rotation.windowDays}\n`);
   } else {
     process.stdout.write(`[refresh] discovery failed (using the frozen plan): ${resolution.reason}\n`);
   }
-  return resolution.batches;
+  return resolution;
 }
 
 // Staging retention (#547) runs only after a publishable refresh: the run
@@ -221,7 +220,7 @@ async function runStagingRetention() {
 async function main() {
   const explicitHash = process.env.VTEX_SHA256_HASH ?? null;
   const runStartedAt = new Date();
-  const plan: { batches: PlanBatch[] } = { batches: await resolvePlanForRun() };
+  const plan = await resolvePlanForRun();
   const stamp = readFlag("date") ?? todayStamp();
   const only = readFlag("batch") !== undefined ? Number(readFlag("batch")) : null;
   const batches = only !== null ? plan.batches.filter((batch) => batch.ordinal === only) : plan.batches;
@@ -239,7 +238,7 @@ async function main() {
   const rejected: RejectedRecord[] = [];
   for (const batch of batches) {
     process.env.VTEX_SHA256_HASH = await resolveHashForSource(batch.source, explicitHash);
-    const outcome = await runBatch(batch, stamp, artifactsDir);
+    const outcome = await runBatch(batch, stamp, plan.mode, artifactsDir);
     if (outcome.ok) ok += 1;
     if (outcome.failure) failures.push(outcome.failure);
     promosCaptured += outcome.promosCaptured;

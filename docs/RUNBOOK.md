@@ -31,17 +31,24 @@ lock, applies the freshness gate, and regenerates the snapshot.
    - Builds the plan at run time: reads `config/catalog-discovery.json` (the
      allowlisted grocery departments per store, `maxBatchesPerRun` and
      `resultsPerBatch`) and reads each store's public VTEX category tree, then
-     turns the departments' child categories into search batches. The log says
-     `[refresh] plan: discovered` with the batch/category counts. When anything
-     in that path fails (config, tree read, no allowlisted category), it logs
-     `[refresh] plan: fallback`, names the discovery error and walks the frozen
-     plan `artifacts/cmvp/catalog/expansion-20260920-discovery-25/acquisition-plan-cycle2.json`
+     turns the departments' child categories into search batches. The sampled
+     children rotate deterministically by UTC date, so every child of every
+     allowlisted department is searched within the logged rotation window
+     (`[refresh] plan rotation: utcDay=<n> windowDays=<n>`); a smaller
+     department roster keeps the quota from starving any one department. The
+     log says `[refresh] plan: discovered` with the batch/category counts. When
+     anything in that path fails (config, tree read, no allowlisted category),
+     it logs `[refresh] plan: fallback`, names the discovery error and walks the
+     frozen plan `artifacts/cmvp/catalog/expansion-20260920-discovery-25/acquisition-plan-cycle2.json`
      instead, so one bad category read never blocks the day.
-   - Walks the batches with a per-day `batchId`
-     (`v1-refresh-<YYYYMMDD>-<ordinal>`); a completed batch replays from its
-     checkpoint and does not query again. A discovered batch searches up to 50
-     results (`resultsPerBatch`) and carries no expected GTINs; a frozen-plan
-     batch keeps its 25-result contract.
+   - Walks the batches with a per-day `batchId` that also carries the plan mode
+     (`v1-refresh-<YYYYMMDD>-d-<ordinal>` for a discovered plan,
+     `v1-refresh-<YYYYMMDD>-f-<ordinal>` for the fallback); a completed batch
+     replays from its checkpoint and does not query again. The mode keeps a
+     same-day discovered/fallback flip from colliding with the other plan's
+     checkpoints. A discovered batch searches up to 50 results
+     (`resultsPerBatch`) and carries no expected GTINs; a frozen-plan batch
+     keeps its 25-result contract.
    - Captures simple Carrefour promos (PromotionTeasers by EAN, public REST
      read) during staging; a failed promo read leaves the promo null, counts in
      the summary, and does not abort the batch.

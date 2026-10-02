@@ -30,6 +30,7 @@ export type RefreshPlanResolution = {
   categoriesConsidered: number;
   departmentsMatched: number;
   truncated: boolean;
+  rotation: { dayIndex: number; windowDays: number };
 };
 
 export type ResolveRefreshPlanDependencies = {
@@ -82,16 +83,30 @@ function isSupportedSource(source: string): boolean {
   return (CMVP_CATALOG_SOURCES as readonly string[]).includes(source);
 }
 
+// One UTC-day number drives the rotation, so two runs on the same UTC date
+// always build the same plan and a new day shifts every department's children.
+export function utcRotationDay(now: Date) {
+  return Math.max(0, Math.floor(now.getTime() / 86_400_000));
+}
+
+// The batch id carries the plan mode (`d` discovered, `f` fallback): a same-day
+// flip between the two must never collide with the other plan's checkpoints.
+export function refreshBatchId(stamp: string, mode: RefreshPlanResolution["mode"], ordinal: number) {
+  return `v1-refresh-${stamp}-${mode === "discovered" ? "d" : "f"}-${String(ordinal).padStart(2, "0")}`;
+}
+
 async function discoverRefreshPlan({
   read,
   fetchTree,
   baseUrlFor,
   configPath,
+  rotationDay,
 }: {
   read: (path: string) => Promise<string>;
   fetchTree: (args: { source: string; baseUrl: string }) => Promise<unknown>;
   baseUrlFor: (source: string) => string;
   configPath: string;
+  rotationDay: number;
 }): Promise<RefreshPlanResolution> {
   const config = parseDiscoveryConfig(JSON.parse(await read(configPath)));
   const treesBySource: Record<string, CategoryTreeNode[]> = {};
@@ -101,7 +116,7 @@ async function discoverRefreshPlan({
     }
     treesBySource[source] = parseCategoryTree(await fetchTree({ source, baseUrl: baseUrlFor(source) }));
   }
-  const plan = buildDiscoveryPlan({ config, treesBySource });
+  const plan = buildDiscoveryPlan({ config, treesBySource, rotationDay });
   if (plan.batches.length === 0) {
     throw new Error("discovery matched no allowlisted category");
   }
@@ -112,29 +127,38 @@ async function discoverRefreshPlan({
     categoriesConsidered: plan.categoriesConsidered,
     departmentsMatched: plan.departmentsMatched,
     truncated: plan.truncated,
+    rotation: plan.rotation,
+  };
+}
+
+function refreshPlanDependencies(dependencies: ResolveRefreshPlanDependencies) {
+  return {
+    read: dependencies.readFile ?? ((path: string) => readFile(path, "utf8")),
+    fetchTree: dependencies.fetchTree ?? ((args: { source: string; baseUrl: string }) => fetchVtexCategoryTree({ baseUrl: args.baseUrl })),
+    baseUrlFor: dependencies.baseUrlFor ?? ((source: string) => getSupermarketBySlug(source).baseUrl),
   };
 }
 
 export async function resolveRefreshPlan({
   configPath = DISCOVERY_CONFIG_PATH,
   frozenPlanPath = FALLBACK_PLAN_PATH,
+  now = new Date(),
   dependencies = {},
 }: {
   configPath?: string;
   frozenPlanPath?: string;
+  now?: Date;
   dependencies?: ResolveRefreshPlanDependencies;
 } = {}): Promise<RefreshPlanResolution> {
-  const read = dependencies.readFile ?? ((path: string) => readFile(path, "utf8"));
-  const fetchTree = dependencies.fetchTree ?? ((args: { source: string; baseUrl: string }) => fetchVtexCategoryTree({ baseUrl: args.baseUrl }));
-  const baseUrlFor = dependencies.baseUrlFor ?? ((source: string) => getSupermarketBySlug(source).baseUrl);
+  const { read, fetchTree, baseUrlFor } = refreshPlanDependencies(dependencies);
 
   const fallback = async (reason: string): Promise<RefreshPlanResolution> => {
     const batches = parseFrozenPlan(JSON.parse(await read(frozenPlanPath)));
-    return { mode: "fallback", batches, reason, categoriesConsidered: 0, departmentsMatched: 0, truncated: false };
+    return { mode: "fallback", batches, reason, categoriesConsidered: 0, departmentsMatched: 0, truncated: false, rotation: { dayIndex: utcRotationDay(now), windowDays: 0 } };
   };
 
   try {
-    return await discoverRefreshPlan({ read, fetchTree, baseUrlFor, configPath });
+    return await discoverRefreshPlan({ read, fetchTree, baseUrlFor, configPath, rotationDay: utcRotationDay(now) });
   } catch (error) {
     return fallback(error instanceof Error ? error.message : String(error));
   }
