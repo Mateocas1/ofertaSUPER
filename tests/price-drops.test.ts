@@ -19,6 +19,8 @@ import {
   type PriceDropSnapshotOffer,
 } from "../src/lib/price-drops";
 import { parseFlags, resolveRules, runExport } from "../scripts/export-price-drops";
+import { buildPriceDropsDigest } from "../scripts/lib/price-drops-poster";
+import { buildPriceDropsFeed } from "../src/lib/price-drops-feed";
 
 // Detection is proven against synthetic snapshots with explicit clocks: the
 // daily refresh rewrites the real ones, so no expectation here depends on it.
@@ -333,5 +335,230 @@ describe("price drops export flags", () => {
   it("rejects a non-numeric threshold instead of silently defaulting", () => {
     assert.throws(() => resolveRules({ PRICE_DROP_LIMIT: "many" }, {}), /non-negative number/);
     assert.throws(() => resolveRules({}, { "min-amount": "-5" }), /non-negative number/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Orchestrator review #1: a suspicious movement is recorded but NEVER published.
+// A drop that a pack-size change or a data error explains must not reach
+// /bajas, the Atom feed or the Telegram digest.
+//
+// The cases below are written against the shape of the real coffee case the
+// current snapshot produced: Carrefour, 3765 -> 753 (80%), list price moving
+// with the price and no unit price recorded for either point.
+// ---------------------------------------------------------------------------
+
+type SuspectDrop = PriceDrop & { reason: string };
+type Detection = { published: PriceDrop[]; suspect: SuspectDrop[] };
+type PayloadWithSuspects = {
+  suspect?: SuspectDrop[];
+  suspectDrops?: number;
+  rules: { maxPercentDrop?: number } & Record<string, unknown>;
+};
+
+const COFFEE = {
+  price: 753,
+  listPrice: 753,
+  history: [{ price: 3765, listPrice: 3765, observedAt: daysBefore(4) }],
+};
+
+function rawOffer(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ean: EAN,
+    source: "carrefour",
+    price: 800,
+    listPrice: null,
+    promo: null,
+    available: true,
+    productUrl: `https://www.carrefour.test/producto/${EAN}`,
+    observedAt: NOW.toISOString(),
+    history: [{ price: 1000, listPrice: null, observedAt: daysBefore(12) }],
+    ...overrides,
+  };
+}
+
+function detectRaw(
+  offers: Array<Record<string, unknown>>,
+  rules: Partial<PriceDropRules> = {},
+): Detection {
+  const rawSnapshot = {
+    generatedAt: NOW.toISOString(),
+    products: offers.map((entry) => ({
+      ean: String(entry.ean),
+      name: `Producto ${String(entry.ean)}`,
+      brand: "Marca",
+      imageUrl: null,
+      category: "Almacén",
+      categorySlug: "almacen",
+    })),
+    offers,
+  } as unknown as PriceDropSnapshot;
+  return detectPriceDrops(
+    rawSnapshot,
+    { ...DEFAULT_PRICE_DROP_RULES, ...rules },
+    NOW,
+  ) as unknown as Detection;
+}
+
+function payloadWith(offers: Array<Record<string, unknown>>, rules: Partial<PriceDropRules> = {}) {
+  const rawSnapshot = {
+    generatedAt: NOW.toISOString(),
+    products: offers.map((entry) => ({
+      ean: String(entry.ean),
+      name: `Producto ${String(entry.ean)}`,
+      brand: "Marca",
+      imageUrl: null,
+      category: "Almacén",
+      categorySlug: "almacen",
+    })),
+    offers,
+  } as unknown as PriceDropSnapshot;
+  return buildPriceDropsPayload(rawSnapshot, { ...DEFAULT_PRICE_DROP_RULES, ...rules }, NOW);
+}
+
+describe("suspicious drops are never published", () => {
+  it("records a drop above the maximum percent as suspect instead of publishing it", () => {
+    const detection = detectRaw([rawOffer({ ...COFFEE })]);
+
+    assert.deepEqual(detection.published, []);
+    assert.equal(detection.suspect.length, 1);
+    const [suspect] = detection.suspect;
+    assert.equal(suspect.reason, "drop_above_max_percent");
+    assert.equal(suspect.percentDrop, 80);
+    assert.equal(suspect.previousPrice, 3765);
+    assert.equal(suspect.currentPrice, 753);
+    assert.equal(suspect.date, "2027-01-15");
+    assert.equal(suspect.source, "carrefour");
+  });
+
+  it("keeps a large drop public when the unit price proves the fall", () => {
+    const detection = detectRaw([
+      rawOffer({
+        price: 753,
+        unitPrice: 6024,
+        history: [{ price: 3765, listPrice: 3765, observedAt: daysBefore(4), unitPrice: 7530 }],
+      }),
+    ]);
+
+    assert.equal(detection.published.length, 1);
+    assert.equal(detection.published[0].percentDrop, 80);
+    assert.deepEqual(detection.suspect, []);
+  });
+
+  it("records a suspect drop when the unit price did not fall", () => {
+    const detection = detectRaw([
+      rawOffer({
+        price: 753,
+        unitPrice: 9000,
+        history: [{ price: 3765, listPrice: 3765, observedAt: daysBefore(4), unitPrice: 7530 }],
+      }),
+    ]);
+
+    assert.deepEqual(detection.published, []);
+    assert.equal(detection.suspect.length, 1);
+    assert.equal(detection.suspect[0].reason, "unit_price_did_not_fall");
+    assert.equal(detection.suspect[0].percentDrop, 80);
+  });
+
+  it("honors a configurable maximum percent", () => {
+    assert.equal(detectRaw([rawOffer({ ...COFFEE })], { maxPercentDrop: 90 }).published.length, 1);
+    assert.equal(detectRaw([rawOffer({ ...COFFEE })], { maxPercentDrop: 70 }).suspect.length, 1);
+  });
+
+  it("publishes an ordinary drop even without unit price evidence", () => {
+    const detection = detectRaw([offer()]);
+
+    assert.equal(detection.published.length, 1);
+    assert.deepEqual(detection.suspect, []);
+  });
+
+  it("publishes only the safe drops and records the suspects in the payload", () => {
+    const payload = payloadWith([
+      rawOffer({ ean: VALID_EANS[1], ...COFFEE }),
+      rawOffer({ ean: VALID_EANS[2] }),
+    ]) as unknown as PriceDropsPayload & PayloadWithSuspects;
+
+    assert.equal(payload.schemaVersion, 2);
+    assert.equal(payload.rules.maxPercentDrop, 60);
+    assert.equal(payload.drops.length, 1);
+    assert.equal(payload.totalDrops, 1);
+    assert.equal(payload.suspectDrops, 1);
+    assert.equal(payload.suspect?.length, 1);
+    assert.equal(payload.suspect?.[0].reason, "drop_above_max_percent");
+    assert.deepEqual(parsePriceDrops(JSON.parse(JSON.stringify(payload))), payload);
+  });
+
+  it("rejects a payload whose suspect entry carries an unknown reason", () => {
+    const payload = payloadWith([rawOffer({ ...COFFEE })]) as unknown as PriceDropsPayload & PayloadWithSuspects;
+    const suspect = payload.suspect ?? [];
+
+    assert.throws(
+      () => parsePriceDrops({ ...payload, suspect: [{ ...suspect[0], reason: "because" }] }),
+      PriceDropsUnavailableError,
+    );
+  });
+
+  it("keeps suspects out of the Atom feed", () => {
+    const payload = payloadWith([
+      rawOffer({ ean: VALID_EANS[1], ...COFFEE }),
+      rawOffer({ ean: VALID_EANS[2] }),
+    ]);
+    const feed = buildPriceDropsFeed(payload);
+
+    assert.equal((feed.match(/<entry>/g) ?? []).length, 1);
+    assert.ok(!feed.includes(`Producto ${VALID_EANS[1]}`), "the suspect product must not appear in the feed");
+  });
+
+  it("keeps suspects out of the Telegram digest and skips a day that only has suspects", async () => {
+    const mixed = payloadWith([
+      rawOffer({ ean: VALID_EANS[1], ...COFFEE }),
+      rawOffer({ ean: VALID_EANS[2] }),
+    ]);
+    const digest = buildPriceDropsDigest(mixed, "https://example.test");
+    assert.ok(!digest.includes(`Producto ${VALID_EANS[1]}`), "the suspect product must not be posted");
+
+    const onlySuspects = payloadWith([rawOffer({ ...COFFEE })]);
+    let called = false;
+    const outcome = await postPriceDropsDigest({
+      payload: onlySuspects,
+      config: { token: "t", chatId: "c" },
+      siteUrl: "https://example.test",
+      fetchImpl: (async () => {
+        called = true;
+        return new Response("{}", { status: 200 });
+      }) as unknown as typeof fetch,
+    });
+    assert.equal(called, false);
+    assert.equal(outcome.action, "skipped");
+  });
+
+  it("excludes suspects from the page view", () => {
+    const payload = payloadWith([
+      rawOffer({ ean: VALID_EANS[1], ...COFFEE }),
+      rawOffer({ ean: VALID_EANS[2] }),
+    ]);
+    const view = buildPriceDropsView(payload);
+
+    assert.equal(view.drops.length, 1);
+    assert.ok(!view.drops.some((drop) => drop.ean === VALID_EANS[1]));
+  });
+
+  it("never publishes a suspect movement from the committed payload", () => {
+    const payload = loadPriceDrops() as unknown as PriceDropsPayload & PayloadWithSuspects;
+    const maxPercent = payload.rules.maxPercentDrop ?? 60;
+
+    for (const drop of payload.drops) {
+      assert.ok(
+        drop.percentDrop <= maxPercent,
+        `published drop ${drop.ean} at ${drop.percentDrop}% must not exceed the suspect threshold`,
+      );
+    }
+    for (const suspect of payload.suspect ?? []) {
+      assert.ok(["drop_above_max_percent", "unit_price_did_not_fall"].includes(suspect.reason));
+      assert.ok(
+        suspect.percentDrop > maxPercent,
+        `suspect ${suspect.ean} must have a reason to be withheld`,
+      );
+    }
   });
 });
