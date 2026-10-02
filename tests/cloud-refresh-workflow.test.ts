@@ -73,6 +73,11 @@ describe("cloud refresh workflow contract", () => {
     const declaration = workflow.slice(stepStart, telegramIndex);
     assert.match(declaration, /continue-on-error: true/, "a missing channel must never fail the refresh");
     assert.match(declaration, /inputs\.dry_run != true/);
+    assert.match(
+      declaration,
+      /github\.event_name == 'schedule'/,
+      "only the scheduled run may post; a manual re-run must never double-post",
+    );
     assert.match(declaration, /TELEGRAM_BOT_TOKEN: \$\{\{ secrets\.TELEGRAM_BOT_TOKEN \}\}/);
     assert.match(declaration, /TELEGRAM_CHANNEL_ID: \$\{\{ secrets\.TELEGRAM_CHANNEL_ID \}\}/);
   });
@@ -84,6 +89,11 @@ describe("cloud refresh workflow contract", () => {
 
     assert.match(declaration, /continue-on-error: true/);
     assert.match(declaration, /inputs\.dry_run != true/);
+    assert.doesNotMatch(
+      declaration,
+      /github\.event_name == 'schedule'/,
+      "a manual run may still refresh the committed drops; only the digest is schedule-only",
+    );
   });
 
   it("keeps the single tracking issue wired to the reporter", () => {
