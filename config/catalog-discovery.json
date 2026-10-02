@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "maxBatchesPerRun": 60,
+  "resultsPerBatch": 50,
+  "departments": {
+    "disco": [
+      "Almacén",
+      "Bebidas",
+      "Frutas y Verduras",
+      "Carnes",
+      "Pescados y Mariscos",
+      "Quesos y Fiambres",
+      "Lácteos",
+      "Congelados",
+      "Panaderia y Pasteleria",
+      "Rotiseria",
+      "Perfumería",
+      "Limpieza",
+      "Mascotas",
+      "Mundo Bebe",
+      "Pastas Frescas"
+    ],
+    "jumbo": [
+      "Almacén",
+      "Bebidas",
+      "Frutas y Verduras",
+      "Carnes",
+      "Pescados y Mariscos",
+      "Quesos y Fiambres",
+      "Lácteos",
+      "Congelados",
+      "Panaderia y Pasteleria",
+      "Rotiseria",
+      "Perfumería",
+      "Limpieza",
+      "Mascotas",
+      "Mundo Bebe",
+      "Pastas Frescas"
+    ],
+    "carrefour": [
+      "Almacén",
+      "Desayuno y merienda",
+      "Bebidas",
+      "Lácteos y productos frescos",
+      "Carnes y pescados",
+      "Frutas y verduras",
+      "Panadería",
+      "Congelados",
+      "Limpieza",
+      "Perfumería y farmacia",
+      "Mundo Bebé",
+      "Mascotas"
+    ]
+  }
+}

@@ -39,6 +39,9 @@ export type DiscoveryPlan = {
   sources: string[];
   batches: DiscoveredBatch[];
   truncated: boolean;
+  /** Raw child category nodes seen across matched departments. */
+  categoriesConsidered: number;
+  departmentsMatched: number;
 };
 
 export type CollectedCategoryTerms = {
@@ -159,10 +162,14 @@ export function buildDiscoveryPlan({
   const batches: DiscoveredBatch[] = [];
   let ordinal = 1;
   let truncated = false;
+  let categoriesConsidered = 0;
+  let departmentsMatched = 0;
 
   sources.forEach((source, index) => {
     const limit = perSource + (index < remainder ? 1 : 0);
     const collected = collectCategoryTerms(treesBySource[source] ?? [], config.departments[source] ?? []);
+    categoriesConsidered += collected.categoriesConsidered;
+    departmentsMatched += collected.departmentsMatched;
     const ordered = interleaveCategoryTerms(collected.byDepartment);
     if (ordered.length > limit) truncated = true;
     for (const term of ordered.slice(0, limit)) {
@@ -171,7 +178,7 @@ export function buildDiscoveryPlan({
     }
   });
 
-  return { sources, batches, truncated };
+  return { sources, batches, truncated, categoriesConsidered, departmentsMatched };
 }
 
 function requireInteger(value: unknown, label: string, max: number) {

@@ -1,7 +1,7 @@
 import "./load-env";
 
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -18,17 +18,17 @@ import { createDependencies } from "./acquire-cmvp-catalog-batch";
 import { evaluateRefreshGates } from "./lib/refresh-gates";
 import { formatRejectedSummary, type RejectedRecord } from "./lib/refresh-summary";
 import { runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
+import { DISCOVERY_CONFIG_PATH, FALLBACK_PLAN_PATH, resolveRefreshPlan } from "./pipeline/resolve-refresh-plan";
 import { topUpUnobservedOffers, type TopUpSummary } from "./pipeline/topup";
 
-// Gate 6 — the single daily catalog refresh command. It replays the 36
-// acquisition batches of the cycle-2 plan with fresh daily batch ids (the
-// same batchId replays without re-querying), captures Carrefour simple
-// promotions during staging, regenerates the snapshot, and prints the run
-// summary (batches ok/failed and the under-24h offer share per supermarket).
+// Gate 6 — the single daily catalog refresh command. The run builds its plan
+// from the stores' live category trees (frozen plan as fallback), replays the
+// batches with fresh daily batch ids (the same batchId replays without
+// re-querying), captures Carrefour simple promotions during staging,
+// regenerates the snapshot, and prints the run summary (batches ok/failed and
+// the under-24h offer share per supermarket).
 
-const PLAN_PATH = "artifacts/cmvp/catalog/expansion-20260920-discovery-25/acquisition-plan-cycle2.json";
-
-type PlanBatch = { ordinal: number; batchId: string; source: string; term: string; count: number; expectedGtins: string[] };
+type PlanBatch = { ordinal: number; source: string; term: string; count: number; expectedGtins: string[] };
 
 type BatchOutcome = {
   ok: boolean;
@@ -196,7 +196,14 @@ async function resolveHashForSource(source: string, explicitHash: string | null)
 async function main() {
   const explicitHash = process.env.VTEX_SHA256_HASH ?? null;
   const runStartedAt = new Date();
-  const plan: { batches: PlanBatch[] } = JSON.parse(await readFile(resolve(PLAN_PATH), "utf8"));
+  const resolution = await resolveRefreshPlan({ configPath: DISCOVERY_CONFIG_PATH, frozenPlanPath: FALLBACK_PLAN_PATH });
+  process.stdout.write(`[refresh] plan: ${resolution.mode}\n`);
+  if (resolution.mode === "discovered") {
+    process.stdout.write(`[refresh] plan detail: batches=${resolution.batches.length} categories=${resolution.categoriesConsidered} departments=${resolution.departmentsMatched} truncated=${resolution.truncated}\n`);
+  } else {
+    process.stdout.write(`[refresh] discovery failed (using the frozen plan): ${resolution.reason}\n`);
+  }
+  const plan: { batches: PlanBatch[] } = { batches: resolution.batches };
   const stamp = readFlag("date") ?? todayStamp();
   const only = readFlag("batch") !== undefined ? Number(readFlag("batch")) : null;
   const batches = only !== null ? plan.batches.filter((batch) => batch.ordinal === only) : plan.batches;
