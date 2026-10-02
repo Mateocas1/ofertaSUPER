@@ -24,7 +24,11 @@ disponible", nunca datos demo. Detalle en [ARCHITECTURE.md](ARCHITECTURE.md).
 Un segundo pipeline, independiente del sitio, exporta la serie diaria densa de
 precios a Parquet y la modela con DuckDB + dbt (`analytics/`):
 
+<!-- price-chart:start -->
 ![Evolución de precios de la canasta](analytics/assets/price-evolution.png)
+
+Fuente: snapshot real `data/catalog-snapshot.json` · Rango 2026-09-20 → 2026-10-02 · 3 días relevados — menos de 7 días relevados: todavía no alcanza para leer una tendencia.
+<!-- price-chart:end -->
 
 - `scripts/export-price-series.ts` escribe una fila por (fecha, GTIN-14, súper)
   desde `price_history` y el estado de cada oferta; un valor con más de 24 h sin

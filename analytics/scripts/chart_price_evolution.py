@@ -1,15 +1,19 @@
 #!/usr/bin/env python
-"""Render the price-evolution chart used by the README.
+"""Render the SAMPLE price-evolution chart (test fixture only).
 
-Reads the same dense series the analytics models use (the committed sample by
-default and the exported partitions on real runs) and writes a PNG, so the
-README chart is a real artifact of the pipeline instead of a hand-drawn image.
+This script renders the synthetic series under `analytics/sample/` so the
+sample pipeline stays reproducible in CI. It is NOT the README chart: the
+README chart is generated from real dated observations by
+`npx tsx scripts/chart-price-evolution.ts` at the repository root, which labels
+the real range and the source. Writing this script's output over
+`assets/price-evolution.png` is refused, so a synthetic chart can never be
+published as the real one.
 
 `dbt build` must have seeded `basket_weights` in the DuckDB database first.
 
 Usage:
     uv run python scripts/chart_price_evolution.py
-    uv run python scripts/chart_price_evolution.py --glob 'data/*/part.parquet' --out assets/real.png
+    uv run python scripts/chart_price_evolution.py --glob 'data/*/part.parquet' --out /tmp/real.png
 """
 
 from __future__ import annotations
@@ -26,7 +30,8 @@ import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_OUTPUT = PROJECT_DIR / "assets" / "price-evolution.png"
+DEFAULT_OUTPUT = PROJECT_DIR / "assets" / "price-evolution.sample.png"
+README_CHART = PROJECT_DIR / "assets" / "price-evolution.png"
 
 QUERY = """
 with priced as (
@@ -67,6 +72,14 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--title", default="Evolución de precios de la canasta")
     args = parser.parse_args()
+
+    if args.out.resolve() == README_CHART.resolve():
+        print(
+            "chart_price_evolution: this renders the synthetic sample fixture; "
+            "the README chart comes from real data via "
+            "`npx tsx scripts/chart-price-evolution.ts`"
+        )
+        return 1
 
     try:
         series = load_series(args.glob)

@@ -57,6 +57,17 @@ sample **page payload** used by the tests and CI lives at
 production. The CI job in `.github/workflows/analytics.yml` runs the build, both
 payload checks and the chart.
 
+## The README chart
+
+`npx tsx scripts/chart-price-evolution.ts` (repository root) renders
+`assets/price-evolution.png` from the committed real snapshot
+(`data/catalog-snapshot.json`): every dated observation of the 12 fixed basket
+products, averaged per product and day. The chart subtitle and the README
+caption name the real range and the source, and say so plainly while fewer than
+seven days exist. The sample (`sample/part.parquet`, drawn by
+`scripts/chart_price_evolution.py`) is a CI fixture only: it refuses to write
+the README path and can never be published as the real chart.
+
 ## The dense series
 
 One row per `(date, gtin14, store)` from the pair's first observation onward.
@@ -108,3 +119,6 @@ number when the window is too short.
   here (ends 2026-08-01), so the production payload is `insufficient` (no index
   values) until at least two basket months and one overlapping CPI month exist.
   The page explains exactly that instead of showing sample numbers.
+- The README chart reads the snapshot's per-offer history, which still carries
+  the 2026-09-20 bootstrap observations; the dense Parquet series (and therefore
+  `basket-index.json`) starts on 2026-09-28, when the daily export began.
