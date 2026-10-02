@@ -174,7 +174,18 @@ known for the current offer state, so older rows carry nulls for them.
 3. `cd analytics && uv run --locked --no-dev python scripts/publish_basket_index.py \
    --glob 'data/*/part.parquet' --source release` runs `dbt build` and rewrites
 `data/analytics/basket-index.json`; the script then commits and pushes it as
-`chore(analytics): refresh basket index <date> [cloud]`. A failed export skips
+`chore(analytics): refresh basket index <date> [cloud]`. The payload is only
+`status = "ready"` with at least two basket months and one overlapping INDEC
+month; otherwise it is `status = "insufficient"` with no index values, so the
+page can never show a one-point or sample "index". The file is left untouched
+when the only difference is `generatedAt`. Regenerate the committed production
+placeholder without dbt with:
+
+```bash
+cd analytics && uv run python scripts/publish_basket_index.py --placeholder --source release
+```
+
+A failed export skips
 the rest; a failed dbt build leaves the previous JSON in place. `uv` is
 installed with `pip` when the runner does not have it.
 
@@ -192,10 +203,12 @@ cd analytics && uv run python scripts/publish_basket_index.py \
 ```
 
 `dbt build` alone is reproducible from a clean checkout with the tiny committed
-sample (`analytics/sample/part.parquet`); the CI job in
-`.github/workflows/analytics.yml` runs it, checks that the committed JSON is
-reproducible (`publish_basket_index.py --check`) and regenerates the README
-chart.
+sample (`analytics/sample/part.parquet`); the sample **page payload** lives at
+`analytics/tests/fixtures/basket-index.sample.json` and the CI job in
+`.github/workflows/analytics.yml` builds from the sample, checks both payloads
+(`--check` against the fixture and `--placeholder --check` against production)
+and regenerates the README chart. No sample artifact is ever served in
+production.
 
 ### CPI seed
 
@@ -208,8 +221,10 @@ unparseable seed before writing anything.
 ### Known limitations
 
 - Real catalog data starts on 2026-09-28 while the INDEC series available here
-  ends on 2026-08-01, so the first real months share no CPI value; the JSON
-  reports that instead of drawing a false comparison.
+  ends on 2026-08-01, so the production payload is an honest
+  `status = "insufficient"` with no index values until two basket months and one
+  overlapping CPI month exist; the page states that instead of drawing a false
+  comparison.
 - Backfill freshness can only use `price_history` changes plus each offer's
   `last_checked_at`, which is a single instant: days before the latest refresh
   may read `stale` even if the offer was checked then. The daily cloud export is

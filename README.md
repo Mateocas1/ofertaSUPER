@@ -33,7 +33,10 @@ precios a Parquet y la modela con DuckDB + dbt (`analytics/`):
   (`scripts/analytics-data.sh`) y publica un índice Laspeyres de canasta fija
   comparado con el IPC Nivel General del INDEC.
 - La página `/inflacion` renderiza `data/analytics/basket-index.json`
-  precalculado: no hay base de datos en el camino de lectura.
+  precalculado: no hay base de datos en el camino de lectura. Mientras la serie
+  no tenga al menos dos meses de canasta y un mes de IPC del INDEC superpuesto,
+  el JSON publica un estado "datos insuficientes" sin valores y la página lo
+  explica; nunca se muestran números de muestra en producción.
 - Comandos, modelos, procedencia del IPC y limitaciones: [analytics/README.md](analytics/README.md).
 
 ## Desarrollo local
@@ -73,8 +76,9 @@ Postgres están en [docs/RUNBOOK.md](docs/RUNBOOK.md).
 - La frescura depende del refresh diario: el sitio siempre muestra el último
   snapshot commiteado, con su fecha de observación.
 - El índice de canasta de `/inflacion` se recalcula con el refresh diario; su
-  JSON declara la fuente y la cobertura, y hasta la primera corrida real en la
-  nube muestra el dataset de muestra de la integración continua.
+  JSON declara la fuente, la cobertura y el estado, y hasta que exista la
+  ventana comparable (2 meses de canasta + 1 mes de IPC superpuesto) la página
+  muestra un estado vacío honesto, sin valores de muestra.
 - Admin: acceso con falla cerrada salvo que la sesión de Clerk tenga el claim exacto de rol admin.
 
 ## Documentación histórica
