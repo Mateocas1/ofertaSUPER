@@ -81,3 +81,4 @@ analytics/logs/
 analytics/.venv/
 analytics/*.duckdb
 analytics/*.duckdb.wal
+analytics/.user.yml

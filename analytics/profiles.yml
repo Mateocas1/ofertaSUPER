@@ -1,0 +1,9 @@
+# Local DuckDB profile for the analytics project. The database is a build
+# artifact: `dbt build` recreates it from the Parquet files and the seeds.
+ofertasuper_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('ANALYTICS_DUCKDB_PATH', 'analytics.duckdb') }}"
+      threads: 4

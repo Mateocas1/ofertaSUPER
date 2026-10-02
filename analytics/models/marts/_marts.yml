@@ -1,0 +1,129 @@
+version: 2
+
+models:
+  - name: dim_product
+    description: One row per canonical GTIN-14 with its latest catalog attributes.
+    columns:
+      - name: gtin14
+        data_tests:
+          - unique
+          - not_null
+      - name: product_name
+        data_tests:
+          - not_null
+
+  - name: dim_store
+    description: One row per supermarket slug seen in the series.
+    columns:
+      - name: store
+        data_tests:
+          - unique
+          - not_null
+      - name: store_name
+        data_tests:
+          - not_null
+
+  - name: fct_price_daily
+    description: >
+      The dense daily series joined to the product and store dimensions. A row
+      with value_reason `stale` has a null price by design.
+    columns:
+      - name: price_date
+        data_tests:
+          - not_null
+      - name: gtin14
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: gtin14
+      - name: store
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_store')
+                field: store
+      - name: value_reason
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["observed", "carried_forward", "stale"]
+
+  - name: mart_basket_index_daily
+    description: Daily Laspeyres basket index; base date reads exactly 100.
+    columns:
+      - name: price_date
+        data_tests:
+          - not_null
+      - name: index_reason
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["no_basket_price", "low_coverage"]
+
+  - name: mart_basket_index_monthly
+    description: Monthly average of the daily basket index plus month-over-month variation.
+    columns:
+      - name: month
+        data_tests:
+          - unique
+          - not_null
+      - name: basket_index
+        data_tests:
+          - not_null
+
+  - name: mart_basket_index_vs_cpi
+    description: Basket index next to the rebased INDEC IPC Nivel General.
+    columns:
+      - name: month
+        data_tests:
+          - unique
+          - not_null
+
+  - name: mart_price_movers
+    description: First-to-last fresh price per product and store.
+    columns:
+      - name: gtin14
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: gtin14
+
+seeds:
+  - name: basket_weights
+    description: >
+      Fixed Laspeyres basket: one row per GTIN-14 with its share of the basket.
+      Weights are renormalized over the products covered on each date.
+    columns:
+      - name: gtin14
+        data_tests:
+          - unique
+          - not_null
+      - name: weight
+        data_tests:
+          - not_null
+    config:
+      meta:
+        weight_semantics: "0 < weight <= 1, weights sum to 1"
+
+  - name: indec_cpi
+    description: >
+      Official INDEC IPC Nivel General Nacional (base December 2016), monthly,
+      mirrored from the datos.gob.ar time-series API. `source_url` points at the
+      exact series; the seed is refreshed only by scripts/fetch_indec_cpi.py.
+    columns:
+      - name: month
+        data_tests:
+          - unique
+          - not_null
+      - name: cpi_index
+        data_tests:
+          - not_null
+      - name: source_url
+        data_tests:
+          - not_null

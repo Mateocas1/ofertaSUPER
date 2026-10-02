@@ -1,0 +1,876 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-02T00:57:24.196Z",
+  "source": "sample",
+  "method": "Laspeyres de canasta fija; precio promedio simple entre los supermercados relevados",
+  "currency": "ARS",
+  "baseDate": "2026-06-01",
+  "coverage": {
+    "seriesStart": "2026-06-01",
+    "seriesEnd": "2026-08-31",
+    "days": 92,
+    "stores": 3,
+    "products": 16,
+    "basketProducts": 12,
+    "basketProductsCovered": 12,
+    "totalWeight": 1.0,
+    "avgWeightCovered": 1.0,
+    "maxWeightCovered": 1.0
+  },
+  "basketWeights": [
+    {
+      "gtin14": "07790742348302",
+      "label": "Leche entera 3% 1 L",
+      "category": "Lácteos",
+      "weight": 0.14
+    },
+    {
+      "gtin14": "07790310985458",
+      "label": "Papas fritas 85 g",
+      "category": "Frutas y Verduras",
+      "weight": 0.11
+    },
+    {
+      "gtin14": "07790990002261",
+      "label": "Detergente en polvo 800 g",
+      "category": "Limpieza",
+      "weight": 0.11
+    },
+    {
+      "gtin14": "02900002002058",
+      "label": "Fideos mostacholes 500 g",
+      "category": "Almacén",
+      "weight": 0.09
+    },
+    {
+      "gtin14": "07790060023684",
+      "label": "Aceite de girasol 1.5 L",
+      "category": "Almacén",
+      "weight": 0.08
+    },
+    {
+      "gtin14": "07790150150276",
+      "label": "Café tostado 150 g",
+      "category": "Café molido y en grano",
+      "weight": 0.08
+    },
+    {
+      "gtin14": "00744430256209",
+      "label": "Yogur bebible 250 g",
+      "category": "Lácteos",
+      "weight": 0.07
+    },
+    {
+      "gtin14": "00763571680872",
+      "label": "Yerba mate 250 g",
+      "category": "Desayuno y Merienda",
+      "weight": 0.07
+    },
+    {
+      "gtin14": "07798079230284",
+      "label": "Harina de arroz 1 kg",
+      "category": "Almacén",
+      "weight": 0.07
+    },
+    {
+      "gtin14": "00000077987839",
+      "label": "Alfajor de arroz",
+      "category": "Almacén",
+      "weight": 0.06
+    },
+    {
+      "gtin14": "07790315000149",
+      "label": "Agua mineral 1.65 L",
+      "category": "Bebidas",
+      "weight": 0.06
+    },
+    {
+      "gtin14": "07790639003437",
+      "label": "Gaseosa cola 2.25 L",
+      "category": "Bebidas",
+      "weight": 0.06
+    }
+  ],
+  "basketDaily": [
+    {
+      "date": "2026-06-01",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-02",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-03",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-04",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-05",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-06",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-07",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-08",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-09",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-10",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-11",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-12",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-13",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-14",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-15",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-16",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-17",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-18",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-19",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-20",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-21",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-22",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-23",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-24",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-25",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-26",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-27",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-28",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-29",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-06-30",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-01",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-02",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-03",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-04",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-05",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-06",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-07",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-08",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-09",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-10",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-11",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-12",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-13",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-14",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-15",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-16",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-17",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-18",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-19",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-20",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-21",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-22",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-23",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-24",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-25",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-26",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-27",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-28",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-29",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-30",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-07-31",
+      "index": 102.785,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-01",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-02",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-03",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-04",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-05",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-06",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-07",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-08",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-09",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-10",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-11",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-12",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-13",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-14",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-15",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-16",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-17",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-18",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-19",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-20",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-21",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-22",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-23",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-24",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-25",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-26",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-27",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-28",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-29",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-30",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-08-31",
+      "index": 104.5458,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    }
+  ],
+  "basketMonthly": [
+    {
+      "month": "2026-06-01",
+      "index": 100.0,
+      "changePct": null,
+      "cpiIndex": 11826.4103,
+      "cpiRebasedIndex": 100.0,
+      "cpiChangePct": 1.8869,
+      "daysCovered": 30,
+      "avgWeightCovered": 1.0
+    },
+    {
+      "month": "2026-07-01",
+      "index": 102.785,
+      "changePct": 2.785,
+      "cpiIndex": 12076.3937,
+      "cpiRebasedIndex": 102.1138,
+      "cpiChangePct": 2.1138,
+      "daysCovered": 31,
+      "avgWeightCovered": 1.0
+    },
+    {
+      "month": "2026-08-01",
+      "index": 104.5458,
+      "changePct": 1.7131,
+      "cpiIndex": 12276.766,
+      "cpiRebasedIndex": 103.8081,
+      "cpiChangePct": 1.6592,
+      "daysCovered": 31,
+      "avgWeightCovered": 1.0
+    }
+  ],
+  "cpi": {
+    "source": "INDEC — IPC Nivel General Nacional, base diciembre 2016",
+    "sourceUrl": "https://apis.datos.gob.ar/series/api/series/?ids=145.3_INGNACNAL_DICI_M_15",
+    "unit": "Índice base diciembre 2016 = 100",
+    "firstMonth": "2025-03-01",
+    "latestMonth": "2026-08-01",
+    "rows": [
+      {
+        "month": "2025-03-01",
+        "index": 8353.3158,
+        "changePct": null
+      },
+      {
+        "month": "2025-04-01",
+        "index": 8585.6078,
+        "changePct": 2.7808
+      },
+      {
+        "month": "2025-05-01",
+        "index": 8714.4871,
+        "changePct": 1.5011
+      },
+      {
+        "month": "2025-06-01",
+        "index": 8855.5681,
+        "changePct": 1.6189
+      },
+      {
+        "month": "2025-07-01",
+        "index": 9023.973,
+        "changePct": 1.9017
+      },
+      {
+        "month": "2025-08-01",
+        "index": 9193.2441,
+        "changePct": 1.8758
+      },
+      {
+        "month": "2025-09-01",
+        "index": 9384.0922,
+        "changePct": 2.076
+      },
+      {
+        "month": "2025-10-01",
+        "index": 9603.8623,
+        "changePct": 2.3419
+      },
+      {
+        "month": "2025-11-01",
+        "index": 9841.3581,
+        "changePct": 2.4729
+      },
+      {
+        "month": "2025-12-01",
+        "index": 10121.3715,
+        "changePct": 2.8453
+      },
+      {
+        "month": "2026-01-01",
+        "index": 10413.0309,
+        "changePct": 2.8816
+      },
+      {
+        "month": "2026-02-01",
+        "index": 10714.6255,
+        "changePct": 2.8963
+      },
+      {
+        "month": "2026-03-01",
+        "index": 11077.0608,
+        "changePct": 3.3826
+      },
+      {
+        "month": "2026-04-01",
+        "index": 11363.0904,
+        "changePct": 2.5822
+      },
+      {
+        "month": "2026-05-01",
+        "index": 11607.3937,
+        "changePct": 2.15
+      },
+      {
+        "month": "2026-06-01",
+        "index": 11826.4103,
+        "changePct": 1.8869
+      },
+      {
+        "month": "2026-07-01",
+        "index": 12076.3937,
+        "changePct": 2.1138
+      },
+      {
+        "month": "2026-08-01",
+        "index": 12276.766,
+        "changePct": 1.6592
+      }
+    ]
+  },
+  "comparison": {
+    "baseMonth": "2026-06-01",
+    "overlapMonths": [
+      "2026-06-01",
+      "2026-07-01",
+      "2026-08-01"
+    ],
+    "note": "El IPC del INDEC está disponible para 3 de los meses de la canasta."
+  },
+  "topRisers": [
+    {
+      "gtin14": "00000077987839",
+      "store": "jumbo",
+      "product_name": "Alfajor de arroz Lulemuu blanco 22 g.",
+      "brand": "Lulemuu",
+      "category": "Almacén",
+      "first_date": "2026-06-01",
+      "last_date": "2026-08-31",
+      "first_price": 604.5,
+      "last_price": 665.83,
+      "change_pct": 10.1456
+    },
+    {
+      "gtin14": "00000077969354",
+      "store": "carrefour",
+      "product_name": "Tableta chocolatín leche Georgalos 8 g.",
+      "brand": "Georgalos",
+      "category": "Lácteos",
+      "first_date": "2026-06-01",
+      "last_date": "2026-08-31",
+      "first_price": 480.0,
+      "last_price": 519.17,
+      "change_pct": 8.1604
+    },
+    {
+      "gtin14": "07790150150276",
+      "store": "disco",
+      "product_name": "Café tostado La Virginia doy pack 150 grs",
+      "brand": "La Virginia",
+      "category": "Café molido y en grano",
+      "first_date": "2026-06-01",
+      "last_date": "2026-08-31",
+      "first_price": 4450.5,
+      "last_price": 4813.59,
+      "change_pct": 8.1584
+    },
+    {
+      "gtin14": "02900002002058",
+      "store": "jumbo",
+      "product_name": "Fideos mostacholes al huevo 500 g.",
+      "brand": "Genérico",
+      "category": "Almacén",
+      "first_date": "2026-06-01",
+      "last_date": "2026-08-31",
+      "first_price": 955.5,
+      "last_price": 1026.5,
+      "change_pct": 7.4307
+    },
+    {
+      "gtin14": "07790742348302",
+      "store": "jumbo",
+      "product_name": "Leche Entera 3% Sachet 1 Lts La Serenísima",
+      "brand": "La Serenísima",
+      "category": "Lácteos",
+      "first_date": "2026-06-01",
+      "last_date": "2026-08-31",
+      "first_price": 1218.75,
+      "last_price": 1304.28,
+      "change_pct": 7.0178
+    }
+  ],
+  "topFallers": [
+    {
+      "gtin14": "07790310985458",
+      "store": "disco",
+      "product_name": "Papas fritas Lays clásicas 85 g.",
+      "brand": "Lays",
+      "category": "Frutas y Verduras",
+      "first_date": "2026-06-01",
+      "last_date": "2026-08-31",
+      "first_price": 1914.75,
+      "last_price": 1864.12,
+      "change_pct": -2.6442
+    },
+    {
+      "gtin14": "07790990002261",
+      "store": "jumbo",
+      "product_name": "Detergente Polvo Zorro Clásico X 800g",
+      "brand": "Zorro",
+      "category": "Limpieza",
+      "first_date": "2026-06-01",
+      "last_date": "2026-08-31",
+      "first_price": 2388.75,
+      "last_price": 2352.32,
+      "change_pct": -1.5251
+    }
+  ]
+}
