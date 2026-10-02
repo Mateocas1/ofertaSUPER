@@ -46,11 +46,27 @@ function isCatalogSnapshot(value: unknown): value is CatalogSnapshot {
   );
 }
 
-function readSnapshot(): CatalogSnapshot {
-  if (!isCatalogSnapshot(catalogSnapshot)) {
+// Schema-only gate shared by the read path and the data-contract tests: a
+// snapshot that does not parse is unavailable, never partially served.
+export function parseCatalogSnapshot(value: unknown): CatalogSnapshot {
+  if (!isCatalogSnapshot(value)) {
     throw new SnapshotUnavailableError("catalog snapshot is missing or malformed");
   }
-  return catalogSnapshot;
+  return value;
+}
+
+// Test-only seam. The public read path always serves the committed snapshot;
+// a test injects a committed fixture so behavior tests keep their own
+// expectations when the daily refresh rewrites the real data. Application
+// code never calls this.
+let snapshotOverrideForTests: CatalogSnapshot | null = null;
+
+export function setSnapshotOverrideForTests(snapshot: CatalogSnapshot | null): void {
+  snapshotOverrideForTests = snapshot;
+}
+
+function readSnapshot(): CatalogSnapshot {
+  return parseCatalogSnapshot(snapshotOverrideForTests ?? catalogSnapshot);
 }
 
 // Health probe: proves the bundled snapshot loads and is structurally usable.

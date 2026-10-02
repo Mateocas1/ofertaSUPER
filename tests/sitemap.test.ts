@@ -11,7 +11,7 @@ test("sitemap combines static routes with independently static categories and gu
   }), categories, () => false);
 
   assert.deepEqual(routes.map(({ url }) => new URL(url).pathname), [
-    "/", "/ofertas", "/buscar", "/categoria/almacen", "/categoria/aceites", "/producto/7790000000001",
+    "/", "/ofertas", "/bajas", "/bajas/feed.xml", "/buscar", "/categoria/almacen", "/categoria/aceites", "/producto/7790000000001",
   ]);
   assert.equal(routes.at(-1)?.lastModified, undefined);
 });
@@ -31,7 +31,9 @@ test("known catalog unavailability retains independently static taxonomy without
   const unavailable = new Error("offline");
   const routes = await buildSitemap(async () => { throw unavailable; }, categories, (error) => error === unavailable);
 
-  assert.deepEqual(routes.map(({ url }) => new URL(url).pathname), ["/", "/ofertas", "/buscar", "/categoria/almacen", "/categoria/aceites"]);
+  assert.deepEqual(routes.map(({ url }) => new URL(url).pathname), [
+    "/", "/ofertas", "/bajas", "/bajas/feed.xml", "/buscar", "/categoria/almacen", "/categoria/aceites",
+  ]);
   assert.ok(routes.every(({ lastModified }) => lastModified === undefined));
   assert.equal(JSON.stringify(routes).includes("7790000000001"), false);
 });

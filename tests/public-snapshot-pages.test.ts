@@ -1,22 +1,28 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { normalizeGtin } from "../src/lib/identity/gtin";
 import {
   loadSnapshotProductList,
   loadSnapshotProductPage,
   loadSnapshotSitemapCatalog,
   resolveSnapshotCatalogPage,
 } from "../src/lib/public-pages";
+import { installSnapshotFixture } from "./helpers/snapshot-fixture";
 
 // Behavioral tests for the server-side page loaders reading the committed
-// snapshot. Same shapes the guarded database loaders returned, so pages keep
-// rendering identical envelopes with real data.
+// fixture snapshot (never the daily-refreshed data). Same shapes the guarded
+// database loaders returned, so pages keep rendering identical envelopes.
 
-const SNAPSHOT_EAN = "2505271000004";
-// Lookups accept the short EAN; the catalog answers with the canonical GTIN-14.
-const SNAPSHOT_GTIN14 = "02505271000004";
+const FIXTURE = installSnapshotFixture();
+const NOW = new Date(FIXTURE.generatedAt);
+const SAMPLE = FIXTURE.products[1];
+const SAMPLE_OFFERS = FIXTURE.offers.filter((offer) => offer.ean === SAMPLE.ean);
 const UNKNOWN_EAN = "0000000000000";
-const NOW = new Date("2026-09-27T12:00:00Z");
+
+function fixtureCount(predicate: (product: (typeof FIXTURE.products)[number]) => boolean): number {
+  return FIXTURE.products.filter(predicate).length;
+}
 
 describe("snapshot page loaders", () => {
   it("product list filters by query and paginates with the guarded page shape", () => {
@@ -24,7 +30,7 @@ describe("snapshot page loaders", () => {
     assert.equal(result.page, 2);
     assert.equal(result.limit, 12);
     assert.ok(result.total > 12, "leche matches more than one page");
-    assert.ok(result.totalPages >= 2);
+    assert.equal(result.totalPages, Math.ceil(result.total / 12));
     assert.ok(result.items.length > 0 && result.items.length <= 12);
     for (const item of result.items) {
       assert.match(item.ean, /^\d{8,18}$/);
@@ -34,10 +40,11 @@ describe("snapshot page loaders", () => {
 
   it("product list filters by category case-insensitively like the database did", () => {
     const result = loadSnapshotProductList({ category: "lácteos", limit: 48, page: 1 }, NOW);
-    assert.ok(result.total > 0);
+    assert.equal(result.total, fixtureCount((product) => product.category === "Lácteos"));
     for (const item of result.items) {
       assert.equal(item.category?.toLowerCase(), "lácteos");
     }
+    assert.ok(result.total > 0);
   });
 
   it("product list supports supermarket, offers-only, max price and price sorting", () => {
@@ -46,32 +53,46 @@ describe("snapshot page loaders", () => {
     assert.deepEqual(prices, [...prices].sort((a, b) => a - b));
 
     const cheap = loadSnapshotProductList({ maxPrice: 1000, limit: 48, page: 1 }, NOW);
+    assert.ok(cheap.total > 0, "the fixture has products under the cap");
+    assert.ok(cheap.total < sorted.total, "the cap must drop at least one product");
     for (const item of cheap.items) {
       assert.ok(item.minPrice !== null && item.minPrice <= 1000);
     }
 
     const offers = loadSnapshotProductList({ offersOnly: true, limit: 48, page: 1 }, NOW);
-    assert.ok(offers.total > 0, "the snapshot has list prices above registered prices");
+    const discounted = fixtureCount((product) =>
+      FIXTURE.offers.some(
+        (offer) =>
+          offer.ean === product.ean &&
+          offer.price !== null &&
+          offer.listPrice !== null &&
+          offer.listPrice > offer.price,
+      ));
+    assert.equal(offers.total, discounted, "offers-only lists exactly the products with a list price above the price");
     for (const item of offers.items) {
       assert.ok(item.automaticDiscountPercent !== null);
     }
 
+    const carrefour = loadSnapshotProductList({ supermarket: "carrefour", limit: 48, page: 1 }, NOW);
+    assert.ok(carrefour.total > 0);
     const disco = loadSnapshotProductList({ supermarket: "disco", limit: 48, page: 1 }, NOW);
     assert.ok(disco.total > 0);
+    assert.ok(disco.total < carrefour.total, "not every fixture product has a disco offer");
   });
 
   it("product page returns detail and dated history for a real EAN", async () => {
-    const data = await loadSnapshotProductPage(SNAPSHOT_EAN, 90, NOW);
+    const data = await loadSnapshotProductPage(SAMPLE.ean, 90, NOW);
     assert.equal(data.dataSource, "database");
     assert.equal(data.degraded, false);
     assert.equal(typeof data.verifiedAt, "string");
     assert.ok(data.product);
-    assert.equal(data.product.ean, SNAPSHOT_GTIN14);
-    assert.ok(data.product.priceEntries.length > 0);
-    assert.ok(data.history.series.length > 0);
+    assert.equal(normalizeGtin(data.product.ean), normalizeGtin(SAMPLE.ean));
+    assert.equal(data.product.priceEntries.length, SAMPLE_OFFERS.length);
+    assert.equal(data.history.series.length, SAMPLE_OFFERS.length);
     for (const series of data.history.series) {
       assert.match(series.color, /^#[0-9a-fA-F]{6}$/);
     }
+    assert.equal(data.history.points.length, SAMPLE_OFFERS[0].history.length);
   });
 
   it("product page returns a null product for an unknown EAN", async () => {
@@ -93,7 +114,7 @@ describe("snapshot page loaders", () => {
 
   it("sitemap catalog lists every snapshot EAN", async () => {
     const catalog = await loadSnapshotSitemapCatalog();
-    assert.ok(catalog.products.length >= 500);
+    assert.equal(catalog.products.length, FIXTURE.products.length);
     assert.ok(catalog.products.every((product) => /^\d{8,18}$/.test(product.ean)));
   });
 });

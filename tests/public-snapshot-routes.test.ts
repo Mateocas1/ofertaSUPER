@@ -11,22 +11,27 @@ import {
   handleSearch,
   type PublicApiDeps,
 } from "../src/lib/public-api";
+import { installSnapshotFixture } from "./helpers/snapshot-fixture";
 
 // Behavioral tests for the public catalog handlers reading the committed
-// snapshot. Handlers receive their collaborators through deps, so the rate
-// limiter is a stub: admit, exhaust (429) or null (strict routes fail closed
-// with 503). The committed JSON is the only data source; an unknown EAN is 404.
+// fixture snapshot, so the daily refresh cannot change their expectations.
+// Handlers receive their collaborators through deps, so the rate limiter is a
+// stub: admit, exhaust (429) or null (strict routes fail closed with 503). The
+// snapshot is the only data source; an unknown EAN is 404.
 
 // Strict admission derives the client identity at a trusted deployment
 // boundary (a single-address x-forwarded-for on Vercel); tests simulate that
 // boundary instead of injecting anything into the handlers.
 process.env.VERCEL = "1";
 
-const SNAPSHOT_EAN = "2505271000004";
-// Lookups accept the short EAN; the catalog answers with the canonical GTIN-14.
-const SNAPSHOT_GTIN14 = "02505271000004";
+const FIXTURE = installSnapshotFixture();
+const SAMPLE = FIXTURE.products[1];
+const SAMPLE_OFFERS = FIXTURE.offers.filter((offer) => offer.ean === SAMPLE.ean);
+const SNAPSHOT_EAN = SAMPLE.ean;
+// Lookups accept the short EAN; any GTIN form of the key resolves to the same product.
+const SNAPSHOT_GTIN14 = SNAPSHOT_EAN.padStart(14, "0");
 const UNKNOWN_EAN = "0000000000000";
-const NOW = new Date("2026-09-27T12:00:00Z");
+const NOW = new Date(FIXTURE.generatedAt);
 
 function request(path: string, init?: { method?: string; body?: string }): NextRequest {
   return new NextRequest(`https://ofertas-super.vercel.app${path}`, {
@@ -147,14 +152,15 @@ describe("public catalog handlers serve the committed snapshot", () => {
       latestCheckedAt: string | null;
       item: { ean: string; priceEntries: { supermarket: { slug: string }; freshnessStatus: string }[] };
     };
-    assert.equal(body.item.ean, SNAPSHOT_GTIN14);
+    assert.equal(body.item.ean, SNAPSHOT_EAN);
+    assert.equal(body.item.ean.padStart(14, "0"), SNAPSHOT_GTIN14);
     assert.equal(body.dataSource, "database");
     assert.equal(body.degraded, false);
     assert.equal(typeof body.verifiedAt, "string");
     assert.equal(body.latestCheckedAt, null);
-    assert.ok(body.item.priceEntries.length > 0, "a snapshot offer must surface as a price entry");
+    assert.equal(body.item.priceEntries.length, SAMPLE_OFFERS.length);
     for (const entry of body.item.priceEntries) {
-      assert.ok(["carrefour", "disco", "jumbo"].includes(entry.supermarket.slug));
+      assert.ok(FIXTURE.sources.includes(entry.supermarket.slug));
       assert.ok(["fresh", "stale", "unknown"].includes(entry.freshnessStatus));
     }
   });
@@ -186,8 +192,13 @@ describe("public catalog handlers serve the committed snapshot", () => {
     for (const point of body.points) {
       assert.match(point.date as string, /^\d{4}-\d{2}-\d{2}$/);
     }
+    const carrefourOffer = SAMPLE_OFFERS.find((offer) => offer.source === "carrefour");
+    assert.ok(carrefourOffer && carrefourOffer.price !== null);
     const carrefourValue = body.points.flatMap((point) => point.carrefour ?? []);
-    assert.ok(carrefourValue.includes(9990), "the snapshot history price must surface as a chart point");
+    assert.ok(
+      carrefourValue.includes(carrefourOffer.price),
+      "the fixture history price must surface as a chart point",
+    );
   });
 
   it("product history returns 404 for an unknown EAN and 400 for invalid days", async () => {

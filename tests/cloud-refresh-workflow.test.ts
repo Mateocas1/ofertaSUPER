@@ -45,13 +45,55 @@ describe("cloud refresh workflow contract", () => {
     assert.match(workflow, /npm run refresh:catalog/);
   });
 
-  it("uploads the dump before committing only the snapshot", () => {
+  it("uploads the dump before committing only the snapshot and the price drops", () => {
     const uploadIndex = workflow.indexOf('scripts/db-state.sh upload');
-    const commitIndex = workflow.indexOf('git add data/catalog-snapshot.json');
+    const commitIndex = workflow.indexOf('git add data/catalog-snapshot.json data/price-drops.json');
     assert.ok(uploadIndex >= 0 && commitIndex >= 0 && uploadIndex < commitIndex, "the dump must be uploaded before the snapshot push");
     assert.match(workflow, /scripts\/db-state\.sh prune/);
     assert.match(workflow, /git push origin HEAD:master/);
     assert.doesNotMatch(workflow, /git add \.(?:\s|$)/);
+  });
+
+  it("exports the price drops and publishes them with the snapshot", () => {
+    const exportIndex = workflow.indexOf("npx tsx scripts/export-price-drops.ts");
+    const commitIndex = workflow.indexOf("git add data/catalog-snapshot.json data/price-drops.json");
+    const pushIndex = workflow.indexOf("git push origin HEAD:master");
+
+    assert.ok(exportIndex >= 0 && commitIndex >= 0 && pushIndex >= 0);
+    assert.ok(exportIndex < commitIndex, "the drops must be exported before the commit");
+    assert.ok(commitIndex < pushIndex, "the drops must ship in the same push as the snapshot");
+  });
+
+  it("posts the Telegram digest after the commit, as a best-effort step", () => {
+    const commitIndex = workflow.indexOf("git add data/catalog-snapshot.json data/price-drops.json");
+    const telegramIndex = workflow.indexOf("npx tsx scripts/post-price-drops.ts");
+    assert.ok(commitIndex >= 0 && telegramIndex > commitIndex, "the digest follows the commit");
+
+    const stepStart = workflow.lastIndexOf("- name:", telegramIndex);
+    const declaration = workflow.slice(stepStart, telegramIndex);
+    assert.match(declaration, /continue-on-error: true/, "a missing channel must never fail the refresh");
+    assert.match(declaration, /inputs\.dry_run != true/);
+    assert.match(
+      declaration,
+      /github\.event_name == 'schedule'/,
+      "only the scheduled run may post; a manual re-run must never double-post",
+    );
+    assert.match(declaration, /TELEGRAM_BOT_TOKEN: \$\{\{ secrets\.TELEGRAM_BOT_TOKEN \}\}/);
+    assert.match(declaration, /TELEGRAM_CHANNEL_ID: \$\{\{ secrets\.TELEGRAM_CHANNEL_ID \}\}/);
+  });
+
+  it("keeps the price drops export best-effort and dry-run aware", () => {
+    const exportIndex = workflow.indexOf("npx tsx scripts/export-price-drops.ts");
+    const stepStart = workflow.lastIndexOf("- name:", exportIndex);
+    const declaration = workflow.slice(stepStart, exportIndex);
+
+    assert.match(declaration, /continue-on-error: true/);
+    assert.match(declaration, /inputs\.dry_run != true/);
+    assert.doesNotMatch(
+      declaration,
+      /github\.event_name == 'schedule'/,
+      "a manual run may still refresh the committed drops; only the digest is schedule-only",
+    );
   });
 
   it("keeps the single tracking issue wired to the reporter", () => {

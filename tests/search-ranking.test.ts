@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { normalizeQuery, searchSnapshotProducts, snapshotMatchRank } from "../src/lib/catalog-snapshot";
+import { installSnapshotFixture } from "./helpers/snapshot-fixture";
 
 // Behavioral tests for the snapshot search ranking: exact EAN first, then
 // names that start with the term, then whole-word matches not preceded by
 // "de", then every other name or brand match. Stable tiebreak: more
-// supermarkets with an offer first, then the name.
+// supermarkets with an offer first, then the name. The snapshot-driven cases
+// run against the committed fixture, never against the daily-refreshed data.
+const FIXTURE = installSnapshotFixture();
 
 const LECHE = { ean: "7790001000011", name: "Leche Entera La Serenísima 1L", brand: "La Serenísima" };
 const DULCE = { ean: "7790002000022", name: "Dulce de Leche Milkaut", brand: "Milkaut" };
@@ -53,13 +56,14 @@ describe("snapshot search ranking", () => {
   });
 
   it("breaks ties by supermarkets with an offer, then name", () => {
-    const result = searchSnapshotProducts({ query: "cafe" });
+    const result = searchSnapshotProducts({ query: "leche" });
+    assert.ok(result.products.length > 1);
     const supersWithOffer = ({ offers }: { offers: { available: boolean; price: number | null }[] }) =>
       offers.filter((offer) => offer.available && offer.price !== null).length;
     for (let index = 0; index < result.products.length - 1; index += 1) {
       const left = result.products[index];
       const right = result.products[index + 1];
-      const rankDiff = snapshotMatchRank(left.product, "cafe") - snapshotMatchRank(right.product, "cafe");
+      const rankDiff = snapshotMatchRank(left.product, "leche") - snapshotMatchRank(right.product, "leche");
       if (rankDiff !== 0) {
         assert.ok(rankDiff < 0, "ranks must be non-decreasing");
         continue;
@@ -72,7 +76,7 @@ describe("snapshot search ranking", () => {
     }
   });
 
-  it("serves /buscar?q=leche with a milk product first from the committed snapshot", () => {
+  it("serves /buscar?q=leche with a milk product first", () => {
     const result = searchSnapshotProducts({ query: "leche" });
     assert.ok(result.total > 0);
     const firstName = normalizeQuery(result.products[0].product.name);
@@ -87,7 +91,8 @@ describe("snapshot search ranking", () => {
   });
 
   it("serves an EAN search with exactly that product first", () => {
-    const result = searchSnapshotProducts({ query: "2505271000004" });
-    assert.equal(result.products[0].product.ean, "02505271000004");
+    const product = FIXTURE.products[7];
+    const result = searchSnapshotProducts({ query: product.ean });
+    assert.equal(result.products[0].product.ean, product.ean);
   });
 });

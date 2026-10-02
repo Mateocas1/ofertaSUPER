@@ -1,12 +1,16 @@
+import type { Metadata } from "next";
 import type { ReactNode, SVGProps } from "react";
 import Link from "next/link";
 
 import {
 	HOME_HERO,
+	HOME_PRICE_DROPS,
 	HOME_PRODUCT_ROWS,
 	MARKET_PULSE_ITEMS,
 	SMART_BASKET,
 } from "@/lib/home-ui-data";
+import { PRICE_DROPS_FEED_PATH } from "@/lib/price-drops-feed";
+import { buildAbsoluteUrl } from "@/lib/seo/metadata";
 import { cn } from "@/lib/utils";
 
 type ProductTone = (typeof SMART_BASKET.products)[number]["tone"];
@@ -32,6 +36,16 @@ const pulseValueClasses: Record<PulseTone, string> = {
 };
 
 export const revalidate = 21600;
+
+// The home page offers the price-drops feed as an alternate representation, so
+// a reader (or a browser) finds it without visiting /bajas first.
+export const metadata: Metadata = {
+	alternates: {
+		types: {
+			"application/atom+xml": [{ url: buildAbsoluteUrl(PRICE_DROPS_FEED_PATH), title: HOME_PRICE_DROPS.title }],
+		},
+	},
+};
 
 export default function Home() {
 	return (
@@ -125,6 +139,8 @@ export default function Home() {
 					<ProductRowsPreview />
 					<MarketPulse />
 				</section>
+
+				<PriceDropsBanner />
 			</div>
 		</div>
 	);
@@ -247,6 +263,40 @@ function SmartBasketPanel() {
 				</Link>
 			</div>
 		</aside>
+	);
+}
+
+function PriceDropsBanner() {
+	return (
+		<section
+			className="surface flex min-w-0 flex-wrap items-center justify-between gap-5 p-4 sm:p-6 lg:p-7"
+			aria-labelledby="price-drops-home-title"
+		>
+			<div className="min-w-0">
+				<h2 id="price-drops-home-title" className="text-2xl font-bold text-foreground sm:text-3xl">
+					{HOME_PRICE_DROPS.title}
+				</h2>
+				<p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+					{HOME_PRICE_DROPS.body}
+				</p>
+				<p className="mt-2 text-xs text-muted-foreground">{HOME_PRICE_DROPS.feedNote}</p>
+			</div>
+			<div className="flex flex-wrap items-center gap-3">
+				<Link
+					href="/bajas"
+					className="press inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+				>
+					{HOME_PRICE_DROPS.action}
+				</Link>
+				<a
+					href={PRICE_DROPS_FEED_PATH}
+					type="application/atom+xml"
+					className="press inline-flex min-h-11 items-center rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground hover:border-primary hover:text-primary"
+				>
+					{HOME_PRICE_DROPS.feedLabel}
+				</a>
+			</div>
+		</section>
 	);
 }
 
