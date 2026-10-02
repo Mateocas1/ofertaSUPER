@@ -38,7 +38,7 @@ METHOD = "Laspeyres de canasta fija; precio promedio simple entre los supermerca
 MOVERS_QUERY = """
 with ranked as (
     select *,
-           row_number() over (partition by gtin14 order by change_pct {direction}) as product_rank
+           row_number() over (partition by gtin14 order by change_pct {direction}, store) as product_rank
     from main.mart_price_movers
 )
 select gtin14, store, product_name, brand, category,
@@ -46,7 +46,7 @@ select gtin14, store, product_name, brand, category,
 from ranked
 where product_rank = 1
   and change_pct {sign} 0
-order by change_pct {direction}
+order by change_pct {direction}, store
 limit {limit}
 """
 

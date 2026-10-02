@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-02T00:57:24.196Z",
+  "generatedAt": "2026-10-02T01:08:58.923Z",
   "source": "sample",
   "method": "Laspeyres de canasta fija; precio promedio simple entre los supermercados relevados",
   "currency": "ARS",
@@ -812,14 +812,14 @@
     },
     {
       "gtin14": "07790150150276",
-      "store": "disco",
+      "store": "carrefour",
       "product_name": "Café tostado La Virginia doy pack 150 grs",
       "brand": "La Virginia",
       "category": "Café molido y en grano",
       "first_date": "2026-06-01",
       "last_date": "2026-08-31",
-      "first_price": 4450.5,
-      "last_price": 4813.59,
+      "first_price": 4300.0,
+      "last_price": 4650.81,
       "change_pct": 8.1584
     },
     {
