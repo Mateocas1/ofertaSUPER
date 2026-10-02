@@ -10,6 +10,8 @@ type MetadataInput = {
   title: string;
   description: string;
   path?: string;
+  /** Atom feeds offered for this page, declared as `<link rel="alternate">`. */
+  feeds?: { path: string; title: string }[];
 };
 
 export function buildAbsoluteUrl(path = "/") {
@@ -57,7 +59,7 @@ export function createGuardedProductMetadata(page: ProductCatalogPageResult): Me
   });
 }
 
-export function createMetadata({ title, description, path = "/" }: MetadataInput): Metadata {
+export function createMetadata({ title, description, path = "/", feeds = [] }: MetadataInput): Metadata {
   const url = buildAbsoluteUrl(path);
 
   return {
@@ -66,6 +68,16 @@ export function createMetadata({ title, description, path = "/" }: MetadataInput
     description,
     alternates: {
       canonical: url,
+      ...(feeds.length > 0
+        ? {
+          types: {
+            "application/atom+xml": feeds.map((feed) => ({
+              url: buildAbsoluteUrl(feed.path),
+              title: feed.title,
+            })),
+          },
+        }
+        : {}),
     },
     openGraph: {
       title,

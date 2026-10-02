@@ -157,6 +157,14 @@ export const MARKET_PULSE_ITEMS = [
 	},
 ] as const;
 
+export const HOME_PRICE_DROPS = {
+	title: "Bajas de precio",
+	body: "Los precios que cayeron contra su registro anterior, con la fecha de cada observación y el supermercado que lo publicó.",
+	action: "Ver bajas de precio",
+	feedLabel: "Suscribirse al feed Atom",
+	feedNote: "Un lector de feeds puede seguir las bajas de cada día.",
+} as const;
+
 export function getApprovedHomeCopy() {
 	return [
 		...HOME_HEADER_NAV.map((item) => item.label),
@@ -195,6 +203,11 @@ export function getApprovedHomeCopy() {
 		"Ejemplos de lectura del catálogo",
 		"Las líneas son ilustrativas y no representan una serie observada.",
 		"Ver ofertas disponibles",
+		HOME_PRICE_DROPS.title,
+		HOME_PRICE_DROPS.body,
+		HOME_PRICE_DROPS.action,
+		HOME_PRICE_DROPS.feedLabel,
+		HOME_PRICE_DROPS.feedNote,
 		...MARKET_PULSE_ITEMS.flatMap((item) => [
 			item.title,
 			item.description,

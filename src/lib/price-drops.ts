@@ -1,4 +1,5 @@
 import { normalizeGtin } from "@/lib/identity/gtin";
+import { SUPERMARKETS } from "@/lib/supermarkets";
 
 import priceDropsJson from "../../data/price-drops.json";
 
@@ -294,6 +295,11 @@ export function formatDropPercent(percentDrop: number): string {
 
 export function formatDropAmount(amountDrop: number): string {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(amountDrop);
+}
+
+/** Display name of the store that observed the price; the slug is the fallback. */
+export function storeLabel(slug: string): string {
+  return SUPERMARKETS.find((entry) => entry.slug === slug)?.name ?? slug;
 }
 
 export type PriceDropsView = {
