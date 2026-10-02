@@ -1,0 +1,228 @@
+// Runtime category discovery (#547): instead of replaying a frozen plan of
+// terms, the daily refresh asks each VTEX store for its public category tree
+// and turns the allowlisted grocery departments into search batches. Each
+// department is searched through its direct children (its subcategories),
+// interleaved round-robin so the quota samples every allowlisted department.
+// The module is pure and deterministic so the same tree always yields the same
+// plan; the HTTP read lives in `src/lib/vtex/category-tree.ts`.
+//
+// The cap is a hard ceiling, not a target: `maxBatchesPerRun` budgets how many
+// searches one refresh may send (`resultsPerBatch` bounds each one) so the
+// cloud job stays far below its 60-minute timeout.
+
+export const MAX_BATCHES_PER_RUN = 60;
+export const MAX_RESULTS_PER_BATCH = 50;
+
+export type CategoryTreeNode = {
+  id: number;
+  name: string;
+  hasChildren: boolean;
+  children: CategoryTreeNode[];
+};
+
+export type DiscoveryConfig = {
+  schemaVersion: 1;
+  maxBatchesPerRun: number;
+  resultsPerBatch: number;
+  /** Store slug -> normalized allowlisted department names. */
+  departments: Record<string, string[]>;
+};
+
+export type DiscoveredBatch = {
+  ordinal: number;
+  source: string;
+  term: string;
+  count: number;
+};
+
+export type DiscoveryPlan = {
+  sources: string[];
+  batches: DiscoveredBatch[];
+  truncated: boolean;
+};
+
+export type CollectedCategoryTerms = {
+  /** Deduplicated candidate terms in tree order (flat view). */
+  terms: string[];
+  /** One group per matched department, in tree order, deduplicated within it. */
+  byDepartment: string[][];
+  /** Raw child category nodes considered, before deduplication. */
+  categoriesConsidered: number;
+  departmentsMatched: number;
+};
+
+// One folding rule for both the allowlist key and the search term: lowercase,
+// strip accents and punctuation, collapse whitespace. It mirrors
+// `normalizeQueryTerm` in the ingestion path so a category name and its search
+// behave identically.
+export function normalizeCategoryName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseCategoryNode(value: unknown): CategoryTreeNode {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("malformed category tree node");
+  }
+  const node = value as Record<string, unknown>;
+  if (!Number.isInteger(node.id) || typeof node.name !== "string" || !node.name.trim()) {
+    throw new Error("malformed category tree node");
+  }
+  const children = Array.isArray(node.children) ? node.children.map(parseCategoryNode) : [];
+  return {
+    id: node.id as number,
+    name: node.name.trim(),
+    hasChildren: node.hasChildren === true || children.length > 0,
+    children,
+  };
+}
+
+export function parseCategoryTree(payload: unknown): CategoryTreeNode[] {
+  if (!Array.isArray(payload)) {
+    throw new Error("malformed category tree payload");
+  }
+  return payload.map(parseCategoryNode);
+}
+
+// A department is searched by its direct children (its subcategories), which
+// cover their own leaves without narrowing to a single product family. A
+// department that is itself a leaf falls back to its own name.
+function directChildTerms(node: CategoryTreeNode): string[] {
+  const names = (node.children.length > 0 ? node.children : [node]).map((child) => normalizeCategoryName(child.name));
+  return [...new Set(names.filter(Boolean))];
+}
+
+export function collectCategoryTerms(tree: CategoryTreeNode[], allowlist: string[]): CollectedCategoryTerms {
+  const allowed = new Set(allowlist.map(normalizeCategoryName).filter(Boolean));
+  const byDepartment: string[][] = [];
+  const seen = new Set<string>();
+  const terms: string[] = [];
+  let categoriesConsidered = 0;
+  let departmentsMatched = 0;
+
+  for (const node of tree) {
+    if (!allowed.has(normalizeCategoryName(node.name))) continue;
+    departmentsMatched += 1;
+    const names = directChildTerms(node);
+    categoriesConsidered += node.children.length > 0 ? node.children.length : 1;
+    byDepartment.push(names);
+    for (const name of names) {
+      if (!seen.has(name)) {
+        seen.add(name);
+        terms.push(name);
+      }
+    }
+  }
+
+  return { terms, byDepartment, categoriesConsidered, departmentsMatched };
+}
+
+// Round-robin across departments so a per-store quota samples every allowlisted
+// department before doubling down on the first one.
+export function interleaveCategoryTerms(byDepartment: string[][]): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  const depth = byDepartment.reduce((max, group) => Math.max(max, group.length), 0);
+
+  for (let index = 0; index < depth; index += 1) {
+    for (const group of byDepartment) {
+      const term = group[index];
+      if (!term || seen.has(term)) continue;
+      seen.add(term);
+      ordered.push(term);
+    }
+  }
+
+  return ordered;
+}
+
+// The cap is split evenly across the configured stores; earlier stores take the
+// remainder. A store with fewer categories than its quota simply contributes
+// fewer batches (the plan never pads). Ordinals keep the daily batch ids stable
+// for a given tree.
+export function buildDiscoveryPlan({
+  config,
+  treesBySource,
+}: {
+  config: DiscoveryConfig;
+  treesBySource: Record<string, CategoryTreeNode[]>;
+}): DiscoveryPlan {
+  const sources = Object.keys(config.departments);
+  const cap = Math.min(config.maxBatchesPerRun, MAX_BATCHES_PER_RUN);
+  const perSource = Math.floor(cap / sources.length);
+  const remainder = cap % sources.length;
+  const batches: DiscoveredBatch[] = [];
+  let ordinal = 1;
+  let truncated = false;
+
+  sources.forEach((source, index) => {
+    const limit = perSource + (index < remainder ? 1 : 0);
+    const collected = collectCategoryTerms(treesBySource[source] ?? [], config.departments[source] ?? []);
+    const ordered = interleaveCategoryTerms(collected.byDepartment);
+    if (ordered.length > limit) truncated = true;
+    for (const term of ordered.slice(0, limit)) {
+      batches.push({ ordinal, source, term, count: config.resultsPerBatch });
+      ordinal += 1;
+    }
+  });
+
+  return { sources, batches, truncated };
+}
+
+function requireInteger(value: unknown, label: string, max: number) {
+  if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > max) {
+    throw new Error(`invalid discovery config: ${label} must be an integer from 1 through ${max}`);
+  }
+  return value as number;
+}
+
+function parseDepartments(value: unknown): Record<string, string[]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("invalid discovery config: departments must be an object");
+  }
+  const departments: Record<string, string[]> = {};
+  for (const [rawSlug, rawNames] of Object.entries(value as Record<string, unknown>)) {
+    const slug = rawSlug.trim().toLowerCase();
+    if (!slug) {
+      throw new Error("invalid discovery config: department keys must be nonblank store slugs");
+    }
+    if (!Array.isArray(rawNames) || rawNames.length === 0) {
+      throw new Error(`invalid discovery config: ${slug} must list at least one department`);
+    }
+    const names = rawNames.map((name) => {
+      if (typeof name !== "string") {
+        throw new Error(`invalid discovery config: ${slug} departments must be strings`);
+      }
+      return normalizeCategoryName(name);
+    });
+    if (names.some((name) => !name)) {
+      throw new Error(`invalid discovery config: ${slug} departments must be nonblank names`);
+    }
+    departments[slug] = names;
+  }
+  if (Object.keys(departments).length === 0) {
+    throw new Error("invalid discovery config: departments must not be empty");
+  }
+  return departments;
+}
+
+export function parseDiscoveryConfig(payload: unknown): DiscoveryConfig {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("invalid discovery config: payload must be an object");
+  }
+  const record = payload as Record<string, unknown>;
+  if (record.schemaVersion !== 1) {
+    throw new Error("invalid discovery config: unsupported schemaVersion");
+  }
+  return {
+    schemaVersion: 1,
+    maxBatchesPerRun: requireInteger(record.maxBatchesPerRun, "maxBatchesPerRun", MAX_BATCHES_PER_RUN),
+    resultsPerBatch: requireInteger(record.resultsPerBatch, "resultsPerBatch", MAX_RESULTS_PER_BATCH),
+    departments: parseDepartments(record.departments),
+  };
+}
