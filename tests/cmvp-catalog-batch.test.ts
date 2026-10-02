@@ -40,6 +40,7 @@ function dependencies(overrides: Partial<CmvpCatalogBatchDependencies> = {}) {
         fetchedGtins: [...expectedGtins].reverse(),
         admittedGtins: [...expectedGtins],
         rejectedCount: 0,
+        rejectedProducts: [],
         error: null,
       };
     },
@@ -143,7 +144,7 @@ describe("CMVP catalog batch", () => {
   it("fails closed for malformed or mismatched acquisition, replays completion, and rejects changed contracts", async () => {
     const malformed = dependencies({ acquire: async () => ({
       runId: 12, startedAt: "2026-03-11T00:00:00.000Z", finishedAt: "2026-03-11T00:00:01.000Z",
-      fetchedGtins: ["malformed"], admittedGtins: expectedGtins, rejectedCount: 0, error: null,
+      fetchedGtins: ["malformed"], admittedGtins: expectedGtins, rejectedCount: 0, rejectedProducts: [], error: null,
     }) });
     const blocked = await runCmvpCatalogBatch(request({ dryRun: false, confirmWrite: true }), malformed);
     assert.equal(blocked.artifact.state, "blocked");
@@ -188,7 +189,7 @@ describe("CMVP catalog batch", () => {
     ]) {
       const result = await runCmvpCatalogBatch(request({ dryRun: false, confirmWrite: true }), dependencies({ acquire: async () => ({
         runId: 12, startedAt: "2026-03-11T00:00:00.000Z", finishedAt: "2026-03-11T00:00:01.000Z",
-        fetchedGtins: expectedGtins, admittedGtins: expectedGtins, ...acquisition,
+        fetchedGtins: expectedGtins, admittedGtins: expectedGtins, rejectedProducts: [], ...acquisition,
       }) }));
       assert.equal(result.artifact.state, "blocked");
     }

@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { db } from "../src/lib/db";
+import { normalizeGtin } from "../src/lib/identity/gtin";
 import {
   runCmvpCatalogBatch,
   type CmvpCatalogBatchArtifact,
@@ -85,9 +86,14 @@ export function createDependencies(output: string): CmvpCatalogBatchDependencies
         const stage = await stageSourceProducts({ runId, slug: request.source, dryRun: request.dryRun, queryTerms: [request.term], queryLimit: 1, count: request.count });
         const validation = await validateStageProducts({ runId, slug: request.source, products: request.dryRun ? stage.products : undefined, dryRun: request.dryRun });
         if (runId) acquisitionMetrics.set(runId, { queries_sent: stage.queriesSent, products_fetched: stage.productsFetched, products_staged: stage.productsStaged, products_rejected: validation.rejected });
-        return { runId: runId ?? null, startedAt: startedAt.toISOString(), finishedAt: new Date().toISOString(), fetchedGtins: stage.products.map((product) => product.ean), admittedGtins: validation.candidates.filter((candidate) => candidate.status === "PENDING").map((candidate) => candidate.ean), rejectedCount: validation.rejected, promoReadsFailed: stage.promoReadsFailed, promosCaptured: stage.promosCaptured, error: null };
+        // The refresh rule tolerates isolated rejects, so the artifact records
+        // which GTINs were rejected and why.
+        const rejectedProducts = validation.candidates
+          .filter((candidate) => candidate.status === "REJECTED")
+          .map((candidate) => ({ gtin: normalizeGtin(candidate.ean) ?? candidate.ean, qualityFlags: candidate.qualityFlags }));
+        return { runId: runId ?? null, startedAt: startedAt.toISOString(), finishedAt: new Date().toISOString(), fetchedGtins: stage.products.map((product) => product.ean), admittedGtins: validation.candidates.filter((candidate) => candidate.status === "PENDING").map((candidate) => candidate.ean), rejectedCount: validation.rejected, rejectedProducts, promoReadsFailed: stage.promoReadsFailed, promosCaptured: stage.promosCaptured, error: null };
       } catch (error) {
-        return { runId: runId ?? null, startedAt: startedAt.toISOString(), finishedAt: new Date().toISOString(), fetchedGtins: [], admittedGtins: [], rejectedCount: 0, error: error instanceof Error ? error.message : "unknown_acquisition_error" };
+        return { runId: runId ?? null, startedAt: startedAt.toISOString(), finishedAt: new Date().toISOString(), fetchedGtins: [], admittedGtins: [], rejectedCount: 0, rejectedProducts: [], error: error instanceof Error ? error.message : "unknown_acquisition_error" };
       }
     },
     async finalizeAcquisition(runId, outcome) {

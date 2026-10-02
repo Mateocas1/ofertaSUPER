@@ -32,6 +32,20 @@ describe("cloud refresh failure classification", () => {
 
     assert.equal(classifyRefreshFailure("refresh", log), "vtex-hash-unavailable");
   });
+
+  it("names the two rejection-rule failures specifically", () => {
+    const exceeded = '[refresh] failures: [{"batchId":"v1-refresh-20261002-28","error":"acquisition_rejected_products"}]\n[refresh] gate check failed: failedBatches=1';
+    const admittedNothing = '[refresh] failures: [{"error":"acquisition_no_admitted_products"}]\n[refresh] gate check failed: failedBatches=1';
+
+    assert.equal(classifyRefreshFailure("refresh", exceeded), "refresh-rejections-exceeded");
+    assert.equal(classifyRefreshFailure("refresh", admittedNothing), "refresh-no-admitted-products");
+  });
+
+  it("does not mistake a tolerated rejection line for a hard failure", () => {
+    const tolerated = '[refresh] rejected: 1 products [{"batchId":"v1-refresh-20261002-28","gtin":"07790000000007","qualityFlags":["price_no_spike"]}]';
+
+    assert.equal(classifyRefreshFailure("refresh", tolerated), "refresh-failed");
+  });
 });
 
 describe("cloud refresh secret redaction", () => {

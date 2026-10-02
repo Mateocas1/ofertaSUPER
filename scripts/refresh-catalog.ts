@@ -16,6 +16,7 @@ import {
 } from "../src/lib/vtex/hash-resolution";
 import { createDependencies } from "./acquire-cmvp-catalog-batch";
 import { evaluateRefreshGates } from "./lib/refresh-gates";
+import { formatRejectedSummary, type RejectedRecord } from "./lib/refresh-summary";
 import { runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
 import { topUpUnobservedOffers, type TopUpSummary } from "./pipeline/topup";
 
@@ -34,6 +35,7 @@ type BatchOutcome = {
   failure: { batchId: string; error: string } | null;
   promosCaptured: number;
   promoReadsFailed: number;
+  rejectedProducts: RejectedRecord[];
 };
 
 function readFlag(name: string) {
@@ -66,6 +68,7 @@ function runSummary(artifact: CmvpCatalogBatchArtifact) {
     acquisitionError: run?.error ?? artifact.reconciliationError ?? null,
     promosCaptured: run?.promosCaptured ?? 0,
     promoReadsFailed: run?.promoReadsFailed ?? 0,
+    rejectedProducts: run?.rejectedProducts ?? [],
   };
 }
 
@@ -96,17 +99,18 @@ async function runBatch(batch: PlanBatch, stamp: string, artifactsDir: string): 
     const result = await runCmvpCatalogBatch(request, createDependencies(request.output));
     const summary = runSummary(result.artifact);
     process.stdout.write(`${JSON.stringify({ ...summary, batchId })}\n`);
+    const rejectedProducts = summary.rejectedProducts.map((product) => ({ batchId, gtin: product.gtin, qualityFlags: product.qualityFlags }));
     const failure = summary.acquisitionError !== null || summary.state !== "completed"
       ? { batchId, error: summary.acquisitionError ?? `state=${summary.state}` }
       : null;
-    return { ok: failure === null, failure, promosCaptured: summary.promosCaptured, promoReadsFailed: summary.promoReadsFailed };
+    return { ok: failure === null, failure, promosCaptured: summary.promosCaptured, promoReadsFailed: summary.promoReadsFailed, rejectedProducts };
   } catch (error) {
     // The pipeline already persisted a blocked artifact when it could; the
     // catch must not overwrite the checkpoint with a non-artifact payload
     // (a malformed checkpoint would poison every later replay).
     const message = error instanceof Error ? error.message : String(error);
     process.stdout.write(`[refresh] ${batchId} failed: ${message}\n`);
-    return { ok: false, failure: { batchId, error: message }, promosCaptured: 0, promoReadsFailed: 0 };
+    return { ok: false, failure: { batchId, error: message }, promosCaptured: 0, promoReadsFailed: 0, rejectedProducts: [] };
   }
 }
 
@@ -134,11 +138,14 @@ async function freshnessBySupermarket() {
   }));
 }
 
-function printSummary(stamp: string, ok: number, failures: Array<{ batchId: string; error: string }>, promosCaptured: number, promoReadsFailed: number, topUp: TopUpSummary, freshness: Array<{ slug: string; offers: number; under24hPercent: number }>) {
+function printSummary(stamp: string, ok: number, failures: Array<{ batchId: string; error: string }>, promosCaptured: number, promoReadsFailed: number, topUp: TopUpSummary, freshness: Array<{ slug: string; offers: number; under24hPercent: number }>, rejected: RejectedRecord[]) {
   process.stdout.write(`\n[refresh] summary ${stamp}: batches ok=${ok} failed=${failures.length}; promos captured=${promosCaptured} readsFailed=${promoReadsFailed}; top-up reads ok=${topUp.readsOk} failed=${topUp.readsFailed}\n`);
   for (const entry of freshness) {
     process.stdout.write(`[refresh] ${entry.slug}: ${entry.under24hPercent}% of ${entry.offers} offers under 24h\n`);
   }
+  // Rejected products are tolerated when they are isolated; name them and their
+  // quality flags so tomorrow's log explains why a product was dropped.
+  process.stdout.write(`${formatRejectedSummary(rejected)}\n`);
   if (failures.length > 0) {
     process.stdout.write(`[refresh] failures: ${JSON.stringify(failures, null, 2)}\n`);
   }
@@ -204,6 +211,7 @@ async function main() {
   let promosCaptured = 0;
   let promoReadsFailed = 0;
   const failures: Array<{ batchId: string; error: string }> = [];
+  const rejected: RejectedRecord[] = [];
   for (const batch of batches) {
     process.env.VTEX_SHA256_HASH = await resolveHashForSource(batch.source, explicitHash);
     const outcome = await runBatch(batch, stamp, artifactsDir);
@@ -211,13 +219,14 @@ async function main() {
     if (outcome.failure) failures.push(outcome.failure);
     promosCaptured += outcome.promosCaptured;
     promoReadsFailed += outcome.promoReadsFailed;
+    rejected.push(...outcome.rejectedProducts);
   }
 
   process.stdout.write("[refresh] re-reading the offers the searches missed\n");
   const topUp = await topUpUnobservedOffers({ stamp, runStartedAt });
   regenerateSnapshot();
   const freshness = await freshnessBySupermarket();
-  printSummary(stamp, ok, failures, promosCaptured, promoReadsFailed, topUp, freshness);
+  printSummary(stamp, ok, failures, promosCaptured, promoReadsFailed, topUp, freshness, rejected);
   await db.$disconnect();
 }
 
