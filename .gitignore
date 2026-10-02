@@ -73,3 +73,11 @@ test-results/
 *:Zone.Identifier
 
 certificatesartifacts/refresh/
+
+# analytics: generated Parquet, dbt artifacts and the local DuckDB
+analytics/data/
+analytics/target/
+analytics/logs/
+analytics/.venv/
+analytics/*.duckdb
+analytics/*.duckdb.wal
