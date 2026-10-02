@@ -1,4 +1,4 @@
-# ofertaSUPER
+# ofertasSUPER
 
 Comparador de precios y ofertas de supermercados de Argentina (Carrefour, Disco y
 Jumbo) por GTIN-14: buscás un producto, ves el precio y la oferta en cada súper,
