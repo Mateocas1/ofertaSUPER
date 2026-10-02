@@ -8,78 +8,95 @@ import {
   searchSnapshotProducts,
   snapshotMatchRank,
 } from "../src/lib/catalog-snapshot";
+import { useSnapshotFixture } from "./helpers/snapshot-fixture";
 
-// The snapshot is generated from the local database; every committed offer is
-// observed on 2026-09-20, so anything inside 24 h of the injected clock must
-// be proven with an explicit observedAt rather than assumed.
-const fixedNow = new Date("2026-09-21T00:00:00.000Z");
+// Behavior of the snapshot read path, proven against the committed fixture in
+// tests/fixtures/catalog-snapshot.fixture.json. The daily refresh rewrites the
+// served snapshot, so no expectation here may depend on its real values.
+const FIXTURE = useSnapshotFixture();
+const GENERATED_AT = new Date(FIXTURE.generatedAt);
+
+function normalized(value: string): string {
+  return normalizeQuery(value);
+}
+
+function productsMatching(term: string): string[] {
+  const needle = normalized(term);
+  return FIXTURE.products
+    .filter((product) =>
+      [product.name, product.brand ?? "", product.ean].some((field) =>
+        normalized(field).includes(needle),
+      ),
+    )
+    .map((product) => product.ean);
+}
 
 describe("snapshot search", () => {
   it("finds products by name without accents or case", () => {
-    const query = normalizeQuery("LECHE");
-    assert.ok(query === "leche");
-    const result = searchSnapshotProducts({ query: "LECHE", now: fixedNow });
-    assert.ok(result.total > 0, "leche must match at least one real product");
+    assert.equal(normalizeQuery("LECHE"), "leche");
+    const result = searchSnapshotProducts({ query: "LECHE", now: GENERATED_AT });
+    assert.deepEqual(
+      result.products.map((entry) => entry.product.ean).sort(),
+      productsMatching("leche").sort(),
+      "the upper-case query must return exactly the products that mention leche",
+    );
     for (const entry of result.products) {
       const haystack = [entry.product.name, entry.product.brand ?? "", entry.product.ean]
-        .map(normalizeQuery)
+        .map(normalized)
         .join(" ");
       assert.ok(haystack.includes("leche"), `result ${entry.product.ean} must mention leche`);
     }
   });
 
-  it("matches accents-insensitively on brand names", () => {
-    const accented = searchSnapshotProducts({ query: "lácteos", now: fixedNow });
-    const plain = searchSnapshotProducts({ query: "lacteos", now: fixedNow });
-    assert.equal(
-      accented.total,
-      plain.total,
-      "accented and plain queries must return the same set",
-    );
+  it("matches accents-insensitively on every searched field", () => {
+    const accented = searchSnapshotProducts({ query: "serenísima", now: GENERATED_AT });
+    const plain = searchSnapshotProducts({ query: "serenisima", now: GENERATED_AT });
+    assert.ok(accented.total > 0, "the fixture has a brand with an accent");
+    assert.equal(accented.total, plain.total, "accented and plain queries must return the same set");
   });
 
   it("returns page 2 with a different slice and honest totals", () => {
-    const first = searchSnapshotProducts({ now: fixedNow, page: 1 });
-    const second = searchSnapshotProducts({ now: fixedNow, page: 2 });
+    const first = searchSnapshotProducts({ now: GENERATED_AT, page: 1 });
+    const second = searchSnapshotProducts({ now: GENERATED_AT, page: 2 });
     assert.equal(first.page, 1);
     assert.equal(second.page, 2);
-    assert.ok(first.total > 24, "the catalog must span more than one page");
+    assert.equal(first.total, FIXTURE.products.length);
     assert.equal(second.total, first.total);
     const firstEans = first.products.map((entry) => entry.product.ean);
     const secondEans = second.products.map((entry) => entry.product.ean);
+    assert.equal(firstEans.length, 24);
     assert.deepEqual(secondEans, secondEans.filter((ean) => !firstEans.includes(ean)));
-    assert.equal(first.products.length, 24);
   });
 
   it("finds a product by any GTIN form of its key, before and after GTIN-14 canonicalization", () => {
-    const { product } = searchSnapshotProducts({ now: fixedNow }).products[0];
+    const { product } = searchSnapshotProducts({ now: GENERATED_AT }).products[0];
     const canonical = product.ean.padStart(14, "0");
     const shortForm = canonical.replace(/^0/, "");
     for (const form of [product.ean, canonical, shortForm]) {
-      assert.equal(getSnapshotProduct(form, fixedNow)?.product.ean, product.ean, form);
+      assert.equal(getSnapshotProduct(form, GENERATED_AT)?.product.ean, product.ean, form);
     }
     assert.equal(snapshotMatchRank(product, canonical), 0);
     assert.equal(snapshotMatchRank(product, shortForm), 0);
   });
 
   it("returns null for an unknown EAN", () => {
-    assert.equal(getSnapshotProduct("0000000000000", fixedNow), null);
+    assert.equal(getSnapshotProduct("0000000000000", GENERATED_AT), null);
   });
 
-  it("reports real products with offers and freshness computed per request", () => {
-    const found = searchSnapshotProducts({ query: "leche", now: fixedNow });
+  it("reports the fixture products with offers and freshness computed per request", () => {
+    const found = searchSnapshotProducts({ query: "leche", now: GENERATED_AT });
     assert.ok(found.products.length > 0);
     const entry = found.products[0];
     assert.ok(entry.offers.length > 0, "every listed product must have offers");
     for (const offer of entry.offers) {
-      assert.ok(["carrefour", "disco", "jumbo"].includes(offer.source));
+      assert.ok(FIXTURE.sources.includes(offer.source));
       assert.ok(offer.observedAt.length > 0);
       if (offer.promo !== null) {
         assert.ok(["nth-unit", "percent-off"].includes(offer.promo.type), "captured promotions carry the parsed shape");
         assert.ok(offer.promo.label.length > 0);
       }
     }
-    const stale = getSnapshotProduct(entry.product.ean, new Date("2026-10-01T00:00:00.000Z"));
+    const stale = getSnapshotProduct(entry.product.ean, new Date(GENERATED_AT.getTime() + 8 * 86_400_000));
     assert.ok(stale);
     assert.equal(stale.freshCount, 0, "a week later nothing is fresh anymore");
   });

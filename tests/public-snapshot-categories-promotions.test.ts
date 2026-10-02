@@ -8,10 +8,12 @@ import {
   handlePromotions,
   type PublicApiDeps,
 } from "../src/lib/public-api";
+import { useSnapshotFixture } from "./helpers/snapshot-fixture";
 
 process.env.VERCEL = "1";
 
-const NOW = new Date("2026-09-27T12:00:00Z");
+const FIXTURE = useSnapshotFixture();
+const NOW = new Date(FIXTURE.generatedAt);
 
 function request(path: string): NextRequest {
   return new NextRequest(`https://ofertas-super.vercel.app${path}`, {
@@ -49,7 +51,9 @@ describe("categories and promotions are served from the snapshot", () => {
     assert.equal(typeof body.verifiedAt, "string");
     assert.deepEqual(body.items.map((item) => item.slug), DETAILED_CATEGORIES.map((category) => category.slug));
     const lacteos = body.items.find((item) => item.slug === "lacteos");
-    assert.ok(lacteos && lacteos.count > 0, "the snapshot has dairy products");
+    const expectedDairy = FIXTURE.products.filter((product) => product.category === "Lácteos").length;
+    assert.ok(lacteos, "the snapshot serves the dairy category");
+    assert.equal(lacteos.count, expectedDairy);
     assert.equal(lacteos.icon, "lacteos");
     assert.deepEqual(lacteos.children, []);
   });

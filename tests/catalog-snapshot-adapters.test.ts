@@ -2,17 +2,20 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { findSnapshotAdaptedProduct, searchSnapshotSummaries } from "../src/lib/catalog-snapshot-adapters";
-import { getSnapshotGeneratedAt, normalizeQuery } from "../src/lib/catalog-snapshot";
+import { normalizeQuery } from "../src/lib/catalog-snapshot";
+import { useSnapshotFixture } from "./helpers/snapshot-fixture";
 
-// The daily refresh rewrites the committed snapshot, so the clocks follow its
-// generation time: at generation the offers are fresh, a week later none are.
-const generatedAt = new Date(getSnapshotGeneratedAt());
+// The daily refresh rewrites the served snapshot, so these adaptation tests run
+// against the committed fixture and derive their clocks from its generatedAt:
+// at generation the offers are fresh, eight days later none of them is.
+const FIXTURE = useSnapshotFixture();
+const generatedAt = new Date(FIXTURE.generatedAt);
 const freshNow = generatedAt;
 const staleNow = new Date(generatedAt.getTime() + 8 * 24 * 60 * 60 * 1000);
 
 function findAdapted(query: string) {
   const result = searchSnapshotSummaries({ query, now: freshNow });
-  assert.ok(result.products.length > 0, `${query} must match a real product`);
+  assert.ok(result.products.length > 0, `${query} must match a fixture product`);
   const summary = result.products[0];
   const detail = findSnapshotAdaptedProduct(summary.ean, freshNow);
   assert.ok(detail, "the matched product must adapt to a detail");
@@ -25,7 +28,7 @@ describe("snapshot adapters produce the guarded shapes", () => {
     assert.equal(summary.ean.length >= 8, true);
     assert.ok(summary.entries.length > 0, "a listed product must have entries");
     for (const entry of summary.entries) {
-      assert.ok(["carrefour", "disco", "jumbo"].includes(entry.supermarket.slug));
+      assert.ok(FIXTURE.sources.includes(entry.supermarket.slug));
       assert.equal(entry.freshnessSlaHours, 24);
       assert.ok(["fresh", "stale", "unknown"].includes(entry.freshnessStatus));
       assert.ok(Number.isFinite(entry.supermarketProductId));
@@ -56,7 +59,7 @@ describe("snapshot adapters produce the guarded shapes", () => {
   it("flips freshness verdicts when the injected clock moves", () => {
     const query = "arroz";
     const fresh = searchSnapshotSummaries({ query, now: freshNow });
-    assert.ok(fresh.products.length > 0, "arroz must match real products");
+    assert.ok(fresh.products.length > 0, "arroz must match fixture products");
     const stale = searchSnapshotSummaries({ query, now: staleNow });
     for (const entry of stale.products) {
       assert.equal(

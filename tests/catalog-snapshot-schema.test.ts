@@ -2,6 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
+import {
+  parseCatalogSnapshot,
+  probeCatalogSnapshot,
+  SNAPSHOT_SCHEMA_VERSION,
+  SnapshotUnavailableError,
+} from "../src/lib/catalog-snapshot";
+import { loadSnapshotFixture } from "./helpers/snapshot-fixture";
+
 // The snapshot is committed to the repo and served by the deployment, so its
 // objects must not leak internal fields. This is a data contract on the JSON
 // itself, not a grep of source code.
@@ -53,3 +61,61 @@ describe("catalog snapshot data contract", () => {
     assert.deepEqual(snapshot.sources, ["carrefour", "disco", "jumbo"]);
   });
 });
+
+// The daily cloud refresh rewrites this file without running the test suite, so
+// the load assertions below are schema-only: they prove the committed snapshot
+// parses and is internally consistent, never that it holds specific values.
+describe("snapshot schema-only load", () => {
+  it("loads the committed snapshot through the schema gate and the health probe", () => {
+    const parsed = parseCatalogSnapshot(snapshot);
+    assert.equal(parsed.schemaVersion, SNAPSHOT_SCHEMA_VERSION);
+    assert.deepEqual(probeCatalogSnapshot(), { generatedAt: parsed.generatedAt });
+  });
+
+  it("keeps every product and offer referentially consistent", () => {
+    const parsed = parseCatalogSnapshot(snapshot);
+    const productEans = new Set(parsed.products.map((product) => product.ean));
+    assert.equal(productEans.size, parsed.products.length, "product keys must be unique");
+    assert.ok(parsed.offers.length >= parsed.products.length, "every product needs at least one offer");
+
+    for (const product of parsed.products) {
+      assert.ok(
+        parsed.offers.some((offer) => offer.ean === product.ean),
+        `product ${product.ean} has no offer`,
+      );
+    }
+
+    for (const offer of parsed.offers) {
+      assert.ok(productEans.has(offer.ean), `offer ${offer.ean} has no product`);
+      assert.ok(!Number.isNaN(Date.parse(offer.observedAt)), `offer ${offer.ean} observedAt must parse`);
+      if (offer.price !== null) assert.ok(Number.isFinite(offer.price) && offer.price >= 0, `offer ${offer.ean} price must be a non-negative number`);
+      if (offer.listPrice !== null) assert.ok(Number.isFinite(offer.listPrice) && offer.listPrice >= 0, `offer ${offer.ean} listPrice must be a non-negative number`);
+      for (const point of offer.history) {
+        assert.ok(!Number.isNaN(Date.parse(point.observedAt)), `history point of ${offer.ean} observedAt must parse`);
+        if (point.price !== null) assert.ok(Number.isFinite(point.price) && point.price >= 0, `history price of ${offer.ean} must be a non-negative number`);
+      }
+    }
+  });
+
+  it("keeps each offer history sorted oldest first", () => {
+    for (const offer of snapshot.offers) {
+      const stamps = offer.history.map((point) => Date.parse(String(point.observedAt)));
+      assert.deepEqual(stamps, [...stamps].sort((left, right) => left - right), `history of ${offer.ean}/${offer.source} must be ascending`);
+    }
+  });
+
+  it("rejects a malformed snapshot instead of serving it", () => {
+    assert.throws(() => parseCatalogSnapshot({ schemaVersion: 2 }), SnapshotUnavailableError);
+    assert.throws(() => parseCatalogSnapshot(parsedWithoutOffers()), SnapshotUnavailableError);
+  });
+
+  it("parses the committed test fixture through the same gate", () => {
+    const fixture = loadSnapshotFixture();
+    assert.equal(fixture.schemaVersion, SNAPSHOT_SCHEMA_VERSION);
+    assert.ok(fixture.products.length > 0 && fixture.offers.length > 0);
+  });
+});
+
+function parsedWithoutOffers(): unknown {
+  return { ...snapshot, offers: "not-an-array" };
+}

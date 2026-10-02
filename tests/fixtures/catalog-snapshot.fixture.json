@@ -1,0 +1,1774 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-01-15T12:00:00.000Z",
+  "sources": [
+    "carrefour",
+    "disco",
+    "jumbo"
+  ],
+  "products": [
+    {
+      "ean": "7790001000019",
+      "name": "Leche Entera La Serenísima 1L",
+      "brand": "La Serenísima",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000019.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000026",
+      "name": "Leche Descremada La Serenísima 1L",
+      "brand": "La Serenísima",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000026.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000033",
+      "name": "Leche Entera Sancor 3% 1L",
+      "brand": "Sancor",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000033.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000040",
+      "name": "Leche Descremada Sancor 1L",
+      "brand": "Sancor",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000040.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000057",
+      "name": "Leche Entera Ilolay 1L",
+      "brand": "Ilolay",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000057.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000064",
+      "name": "Leche Entera Milkaut 1L",
+      "brand": "Milkaut",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000064.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000071",
+      "name": "Leche Chocolatada La Serenísima 1L",
+      "brand": "La Serenísima",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000071.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000088",
+      "name": "Leche Entera Manfrey 1L",
+      "brand": "Manfrey",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000088.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000095",
+      "name": "Leche Descremada Ilolay 1L",
+      "brand": "Ilolay",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000095.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000101",
+      "name": "Leche en Polvo Nido 800g",
+      "brand": "Nestlé",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000101.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000118",
+      "name": "Leche Entera La Sibila 1L",
+      "brand": "La Sibila",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000118.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000125",
+      "name": "Leche Deslactosada La Serenísima 1L",
+      "brand": "La Serenísima",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000125.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000132",
+      "name": "Dulce de Leche Milkaut 400g",
+      "brand": "Milkaut",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000132.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000149",
+      "name": "Yogur Natural Yogurísimo 1kg",
+      "brand": "Yogurísimo",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000149.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000156",
+      "name": "Queso Crema Casancrem 300g",
+      "brand": "Casancrem",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000156.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000163",
+      "name": "Manteca La Serenísima 200g",
+      "brand": "La Serenísima",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000163.jpg",
+      "category": "Lácteos",
+      "categorySlug": "lacteos"
+    },
+    {
+      "ean": "7790001000170",
+      "name": "Café Molido La Morenita 500g",
+      "brand": "La Morenita",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000170.jpg",
+      "category": "Almacén",
+      "categorySlug": "almacen"
+    },
+    {
+      "ean": "7790001000187",
+      "name": "Café en Grano Cabrales 1kg",
+      "brand": "Cabrales",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000187.jpg",
+      "category": "Almacén",
+      "categorySlug": "almacen"
+    },
+    {
+      "ean": "7790001000194",
+      "name": "Yerba Mate Taragüí 1kg",
+      "brand": "Taragüí",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000194.jpg",
+      "category": "Almacén",
+      "categorySlug": "almacen"
+    },
+    {
+      "ean": "7790001000200",
+      "name": "Arroz Largo Fino Gallo Oro 1kg",
+      "brand": "Gallo Oro",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000200.jpg",
+      "category": "Almacén",
+      "categorySlug": "almacen"
+    },
+    {
+      "ean": "7790001000217",
+      "name": "Aceite de Girasol Natura 1,5L",
+      "brand": "Natura",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000217.jpg",
+      "category": "Almacén",
+      "categorySlug": "almacen"
+    },
+    {
+      "ean": "7790001000224",
+      "name": "Azúcar Ledesma 1kg",
+      "brand": "Ledesma",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000224.jpg",
+      "category": "Almacén",
+      "categorySlug": "almacen"
+    },
+    {
+      "ean": "7790001000231",
+      "name": "Fideos Matarazzo 500g",
+      "brand": "Matarazzo",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000231.jpg",
+      "category": "Almacén",
+      "categorySlug": "almacen"
+    },
+    {
+      "ean": "7790001000248",
+      "name": "Harina Pureza 000 1kg",
+      "brand": "Pureza",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000248.jpg",
+      "category": "Almacén",
+      "categorySlug": "almacen"
+    },
+    {
+      "ean": "7790001000255",
+      "name": "Atún La Campagnola 170g",
+      "brand": "La Campagnola",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000255.jpg",
+      "category": "Almacén",
+      "categorySlug": "almacen"
+    },
+    {
+      "ean": "7790001000262",
+      "name": "Chocolate con Leche Milka 100g",
+      "brand": "Milka",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000262.jpg",
+      "category": "Almacén",
+      "categorySlug": "almacen"
+    },
+    {
+      "ean": "7790001000279",
+      "name": "Gaseosa Coca-Cola 2,25L",
+      "brand": "Coca-Cola",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000279.jpg",
+      "category": "Bebidas",
+      "categorySlug": "bebidas"
+    },
+    {
+      "ean": "7790001000286",
+      "name": "Agua Mineral Villavicencio 2L",
+      "brand": "Villavicencio",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000286.jpg",
+      "category": "Bebidas",
+      "categorySlug": "bebidas"
+    },
+    {
+      "ean": "7790001000293",
+      "name": "Cerveza Quilmes 1L",
+      "brand": "Quilmes",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000293.jpg",
+      "category": "Bebidas",
+      "categorySlug": "bebidas"
+    },
+    {
+      "ean": "7790001000309",
+      "name": "Jugo Baggio Naranja 1L",
+      "brand": "Baggio",
+      "imageUrl": "https://cdn.ofertasuper.test/7790001000309.jpg",
+      "category": "Bebidas",
+      "categorySlug": "bebidas"
+    }
+  ],
+  "offers": [
+    {
+      "ean": "7790001000019",
+      "source": "carrefour",
+      "price": 331,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000019",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 390.58,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 354.17,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 331,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000026",
+      "source": "carrefour",
+      "price": 462,
+      "listPrice": 577.5,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000026",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 545.16,
+          "listPrice": 681.45,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 494.34,
+          "listPrice": 617.93,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 462,
+          "listPrice": 577.5,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000026",
+      "source": "disco",
+      "price": 517.44,
+      "listPrice": 646.8,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000026",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 610.58,
+          "listPrice": 763.22,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 553.66,
+          "listPrice": 692.08,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 517.44,
+          "listPrice": 646.8,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000033",
+      "source": "carrefour",
+      "price": 593,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000033",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 699.74,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 634.51,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 593,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000033",
+      "source": "jumbo",
+      "price": 557.42,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.jumbo.test/producto/7790001000033",
+      "observedAt": "2026-01-12T10:00:00.000Z",
+      "history": [
+        {
+          "price": 657.76,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 596.44,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 557.42,
+          "listPrice": null,
+          "observedAt": "2026-01-12T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000040",
+      "source": "carrefour",
+      "price": 724,
+      "listPrice": 905,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000040",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 854.32,
+          "listPrice": 1067.9,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 774.68,
+          "listPrice": 968.35,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 724,
+          "listPrice": 905,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000040",
+      "source": "disco",
+      "price": 810.88,
+      "listPrice": 1013.6,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000040",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 956.84,
+          "listPrice": 1196.05,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 867.64,
+          "listPrice": 1084.55,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 810.88,
+          "listPrice": 1013.6,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000057",
+      "source": "carrefour",
+      "price": 855,
+      "listPrice": null,
+      "promo": {
+        "type": "percent-off",
+        "percent": 15,
+        "nth": null,
+        "maxUnits": null,
+        "label": "15% off en la segunda unidad"
+      },
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000057",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 1008.9,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 914.85,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 855,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000064",
+      "source": "carrefour",
+      "price": 986,
+      "listPrice": 1232.5,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000064",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 1163.48,
+          "listPrice": 1454.35,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1055.02,
+          "listPrice": 1318.78,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 986,
+          "listPrice": 1232.5,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000064",
+      "source": "disco",
+      "price": 1104.32,
+      "listPrice": 1380.4,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000064",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 1303.1,
+          "listPrice": 1628.87,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1181.62,
+          "listPrice": 1477.03,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1104.32,
+          "listPrice": 1380.4,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000064",
+      "source": "jumbo",
+      "price": 926.84,
+      "listPrice": 1158.55,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.jumbo.test/producto/7790001000064",
+      "observedAt": "2026-01-12T10:00:00.000Z",
+      "history": [
+        {
+          "price": 1093.67,
+          "listPrice": 1367.09,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 991.72,
+          "listPrice": 1239.65,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 926.84,
+          "listPrice": 1158.55,
+          "observedAt": "2026-01-12T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000071",
+      "source": "carrefour",
+      "price": 1117,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000071",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 1318.06,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1195.19,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1117,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000088",
+      "source": "carrefour",
+      "price": 1248,
+      "listPrice": 1560,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000088",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 1472.64,
+          "listPrice": 1840.8,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1335.36,
+          "listPrice": 1669.2,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1248,
+          "listPrice": 1560,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000088",
+      "source": "disco",
+      "price": 1397.76,
+      "listPrice": 1747.2,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000088",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 1649.36,
+          "listPrice": 2061.7,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1495.6,
+          "listPrice": 1869.5,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1397.76,
+          "listPrice": 1747.2,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000095",
+      "source": "carrefour",
+      "price": 1379,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000095",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 1627.22,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1475.53,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1379,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000095",
+      "source": "jumbo",
+      "price": 1296.26,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.jumbo.test/producto/7790001000095",
+      "observedAt": "2026-01-12T10:00:00.000Z",
+      "history": [
+        {
+          "price": 1529.59,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1387,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1296.26,
+          "listPrice": null,
+          "observedAt": "2026-01-12T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000101",
+      "source": "carrefour",
+      "price": 1510,
+      "listPrice": 1887.5,
+      "promo": {
+        "type": "percent-off",
+        "percent": 15,
+        "nth": null,
+        "maxUnits": null,
+        "label": "15% off en la segunda unidad"
+      },
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000101",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 1781.8,
+          "listPrice": 2227.25,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1615.7,
+          "listPrice": 2019.63,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1510,
+          "listPrice": 1887.5,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000101",
+      "source": "disco",
+      "price": null,
+      "listPrice": null,
+      "promo": null,
+      "available": false,
+      "productUrl": "https://www.disco.test/producto/7790001000101",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 1995.62,
+          "listPrice": 2494.52,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1809.58,
+          "listPrice": 2261.98,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1691.2,
+          "listPrice": 2114,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000118",
+      "source": "carrefour",
+      "price": 1641,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000118",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 1936.38,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1755.87,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1641,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000125",
+      "source": "carrefour",
+      "price": 1772,
+      "listPrice": 2215,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000125",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 2090.96,
+          "listPrice": 2613.7,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1896.04,
+          "listPrice": 2370.05,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1772,
+          "listPrice": 2215,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000125",
+      "source": "disco",
+      "price": 1984.64,
+      "listPrice": 2480.8,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000125",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 2341.88,
+          "listPrice": 2927.34,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2123.56,
+          "listPrice": 2654.46,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1984.64,
+          "listPrice": 2480.8,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000125",
+      "source": "jumbo",
+      "price": 1665.68,
+      "listPrice": 2082.1,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.jumbo.test/producto/7790001000125",
+      "observedAt": "2026-01-12T10:00:00.000Z",
+      "history": [
+        {
+          "price": 1965.5,
+          "listPrice": 2456.88,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 1782.28,
+          "listPrice": 2227.85,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1665.68,
+          "listPrice": 2082.1,
+          "observedAt": "2026-01-12T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000132",
+      "source": "carrefour",
+      "price": 1903,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000132",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 2245.54,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2036.21,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 1903,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000149",
+      "source": "carrefour",
+      "price": 2034,
+      "listPrice": 2542.5,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000149",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 2400.12,
+          "listPrice": 3000.15,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2176.38,
+          "listPrice": 2720.48,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2034,
+          "listPrice": 2542.5,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000149",
+      "source": "disco",
+      "price": 2278.08,
+      "listPrice": 2847.6,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000149",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 2688.13,
+          "listPrice": 3360.17,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2437.55,
+          "listPrice": 3046.93,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2278.08,
+          "listPrice": 2847.6,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000156",
+      "source": "carrefour",
+      "price": 2165,
+      "listPrice": null,
+      "promo": {
+        "type": "percent-off",
+        "percent": 15,
+        "nth": null,
+        "maxUnits": null,
+        "label": "15% off en la segunda unidad"
+      },
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000156",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 2554.7,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2316.55,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2165,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000156",
+      "source": "jumbo",
+      "price": 2035.1,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.jumbo.test/producto/7790001000156",
+      "observedAt": "2026-01-12T10:00:00.000Z",
+      "history": [
+        {
+          "price": 2401.42,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2177.56,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2035.1,
+          "listPrice": null,
+          "observedAt": "2026-01-12T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000163",
+      "source": "carrefour",
+      "price": 2296,
+      "listPrice": 2870,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000163",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 2709.28,
+          "listPrice": 3386.6,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2456.72,
+          "listPrice": 3070.9,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2296,
+          "listPrice": 2870,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000163",
+      "source": "disco",
+      "price": 2571.52,
+      "listPrice": 3214.4,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000163",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 3034.39,
+          "listPrice": 3792.99,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2751.53,
+          "listPrice": 3439.41,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2571.52,
+          "listPrice": 3214.4,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000170",
+      "source": "carrefour",
+      "price": 2427,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000170",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 2863.86,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2596.89,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2427,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000187",
+      "source": "carrefour",
+      "price": 2558,
+      "listPrice": 3197.5,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000187",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 3018.44,
+          "listPrice": 3773.05,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2737.06,
+          "listPrice": 3421.33,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2558,
+          "listPrice": 3197.5,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000187",
+      "source": "disco",
+      "price": 2864.96,
+      "listPrice": 3581.2,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000187",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 3380.65,
+          "listPrice": 4225.82,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3065.51,
+          "listPrice": 3831.88,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2864.96,
+          "listPrice": 3581.2,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000187",
+      "source": "jumbo",
+      "price": 2404.52,
+      "listPrice": 3005.65,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.jumbo.test/producto/7790001000187",
+      "observedAt": "2026-01-12T10:00:00.000Z",
+      "history": [
+        {
+          "price": 2837.33,
+          "listPrice": 3546.67,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2572.84,
+          "listPrice": 3216.05,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2404.52,
+          "listPrice": 3005.65,
+          "observedAt": "2026-01-12T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000194",
+      "source": "carrefour",
+      "price": 2689,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000194",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 3173.02,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2877.23,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2689,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000200",
+      "source": "carrefour",
+      "price": 2820,
+      "listPrice": 3525,
+      "promo": {
+        "type": "percent-off",
+        "percent": 15,
+        "nth": null,
+        "maxUnits": null,
+        "label": "15% off en la segunda unidad"
+      },
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000200",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 3327.6,
+          "listPrice": 4159.5,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3017.4,
+          "listPrice": 3771.75,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2820,
+          "listPrice": 3525,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000200",
+      "source": "disco",
+      "price": null,
+      "listPrice": null,
+      "promo": null,
+      "available": false,
+      "productUrl": "https://www.disco.test/producto/7790001000200",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 3726.91,
+          "listPrice": 4658.64,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3379.49,
+          "listPrice": 4224.36,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3158.4,
+          "listPrice": 3948,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000217",
+      "source": "carrefour",
+      "price": 2951,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000217",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 3482.18,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3157.57,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2951,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000217",
+      "source": "jumbo",
+      "price": 2773.94,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.jumbo.test/producto/7790001000217",
+      "observedAt": "2026-01-12T10:00:00.000Z",
+      "history": [
+        {
+          "price": 3273.25,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 2968.12,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 2773.94,
+          "listPrice": null,
+          "observedAt": "2026-01-12T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000224",
+      "source": "carrefour",
+      "price": 3082,
+      "listPrice": 3852.5,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000224",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 3636.76,
+          "listPrice": 4545.95,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3297.74,
+          "listPrice": 4122.18,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3082,
+          "listPrice": 3852.5,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000224",
+      "source": "disco",
+      "price": 3451.84,
+      "listPrice": 4314.8,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000224",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 4073.17,
+          "listPrice": 5091.46,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3693.47,
+          "listPrice": 4616.84,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3451.84,
+          "listPrice": 4314.8,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000231",
+      "source": "carrefour",
+      "price": 3213,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000231",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 3791.34,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3437.91,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3213,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000248",
+      "source": "carrefour",
+      "price": 3344,
+      "listPrice": 4180,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000248",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 3945.92,
+          "listPrice": 4932.4,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3578.08,
+          "listPrice": 4472.6,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3344,
+          "listPrice": 4180,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000248",
+      "source": "disco",
+      "price": 3745.28,
+      "listPrice": 4681.6,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000248",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 4419.43,
+          "listPrice": 5524.29,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 4007.45,
+          "listPrice": 5009.31,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3745.28,
+          "listPrice": 4681.6,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000248",
+      "source": "jumbo",
+      "price": 3143.36,
+      "listPrice": 3929.2,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.jumbo.test/producto/7790001000248",
+      "observedAt": "2026-01-12T10:00:00.000Z",
+      "history": [
+        {
+          "price": 3709.16,
+          "listPrice": 4636.46,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3363.4,
+          "listPrice": 4204.24,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3143.36,
+          "listPrice": 3929.2,
+          "observedAt": "2026-01-12T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000255",
+      "source": "carrefour",
+      "price": 3475,
+      "listPrice": null,
+      "promo": {
+        "type": "percent-off",
+        "percent": 15,
+        "nth": null,
+        "maxUnits": null,
+        "label": "15% off en la segunda unidad"
+      },
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000255",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 4100.5,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3718.25,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3475,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000262",
+      "source": "carrefour",
+      "price": 3606,
+      "listPrice": 4507.5,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000262",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 4255.08,
+          "listPrice": 5318.85,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3858.42,
+          "listPrice": 4823.03,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3606,
+          "listPrice": 4507.5,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000262",
+      "source": "disco",
+      "price": 4038.72,
+      "listPrice": 5048.4,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000262",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 4765.69,
+          "listPrice": 5957.11,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 4321.43,
+          "listPrice": 5401.79,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 4038.72,
+          "listPrice": 5048.4,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000279",
+      "source": "carrefour",
+      "price": 3737,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000279",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 4409.66,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3998.59,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3737,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000279",
+      "source": "jumbo",
+      "price": 3512.78,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.jumbo.test/producto/7790001000279",
+      "observedAt": "2026-01-12T10:00:00.000Z",
+      "history": [
+        {
+          "price": 4145.08,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 3758.67,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3512.78,
+          "listPrice": null,
+          "observedAt": "2026-01-12T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000286",
+      "source": "carrefour",
+      "price": 3868,
+      "listPrice": 4835,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000286",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 4564.24,
+          "listPrice": 5705.3,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 4138.76,
+          "listPrice": 5173.45,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3868,
+          "listPrice": 4835,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000286",
+      "source": "disco",
+      "price": 4332.16,
+      "listPrice": 5415.2,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.disco.test/producto/7790001000286",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 5111.95,
+          "listPrice": 6389.94,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 4635.41,
+          "listPrice": 5794.26,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 4332.16,
+          "listPrice": 5415.2,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000293",
+      "source": "carrefour",
+      "price": 3999,
+      "listPrice": null,
+      "promo": null,
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000293",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 4718.82,
+          "listPrice": null,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 4278.93,
+          "listPrice": null,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3999,
+          "listPrice": null,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000309",
+      "source": "carrefour",
+      "price": 4130,
+      "listPrice": 5162.5,
+      "promo": {
+        "type": "percent-off",
+        "percent": 15,
+        "nth": null,
+        "maxUnits": null,
+        "label": "15% off en la segunda unidad"
+      },
+      "available": true,
+      "productUrl": "https://www.carrefour.test/producto/7790001000309",
+      "observedAt": "2026-01-15T11:00:00.000Z",
+      "history": [
+        {
+          "price": 4873.4,
+          "listPrice": 6091.75,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 4419.1,
+          "listPrice": 5523.88,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 4130,
+          "listPrice": 5162.5,
+          "observedAt": "2026-01-15T11:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000309",
+      "source": "disco",
+      "price": null,
+      "listPrice": null,
+      "promo": null,
+      "available": false,
+      "productUrl": "https://www.disco.test/producto/7790001000309",
+      "observedAt": "2026-01-15T10:00:00.000Z",
+      "history": [
+        {
+          "price": 5458.21,
+          "listPrice": 6822.76,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 4949.39,
+          "listPrice": 6186.74,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 4625.6,
+          "listPrice": 5782,
+          "observedAt": "2026-01-15T10:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "ean": "7790001000309",
+      "source": "jumbo",
+      "price": null,
+      "listPrice": null,
+      "promo": null,
+      "available": false,
+      "productUrl": "https://www.jumbo.test/producto/7790001000309",
+      "observedAt": "2026-01-12T10:00:00.000Z",
+      "history": [
+        {
+          "price": 4581,
+          "listPrice": 5726.25,
+          "observedAt": "2026-01-05T10:00:00.000Z"
+        },
+        {
+          "price": 4153.95,
+          "listPrice": 5192.44,
+          "observedAt": "2026-01-10T10:00:00.000Z"
+        },
+        {
+          "price": 3882.2,
+          "listPrice": 4852.75,
+          "observedAt": "2026-01-12T10:00:00.000Z"
+        }
+      ]
+    }
+  ]
+}
