@@ -13,6 +13,8 @@ import {
 // rendering identical envelopes with real data.
 
 const SNAPSHOT_EAN = "2505271000004";
+// Lookups accept the short EAN; the catalog answers with the canonical GTIN-14.
+const SNAPSHOT_GTIN14 = "02505271000004";
 const UNKNOWN_EAN = "0000000000000";
 const NOW = new Date("2026-09-27T12:00:00Z");
 
@@ -64,7 +66,7 @@ describe("snapshot page loaders", () => {
     assert.equal(data.degraded, false);
     assert.equal(typeof data.verifiedAt, "string");
     assert.ok(data.product);
-    assert.equal(data.product.ean, SNAPSHOT_EAN);
+    assert.equal(data.product.ean, SNAPSHOT_GTIN14);
     assert.ok(data.product.priceEntries.length > 0);
     assert.ok(data.history.series.length > 0);
     for (const series of data.history.series) {
