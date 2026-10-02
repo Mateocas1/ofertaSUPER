@@ -594,13 +594,13 @@ function isHashInvalidRequestError(error: unknown) {
 }
 
 function buildVtexTermFallbackRequest(query: string, count: number) {
+  // VTEX's `ft` rejects a `+`-encoded space with HTTP 400, so the term is
+  // percent-encoded by hand instead of through URLSearchParams (which would
+  // turn every space into `+`). Discovered categories are multi-word names, so
+  // this path has to survive them.
   return {
     pathname: "/api/catalog_system/pub/products/search",
-    search: new URLSearchParams({
-      ft: query,
-      _from: "0",
-      _to: String(count - 1),
-    }).toString(),
+    search: `ft=${encodeURIComponent(query)}&_from=0&_to=${count - 1}`,
   };
 }
 
