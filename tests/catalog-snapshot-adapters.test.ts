@@ -3,12 +3,12 @@ import { describe, it } from "node:test";
 
 import { findSnapshotAdaptedProduct, searchSnapshotSummaries } from "../src/lib/catalog-snapshot-adapters";
 import { normalizeQuery } from "../src/lib/catalog-snapshot";
-import { useSnapshotFixture } from "./helpers/snapshot-fixture";
+import { installSnapshotFixture } from "./helpers/snapshot-fixture";
 
 // The daily refresh rewrites the served snapshot, so these adaptation tests run
 // against the committed fixture and derive their clocks from its generatedAt:
 // at generation the offers are fresh, eight days later none of them is.
-const FIXTURE = useSnapshotFixture();
+const FIXTURE = installSnapshotFixture();
 const generatedAt = new Date(FIXTURE.generatedAt);
 const freshNow = generatedAt;
 const staleNow = new Date(generatedAt.getTime() + 8 * 24 * 60 * 60 * 1000);

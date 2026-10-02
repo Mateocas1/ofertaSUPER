@@ -1,4 +1,5 @@
 import { normalizeGtin } from "@/lib/identity/gtin";
+import { comparePriceAgainstHistory, type PriceDropAlert } from "@/lib/promotions/alerts";
 import { SUPERMARKETS } from "@/lib/supermarkets";
 
 import priceDropsJson from "../../data/price-drops.json";
@@ -151,10 +152,9 @@ function toDrop(
   offer: PriceDropSnapshotOffer,
   product: PriceDropSnapshotProduct,
   reference: ReferencePrice,
-  currentPrice: number,
+  alert: PriceDropAlert,
   date: string,
 ): PriceDrop {
-  const amountDrop = roundCurrency(reference.price - currentPrice);
   return {
     ean: normalizeGtin(offer.ean) ?? offer.ean,
     date,
@@ -163,10 +163,10 @@ function toDrop(
     brand: product.brand,
     category: product.category,
     imageUrl: product.imageUrl,
-    previousPrice: reference.price,
-    currentPrice,
-    amountDrop,
-    percentDrop: roundCurrency((amountDrop / reference.price) * 100),
+    previousPrice: alert.previousPrice,
+    currentPrice: alert.currentPrice,
+    amountDrop: alert.amountDrop,
+    percentDrop: alert.percentDrop,
     previousObservedAt: reference.observedAt,
     observedAt: offer.observedAt,
     productUrl: offer.productUrl,
@@ -182,6 +182,30 @@ function compareDrops(left: PriceDrop, right: PriceDrop): number {
   );
 }
 
+function dropForOffer(
+  offer: PriceDropSnapshotOffer,
+  product: PriceDropSnapshotProduct,
+  rules: PriceDropRules,
+  now: Date,
+  date: string,
+): PriceDrop | null {
+  const currentPrice = offer.price;
+  if (currentPrice === null || !isUsableOffer(offer, now, rules)) return null;
+
+  const currentObserved = Date.parse(offer.observedAt);
+  const reference = lastDifferentPrice(offer, currentPrice, currentObserved, rules.windowDays);
+  if (!reference || !(reference.price > 0)) return null;
+
+  // The shared movement helper owns the rounding and the "is it a drop" rule.
+  const alert = comparePriceAgainstHistory(currentPrice, reference.price).priceDropAlert;
+  if (alert === null) return null;
+  if (alert.percentDrop + EPSILON < rules.minPercentDrop) return null;
+  if (alert.amountDrop + EPSILON < rules.minAmountDrop) return null;
+  if (isPromoOnlyArtifact(offer, reference.price, currentPrice)) return null;
+
+  return toDrop(offer, product, reference, alert, date);
+}
+
 /** Every drop the rules accept, in deterministic order (the limit is not applied here). */
 export function detectPriceDrops(
   snapshot: PriceDropSnapshot,
@@ -194,20 +218,9 @@ export function detectPriceDrops(
 
   for (const offer of snapshot.offers) {
     const product = products.get(offer.ean);
-    const currentPrice = offer.price;
-    if (!product || currentPrice === null || !isUsableOffer(offer, now, rules)) continue;
-
-    const currentObserved = Date.parse(offer.observedAt);
-    const reference = lastDifferentPrice(offer, currentPrice, currentObserved, rules.windowDays);
-    if (!reference || !(reference.price > 0)) continue;
-
-    const amountDrop = roundCurrency(reference.price - currentPrice);
-    const percentDrop = roundCurrency((amountDrop / reference.price) * 100);
-    if (percentDrop + EPSILON < rules.minPercentDrop) continue;
-    if (amountDrop + EPSILON < rules.minAmountDrop) continue;
-    if (isPromoOnlyArtifact(offer, reference.price, currentPrice)) continue;
-
-    drops.push(toDrop(offer, product, reference, currentPrice, date));
+    if (!product) continue;
+    const drop = dropForOffer(offer, product, rules, now, date);
+    if (drop !== null) drops.push(drop);
   }
 
   return drops.sort(compareDrops);
@@ -237,23 +250,16 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+const STRING_DROP_FIELDS = ["ean", "date", "source", "name", "previousObservedAt", "observedAt"] as const;
+const NULLABLE_STRING_DROP_FIELDS = ["brand", "category", "imageUrl", "productUrl"] as const;
+const NUMBER_DROP_FIELDS = ["previousPrice", "currentPrice", "amountDrop", "percentDrop"] as const;
+
 function isDrop(value: unknown): value is PriceDrop {
   if (!isRecord(value)) return false;
   return (
-    typeof value.ean === "string" &&
-    typeof value.date === "string" &&
-    typeof value.source === "string" &&
-    typeof value.name === "string" &&
-    (value.brand === null || typeof value.brand === "string") &&
-    (value.category === null || typeof value.category === "string") &&
-    (value.imageUrl === null || typeof value.imageUrl === "string") &&
-    (value.productUrl === null || typeof value.productUrl === "string") &&
-    isFiniteNumber(value.previousPrice) &&
-    isFiniteNumber(value.currentPrice) &&
-    isFiniteNumber(value.amountDrop) &&
-    isFiniteNumber(value.percentDrop) &&
-    typeof value.previousObservedAt === "string" &&
-    typeof value.observedAt === "string"
+    STRING_DROP_FIELDS.every((field) => typeof value[field] === "string") &&
+    NULLABLE_STRING_DROP_FIELDS.every((field) => value[field] === null || typeof value[field] === "string") &&
+    NUMBER_DROP_FIELDS.every((field) => isFiniteNumber(value[field]))
   );
 }
 

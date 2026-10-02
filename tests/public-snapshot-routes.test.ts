@@ -11,7 +11,7 @@ import {
   handleSearch,
   type PublicApiDeps,
 } from "../src/lib/public-api";
-import { useSnapshotFixture } from "./helpers/snapshot-fixture";
+import { installSnapshotFixture } from "./helpers/snapshot-fixture";
 
 // Behavioral tests for the public catalog handlers reading the committed
 // fixture snapshot, so the daily refresh cannot change their expectations.
@@ -24,7 +24,7 @@ import { useSnapshotFixture } from "./helpers/snapshot-fixture";
 // boundary instead of injecting anything into the handlers.
 process.env.VERCEL = "1";
 
-const FIXTURE = useSnapshotFixture();
+const FIXTURE = installSnapshotFixture();
 const SAMPLE = FIXTURE.products[1];
 const SAMPLE_OFFERS = FIXTURE.offers.filter((offer) => offer.ean === SAMPLE.ean);
 const SNAPSHOT_EAN = SAMPLE.ean;

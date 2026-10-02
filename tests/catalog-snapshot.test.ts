@@ -8,12 +8,12 @@ import {
   searchSnapshotProducts,
   snapshotMatchRank,
 } from "../src/lib/catalog-snapshot";
-import { useSnapshotFixture } from "./helpers/snapshot-fixture";
+import { installSnapshotFixture } from "./helpers/snapshot-fixture";
 
 // Behavior of the snapshot read path, proven against the committed fixture in
 // tests/fixtures/catalog-snapshot.fixture.json. The daily refresh rewrites the
 // served snapshot, so no expectation here may depend on its real values.
-const FIXTURE = useSnapshotFixture();
+const FIXTURE = installSnapshotFixture();
 const GENERATED_AT = new Date(FIXTURE.generatedAt);
 
 function normalized(value: string): string {

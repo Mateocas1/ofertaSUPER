@@ -9,6 +9,9 @@ const ATTRIBUTE = /([A-Za-z_][\w.:-]*)\s*=\s*"([^"<]*)"/g;
 
 export class XmlWellFormednessError extends Error {}
 
+type Token = { kind: "text" | "tag"; value: string; at: number };
+type DocumentState = { stack: string[]; sawRoot: boolean; rootClosed: boolean };
+
 function fail(message: string): never {
   throw new XmlWellFormednessError(message);
 }
@@ -34,62 +37,81 @@ function checkAttributes(source: string, where: string): void {
   if (rest.trim().length > 0) fail(`malformed attributes at ${where}: ${rest.trim()}`);
 }
 
-/** Throws XmlWellFormednessError unless `xml` is a single well-formed element tree. */
-export function assertWellFormedXml(xml: string): void {
-  const stack: string[] = [];
+function tokenize(xml: string): Token[] {
+  const tokens: Token[] = [];
   let index = 0;
-  let sawRoot = false;
-  let rootClosed = false;
-
-  const outsideRoot = (text: string) => {
-    if (text.trim().length > 0) fail("content outside the root element");
-  };
-
   while (index < xml.length) {
     const open = xml.indexOf("<", index);
-    const text = open === -1 ? xml.slice(index) : xml.slice(index, open);
-    if (rootClosed) outsideRoot(text);
-    else checkText(text, `offset ${index}`);
-    if (open === -1) break;
-
+    if (open === -1) {
+      tokens.push({ kind: "text", value: xml.slice(index), at: index });
+      return tokens;
+    }
+    if (open > index) tokens.push({ kind: "text", value: xml.slice(index, open), at: index });
     const close = xml.indexOf(">", open);
     if (close === -1) fail(`unterminated tag at offset ${open}`);
-    const tag = xml.slice(open + 1, close);
+    tokens.push({ kind: "tag", value: xml.slice(open + 1, close), at: open });
     index = close + 1;
+  }
+  return tokens;
+}
 
-    if (tag.startsWith("?") || tag.startsWith("!")) {
-      if (rootClosed) fail("declaration or comment after the root element");
-      continue;
-    }
-
-    if (tag.startsWith("/")) {
-      const name = tag.slice(1).trim();
-      const expected = stack.pop();
-      if (expected === undefined) fail(`closing </${name}> without an open element`);
-      if (name !== expected) fail(`closing </${name}> does not match <${expected}>`);
-      if (stack.length === 0) rootClosed = true;
-      continue;
-    }
-
-    if (rootClosed) fail("element after the root element");
-    if (stack.length === 0) {
-      if (sawRoot) fail("more than one root element");
-      sawRoot = true;
-    }
-
-    const selfClosing = tag.endsWith("/");
-    const body = selfClosing ? tag.slice(0, -1) : tag;
-    const name = TAG_NAME.exec(body)?.[0];
-    if (!name) fail(`invalid tag name in <${tag}>`);
-    checkAttributes(body.slice(name.length), `<${name}>`);
-
-    if (selfClosing) {
-      if (stack.length === 0) rootClosed = true;
-    } else {
-      stack.push(name);
-    }
+function startTag(token: string, state: DocumentState): void {
+  if (state.rootClosed) fail("element after the root element");
+  if (state.stack.length === 0) {
+    if (state.sawRoot) fail("more than one root element");
+    state.sawRoot = true;
   }
 
-  if (!sawRoot) fail("no root element");
-  if (!rootClosed) fail(`unclosed element <${stack[stack.length - 1] ?? "?"}>`);
+  const selfClosing = token.endsWith("/");
+  const body = selfClosing ? token.slice(0, -1) : token;
+  const name = TAG_NAME.exec(body)?.[0];
+  if (!name) fail(`invalid tag name in <${token}>`);
+  checkAttributes(body.slice(name.length), `<${name}>`);
+
+  if (!selfClosing) {
+    state.stack.push(name);
+  } else if (state.stack.length === 0) {
+    state.rootClosed = true;
+  }
+}
+
+function endTag(token: string, state: DocumentState): void {
+  const name = token.slice(1).trim();
+  const expected = state.stack.pop();
+  if (expected === undefined) fail(`closing </${name}> without an open element`);
+  if (name !== expected) fail(`closing </${name}> does not match <${expected}>`);
+  if (state.stack.length === 0) state.rootClosed = true;
+}
+
+function applyText(token: Token, state: DocumentState): void {
+  if (!state.rootClosed) {
+    checkText(token.value, `offset ${token.at}`);
+    return;
+  }
+  if (token.value.trim().length > 0) fail("content outside the root element");
+}
+
+function applyTag(token: Token, state: DocumentState): void {
+  if (token.value.startsWith("?")) {
+    if (state.rootClosed) fail("declaration after the root element");
+    return;
+  }
+  if (token.value.startsWith("!")) return;
+  if (token.value.startsWith("/")) {
+    endTag(token.value, state);
+    return;
+  }
+  startTag(token.value, state);
+}
+
+/** Throws XmlWellFormednessError unless `xml` is a single well-formed element tree. */
+export function assertWellFormedXml(xml: string): void {
+  const state: DocumentState = { stack: [], sawRoot: false, rootClosed: false };
+  for (const token of tokenize(xml)) {
+    if (token.kind === "text") applyText(token, state);
+    else applyTag(token, state);
+  }
+
+  if (!state.sawRoot) fail("no root element");
+  if (!state.rootClosed) fail(`unclosed element <${state.stack[state.stack.length - 1] ?? "?"}>`);
 }

@@ -68,23 +68,11 @@ export function buildPriceDropsDigest(
   return truncate([heading, "", ...lines, "", footer].join("\n"), TELEGRAM_TEXT_LIMIT);
 }
 
-export async function postPriceDropsDigest(options: {
-  payload: PriceDropsPayload;
-  config: TelegramConfig;
-  siteUrl: string;
-  fetchImpl?: typeof fetch;
-  maxDrops?: number;
-}): Promise<PostOutcome> {
-  const { config } = options;
-  if (config.token === null || config.chatId === null) {
-    return { action: "skipped", reason: "skipped: not configured" };
-  }
-  if (options.payload.drops.length === 0) {
-    return { action: "skipped", reason: "skipped: no drops published" };
-  }
-
-  const send = options.fetchImpl ?? fetch;
-  const text = buildPriceDropsDigest(options.payload, options.siteUrl, options.maxDrops);
+async function sendDigest(
+  send: typeof fetch,
+  config: TelegramConfig,
+  text: string,
+): Promise<PostOutcome> {
   try {
     const response = await send(`${TELEGRAM_API_BASE}/bot${config.token}/sendMessage`, {
       method: "POST",
@@ -108,4 +96,23 @@ export async function postPriceDropsDigest(options: {
   } catch (error) {
     return { action: "failed", reason: error instanceof Error ? error.message : "telegram request failed" };
   }
+}
+
+export async function postPriceDropsDigest(options: {
+  payload: PriceDropsPayload;
+  config: TelegramConfig;
+  siteUrl: string;
+  fetchImpl?: typeof fetch;
+  maxDrops?: number;
+}): Promise<PostOutcome> {
+  const { config } = options;
+  if (config.token === null || config.chatId === null) {
+    return { action: "skipped", reason: "skipped: not configured" };
+  }
+  if (options.payload.drops.length === 0) {
+    return { action: "skipped", reason: "skipped: no drops published" };
+  }
+
+  const text = buildPriceDropsDigest(options.payload, options.siteUrl, options.maxDrops);
+  return sendDigest(options.fetchImpl ?? fetch, config, text);
 }

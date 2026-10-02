@@ -32,27 +32,28 @@ tells a visitor (or a subscriber) that a price fell.
 
 ## Plan
 
-- [ ] T1 — Snapshot tests derive from data (or a fixture), never from real values.
+- [x] T1 — Snapshot tests derive from data (or a fixture), never from real values.
   - Add `setSnapshotOverrideForTests` seam + exported `parseCatalogSnapshot` validator in
     `src/lib/catalog-snapshot.ts` (production still serves the committed JSON only).
-  - Add `tests/fixtures/catalog-snapshot.fixture.json` (small, deterministic).
+  - Add a committed, deterministic fixture built in `tests/helpers/snapshot-fixture.ts` (30 products,
+    55 offers, valid EAN-13 check digits, three-point history).
   - Rewrite the real-value tests to use the fixture; keep one schema-only test over the committed
     snapshot (structure + referential integrity, no pinned values).
   - Acceptance: `npm test` green; regenerating the real snapshot cannot change any expectation in
     those files; the schema-only test still fails if the committed snapshot is malformed.
-- [ ] T2 — Drop detection and `data/price-drops.json`.
+- [x] T2 — Drop detection and `data/price-drops.json`.
   - `src/lib/price-drops.ts`: pure `detectPriceDrops` from snapshot history (last different observed
     price within N days; >= 10 % and >= ARS 100; stale offers and promo-only artifacts excluded;
     deterministic order, top 100), payload schema v1, `parsePriceDrops`, `loadPriceDrops`.
   - `scripts/export-price-drops.ts` writes the committed JSON from `data/catalog-snapshot.json`.
   - Acceptance: `npm test` green; the script regenerates the file deterministically (only
     `generatedAt`/`date` move with the clock); the committed file matches the current snapshot.
-- [ ] T3 — `/bajas` page, `/bajas/feed.xml`, home link, sitemap.
+- [x] T3 — `/bajas` page, `/bajas/feed.xml`, home link, sitemap.
   - Server-rendered page with an honest empty state and an unavailable state; Atom feed with stable
     per-offer+date ids and product links; `<link rel="alternate">`; home link; both routes in the
     sitemap.
   - Acceptance: XML well-formedness/idempotence tests, page view-model tests, sitemap test green.
-- [ ] T4 — Telegram poster + cloud wiring + RUNBOOK.
+- [x] T4 — Telegram poster + cloud wiring + RUNBOOK.
   - `scripts/post-price-drops.ts` (top 10 digest; unset config -> exit 0), `continue-on-error` steps
     in the workflow after the commit, RUNBOOK setup (@BotFather, channel admin, channel id).
   - Acceptance: poster no-op test + payload test with a fake fetch; workflow contract test green.
@@ -63,4 +64,10 @@ tells a visitor (or a subscriber) that a price fell.
 
 ## Evidence log
 
-(appended per task: commit SHA + subject)
+- T1 — `78bfa5e` test(snapshot): keep the read-path tests independent from the daily refresh
+  (`437763b` chore(odd): track the price-drops feature tasks). Evidence: `npm test` 549 pass / 91 suites; `npx tsc --noEmit` clean.
+- T2 — `8e93a87` feat(price-drops): detect the day's drops from the snapshot history. Evidence: `tests/price-drops.test.ts` 24 pass; committed payload holds 24 drops from the current snapshot.
+- T3 — `5c2372f` feat(bajas): publish the price drops as a page and an Atom feed. Evidence: `tests/price-drops-feed.test.ts` + `tests/price-drops-page.test.ts`; `next build` registers `/bajas` (static, 6h) and `/bajas/feed.xml` and the prerendered page shows the 24 committed drops.
+- T4 — `56ac6ea` feat(ci): export the price drops and post them to the Telegram channel. Evidence: `tests/price-drops-poster.test.ts` + the extended `tests/cloud-refresh-workflow.test.ts`; `python3 -c yaml.safe_load` reads the 14-step workflow.
+- Checks — `npx tsc --noEmit` clean; `npm test` 602 pass / 101 suites; `npm run lint` 0 errors / 0 warnings; `npm run audit:complexity` PASS (0 over threshold); `npx next build --webpack` exit 0 (pre-existing Prisma DATABASE_URL noise only).
+- Refactor — the lint pass forced smaller functions in `src/lib/price-drops.ts`, `scripts/lib/price-drops-poster.ts` and `tests/helpers/xml.ts` (no behavior change), and the JSON fixture turned into the built fixture for a readable diff.

@@ -8,11 +8,11 @@ import {
   handlePromotions,
   type PublicApiDeps,
 } from "../src/lib/public-api";
-import { useSnapshotFixture } from "./helpers/snapshot-fixture";
+import { installSnapshotFixture } from "./helpers/snapshot-fixture";
 
 process.env.VERCEL = "1";
 
-const FIXTURE = useSnapshotFixture();
+const FIXTURE = installSnapshotFixture();
 const NOW = new Date(FIXTURE.generatedAt);
 
 function request(path: string): NextRequest {

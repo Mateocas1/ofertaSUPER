@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { normalizeQuery, searchSnapshotProducts, snapshotMatchRank } from "../src/lib/catalog-snapshot";
-import { useSnapshotFixture } from "./helpers/snapshot-fixture";
+import { installSnapshotFixture } from "./helpers/snapshot-fixture";
 
 // Behavioral tests for the snapshot search ranking: exact EAN first, then
 // names that start with the term, then whole-word matches not preceded by
 // "de", then every other name or brand match. Stable tiebreak: more
 // supermarkets with an offer first, then the name. The snapshot-driven cases
 // run against the committed fixture, never against the daily-refreshed data.
-const FIXTURE = useSnapshotFixture();
+const FIXTURE = installSnapshotFixture();
 
 const LECHE = { ean: "7790001000011", name: "Leche Entera La Serenísima 1L", brand: "La Serenísima" };
 const DULCE = { ean: "7790002000022", name: "Dulce de Leche Milkaut", brand: "Milkaut" };

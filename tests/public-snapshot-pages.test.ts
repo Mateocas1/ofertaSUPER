@@ -8,13 +8,13 @@ import {
   loadSnapshotSitemapCatalog,
   resolveSnapshotCatalogPage,
 } from "../src/lib/public-pages";
-import { useSnapshotFixture } from "./helpers/snapshot-fixture";
+import { installSnapshotFixture } from "./helpers/snapshot-fixture";
 
 // Behavioral tests for the server-side page loaders reading the committed
 // fixture snapshot (never the daily-refreshed data). Same shapes the guarded
 // database loaders returned, so pages keep rendering identical envelopes.
 
-const FIXTURE = useSnapshotFixture();
+const FIXTURE = installSnapshotFixture();
 const NOW = new Date(FIXTURE.generatedAt);
 const SAMPLE = FIXTURE.products[1];
 const SAMPLE_OFFERS = FIXTURE.offers.filter((offer) => offer.ean === SAMPLE.ean);
