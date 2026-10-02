@@ -19,6 +19,7 @@ import { evaluateRefreshGates } from "./lib/refresh-gates";
 import { formatRejectedSummary, type RejectedRecord } from "./lib/refresh-summary";
 import { runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
 import { DISCOVERY_CONFIG_PATH, FALLBACK_PLAN_PATH, resolveRefreshPlan } from "./pipeline/resolve-refresh-plan";
+import { pruneStagingProducts } from "./pipeline/staging-retention";
 import { topUpUnobservedOffers, type TopUpSummary } from "./pipeline/topup";
 
 // Gate 6 — the single daily catalog refresh command. The run builds its plan
@@ -161,6 +162,7 @@ function printSummary(stamp: string, ok: number, failures: Array<{ batchId: stri
     console.error(`[refresh] gate check failed: ${gate.message}`);
     process.exitCode = gate.exitCode;
   }
+  return gate.ok;
 }
 
 // The acquisition path needs the persisted-query hash and the supermarkets can
@@ -233,7 +235,20 @@ async function main() {
   const topUp = await topUpUnobservedOffers({ stamp, runStartedAt });
   regenerateSnapshot();
   const freshness = await freshnessBySupermarket();
-  printSummary(stamp, ok, failures, promosCaptured, promoReadsFailed, topUp, freshness, rejected);
+  const publishable = printSummary(stamp, ok, failures, promosCaptured, promoReadsFailed, topUp, freshness, rejected);
+
+  // Staging retention (#547) runs only after a publishable refresh: the run
+  // already produced a snapshot, so a retention hiccup must never block the
+  // publish. It deletes only `staging_product` rows older than the window.
+  if (publishable) {
+    try {
+      const retention = await pruneStagingProducts({ client: db });
+      process.stdout.write(`[refresh] staging retention: deleted=${retention.deleted} olderThanDays=${retention.retentionDays} batches=${retention.batches}\n`);
+    } catch (error) {
+      process.stdout.write(`[refresh] staging retention failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    }
+  }
+
   await db.$disconnect();
 }
 
