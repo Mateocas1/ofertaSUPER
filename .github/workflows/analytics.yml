@@ -51,6 +51,6 @@ jobs:
         working-directory: analytics
         run: uv run python scripts/publish_basket_index.py --placeholder --source release --check
 
-      - name: Verify the README chart is reproducible
+      - name: Verify the sample chart fixture is reproducible
         working-directory: analytics
-        run: uv run python scripts/chart_price_evolution.py --out /tmp/price-evolution.png
+        run: uv run python scripts/chart_price_evolution.py --out /tmp/price-evolution.sample.png

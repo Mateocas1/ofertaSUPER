@@ -2,9 +2,14 @@ name: Daily catalog refresh
 
 on:
   schedule:
-    # 10:00 UTC every day (07:00 Argentina). One writer only: the local crontab
-    # line is removed once this job is green (see docs/RUNBOOK.md).
-    - cron: "0 10 * * *"
+    # Two off-peak triggers: GitHub delays or drops top-of-hour crons under
+    # load (the old "0 10 * * *" never fired a single scheduled run), so the
+    # day's refresh runs at 10:23 UTC and the 14:41 UTC window is a backup.
+    # The guard job below keeps the backup from refreshing twice in one UTC
+    # day. One writer only: the local crontab line is removed once this job is
+    # green (see docs/RUNBOOK.md).
+    - cron: "23 10 * * *"
+    - cron: "41 14 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -21,8 +26,47 @@ permissions:
   issues: write
 
 jobs:
+  guard:
+    name: Skip a duplicate scheduled refresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+      weeklyChart: ${{ steps.check.outputs.weeklyChart }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: master
+          fetch-depth: 0
+
+      # Schedule only: a workflow_dispatch run is always an explicit decision to
+      # refresh, so it leaves the outputs empty and the refresh job runs.
+      - name: Check today's cloud refresh on master
+        id: check
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          set -euo pipefail
+          today="$(date -u +%F)"
+          subject="chore(catalog): refresh ${today} [cloud]"
+          if git log origin/master --fixed-strings --grep="$subject" -n 1 --pretty=%H | grep -q .; then
+            echo "master already has today's refresh (${today}); the backup window has nothing to do"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$(date -u +%u)" = "1" ]; then
+            echo "weeklyChart=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "weeklyChart=false" >> "$GITHUB_OUTPUT"
+          fi
+
   refresh:
     name: Restore, refresh and publish
+    needs: guard
+    if: ${{ needs.guard.outputs.skip != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     services:
@@ -134,6 +178,24 @@ jobs:
             echo "snapshot and price drops unchanged; nothing to publish" | tee -a "$LOG_FILE"
           else
             git commit -m "chore(catalog): refresh $(date -u +%F) [cloud]"
+            git push origin HEAD:master 2>&1 | tee -a "$LOG_FILE"
+          fi
+
+      - name: Regenerate the README price chart (weekly, best effort)
+        if: ${{ success() && inputs.dry_run != true && needs.guard.outputs.weeklyChart == 'true' }}
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          LOG_FILE="$RUNNER_TEMP/cloud-refresh.log"
+          echo chart > "$RUNNER_TEMP/cloud-refresh-stage.txt"
+          npx tsx scripts/chart-price-evolution.ts 2>&1 | tee -a "$LOG_FILE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add analytics/assets/price-evolution.png README.md
+          if git diff --cached --quiet; then
+            echo "price chart unchanged; nothing to publish" | tee -a "$LOG_FILE"
+          else
+            git commit -m "chore(analytics): refresh the price chart $(date -u +%F) [cloud]"
             git push origin HEAD:master 2>&1 | tee -a "$LOG_FILE"
           fi
 

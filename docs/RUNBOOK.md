@@ -119,8 +119,19 @@ public: the state travels as a Postgres custom-format dump attached to the
 GitHub Release `db-state`, managed only with the workflow's built-in
 `GITHUB_TOKEN`. No new accounts or repository secrets are needed.
 
-Each run (10:00 UTC daily, plus `workflow_dispatch` with a `dry_run` input that
-restores and refreshes but never uploads or commits):
+The workflow is triggered by two off-peak crons (`23 10 * * *` and
+`41 14 * * *`, i.e. 10:23 and 14:41 UTC) plus `workflow_dispatch` with a
+`dry_run` input that restores and refreshes but never uploads or commits.
+GitHub delays or drops top-of-hour crons under load: the original
+`0 10 * * *` never fired a single scheduled run, so the first window is the day
+and the second is the backup. A `guard` job runs before the refresh job; on a
+scheduled run it greps `origin/master` with `git log --fixed-strings` for
+today's `chore(catalog): refresh <UTC date> [cloud]` commit and skips the whole
+refresh when it is already there, so the backup window can never refresh twice
+in the same UTC day. A manual `workflow_dispatch` always refreshes (its
+schedule-only check leaves the guard outputs empty and the refresh job runs).
+
+Each run:
 
 1. Starts an ephemeral `postgres:16-bookworm` service container.
 2. `scripts/db-state.sh download` fetches the newest `ofertasuper-<date>.dump`
@@ -320,6 +331,32 @@ A failed export skips
 the rest; a failed dbt build leaves the previous JSON in place. `uv` is
 installed with `pip` when the runner does not have it.
 
+### README price chart (weekly)
+
+The README chart (`analytics/assets/price-evolution.png`) is a real artifact:
+`npx tsx scripts/chart-price-evolution.ts` reads the committed snapshot's dated
+observations for the 12 fixed basket products, averages them per product and
+day, and draws them with `sharp`. The source is `data/catalog-snapshot.json`
+(the published `analytics-data` release does not exist yet), and the guard
+refuses `analytics/sample/*.parquet`, so a synthetic series can never be
+published as the real chart.
+
+The chart subtitle and the README caption (patched between the
+`price-chart:start` / `price-chart:end` markers) name the real range and the
+source, and say so plainly while fewer than seven days exist. The snapshot's
+offer history still carries the 2026-09-20 bootstrap observations, while the
+dense Parquet export (and therefore `basket-index.json`) starts on 2026-09-28,
+when the daily export began; the chart labels whatever range its real source
+actually has.
+
+The daily-refresh workflow runs it as a best-effort step (`continue-on-error`,
+`date -u +%u` = 1) after the snapshot commit, and pushes one
+`chore(analytics): refresh the price chart <date> [cloud]` commit only when the
+PNG or the README block changed. Locally it is just the command above.
+`analytics/scripts/chart_price_evolution.py` still renders the synthetic sample
+as a CI fixture (`--out /tmp/price-evolution.sample.png`) and refuses to write
+the README path.
+
 ### Backfill and local runs
 
 The backfill rebuilds every past day from `price_history`. From a host that can
@@ -338,8 +375,9 @@ sample (`analytics/sample/part.parquet`); the sample **page payload** lives at
 `analytics/tests/fixtures/basket-index.sample.json` and the CI job in
 `.github/workflows/analytics.yml` builds from the sample, checks both payloads
 (`--check` against the fixture and `--placeholder --check` against production)
-and regenerates the README chart. No sample artifact is ever served in
-production.
+and regenerates the sample chart fixture. The README chart is not built here:
+it comes from real data via `npx tsx scripts/chart-price-evolution.ts` (see
+"README price chart" above). No sample artifact is ever served in production.
 
 ### CPI seed
 

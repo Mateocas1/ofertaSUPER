@@ -9,8 +9,9 @@ const workflow = read(".github/workflows/daily-refresh.yml");
 const dbState = read("scripts/db-state.sh");
 
 describe("cloud refresh workflow contract", () => {
-  it("runs on the daily schedule and on manual dry runs", () => {
-    assert.match(workflow, /schedule:[\s\S]*?- cron: "0 10 \* \* \*"/);
+  it("runs on two off-peak schedules and on manual dry runs", () => {
+    assert.match(workflow, /schedule:[\s\S]*?- cron: "23 10 \* \* \*"[\s\S]*?- cron: "41 14 \* \* \*"/);
+    assert.doesNotMatch(workflow, /- cron: "0 10 \* \* \*"/);
     assert.match(workflow, /workflow_dispatch:[\s\S]*dry_run:[\s\S]*type: boolean/);
   });
 
@@ -106,6 +107,52 @@ describe("cloud refresh workflow contract", () => {
     assert.doesNotMatch(workflow, /echo .*DATABASE_URL/);
     assert.doesNotMatch(workflow, /echo .*PGPASSWORD/);
     assert.doesNotMatch(workflow, /echo .*secrets\.GITHUB_TOKEN/);
+  });
+});
+
+describe("duplicate scheduled refresh guard", () => {
+  it("decides in a pre-job, so a duplicate schedule never starts the refresh", () => {
+    assert.match(workflow, /jobs:\s*\n\s*guard:/);
+    assert.match(
+      workflow,
+      /outputs:\s*\n\s*skip: \$\{\{ steps\.check\.outputs\.skip \}\}\s*\n\s*weeklyChart: \$\{\{ steps\.check\.outputs\.weeklyChart \}\}/,
+    );
+    assert.match(workflow, /id: check\s*\n\s*if: \$\{\{ github\.event_name == 'schedule' \}\}/);
+    assert.match(workflow, /today="\$\(date -u \+%F\)"/);
+    assert.match(workflow, /subject="chore\(catalog\): refresh \$\{today\} \[cloud\]"/);
+    assert.match(workflow, /git log origin\/master --fixed-strings --grep="\$subject"/);
+    assert.match(workflow, /date -u \+%u/);
+  });
+
+  it("keeps the refresh job behind the guard, so a dispatch always runs", () => {
+    assert.match(
+      workflow,
+      /refresh:\s*\n\s*name: Restore, refresh and publish\s*\n\s*needs: guard\s*\n\s*if: \$\{\{ needs\.guard\.outputs\.skip != 'true' \}\}/,
+    );
+  });
+});
+
+describe("weekly README price chart", () => {
+  it("regenerates the real chart from the just-committed snapshot, best effort", () => {
+    const snapshotIndex = workflow.indexOf("git add data/catalog-snapshot.json data/price-drops.json");
+    const chartIndex = workflow.indexOf("npx tsx scripts/chart-price-evolution.ts");
+    assert.ok(snapshotIndex >= 0 && chartIndex > snapshotIndex, "the chart follows the snapshot commit");
+
+    const declaration = workflow.slice(workflow.lastIndexOf("- name:", chartIndex), chartIndex);
+    assert.match(declaration, /continue-on-error: true/);
+    assert.match(declaration, /inputs\.dry_run != true/);
+    assert.match(declaration, /needs\.guard\.outputs\.weeklyChart == 'true'/);
+  });
+
+  it("commits the PNG and the README caption only when the chart changed", () => {
+    const chartIndex = workflow.indexOf("npx tsx scripts/chart-price-evolution.ts");
+    assert.ok(chartIndex >= 0);
+    const after = workflow.slice(chartIndex);
+
+    assert.match(after, /git add analytics\/assets\/price-evolution\.png README\.md/);
+    assert.match(after, /git diff --cached --quiet/);
+    assert.match(after, /git commit -m "chore\(analytics\): refresh the price chart \$\(date -u \+%F\) \[cloud\]"/);
+    assert.match(after, /git push origin HEAD:master/);
   });
 });
 
