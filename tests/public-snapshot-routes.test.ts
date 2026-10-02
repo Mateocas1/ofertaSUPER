@@ -23,6 +23,8 @@ import {
 process.env.VERCEL = "1";
 
 const SNAPSHOT_EAN = "2505271000004";
+// Lookups accept the short EAN; the catalog answers with the canonical GTIN-14.
+const SNAPSHOT_GTIN14 = "02505271000004";
 const UNKNOWN_EAN = "0000000000000";
 const NOW = new Date("2026-09-27T12:00:00Z");
 
@@ -145,7 +147,7 @@ describe("public catalog handlers serve the committed snapshot", () => {
       latestCheckedAt: string | null;
       item: { ean: string; priceEntries: { supermarket: { slug: string }; freshnessStatus: string }[] };
     };
-    assert.equal(body.item.ean, SNAPSHOT_EAN);
+    assert.equal(body.item.ean, SNAPSHOT_GTIN14);
     assert.equal(body.dataSource, "database");
     assert.equal(body.degraded, false);
     assert.equal(typeof body.verifiedAt, "string");

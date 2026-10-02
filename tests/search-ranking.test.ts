@@ -88,6 +88,6 @@ describe("snapshot search ranking", () => {
 
   it("serves an EAN search with exactly that product first", () => {
     const result = searchSnapshotProducts({ query: "2505271000004" });
-    assert.equal(result.products[0].product.ean, "2505271000004");
+    assert.equal(result.products[0].product.ean, "02505271000004");
   });
 });
