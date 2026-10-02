@@ -17,6 +17,8 @@ export type CmvpCatalogBatchRequest = {
   refresh?: boolean;
 };
 
+export type RejectedProduct = { gtin: string; qualityFlags: string[] };
+
 type AcquisitionResult = {
   runId: number | null;
   startedAt: string;
@@ -24,6 +26,7 @@ type AcquisitionResult = {
   fetchedGtins: string[];
   admittedGtins: string[];
   rejectedCount: number;
+  rejectedProducts: RejectedProduct[];
   error: string | null;
   promoReadsFailed?: number;
   promosCaptured?: number;
@@ -42,7 +45,7 @@ export type CmvpCatalogBatchArtifact = {
   fetchedGtins: string[];
   admittedGtins: string[];
   reconciliationError: string | null;
-  runs: Array<{ runId: number | null; startedAt: string; finishedAt: string; fetchedCount: number; admittedCount: number; rejectedCount: number; error: string | null; promoReadsFailed?: number; promosCaptured?: number }>;
+  runs: Array<{ runId: number | null; startedAt: string; finishedAt: string; fetchedCount: number; admittedCount: number; rejectedCount: number; rejectedProducts: RejectedProduct[]; error: string | null; promoReadsFailed?: number; promosCaptured?: number }>;
 };
 
 export type CmvpCatalogBatchDependencies = {
@@ -101,6 +104,35 @@ function contractDigest(request: NormalizedRequest) {
 }
 
 function sameSet(left: string[], right: string[]) { return left.length === right.length && left.every((value, index) => value === right[index]); }
+
+// A daily refresh batch tolerates isolated rejects so one bad product cannot
+// block the whole publish: it only fails when the rejects exceed
+// max(1, 10% of the fetched products) or when it admits nothing at all.
+export const REJECTION_TOLERANCE_RATIO = 0.1;
+
+export function rejectionTolerance(fetchedCount: number): number {
+  return Math.max(1, Math.floor(fetchedCount * REJECTION_TOLERANCE_RATIO));
+}
+
+export function exceedsRejectionTolerance(rejectedCount: number, fetchedCount: number): boolean {
+  return rejectedCount > rejectionTolerance(fetchedCount);
+}
+
+function canonicalRejectedProducts(products: RejectedProduct[]): RejectedProduct[] {
+  return products.map((product) => ({ gtin: normalizeGtin(product.gtin) ?? product.gtin, qualityFlags: [...product.qualityFlags] }));
+}
+
+// Refresh batches re-assert that the admitted plus rejected identities are
+// exactly the fetched products, instead of requiring fetched == admitted.
+function refreshAdmissionMatches(fetchedGtins: string[], admittedGtins: string[], rejectedProducts: RejectedProduct[]): boolean {
+  try {
+    const rejectedGtins = normalizeGtins(rejectedProducts.map((product) => product.gtin), "rejected");
+    return sameSet(normalizeGtins([...admittedGtins, ...rejectedGtins], "admitted"), normalizeGtins(fetchedGtins, "fetched"));
+  } catch {
+    return false;
+  }
+}
+
 function runId(artifact: CmvpCatalogBatchArtifact) { return artifact.runs[0]?.runId ?? null; }
 function isNonNegativeInteger(value: unknown): value is number { return Number.isInteger(value) && (value as number) >= 0; }
 function isPositiveInteger(value: unknown): value is number { return Number.isInteger(value) && (value as number) > 0; }
@@ -117,9 +149,10 @@ function matchesCheckpointMetadata(artifact: CmvpCatalogBatchArtifact, request: 
 
 function matchesCheckpointGtins(artifact: CmvpCatalogBatchArtifact, request: NormalizedRequest) {
   // Refresh batches re-assert only their own self-consistency: the source
-  // catalog evolves, so the plan's expected GTINs do not bound the replay.
+  // catalog evolves, so the plan's expected GTINs do not bound the replay, and
+  // a tolerated reject is part of the fetched set.
   if (request.refresh) {
-    return sameSet(normalizeGtins(artifact.fetchedGtins, "checkpoint fetched"), normalizeGtins(artifact.admittedGtins, "checkpoint admitted"));
+    return refreshAdmissionMatches(artifact.fetchedGtins, artifact.admittedGtins, artifact.runs[0]?.rejectedProducts ?? []);
   }
   return sameSet(normalizeGtins(artifact.expectedGtins, "checkpoint expected"), request.expectedGtins)
     && sameSet(normalizeGtins(artifact.fetchedGtins, "checkpoint fetched"), request.expectedGtins)
@@ -144,9 +177,13 @@ function hasCompletedRunTimestamps(run: ArtifactRun) {
 
 function hasCompletedRunCounts(run: ArtifactRun, request: NormalizedRequest) {
   // Refresh batches report what the source actually returned today: the plan
-  // count bounds the search, not the catalog.
+  // count bounds the search, not the catalog, and isolated rejects are within
+  // the tolerance.
   if (request.refresh) {
-    return run.fetchedCount === run.admittedCount && run.rejectedCount === 0 && run.error === null;
+    return run.fetchedCount === run.admittedCount + run.rejectedCount
+      && !exceedsRejectionTolerance(run.rejectedCount, run.fetchedCount)
+      && run.admittedCount > 0
+      && run.error === null;
   }
   return run.fetchedCount === request.count && run.admittedCount === request.count
     && run.rejectedCount === 0 && run.error === null;
@@ -170,7 +207,7 @@ function createArtifact(request: NormalizedRequest, contract: string, state: Cmv
     schemaVersion: 1, batchId: request.batchId, source: request.source, term: request.term, count: request.count,
     expectedGtins: [...request.expectedGtins], dryRun: request.dryRun, contractDigest: contract, state,
     fetchedGtins, admittedGtins, reconciliationError: null,
-    runs: acquisition ? [{ runId: acquisition.runId, startedAt: acquisition.startedAt, finishedAt: acquisition.finishedAt, fetchedCount: fetchedGtins.length, admittedCount: admittedGtins.length, rejectedCount: acquisition.rejectedCount, error, promoReadsFailed: acquisition.promoReadsFailed, promosCaptured: acquisition.promosCaptured }] : [],
+    runs: acquisition ? [{ runId: acquisition.runId, startedAt: acquisition.startedAt, finishedAt: acquisition.finishedAt, fetchedCount: fetchedGtins.length, admittedCount: admittedGtins.length, rejectedCount: acquisition.rejectedCount, rejectedProducts: canonicalRejectedProducts(acquisition.rejectedProducts ?? []), error, promoReadsFailed: acquisition.promoReadsFailed, promosCaptured: acquisition.promosCaptured }] : [],
   };
 }
 
@@ -245,8 +282,9 @@ function acquisitionOutcome(acquisition: AcquisitionResult) {
   let admittedGtins: string[] = [];
   let error = normalizedError(acquisition.error, "acquisition");
   if (!isNonNegativeInteger(acquisition.rejectedCount)) error = "invalid_acquisition_rejected_count";
-  else if (acquisition.rejectedCount !== 0) error = "acquisition_rejected_products";
   try { fetchedGtins = normalizeGtins(acquisition.fetchedGtins, "fetched"); admittedGtins = normalizeGtins(acquisition.admittedGtins, "admitted"); } catch { error = "invalid_acquisition_gtins"; }
+  if (error === null && exceedsRejectionTolerance(acquisition.rejectedCount, fetchedGtins.length)) error = "acquisition_rejected_products";
+  if (error === null && admittedGtins.length === 0) error = "acquisition_no_admitted_products";
   return { fetchedGtins, admittedGtins, error };
 }
 
@@ -259,7 +297,7 @@ async function handleAcquisitionOutcome(request: NormalizedRequest, contract: st
     return { artifact, replayed: false };
   }
   const expectedMismatch = request.refresh
-    ? !sameSet(admittedGtins, fetchedGtins)
+    ? !refreshAdmissionMatches(fetchedGtins, admittedGtins, acquisition.rejectedProducts ?? [])
     : !sameSet(fetchedGtins, request.expectedGtins) || !sameSet(admittedGtins, request.expectedGtins);
   if (expectedMismatch) {
     const mismatch = request.refresh ? "admitted GTINs diverge from the fetched products" : "fetched/admitted GTIN mismatch before reconciliation";
