@@ -42,6 +42,8 @@ export type DiscoveryPlan = {
   /** Raw child category nodes seen across matched departments. */
   categoriesConsidered: number;
   departmentsMatched: number;
+  /** UTC-day rotation: which day this plan is, and its worst-case coverage window. */
+  rotation: { dayIndex: number; windowDays: number };
 };
 
 export type CollectedCategoryTerms = {
@@ -144,6 +146,21 @@ export function interleaveCategoryTerms(byDepartment: string[][]): string[] {
   return ordered;
 }
 
+function rotate<T>(values: T[], offset: number): T[] {
+  if (values.length === 0) return values;
+  const shift = ((offset % values.length) + values.length) % values.length;
+  return [...values.slice(shift), ...values.slice(0, shift)];
+}
+
+// Every child of every allowlisted department must be searched within a bounded
+// number of days, so the plan rotates deterministically by UTC day: the
+// department order shifts (every department reaches a slot even when the quota
+// is below the department count) and each department's own children shift
+// inside it. A specific child reappears at most `windowDays` later.
+export function rotateCategoryPlan(byDepartment: string[][], rotationDay: number) {
+  return rotate(byDepartment, rotationDay).map((group) => rotate(group, rotationDay));
+}
+
 // The cap is split evenly across the configured stores; earlier stores take the
 // remainder. A store with fewer categories than its quota simply contributes
 // fewer batches (the plan never pads). Ordinals keep the daily batch ids stable
@@ -151,26 +168,32 @@ export function interleaveCategoryTerms(byDepartment: string[][]): string[] {
 export function buildDiscoveryPlan({
   config,
   treesBySource,
+  rotationDay = 0,
 }: {
   config: DiscoveryConfig;
   treesBySource: Record<string, CategoryTreeNode[]>;
+  /** UTC day number; shifts the sampled children so the plan covers the tree over time. */
+  rotationDay?: number;
 }): DiscoveryPlan {
   const sources = Object.keys(config.departments);
   const cap = Math.min(config.maxBatchesPerRun, MAX_BATCHES_PER_RUN);
   const perSource = Math.floor(cap / sources.length);
   const remainder = cap % sources.length;
+  const dayIndex = Math.max(0, Math.floor(rotationDay));
   const batches: DiscoveredBatch[] = [];
   let ordinal = 1;
   let truncated = false;
   let categoriesConsidered = 0;
   let departmentsMatched = 0;
+  let windowDays = 0;
 
   sources.forEach((source, index) => {
     const limit = perSource + (index < remainder ? 1 : 0);
     const collected = collectCategoryTerms(treesBySource[source] ?? [], config.departments[source] ?? []);
     categoriesConsidered += collected.categoriesConsidered;
     departmentsMatched += collected.departmentsMatched;
-    const ordered = interleaveCategoryTerms(collected.byDepartment);
+    windowDays = Math.max(windowDays, ...collected.byDepartment.map((group) => group.length), 0);
+    const ordered = interleaveCategoryTerms(rotateCategoryPlan(collected.byDepartment, dayIndex));
     if (ordered.length > limit) truncated = true;
     for (const term of ordered.slice(0, limit)) {
       batches.push({ ordinal, source, term, count: config.resultsPerBatch });
@@ -178,7 +201,7 @@ export function buildDiscoveryPlan({
     }
   });
 
-  return { sources, batches, truncated, categoriesConsidered, departmentsMatched };
+  return { sources, batches, truncated, categoriesConsidered, departmentsMatched, rotation: { dayIndex, windowDays } };
 }
 
 function requireInteger(value: unknown, label: string, max: number) {

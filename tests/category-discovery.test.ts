@@ -112,6 +112,62 @@ test("buildDiscoveryPlan is deterministic across repeated runs", async () => {
   assert.ok(first.batches.length > 0);
 });
 
+const ROTATION_TREE = [
+  { id: 1, name: "Almacén", hasChildren: true, children: [
+    { id: 2, name: "Arroz", hasChildren: false, children: [] },
+    { id: 3, name: "Cafe", hasChildren: false, children: [] },
+    { id: 4, name: "Fideos", hasChildren: false, children: [] },
+  ] },
+  { id: 5, name: "Bebidas", hasChildren: true, children: [
+    { id: 6, name: "Aguas", hasChildren: false, children: [] },
+    { id: 7, name: "Gaseosas", hasChildren: false, children: [] },
+  ] },
+];
+
+function rotationPlan(rotationDay: number) {
+  return buildDiscoveryPlan({
+    config: config({ maxBatchesPerRun: 2, departments: { disco: ["Almacén", "Bebidas"] } }),
+    treesBySource: { disco: parseCategoryTree(ROTATION_TREE) },
+    rotationDay,
+  });
+}
+
+test("buildDiscoveryPlan rotates the sampled children deterministically by day", () => {
+  const plan = (rotationDay: number) => rotationPlan(rotationDay).batches.map((batch) => batch.term);
+
+  assert.deepEqual(plan(0), ["arroz", "aguas"]);
+  assert.deepEqual(plan(1), ["gaseosas", "cafe"]);
+  assert.deepEqual(plan(2), ["fideos", "aguas"]);
+  assert.deepEqual(plan(0), plan(0), "the same UTC day always yields the same plan");
+  assert.deepEqual(plan(2), rotationPlan(2).batches.map((batch) => batch.term));
+});
+
+test("rotation searches every child of every department within the bounded window", () => {
+  const days = [0, 1, 2, 3, 4];
+  const byTerm = new Map(days.map((day) => [day, rotationPlan(day).batches.map((batch) => batch.term)]));
+
+  const almacen = new Set(["arroz", "cafe", "fideos", "aguas", "gaseosas"]);
+  const seen = new Set(days.flatMap((day) => byTerm.get(day) ?? []));
+  assert.deepEqual([...almacen].filter((term) => !seen.has(term)), [], "no department child is starved");
+
+  const plan = rotationPlan(0);
+  assert.equal(plan.rotation.dayIndex, 0);
+  assert.equal(plan.rotation.windowDays, 3, "the window is the longest department, not the whole tree");
+  assert.ok(plan.rotation.windowDays > 0);
+});
+
+test("rotation keeps every department reachable when the quota is below the department count", () => {
+  const plan = (rotationDay: number) => buildDiscoveryPlan({
+    config: config({ maxBatchesPerRun: 1, departments: { disco: ["Almacén", "Bebidas"] } }),
+    treesBySource: { disco: parseCategoryTree(ROTATION_TREE) },
+    rotationDay,
+  });
+
+  const sources = new Set([plan(0), plan(1), plan(2)].flatMap((entry) => entry.batches.map((batch) => batch.term)));
+  assert.ok(sources.has("arroz") || sources.has("cafe") || sources.has("fideos"), "Almacén is sampled on some day");
+  assert.ok(sources.has("aguas") || sources.has("gaseosas"), "Bebidas is sampled on some day");
+});
+
 test("buildDiscoveryPlan splits the per-run cap across stores and honors resultsPerBatch", async () => {
   const disco = parseCategoryTree((await fixture("disco")).tree);
   const carrefour = parseCategoryTree((await fixture("carrefour")).tree);
