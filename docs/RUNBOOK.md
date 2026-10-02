@@ -35,9 +35,13 @@ lock, applies the freshness gate, and regenerates the snapshot.
      read) during staging; a failed promo read leaves the promo null, counts in
      the summary, and does not abort the batch.
    - Regenerates `data/catalog-snapshot.json` and prints the summary: batches
-     ok/failed, promos captured/failed reads, and the % of offers <24 h per
-     supermarket. Exits with an error if a batch failed or the worst
-     supermarket falls below 90%.
+     ok/failed, promos captured/failed reads, `[refresh] rejected: <n> products
+     [...]` with the quality flags of every dropped product, and the % of offers
+     <24 h per supermarket. A batch counts as failed only when its rejected
+     products exceed `max(1, 10% of the fetched)` or it admits nothing; an
+     isolated rejected product is tolerated and does not block the publish.
+     Exits with an error if a batch failed or the worst supermarket falls below
+     90%.
    - It reads the VTEX persisted-query hash from `ingestion_run.vtex_hash`
      (the acquisition stores it); it is never asked for or printed.
 
@@ -90,8 +94,11 @@ restores and refreshes but never uploads or commits):
    database (below).
 3. `npx prisma migrate deploy`, then `npm run refresh:catalog` with exactly the
    same gates as the local run (failed batches, freshness <90%, a source with
-   >20% failed reads, `VTEX_HASH_UNAVAILABLE`). A tripped gate publishes
-   nothing.
+   >20% failed reads, `VTEX_HASH_UNAVAILABLE`). A batch is only failed when its
+   rejected products exceed `max(1, 10% of the fetched)` or it admits nothing;
+   an isolated rejected product is tolerated, recorded in the batch artifact and
+   printed as `[refresh] rejected: <n> products [...]` with its quality flags. A
+   tripped gate publishes nothing.
 4. On success: `scripts/db-state.sh dump` writes the new state, `upload` stores
    it as `ofertasuper-<UTC date>.dump`, and `prune` keeps the newest 14 assets.
    Only then the workflow commits `data/catalog-snapshot.json` to `master` as
@@ -99,8 +106,10 @@ restores and refreshes but never uploads or commits):
    uploaded before the push, so database state and snapshot never diverge.
 5. On failure: the job fails (GitHub emails the owner for scheduled runs) and a
    step opens, or comments on, the single open issue labelled
-   `refresh-failure`, with the run URL and the greppable reason; the next
-   successful run closes it.
+   `refresh-failure`, with the run URL and the greppable reason (`vtex-hash-unavailable`,
+   `refresh-rejections-exceeded` when a batch crossed the rejection rule,
+   `refresh-no-admitted-products` when a batch admitted nothing, and so on); the
+   next successful run closes it.
 
 The workflow serializes runs with `concurrency: daily-refresh`, requests only
 `contents: write` and `issues: write`, times out after 60 minutes, pins every
