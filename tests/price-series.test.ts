@@ -9,11 +9,13 @@ import { parquetReadObjects } from "hyparquet";
 import {
   buildDenseSeries,
   endOfUtcDay,
+  parseFlags,
   partitionRelativePath,
   utcDateRange,
   writeSeriesPartitions,
   type PairState,
 } from "../scripts/lib/price-series";
+import { CHANGE_COLUMNS, CHANGES_SQL, PAIR_COLUMNS, PAIRS_SQL } from "../scripts/lib/price-series-sql";
 
 const NOW = new Date("2026-10-02T10:00:00.000Z");
 
@@ -146,6 +148,29 @@ describe("buildDenseSeries freshness rules", () => {
     });
 
     assert.equal(rows.length, 0);
+  });
+});
+
+describe("export CLI flags and SQL mapping", () => {
+  it("accepts both --name=value and --name value", () => {
+    assert.deepEqual(parseFlags(["--mode", "backfill", "--out=/tmp/x", "--from", "2026-09-01"]), {
+      mode: "backfill",
+      out: "/tmp/x",
+      from: "2026-09-01",
+    });
+  });
+
+  it("keeps a bare flag empty and never swallows the next flag", () => {
+    assert.deepEqual(parseFlags(["--dry-run", "--mode=daily"]), { "dry-run": "", mode: "daily" });
+  });
+
+  it("aliases every exported column uniquely and in the positional order", () => {
+    const aliases = (sql: string) => [...sql.matchAll(/\bas\s+([a-z0-9_]+)/g)].map((match) => match[1]);
+
+    assert.deepEqual(aliases(PAIRS_SQL), [...PAIR_COLUMNS]);
+    assert.deepEqual(aliases(CHANGES_SQL), [...CHANGE_COLUMNS]);
+    // Prisma collapses duplicate keys, so a repeated alias would shift the mapping.
+    assert.equal(new Set(aliases(PAIRS_SQL)).size, PAIR_COLUMNS.length);
   });
 });
 

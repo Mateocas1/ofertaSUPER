@@ -17,44 +17,23 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   buildDenseSeries,
+  parseFlags,
   utcDateRange,
   writeSeriesPartitions,
   type PairChange,
   type PairState,
   type SeriesPair,
 } from "./lib/price-series";
+import { CHANGE_INDEX, CHANGES_SQL, PAIR_INDEX, PAIRS_SQL } from "./lib/price-series-sql";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_OUT_DIR = resolve(repoRoot, "analytics", "data");
 const DEFAULT_CONTAINER = "ofertasuper-cmvp-local-bootstrap-postgres-1";
 
-const PAIRS_SQL = `select sp.id::text,
-       sp.product_ean,
-       s.slug,
-       s.name,
-       p.name,
-       coalesce(p.brand, ''),
-       coalesce(p.category, ''),
-       sp.price::text,
-       sp.list_price::text,
-       sp.is_available::text,
-       (sp.promo is not null)::text,
-       to_char(sp.last_checked_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-from supermarket_products sp
-join supermarkets s on s.id = sp.supermarket_id
-join products p on p.ean = sp.product_ean
-order by sp.id`;
-
-const CHANGES_SQL = `select ph.supermarket_product_id::text,
-       ph.price::text,
-       ph.list_price::text,
-       to_char(ph.scraped_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-from price_history ph
-order by ph.supermarket_product_id, ph.scraped_at`;
+const flags = parseFlags(process.argv.slice(2));
 
 function readFlag(name: string): string | undefined {
-  const prefix = `--${name}=`;
-  return process.argv.find((value) => value.startsWith(prefix))?.slice(prefix.length);
+  return flags[name];
 }
 
 function todayUtc(): string {
@@ -102,12 +81,12 @@ async function readRows(sql: string): Promise<string[][]> {
 
 function toPair(row: string[]): SeriesPair {
   return {
-    gtin14: row[1],
-    store: row[2],
-    storeName: row[3],
-    productName: row[4],
-    brand: row[5] === "" ? null : row[5],
-    category: row[6] === "" ? null : row[6],
+    gtin14: row[PAIR_INDEX.gtin14],
+    store: row[PAIR_INDEX.store],
+    storeName: row[PAIR_INDEX.store_name],
+    productName: row[PAIR_INDEX.product_name],
+    brand: row[PAIR_INDEX.brand] === "" ? null : row[PAIR_INDEX.brand],
+    category: row[PAIR_INDEX.category] === "" ? null : row[PAIR_INDEX.category],
   };
 }
 
@@ -119,34 +98,34 @@ async function loadStates(): Promise<PairState[]> {
 
   const states = new Map<string, PairState>();
   for (const row of pairs) {
-    states.set(row[0], {
+    states.set(row[PAIR_INDEX.supermarket_product_id], {
       pair: toPair(row),
       changes: [],
       current: {
-        price: parseNullableNumber(row[7]),
-        listPrice: parseNullableNumber(row[8]),
-        available: parseBoolean(row[9]),
-        promo: parseBoolean(row[10]),
-        observedAt: row[11],
+        price: parseNullableNumber(row[PAIR_INDEX.price]),
+        listPrice: parseNullableNumber(row[PAIR_INDEX.list_price]),
+        available: parseBoolean(row[PAIR_INDEX.is_available]),
+        promo: parseBoolean(row[PAIR_INDEX.has_promo]),
+        observedAt: row[PAIR_INDEX.observed_at],
       },
     });
   }
 
   let orphanChanges = 0;
   for (const row of changes) {
-    const state = states.get(row[0]);
+    const state = states.get(row[CHANGE_INDEX.supermarket_product_id]);
     if (!state) {
       orphanChanges += 1;
       continue;
     }
     const change: PairChange = {
-      price: parseNullableNumber(row[1]),
-      listPrice: parseNullableNumber(row[2]),
+      price: parseNullableNumber(row[CHANGE_INDEX.price]),
+      listPrice: parseNullableNumber(row[CHANGE_INDEX.list_price]),
       // Availability and promotion are not recorded per change; they are taken
       // from the current offer state when it is the fresh observation.
       available: state.current.available,
       promo: state.current.promo,
-      observedAt: row[3],
+      observedAt: row[CHANGE_INDEX.observed_at],
     };
     state.changes.push(change);
   }

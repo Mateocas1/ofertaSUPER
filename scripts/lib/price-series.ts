@@ -155,6 +155,29 @@ export function partitionRelativePath(date: string): string {
   return join(`date=${date}`, "part.parquet");
 }
 
+/** Accepts both `--name=value` and `--name value`; a bare `--flag` maps to "". */
+export function parseFlags(argv: string[]): Record<string, string> {
+  const flags: Record<string, string> = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (!arg.startsWith("--")) continue;
+    const body = arg.slice(2);
+    const equals = body.indexOf("=");
+    if (equals >= 0) {
+      flags[body.slice(0, equals)] = body.slice(equals + 1);
+      continue;
+    }
+    const next = argv[index + 1];
+    if (next !== undefined && !next.startsWith("--")) {
+      flags[body] = next;
+      index += 1;
+    } else {
+      flags[body] = "";
+    }
+  }
+  return flags;
+}
+
 export function seriesRowsToParquet(rows: SeriesRow[]): Uint8Array {
   const buffer = parquetWriteBuffer({
     codec: "SNAPPY",
