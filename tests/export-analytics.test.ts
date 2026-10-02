@@ -6,6 +6,7 @@ const root = new URL("../", import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), "utf8");
 
 const workflow = read(".github/workflows/daily-refresh.yml");
+const analyticsWorkflow = read(".github/workflows/analytics.yml");
 const script = read("scripts/export-analytics.sh");
 
 describe("cloud analytics hook contract", () => {
@@ -41,5 +42,23 @@ describe("cloud analytics hook contract", () => {
     assert.match(script, /run_stage upload[\s\S]*\|\| true/);
     assert.match(script, /run_stage analytics[\s\S]*\|\| true/);
     assert.match(script, /run_stage commit[\s\S]*\|\| true/);
+  });
+});
+
+describe("analytics CI workflow contract", () => {
+  it("builds the models from the sample and verifies the committed payload", () => {
+    assert.match(analyticsWorkflow, /working-directory: analytics/);
+    assert.match(analyticsWorkflow, /uv run dbt build --profiles-dir \./);
+    assert.match(analyticsWorkflow, /publish_basket_index\.py --skip-build --check/);
+    assert.match(analyticsWorkflow, /chart_price_evolution\.py/);
+  });
+
+  it("pins every action to a full commit SHA and reads only the repository", () => {
+    const usesLines = analyticsWorkflow.split("\n").filter((line) => /^\s*uses:/.test(line));
+    assert.ok(usesLines.length >= 2, "expected at least two action steps");
+    for (const line of usesLines) {
+      assert.match(line, /uses: [\w.-]+\/[\w.-]+@[0-9a-f]{40}(?: # v[\d.]+)?$/, `unpinned action: ${line.trim()}`);
+    }
+    assert.match(analyticsWorkflow, /permissions:\s*\n\s*contents: read/);
   });
 });
