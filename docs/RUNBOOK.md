@@ -267,10 +267,12 @@ working without touching the drop rules.
 Until both secrets exist the workflow step runs
 `npx tsx scripts/post-price-drops.ts`, which logs
 `post-price-drops: skipped: not configured` and exits 0 (`continue-on-error`
-on top). The channel is never posted twice for the same day: the digest is
-built from the committed payload, and a day with no published drops is skipped
-instead of posting a noise message. Test the poster by hand with the token in
-the environment (never commit it):
+on top). The step also runs **only on the scheduled run**
+(`github.event_name == 'schedule'`), so dispatching the workflow by hand never
+posts the digest a second time. The channel is never posted twice for the same
+day either: the digest is built from the committed payload, and a day with no
+published drops is skipped instead of posting a noise message. Test the poster
+by hand with the token in the environment (never commit it):
 
 ```bash
 TELEGRAM_BOT_TOKEN=... TELEGRAM_CHANNEL_ID=-100... npx tsx scripts/post-price-drops.ts

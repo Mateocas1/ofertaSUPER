@@ -138,7 +138,7 @@ jobs:
           fi
 
       - name: Post the price drops digest to Telegram
-        if: ${{ success() && inputs.dry_run != true }}
+        if: ${{ success() && inputs.dry_run != true && github.event_name == 'schedule' }}
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
