@@ -2,7 +2,9 @@ import "server-only";
 
 import basketIndexJson from "../../../data/analytics/basket-index.json";
 
-export const BASKET_INDEX_SCHEMA_VERSION = 1;
+export const BASKET_INDEX_SCHEMA_VERSION = 2;
+
+export type BasketIndexStatus = "ready" | "insufficient";
 
 export type BasketIndexDailyPoint = {
   date: string;
@@ -39,9 +41,13 @@ export type BasketIndexPayload = {
   schemaVersion: number;
   generatedAt: string;
   source: "sample" | "release" | string;
+  status: BasketIndexStatus;
+  statusReason: string | null;
+  statusNote: string | null;
+  requirements: { minimumBasketMonths: number; minimumOverlappingCpiMonths: number };
   method: string;
   currency: string;
-  baseDate: string;
+  baseDate: string | null;
   coverage: {
     seriesStart: string | null;
     seriesEnd: string | null;
@@ -72,26 +78,38 @@ export type BasketIndexPayload = {
 
 export class BasketIndexUnavailableError extends Error {}
 
-const REQUIRED_STRING_FIELDS = ["generatedAt", "baseDate", "source", "method", "currency"] as const;
+const REQUIRED_STRING_FIELDS = ["generatedAt", "source", "method", "currency", "status"] as const;
 const REQUIRED_ARRAY_FIELDS = ["basketDaily", "basketMonthly", "basketWeights", "topRisers", "topFallers"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+const STRUCTURAL_CHECKS: ((value: Record<string, unknown>) => boolean)[] = [
+  (value) => typeof value.schemaVersion === "number",
+  (value) => value.baseDate === null || typeof value.baseDate === "string",
+  (value) => isRecord(value.coverage),
+  (value) => isRecord(value.comparison),
+  (value) => isRecord(value.requirements),
+  (value) => isRecord(value.cpi) && Array.isArray(value.cpi.rows),
+];
+
 function isBasketIndex(value: unknown): value is BasketIndexPayload {
   if (!isRecord(value)) return false;
   const stringsOk = REQUIRED_STRING_FIELDS.every((field) => typeof value[field] === "string");
   const arraysOk = REQUIRED_ARRAY_FIELDS.every((field) => Array.isArray(value[field]));
-  const cpiOk = isRecord(value.cpi) && Array.isArray(value.cpi.rows);
-  return typeof value.schemaVersion === "number" && stringsOk && arraysOk && cpiOk && isRecord(value.coverage);
+  return stringsOk && arraysOk && STRUCTURAL_CHECKS.every((check) => check(value));
+}
+
+export function parseBasketIndex(value: unknown): BasketIndexPayload {
+  if (!isBasketIndex(value) || value.schemaVersion !== BASKET_INDEX_SCHEMA_VERSION) {
+    throw new BasketIndexUnavailableError("basket index payload is missing or malformed");
+  }
+  return value;
 }
 
 export function loadBasketIndex(): BasketIndexPayload {
-  if (!isBasketIndex(basketIndexJson) || basketIndexJson.schemaVersion !== BASKET_INDEX_SCHEMA_VERSION) {
-    throw new BasketIndexUnavailableError("basket index payload is missing or malformed");
-  }
-  return basketIndexJson;
+  return parseBasketIndex(basketIndexJson);
 }
 
 function monthKey(date: string): string {
@@ -132,6 +150,12 @@ export function formatPercent(value: number | null): string {
 /** Honest one-liner about what the index actually covers. */
 export function coverageSummary(payload: BasketIndexPayload): string {
   const { coverage } = payload;
+  if (payload.status !== "ready") {
+    return (
+      `${coverage.basketProducts} productos en la canasta fija; la serie de precios del catálogo ` +
+      `arranca el ${coverage.seriesStart ?? "sin fecha"}.`
+    );
+  }
   const start = coverage.seriesStart ?? "sin datos";
   const end = coverage.seriesEnd ?? "sin datos";
   return (
@@ -147,11 +171,38 @@ export type BasketIndexView = {
   latest: BasketIndexMonthlyPoint | null;
   chartPoints: { date: string; basket: number | null; cpi: number | null }[];
   stats: BasketIndexStat[];
+  /** True while the series cannot support an index; the page renders the empty state. */
+  isEmpty: boolean;
+  /** True only for the CI sample payload, which never ships to production. */
   isSample: boolean;
   summary: string;
   cpiMonthLabel: string;
   cpiSourceUrl: string | null;
+  statusNote: string;
+  requirements: BasketIndexPayload["requirements"];
 };
+
+function buildStats(payload: BasketIndexPayload, latest: BasketIndexMonthlyPoint | null, cpiMonthLabel: string): BasketIndexStat[] {
+  const ready = payload.status === "ready";
+  return [
+    {
+      label: "Índice de canasta",
+      value: formatNumber(latest?.index ?? null),
+      detail: latest ? `Base ${payload.baseDate} = 100 · ${formatMonthLabel(latest.month)}` : "Sin meses publicados",
+    },
+    {
+      label: "Variación mensual canasta",
+      value: formatPercent(latest?.changePct ?? null),
+      detail: "Contra el mes anterior publicado",
+    },
+    { label: "IPC último mes", value: formatPercent(latest?.cpiChangePct ?? null), detail: cpiMonthLabel },
+    {
+      label: "Cobertura de canasta",
+      value: ready ? `${Math.round(payload.coverage.avgWeightCovered * 100)}%` : "—",
+      detail: `${payload.coverage.basketProductsCovered} de ${payload.coverage.basketProducts} productos`,
+    },
+  ];
+}
 
 /** Everything the page renders, computed once from the committed payload. */
 export function buildBasketIndexView(payload: BasketIndexPayload): BasketIndexView {
@@ -161,27 +212,13 @@ export function buildBasketIndexView(payload: BasketIndexPayload): BasketIndexVi
     payload,
     latest,
     chartPoints: buildChartPoints(payload),
-    isSample: payload.source !== "release",
+    isEmpty: payload.status !== "ready" || payload.basketMonthly.length === 0,
+    isSample: payload.source === "sample",
     summary: coverageSummary(payload),
     cpiMonthLabel,
     cpiSourceUrl: payload.cpi.sourceUrl,
-    stats: [
-      {
-        label: "Índice de canasta",
-        value: formatNumber(latest?.index ?? null),
-        detail: latest ? `Base ${payload.baseDate} = 100 · ${formatMonthLabel(latest.month)}` : "Sin meses publicados",
-      },
-      {
-        label: "Variación mensual canasta",
-        value: formatPercent(latest?.changePct ?? null),
-        detail: "Contra el mes anterior publicado",
-      },
-      { label: "IPC último mes", value: formatPercent(latest?.cpiChangePct ?? null), detail: cpiMonthLabel },
-      {
-        label: "Cobertura de canasta",
-        value: `${Math.round(payload.coverage.avgWeightCovered * 100)}%`,
-        detail: `${payload.coverage.basketProductsCovered} de ${payload.coverage.basketProducts} productos`,
-      },
-    ],
+    statusNote: payload.statusNote ?? payload.comparison.note,
+    requirements: payload.requirements,
+    stats: buildStats(payload, latest, cpiMonthLabel),
   };
 }

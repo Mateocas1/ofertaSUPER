@@ -49,7 +49,8 @@ describe("analytics CI workflow contract", () => {
   it("builds the models from the sample and verifies the committed payload", () => {
     assert.match(analyticsWorkflow, /working-directory: analytics/);
     assert.match(analyticsWorkflow, /uv run dbt build --profiles-dir \./);
-    assert.match(analyticsWorkflow, /publish_basket_index\.py --skip-build --check/);
+    assert.match(analyticsWorkflow, /publish_basket_index\.py --skip-build --out tests\/fixtures\/basket-index\.sample\.json --check/);
+    assert.match(analyticsWorkflow, /publish_basket_index\.py --placeholder --source release --check/);
     assert.match(analyticsWorkflow, /chart_price_evolution\.py/);
   });
 

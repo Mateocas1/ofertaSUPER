@@ -11,6 +11,7 @@ import {
   loadBasketIndex,
   type BasketIndexMover,
   type BasketIndexPayload,
+  type BasketIndexView,
 } from "@/lib/analytics/basket-index";
 import { createMetadata } from "@/lib/seo/metadata";
 
@@ -45,6 +46,33 @@ function StatCard({ label, value, detail }: { label: string; value: string; deta
       <p className="mt-2 text-3xl font-bold tracking-[-0.03em] text-foreground">{value}</p>
       <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
     </article>
+  );
+}
+
+function InsufficientSeries({ view }: { view: BasketIndexView }) {
+  return (
+    <section className="surface p-6 sm:p-8 lg:p-10" aria-labelledby="basket-index-empty">
+      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Serie en construcción</p>
+      <h2 id="basket-index-empty" className="mt-2 text-2xl font-bold tracking-[-0.03em] text-foreground">
+        Sin datos suficientes para publicar un índice
+      </h2>
+      <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">{view.statusNote}</p>
+      <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">
+        No se muestran valores estimados ni de muestra mientras falte esa ventana.
+      </p>
+      <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+        <li className="rounded-xl bg-surface-2 px-4 py-3 text-sm leading-6 text-muted-foreground ring-1 ring-border">
+          Al menos {view.requirements.minimumBasketMonths} meses completos de canasta.
+        </li>
+        <li className="rounded-xl bg-surface-2 px-4 py-3 text-sm leading-6 text-muted-foreground ring-1 ring-border">
+          Un mes de IPC del INDEC superpuesto (último publicado: {view.cpiMonthLabel}).
+        </li>
+      </ul>
+      <p className="mt-6 text-sm leading-6 text-muted-foreground">
+        Cuando se cumplan, esta página muestra el índice de canasta, la comparación mensual contra el IPC y los mayores
+        movimientos por producto.
+      </p>
+    </section>
   );
 }
 
@@ -159,36 +187,42 @@ export default function InflationPage() {
           </section>
         )}
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {view.stats.map((stat) => (
-            <StatCard key={stat.label} label={stat.label} value={stat.value} detail={stat.detail} />
-          ))}
-        </section>
+        {view.isEmpty ? (
+          <InsufficientSeries view={view} />
+        ) : (
+          <>
+            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {view.stats.map((stat) => (
+                <StatCard key={stat.label} label={stat.label} value={stat.value} detail={stat.detail} />
+              ))}
+            </section>
 
-        <section className="surface p-5 sm:p-6">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-semibold tracking-[-0.02em] text-foreground">Canasta vs IPC</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Serie diaria del índice contra el IPC mensual rebajado a la misma base.
-              </p>
-            </div>
-            <Link
-              href="/metodologia"
-              className="press inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-            >
-              Cómo se calcula
-            </Link>
-          </div>
-          <BasketIndexChart points={view.chartPoints} />
-        </section>
+            <section className="surface p-5 sm:p-6">
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-semibold tracking-[-0.02em] text-foreground">Canasta vs IPC</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Serie diaria del índice contra el IPC mensual rebajado a la misma base.
+                  </p>
+                </div>
+                <Link
+                  href="/metodologia"
+                  className="press inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                >
+                  Cómo se calcula
+                </Link>
+              </div>
+              <BasketIndexChart points={view.chartPoints} />
+            </section>
 
-        <ComparisonTable payload={payload} />
+            <ComparisonTable payload={payload} />
 
-        <section className="grid gap-5 lg:grid-cols-2">
-          <MoversTable title="Mayores subas" movers={payload.topRisers} tone="rise" />
-          <MoversTable title="Mayores bajas" movers={payload.topFallers} tone="fall" />
-        </section>
+            <section className="grid gap-5 lg:grid-cols-2">
+              <MoversTable title="Mayores subas" movers={payload.topRisers} tone="rise" />
+              <MoversTable title="Mayores bajas" movers={payload.topFallers} tone="fall" />
+            </section>
+          </>
+        )}
 
         <section className="surface-soft p-5 sm:p-6" aria-labelledby="basket-composition">
           <h2 id="basket-composition" className="text-xl font-semibold tracking-[-0.02em] text-foreground">
