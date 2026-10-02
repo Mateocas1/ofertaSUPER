@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: stg_price_series
+    description: >
+      Dense daily series (one row per date, gtin14 and store) read from the
+      exported Parquet partitions. A row whose value_reason is `stale` carries
+      null prices because the last observation is older than 24 h.
+    columns:
+      - name: price_date
+        data_tests:
+          - not_null
+      - name: gtin14
+        data_tests:
+          - not_null
+      - name: store
+        data_tests:
+          - not_null
+      - name: value_reason
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["observed", "carried_forward", "stale"]
+      - name: age_hours
+        data_tests:
+          - not_null

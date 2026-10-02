@@ -147,6 +147,91 @@ pg_restore --list /tmp/db-state/ofertasuper-*.dump | head
 
 The dump contains only the public catalog data: no roles, no ACLs, no secrets.
 
+## Analytics product (dense series and basket index)
+
+The public `/inflacion` page renders `data/analytics/basket-index.json`, a small
+precomputed JSON committed like the snapshot, so there is no database on the
+read path. It is produced by the uv + DuckDB + dbt project in `analytics/`
+(see `analytics/README.md` for the models and the fixed basket).
+
+### Daily (cloud)
+
+The daily-refresh workflow runs one best-effort step after "Dump, upload and
+prune the state": `scripts/export-analytics.sh` with `continue-on-error: true`.
+It never blocks the catalog refresh, and each stage logs what it did:
+
+1. `scripts/export-price-series.ts --mode daily --out analytics/data` writes
+today's dense partition (`date=YYYY-MM-DD/part.parquet`): one row per
+`(date, gtin14, store)` with price, list price, promo flag, availability and a
+`reason`. The value is carried forward only while the last observation is within
+24 h of the export instant; older rows are null with `reason = stale`, and a
+pair that was never observed has no row. Availability and promotion are only
+known for the current offer state, so older rows carry nulls for them.
+2. `scripts/analytics-data.sh upload-dir analytics/data` uploads one
+`price-series-<date>.parquet` asset per day to the GitHub Release
+`analytics-data` (same `GITHUB_TOKEN` pattern as `db-state`; keeps the newest
+60 assets).
+3. `cd analytics && uv run --locked --no-dev python scripts/publish_basket_index.py \
+   --glob 'data/*/part.parquet' --source release` runs `dbt build` and rewrites
+`data/analytics/basket-index.json`; the script then commits and pushes it as
+`chore(analytics): refresh basket index <date> [cloud]`. The payload is only
+`status = "ready"` with at least two basket months and one overlapping INDEC
+month; otherwise it is `status = "insufficient"` with no index values, so the
+page can never show a one-point or sample "index". The file is left untouched
+when the only difference is `generatedAt`. Regenerate the committed production
+placeholder without dbt with:
+
+```bash
+cd analytics && uv run python scripts/publish_basket_index.py --placeholder --source release
+```
+
+A failed export skips
+the rest; a failed dbt build leaves the previous JSON in place. `uv` is
+installed with `pip` when the runner does not have it.
+
+### Backfill and local runs
+
+The backfill rebuilds every past day from `price_history`. From a host that can
+reach the local Postgres (or with the docker `psql` fallback when
+`DATABASE_URL` is unset):
+
+```bash
+npx tsx scripts/export-price-series.ts --mode backfill --out analytics/data
+scripts/analytics-data.sh upload-dir analytics/data   # GH_TOKEN required
+cd analytics && uv run python scripts/publish_basket_index.py \
+  --glob 'data/*/part.parquet' --source release
+```
+
+`dbt build` alone is reproducible from a clean checkout with the tiny committed
+sample (`analytics/sample/part.parquet`); the sample **page payload** lives at
+`analytics/tests/fixtures/basket-index.sample.json` and the CI job in
+`.github/workflows/analytics.yml` builds from the sample, checks both payloads
+(`--check` against the fixture and `--placeholder --check` against production)
+and regenerates the README chart. No sample artifact is ever served in
+production.
+
+### CPI seed
+
+`analytics/seeds/indec_cpi.csv` is the official INDEC IPC Nivel General
+Nacional (base December 2016), monthly, with the exact source URL per row.
+Refresh it only with `cd analytics && uv run python scripts/fetch_indec_cpi.py`;
+the script fails loudly instead of inventing values. The loader rejects an
+unparseable seed before writing anything.
+
+### Known limitations
+
+- Real catalog data starts on 2026-09-28 while the INDEC series available here
+  ends on 2026-08-01, so the production payload is an honest
+  `status = "insufficient"` with no index values until two basket months and one
+  overlapping CPI month exist; the page states that instead of drawing a false
+  comparison.
+- Backfill freshness can only use `price_history` changes plus each offer's
+  `last_checked_at`, which is a single instant: days before the latest refresh
+  may read `stale` even if the offer was checked then. The daily cloud export is
+  always measured against its own observation instant.
+- The `analytics-data` release is replaceable state: it can be rebuilt with a
+  backfill at any time; only `data/analytics/basket-index.json` is served.
+
 ## Daily cron
 
 1. **Script:** `scripts/cron-refresh.sh`. It works in a dedicated worktree

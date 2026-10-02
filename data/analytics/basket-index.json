@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-02T01:18:01.883Z",
+  "source": "release",
+  "status": "insufficient",
+  "statusReason": "insufficient_series",
+  "statusNote": "La serie de precios del catálogo arranca el 2026-09-28. El índice necesita al menos 2 meses de canasta y un mes de IPC del INDEC superpuesto.",
+  "requirements": {
+    "minimumBasketMonths": 2,
+    "minimumOverlappingCpiMonths": 1
+  },
+  "method": "Laspeyres de canasta fija; precio promedio simple entre los supermercados relevados",
+  "currency": "ARS",
+  "baseDate": null,
+  "coverage": {
+    "seriesStart": "2026-09-28",
+    "seriesEnd": null,
+    "days": 0,
+    "stores": 0,
+    "products": 0,
+    "basketProducts": 12,
+    "basketProductsCovered": 0,
+    "totalWeight": 1.0,
+    "avgWeightCovered": 0.0,
+    "maxWeightCovered": 0.0
+  },
+  "basketWeights": [
+    {
+      "gtin14": "07790742348302",
+      "label": "Leche entera 3% 1 L",
+      "category": "Lácteos",
+      "weight": 0.14
+    },
+    {
+      "gtin14": "07790310985458",
+      "label": "Papas fritas 85 g",
+      "category": "Frutas y Verduras",
+      "weight": 0.11
+    },
+    {
+      "gtin14": "07790990002261",
+      "label": "Detergente en polvo 800 g",
+      "category": "Limpieza",
+      "weight": 0.11
+    },
+    {
+      "gtin14": "02900002002058",
+      "label": "Fideos mostacholes 500 g",
+      "category": "Almacén",
+      "weight": 0.09
+    },
+    {
+      "gtin14": "07790060023684",
+      "label": "Aceite de girasol 1.5 L",
+      "category": "Almacén",
+      "weight": 0.08
+    },
+    {
+      "gtin14": "07790150150276",
+      "label": "Café tostado 150 g",
+      "category": "Café molido y en grano",
+      "weight": 0.08
+    },
+    {
+      "gtin14": "00744430256209",
+      "label": "Yogur bebible 250 g",
+      "category": "Lácteos",
+      "weight": 0.07
+    },
+    {
+      "gtin14": "00763571680872",
+      "label": "Yerba mate 250 g",
+      "category": "Desayuno y Merienda",
+      "weight": 0.07
+    },
+    {
+      "gtin14": "07798079230284",
+      "label": "Harina de arroz 1 kg",
+      "category": "Almacén",
+      "weight": 0.07
+    },
+    {
+      "gtin14": "00000077987839",
+      "label": "Alfajor de arroz",
+      "category": "Almacén",
+      "weight": 0.06
+    },
+    {
+      "gtin14": "07790315000149",
+      "label": "Agua mineral 1.65 L",
+      "category": "Bebidas",
+      "weight": 0.06
+    },
+    {
+      "gtin14": "07790639003437",
+      "label": "Gaseosa cola 2.25 L",
+      "category": "Bebidas",
+      "weight": 0.06
+    }
+  ],
+  "basketDaily": [],
+  "basketMonthly": [],
+  "cpi": {
+    "source": "INDEC — IPC Nivel General Nacional, base diciembre 2016",
+    "sourceUrl": "https://apis.datos.gob.ar/series/api/series/?ids=145.3_INGNACNAL_DICI_M_15",
+    "unit": "Índice base diciembre 2016 = 100",
+    "firstMonth": "2025-03-01",
+    "latestMonth": "2026-08-01",
+    "rows": [
+      {
+        "month": "2025-03-01",
+        "index": 8353.3158,
+        "changePct": null
+      },
+      {
+        "month": "2025-04-01",
+        "index": 8585.6078,
+        "changePct": 2.7808
+      },
+      {
+        "month": "2025-05-01",
+        "index": 8714.4871,
+        "changePct": 1.5011
+      },
+      {
+        "month": "2025-06-01",
+        "index": 8855.5681,
+        "changePct": 1.6189
+      },
+      {
+        "month": "2025-07-01",
+        "index": 9023.973,
+        "changePct": 1.9017
+      },
+      {
+        "month": "2025-08-01",
+        "index": 9193.2441,
+        "changePct": 1.8758
+      },
+      {
+        "month": "2025-09-01",
+        "index": 9384.0922,
+        "changePct": 2.076
+      },
+      {
+        "month": "2025-10-01",
+        "index": 9603.8623,
+        "changePct": 2.3419
+      },
+      {
+        "month": "2025-11-01",
+        "index": 9841.3581,
+        "changePct": 2.4729
+      },
+      {
+        "month": "2025-12-01",
+        "index": 10121.3715,
+        "changePct": 2.8453
+      },
+      {
+        "month": "2026-01-01",
+        "index": 10413.0309,
+        "changePct": 2.8816
+      },
+      {
+        "month": "2026-02-01",
+        "index": 10714.6255,
+        "changePct": 2.8963
+      },
+      {
+        "month": "2026-03-01",
+        "index": 11077.0608,
+        "changePct": 3.3826
+      },
+      {
+        "month": "2026-04-01",
+        "index": 11363.0904,
+        "changePct": 2.5822
+      },
+      {
+        "month": "2026-05-01",
+        "index": 11607.3937,
+        "changePct": 2.15
+      },
+      {
+        "month": "2026-06-01",
+        "index": 11826.4103,
+        "changePct": 1.8869
+      },
+      {
+        "month": "2026-07-01",
+        "index": 12076.3937,
+        "changePct": 2.1138
+      },
+      {
+        "month": "2026-08-01",
+        "index": 12276.766,
+        "changePct": 1.6592
+      }
+    ]
+  },
+  "comparison": {
+    "baseMonth": null,
+    "overlapMonths": [],
+    "note": "Sin meses comparables todavía."
+  },
+  "topRisers": [],
+  "topFallers": []
+}

@@ -1,0 +1,56 @@
+name: Analytics (dbt)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "analytics/**"
+      - "data/analytics/**"
+      - ".github/workflows/analytics.yml"
+      - ".github/workflows/daily-refresh.yml"
+  pull_request:
+    paths:
+      - "analytics/**"
+      - "data/analytics/**"
+      - ".github/workflows/analytics.yml"
+      - ".github/workflows/daily-refresh.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: analytics-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dbt:
+    name: dbt build on the committed sample
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Build the models from the sample
+        working-directory: analytics
+        run: |
+          uv sync --locked
+          uv run dbt build --profiles-dir .
+
+      - name: Verify the committed sample fixture is reproducible
+        working-directory: analytics
+        run: uv run python scripts/publish_basket_index.py --skip-build --out tests/fixtures/basket-index.sample.json --check
+
+      - name: Verify the committed production payload is the honest placeholder
+        working-directory: analytics
+        run: uv run python scripts/publish_basket_index.py --placeholder --source release --check
+
+      - name: Verify the README chart is reproducible
+        working-directory: analytics
+        run: uv run python scripts/chart_price_evolution.py --out /tmp/price-evolution.png

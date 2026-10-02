@@ -1,0 +1,45 @@
+name: ofertasuper_analytics
+version: "1.0.0"
+config-version: 2
+
+profile: ofertasuper_analytics
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"
+
+clean-targets:
+  - target
+  - dbt_packages
+
+vars:
+  # Glob (relative to this project) the dense daily series is read from. A
+  # clean checkout uses the committed sample; real runs pass the exported
+  # partitions, e.g. --vars '{price_series_glob: "data/*/part.parquet"}'.
+  price_series_glob: "sample/*.parquet"
+  # Minimum share of the fixed basket weight that must carry a fresh price on a
+  # date for the Laspeyres index to be published (otherwise null + reason).
+  basket_min_coverage: 0.6
+
+models:
+  ofertasuper_analytics:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
+
+seeds:
+  ofertasuper_analytics:
+    basket_weights:
+      +column_types:
+        gtin14: varchar
+        weight: double
+        label: varchar
+        category: varchar
+    indec_cpi:
+      +column_types:
+        month: date
+        cpi_index: double
+        source_url: varchar

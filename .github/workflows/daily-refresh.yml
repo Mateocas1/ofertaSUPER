@@ -100,6 +100,17 @@ jobs:
           scripts/db-state.sh upload "$RUNNER_TEMP/state.dump" 2>&1 | tee -a "$LOG_FILE"
           scripts/db-state.sh prune 2>&1 | tee -a "$LOG_FILE"
 
+      - name: Export the daily price series and refresh the basket index
+        if: ${{ success() && inputs.dry_run != true }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          LOG_FILE="$RUNNER_TEMP/cloud-refresh.log"
+          echo analytics > "$RUNNER_TEMP/cloud-refresh-stage.txt"
+          scripts/export-analytics.sh 2>&1 | tee -a "$LOG_FILE"
+
       - name: Commit the snapshot to master
         if: ${{ success() && inputs.dry_run != true }}
         run: |
