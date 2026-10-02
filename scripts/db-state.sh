@@ -128,9 +128,16 @@ cmd_upload() {
   fi
 
   local asset_name="${DB_STATE_ASSET_NAME:-ofertasuper-$(date -u +%F).dump}"
-  if ! gh release upload "$RELEASE_TAG" "$dumpfile#$asset_name" --clobber >/dev/null; then
+  # The asset name is the uploaded file's basename (a `file#text` suffix only
+  # sets the display label), so upload a copy that already carries the name.
+  local staging
+  staging="$(mktemp -d)"
+  cp "$dumpfile" "$staging/$asset_name"
+  if ! gh release upload "$RELEASE_TAG" "$staging/$asset_name" --clobber >/dev/null; then
+    rm -rf "$staging"
     fail "UPLOAD_FAILED" "could not upload $asset_name" 5
   fi
+  rm -rf "$staging"
   log "uploaded $asset_name"
   printf '%s\n' "$asset_name"
 }

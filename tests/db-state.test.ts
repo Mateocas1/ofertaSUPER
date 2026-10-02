@@ -33,8 +33,11 @@ case "$1 $2" in
     cp "$state/$pattern" "$dir/$pattern"
     ;;
   "release upload")
+    # Like the real gh: the asset name is the file's basename; a "#text"
+    # suffix would only set the display label.
     spec="$4"
-    printf '%s\\n' "\${spec#*#}" >> "$state/uploaded"
+    file="\${spec%%#*}"
+    basename "$file" >> "$state/uploaded"
     ;;
   "release delete-asset")
     printf '%s\\n' "$4" >> "$state/deleted"
