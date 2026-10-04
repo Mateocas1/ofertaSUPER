@@ -271,7 +271,7 @@ function addOutcome(totals: RunTotals, outcome: BatchOutcome) {
 // a store whose hash cannot be resolved (e.g. a newly added one) does not take
 // the run down, and its runs do not record another store's hash.
 async function applyHashFor(batch: RefreshPlanBatch, explicitHash: string | null) {
-  if (searchUsesPersistedQuery(batch)) {
+  if (getSupermarketBySlug(batch.source).adapter === "vtex" && searchUsesPersistedQuery(batch)) {
     process.env.VTEX_SHA256_HASH = await resolveHashForSource(batch.source, explicitHash);
   } else {
     delete process.env.VTEX_SHA256_HASH;

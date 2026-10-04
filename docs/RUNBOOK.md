@@ -29,7 +29,19 @@ lock, applies the freshness gate, and regenerates the snapshot.
    ```
 
    - Refreshes the stores in `src/lib/refresh-sources.ts` (Carrefour, Disco,
-     Jumbo and, since 2026-10-04, Vea). Adding a VTEX store is that list, its
+     Jumbo and, since 2026-10-04, Vea and Coto). Coto is not VTEX: its site
+     (www.coto.com.ar) searches through Constructor.io with the public client
+     key it sends from every browser, and `src/lib/coto/client.ts` reads the
+     same API: the category tree (its departments and their subgroups, whose
+     `catv<8 digits>` ids become the plan's numeric category paths), a
+     category browse or text search in pages of 200 filtered to branch 200
+     (the branch the site prices for; `COTO_STORE_ID` overrides it), and a
+     search by EAN for the top-up. The shelf price ("Precio Contado") is the
+     branch's `listPrice`, `formatPrice` is the price per unit
+     (`product_format`), and `discounts[].discountText` ("25%Dto") becomes a
+     percent-off promotion. Weighable products and invalid EANs are skipped.
+     Its request delay is `COTO_REQUEST_MIN_DELAY_MS`/`COTO_REQUEST_MAX_DELAY_MS`
+     (400–900 ms). Adding a VTEX store is that list, its
      departments in `config/catalog-discovery.json` and an active row in
      `supermarkets` (Vea's comes from the
      `20261004000000_vea_refresh_source` migration). Only a batch that

@@ -39,13 +39,22 @@ function toDecimal(value: number | null) {
 export // Gate 6: simple-promotion capture. Only Carrefour exposes teasers through
 // the public REST read; a failed read stores null and counts as a failure
 // without aborting the batch — the price is staged regardless.
-// A paged REST search already carries the teasers in its payload, so those
-// products need no second read.
+// A paged REST search (or the Coto search) already carries the promotions in
+// its payload, so those products need no second read; only Carrefour products
+// without one are read by EAN.
+function knownPromotions(products: NormalizedProduct[], known?: Map<string, SimplePromotion | null>) {
+  const promoByEan = new Map<string, SimplePromotion | null>();
+  for (const product of products) {
+    if (known?.has(product.ean)) promoByEan.set(product.ean, known.get(product.ean) ?? null);
+  }
+  return promoByEan;
+}
+
 async function captureSimplePromotions(slug: string, products: NormalizedProduct[], known?: Map<string, SimplePromotion | null>) {
   const promoByEan = new Map<string, SimplePromotion | null>();
   let promoReadsFailed = 0;
   if (slug !== "carrefour") {
-    return { promoByEan, promoReadsFailed };
+    return { promoByEan: knownPromotions(products, known), promoReadsFailed };
   }
 
   for (const product of products) {

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { buildDiscoveryPlan, parseCategoryTree, parseDiscoveryConfig, type CategoryTreeNode } from "../../src/lib/discovery/category-plan";
 import { getSupermarketBySlug } from "../../src/lib/supermarkets";
+import { fetchCotoCategoryTree } from "../../src/lib/coto/client";
 import { fetchVtexCategoryTree } from "../../src/lib/vtex/category-tree";
 import { CMVP_CATALOG_SOURCES } from "./cmvp-catalog-batch";
 
@@ -136,7 +137,9 @@ async function discoverRefreshPlan({
 function refreshPlanDependencies(dependencies: ResolveRefreshPlanDependencies) {
   return {
     read: dependencies.readFile ?? ((path: string) => readFile(path, "utf8")),
-    fetchTree: dependencies.fetchTree ?? ((args: { source: string; baseUrl: string }) => fetchVtexCategoryTree({ baseUrl: args.baseUrl })),
+    // Coto is not VTEX: its tree comes from its own search (Constructor.io).
+    fetchTree: dependencies.fetchTree ?? ((args: { source: string; baseUrl: string }) =>
+      args.source === "coto" ? fetchCotoCategoryTree() : fetchVtexCategoryTree({ baseUrl: args.baseUrl })),
     baseUrlFor: dependencies.baseUrlFor ?? ((source: string) => getSupermarketBySlug(source).baseUrl),
   };
 }

@@ -1,7 +1,8 @@
 // The supermarkets the daily refresh acquires, tops up, gates and publishes.
 // One list, so adding a store is one change here plus its discovery
-// allowlist (config/catalog-discovery.json) and its supermarket row.
-export const REFRESH_SOURCES = ["carrefour", "disco", "jumbo", "vea"] as const;
+// allowlist (config/catalog-discovery.json) and its supermarket row. Every
+// store is VTEX except Coto, which has its own client (src/lib/coto).
+export const REFRESH_SOURCES = ["carrefour", "coto", "disco", "jumbo", "vea"] as const;
 
 export type RefreshSource = (typeof REFRESH_SOURCES)[number];
 
