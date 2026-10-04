@@ -41,6 +41,13 @@ function readPayload(path: string): PriceDropsPayload {
 export async function runPoster(options: PosterOptions): Promise<PosterRun> {
   const payload = readPayload(options.payloadPath ?? DEFAULT_PAYLOAD_PATH);
   const today = (options.now ?? new Date()).toISOString().slice(0, 10);
+  const config = readTelegramConfig(options.env);
+
+  // Without the channel there is nothing to post, whatever the payload's day:
+  // the run reports "not configured" as the header promises.
+  if (!config.token || !config.chatId) {
+    return { outcome: { action: "skipped", reason: "skipped: not configured" }, payload };
+  }
 
   // A failed export leaves yesterday's payload in place; posting it again would
   // repeat the previous digest in the channel.
@@ -51,7 +58,7 @@ export async function runPoster(options: PosterOptions): Promise<PosterRun> {
   return {
     outcome: await postPriceDropsDigest({
       payload,
-      config: readTelegramConfig(options.env),
+      config,
       siteUrl: siteUrlFromEnv(options.env),
       fetchImpl: options.fetchImpl,
     }),

@@ -44,7 +44,10 @@ describe("production payload (committed JSON)", () => {
     const payload = loadBasketIndex();
     const note = payload.statusNote ?? "";
 
-    assert.match(note, /2026-09-28/);
+    // The catalog start moves with the published data (the daily refresh
+    // re-exports it), so the note must name whatever the payload says.
+    assert.ok(payload.coverage.seriesStart, "the payload names its catalog start");
+    assert.ok(note.includes(payload.coverage.seriesStart!));
     assert.match(note, /2 meses de canasta/i);
     assert.match(note, /IPC del INDEC/i);
     assert.equal(payload.requirements.minimumBasketMonths, 2);
@@ -60,14 +63,15 @@ describe("production payload (committed JSON)", () => {
   });
 
   it("renders the empty view model instead of stats", () => {
-    const view = buildBasketIndexView(loadBasketIndex());
+    const payload = loadBasketIndex();
+    const view = buildBasketIndexView(payload);
 
     assert.equal(view.isEmpty, true);
     assert.equal(view.isSample, false);
     assert.equal(view.chartPoints.length, 0);
     assert.equal(view.latest, null);
     assert.match(view.summary, /canasta fija/);
-    assert.match(view.summary, /2026-09-28/);
+    assert.ok(view.summary.includes(payload.coverage.seriesStart!));
   });
 });
 
