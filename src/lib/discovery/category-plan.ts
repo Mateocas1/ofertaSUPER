@@ -10,7 +10,10 @@
 // searches one refresh may send (`resultsPerBatch` bounds each one) so the
 // cloud job stays far below its 60-minute timeout.
 
-export const MAX_BATCHES_PER_RUN = 60;
+// Raised from 60 with the paged search and the concurrent top-up (#568); the
+// refresh's search time budget (scripts/lib/search-budget.ts) skips whatever
+// does not fit in a given run, so the cap no longer has to guess the timeout.
+export const MAX_BATCHES_PER_RUN = 150;
 // Above 50 a batch pages through the REST catalog search (50 per page).
 export const MAX_RESULTS_PER_BATCH = 200;
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "maxBatchesPerRun": 60,
+  "maxBatchesPerRun": 90,
   "resultsPerBatch": 200,
   "departments": {
     "disco": [

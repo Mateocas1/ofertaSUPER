@@ -17,6 +17,7 @@ import {
 import { createDependencies } from "./acquire-cmvp-catalog-batch";
 import { catalogGrowth, formatCatalogGrowth, formatPhaseTimings, readSnapshotKeys } from "./lib/catalog-growth";
 import { emptyBatchTolerance, evaluateRefreshGates } from "./lib/refresh-gates";
+import { searchBudgetMs, searchBudgetSpent } from "./lib/search-budget";
 import { formatRejectedSummary, type RejectedRecord } from "./lib/refresh-summary";
 import { ACQUISITION_NO_RESULTS, runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
 import { DISCOVERY_CONFIG_PATH, FALLBACK_PLAN_PATH, refreshBatchId, resolveRefreshPlan, type RefreshPlanBatch, type RefreshPlanResolution } from "./pipeline/resolve-refresh-plan";
@@ -151,8 +152,10 @@ async function freshnessBySupermarket() {
 
 type EmptyBatch = NonNullable<BatchOutcome["empty"]>;
 
-function printSummary(stamp: string, ok: number, failures: Array<{ batchId: string; error: string }>, empties: EmptyBatch[], plannedBatches: number, promosCaptured: number, promoReadsFailed: number, topUp: TopUpSummary, freshness: Array<{ slug: string; offers: number; under24hPercent: number }>, rejected: RejectedRecord[]) {
-  process.stdout.write(`\n[refresh] summary ${stamp}: batches ok=${ok} failed=${failures.length} empty=${empties.length}; promos captured=${promosCaptured} readsFailed=${promoReadsFailed}; top-up reads ok=${topUp.readsOk} failed=${topUp.readsFailed}\n`);
+type BatchCounts = { ok: number; failures: Array<{ batchId: string; error: string }>; empties: EmptyBatch[]; skipped: number; planned: number };
+
+function printSummary(stamp: string, { ok, failures, empties, skipped, planned }: BatchCounts, promosCaptured: number, promoReadsFailed: number, topUp: TopUpSummary, freshness: Array<{ slug: string; offers: number; under24hPercent: number }>, rejected: RejectedRecord[]) {
+  process.stdout.write(`\n[refresh] summary ${stamp}: batches ok=${ok} failed=${failures.length} empty=${empties.length} skipped=${skipped}; promos captured=${promosCaptured} readsFailed=${promoReadsFailed}; top-up reads ok=${topUp.readsOk} failed=${topUp.readsFailed}\n`);
   for (const entry of freshness) {
     process.stdout.write(`[refresh] ${entry.slug}: ${entry.under24hPercent}% of ${entry.offers} offers under 24h\n`);
   }
@@ -162,7 +165,7 @@ function printSummary(stamp: string, ok: number, failures: Array<{ batchId: stri
   if (empties.length > 0) {
     // Not failures: these categories exist in the store tree but neither their
     // name nor its compact words returned a product today.
-    process.stdout.write(`[refresh] empty categories (tolerated up to ${emptyBatchTolerance(plannedBatches)}): ${JSON.stringify(empties)}\n`);
+    process.stdout.write(`[refresh] empty categories (tolerated up to ${emptyBatchTolerance(planned - skipped)}): ${JSON.stringify(empties)}\n`);
   }
   if (failures.length > 0) {
     process.stdout.write(`[refresh] failures: ${JSON.stringify(failures, null, 2)}\n`);
@@ -173,7 +176,7 @@ function printSummary(stamp: string, ok: number, failures: Array<{ batchId: stri
   const gate = evaluateRefreshGates({
     failedBatches: failures.length,
     emptyBatches: empties.length,
-    plannedBatches,
+    plannedBatches: planned - skipped,
     freshness,
     sourceReads: [...topUp.perSource, { slug: "carrefour", readsOk: promosCaptured, readsFailed: promoReadsFailed }],
   });
@@ -245,10 +248,11 @@ type RunTotals = {
   promosCaptured: number;
   promoReadsFailed: number;
   rejected: RejectedRecord[];
+  skipped: number;
 };
 
 function emptyTotals(): RunTotals {
-  return { ok: 0, failures: [], empties: [], promosCaptured: 0, promoReadsFailed: 0, rejected: [] };
+  return { ok: 0, failures: [], empties: [], promosCaptured: 0, promoReadsFailed: 0, rejected: [], skipped: 0 };
 }
 
 function addOutcome(totals: RunTotals, outcome: BatchOutcome) {
@@ -262,7 +266,14 @@ function addOutcome(totals: RunTotals, outcome: BatchOutcome) {
 
 async function runBatches(batches: RefreshPlanBatch[], stamp: string, mode: RefreshPlanResolution["mode"], artifactsDir: string, explicitHash: string | null) {
   const totals = emptyTotals();
-  for (const batch of batches) {
+  const budgetMs = searchBudgetMs();
+  const startedAt = Date.now();
+  for (const [index, batch] of batches.entries()) {
+    if (searchBudgetSpent(startedAt, Date.now(), budgetMs)) {
+      totals.skipped = batches.length - index;
+      process.stdout.write(`[refresh] search budget of ${budgetMs / 60_000}m spent: skipped the last ${totals.skipped} batches (searched on a later rotation)\n`);
+      break;
+    }
     process.env.VTEX_SHA256_HASH = await resolveHashForSource(batch.source, explicitHash);
     addOutcome(totals, await runBatch(batch, stamp, mode, artifactsDir));
   }
@@ -293,7 +304,7 @@ async function main() {
   };
 
   const totals = await timed("searches", () => runBatches(batches, stamp, plan.mode, artifactsDir, explicitHash));
-  const { ok, failures, empties, promosCaptured, promoReadsFailed, rejected } = totals;
+  const { ok, failures, empties, promosCaptured, promoReadsFailed, rejected, skipped } = totals;
 
   process.stdout.write("[refresh] re-reading the offers the searches missed\n");
   const topUp = await timed("topup", () => topUpUnobservedOffers({ stamp, runStartedAt }));
@@ -301,7 +312,7 @@ async function main() {
   process.stdout.write(`${formatPhaseTimings(phases)}\n`);
   process.stdout.write(`${formatCatalogGrowth(catalogGrowth(previousSnapshot, readSnapshotKeys(SNAPSHOT_PATH)))}\n`);
   const freshness = await freshnessBySupermarket();
-  const publishable = printSummary(stamp, ok, failures, empties, batches.length, promosCaptured, promoReadsFailed, topUp, freshness, rejected);
+  const publishable = printSummary(stamp, { ok, failures, empties, skipped, planned: batches.length }, promosCaptured, promoReadsFailed, topUp, freshness, rejected);
 
   if (publishable) await runStagingRetention();
 

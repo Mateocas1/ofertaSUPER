@@ -40,7 +40,14 @@ lock, applies the freshness gate, and regenerates the snapshot.
      anything in that path fails (config, tree read, no allowlisted category),
      it logs `[refresh] plan: fallback`, names the discovery error and walks the
      frozen plan `artifacts/cmvp/catalog/expansion-20260920-discovery-25/acquisition-plan-cycle2.json`
-     instead, so one bad category read never blocks the day.
+     instead, so one bad category read never blocks the day. The plan takes
+     up to `maxBatchesPerRun` batches (90; ceiling 150) split across the
+     stores. The searches have a time budget (`REFRESH_SEARCH_BUDGET_MINUTES`,
+     25 by default, at most 45): once it is spent, the remaining batches are
+     skipped, not failed (`[refresh] search budget of <n>m spent: skipped the
+     last <n> batches`, and `skipped=<n>` in the summary), so the top-up and
+     the snapshot always fit in the job's 60 minutes. The rotation reaches the
+     skipped categories on another day.
    - Walks the batches with a per-day `batchId` that also carries the plan mode
      (`v1-refresh-<YYYYMMDD>-d-<ordinal>` for a discovered plan,
      `v1-refresh-<YYYYMMDD>-f-<ordinal>` for the fallback); a completed batch
