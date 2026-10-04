@@ -15,6 +15,7 @@ import {
   VtexHashUnavailableError,
 } from "../src/lib/vtex/hash-resolution";
 import { createDependencies } from "./acquire-cmvp-catalog-batch";
+import { catalogGrowth, formatCatalogGrowth, formatPhaseTimings, readSnapshotKeys } from "./lib/catalog-growth";
 import { emptyBatchTolerance, evaluateRefreshGates } from "./lib/refresh-gates";
 import { formatRejectedSummary, type RejectedRecord } from "./lib/refresh-summary";
 import { ACQUISITION_NO_RESULTS, runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
@@ -258,6 +259,17 @@ function addOutcome(totals: RunTotals, outcome: BatchOutcome) {
   totals.rejected.push(...outcome.rejectedProducts);
 }
 
+async function runBatches(batches: RefreshPlanBatch[], stamp: string, mode: RefreshPlanResolution["mode"], artifactsDir: string, explicitHash: string | null) {
+  const totals = emptyTotals();
+  for (const batch of batches) {
+    process.env.VTEX_SHA256_HASH = await resolveHashForSource(batch.source, explicitHash);
+    addOutcome(totals, await runBatch(batch, stamp, mode, artifactsDir));
+  }
+  return totals;
+}
+
+const SNAPSHOT_PATH = "data/catalog-snapshot.json";
+
 async function main() {
   const explicitHash = process.env.VTEX_SHA256_HASH ?? null;
   const runStartedAt = new Date();
@@ -272,16 +284,21 @@ async function main() {
   const artifactsDir = resolve("artifacts/refresh", stamp);
   await mkdir(artifactsDir, { recursive: true });
 
-  const totals = emptyTotals();
-  for (const batch of batches) {
-    process.env.VTEX_SHA256_HASH = await resolveHashForSource(batch.source, explicitHash);
-    addOutcome(totals, await runBatch(batch, stamp, plan.mode, artifactsDir));
-  }
+  const previousSnapshot = readSnapshotKeys(SNAPSHOT_PATH);
+  const phases: Array<{ name: string; ms: number }> = [];
+  const timed = async <T>(name: string, work: () => Promise<T> | T): Promise<T> => {
+    const startedAt = Date.now();
+    try { return await work(); } finally { phases.push({ name, ms: Date.now() - startedAt }); }
+  };
+
+  const totals = await timed("searches", () => runBatches(batches, stamp, plan.mode, artifactsDir, explicitHash));
   const { ok, failures, empties, promosCaptured, promoReadsFailed, rejected } = totals;
 
   process.stdout.write("[refresh] re-reading the offers the searches missed\n");
-  const topUp = await topUpUnobservedOffers({ stamp, runStartedAt });
-  regenerateSnapshot();
+  const topUp = await timed("topup", () => topUpUnobservedOffers({ stamp, runStartedAt }));
+  await timed("snapshot", regenerateSnapshot);
+  process.stdout.write(`${formatPhaseTimings(phases)}\n`);
+  process.stdout.write(`${formatCatalogGrowth(catalogGrowth(previousSnapshot, readSnapshotKeys(SNAPSHOT_PATH)))}\n`);
   const freshness = await freshnessBySupermarket();
   const publishable = printSummary(stamp, ok, failures, empties, batches.length, promosCaptured, promoReadsFailed, topUp, freshness, rejected);
 

@@ -103,6 +103,19 @@ in the summary (`top-up reads ok/failed`) without aborting the run. With the
 top-up, the first day reached 100% <24 h in the three supermarkets (327 reads,
 0 failures).
 
+The three supermarkets are read at the same time (each is its own host and
+keeps its own sequential pace and delay, so no store sees more traffic than
+before); the staging and reconcile writes still run one supermarket after
+another, because Disco and Jumbo share EANs. Each source logs
+`[refresh] top-up <slug>: reads ok=<n> failed=<n> in <s>s`. The top-up grows
+with the catalog (2026-10-04: 3925 sequential reads took ~26 min of the 60-min
+job), so it is the first limit on catalog growth (#568).
+
+The summary also prints `[refresh] timings: searches=<m> topup=<m>
+snapshot=<m>` and `[refresh] catalog: products=<n> (+<new>, -<gone>);
+offers=<n> (+<new>, -<gone>)` against the previous snapshot, to measure every
+catalog-size change on a real run.
+
 ### Freshness coverage (known limitation)
 
 A batch searches by term and takes at most its configured results
