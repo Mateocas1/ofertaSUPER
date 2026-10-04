@@ -97,21 +97,39 @@ describe("CMVP catalog batch", () => {
     assert.deepEqual(deps.calls, []);
   });
 
-  it("lets a discovered refresh batch search up to 50 results with no expected GTINs", async () => {
+  it("lets a discovered refresh batch search up to 200 results with no expected GTINs", async () => {
     const admitted = ["7790000000003"];
     const refreshDependencies = () => dependencies({
       acquire: async () => ({ runId: 12, startedAt: "2026-03-11T00:00:00.000Z", finishedAt: "2026-03-11T00:00:01.000Z", fetchedGtins: [...admitted], admittedGtins: [...admitted], rejectedCount: 0, rejectedProducts: [], error: null }),
     });
 
-    const result = await runCmvpCatalogBatch(request({ refresh: true, count: 50, expectedGtins: [] }), refreshDependencies());
+    const result = await runCmvpCatalogBatch(request({ refresh: true, count: 200, expectedGtins: [] }), refreshDependencies());
     assert.equal(result.artifact.state, "completed");
-    assert.equal(result.artifact.count, 50);
+    assert.equal(result.artifact.count, 200);
     assert.deepEqual(result.artifact.expectedGtins, []);
 
     for (const invalid of [
-      request({ refresh: true, count: 51, expectedGtins: [] }),
-      request({ refresh: false, count: 50, expectedGtins: [] }),
+      request({ refresh: true, count: 201, expectedGtins: [] }),
+      request({ refresh: false, count: 25, expectedGtins: [] }),
       request({ refresh: true, count: 2, expectedGtins: [expectedGtins[0]] }),
+    ]) await assert.rejects(() => runCmvpCatalogBatch(invalid, dependencies()));
+  });
+
+  it("accepts a category path only on a refresh batch and only as /<id>/<id>/", async () => {
+    const admitted = ["7790000000003"];
+    const refreshDependencies = () => dependencies({
+      acquire: async () => ({ runId: 12, startedAt: "2026-03-11T00:00:00.000Z", finishedAt: "2026-03-11T00:00:01.000Z", fetchedGtins: [...admitted], admittedGtins: [...admitted], rejectedCount: 0, rejectedProducts: [], error: null }),
+    });
+
+    const withPath = await runCmvpCatalogBatch(request({ refresh: true, count: 200, expectedGtins: [], categoryPath: "/12/345/" }), refreshDependencies());
+    const withoutPath = await runCmvpCatalogBatch(request({ refresh: true, count: 200, expectedGtins: [] }), refreshDependencies());
+    assert.equal(withPath.artifact.state, "completed");
+    assert.notEqual(withPath.artifact.contractDigest, withoutPath.artifact.contractDigest);
+
+    for (const invalid of [
+      request({ categoryPath: "/12/345/" }),
+      request({ refresh: true, count: 200, expectedGtins: [], categoryPath: "12/345" }),
+      request({ refresh: true, count: 200, expectedGtins: [], categoryPath: "/12/abc/" }),
     ]) await assert.rejects(() => runCmvpCatalogBatch(invalid, dependencies()));
   });
 

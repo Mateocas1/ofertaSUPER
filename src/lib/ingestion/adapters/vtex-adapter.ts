@@ -1,9 +1,13 @@
 import type { SupermarketDefinition } from "@/lib/supermarkets";
 import { resolveIngestionQueryTerms } from "@/lib/ingestion/query-terms";
+import type { SimplePromotion } from "@/lib/promotions/capture";
 import {
+	fetchVtexCatalogPages,
 	fetchVtexDirectProducts,
 	fetchVtexProducts,
 	probeVtexHash,
+	searchUsesPersistedQuery,
+	type VtexCatalogSearch,
 } from "@/lib/vtex/client";
 import type { NormalizedProduct } from "@/lib/vtex/normalize";
 
@@ -44,6 +48,15 @@ export class VtexSourceAdapter implements SourceAdapter {
 		options: FetchOptions = {},
 	): Promise<FetchProductsResult> {
     const count = options.count ?? 50;
+    // A category path, or more results than one autocomplete page holds,
+    // goes through the paged REST catalog search instead.
+    if (!searchUsesPersistedQuery({ count, categoryPath: options.categoryPath })) {
+      const searches: VtexCatalogSearch[] = options.categoryPath
+        ? [{ kind: "category", path: options.categoryPath }]
+        : terms.map((value) => ({ kind: "text", value }));
+      return this.fetchCatalogPages(searches, count, options.retries);
+    }
+
     const uniqueProducts = new Map<string, NormalizedProduct>();
     let fallbackUsed = false;
 
@@ -63,6 +76,25 @@ export class VtexSourceAdapter implements SourceAdapter {
 
     const result = Array.from(uniqueProducts.values()) as FetchProductsResult;
     if (fallbackUsed) result.fallbackUsed = true;
+    return result;
+  }
+
+  private async fetchCatalogPages(searches: VtexCatalogSearch[], count: number, retries?: number): Promise<FetchProductsResult> {
+    const products = new Map<string, NormalizedProduct>();
+    const promoByEan = new Map<string, SimplePromotion | null>();
+    let pagesFailed = 0;
+    for (const search of searches) {
+      const page = await fetchVtexCatalogPages({ baseUrl: this.supermarket.baseUrl, search, limit: count, retries });
+      pagesFailed += page.pagesFailed ?? 0;
+      for (const product of page) {
+        if (products.has(product.ean)) continue;
+        products.set(product.ean, product);
+        promoByEan.set(product.ean, page.promoByEan?.get(product.ean) ?? null);
+      }
+    }
+    const result = Array.from(products.values()) as FetchProductsResult;
+    result.promoByEan = promoByEan;
+    result.pagesFailed = pagesFailed;
     return result;
   }
 

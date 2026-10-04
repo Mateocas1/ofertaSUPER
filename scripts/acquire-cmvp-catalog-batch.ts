@@ -12,6 +12,7 @@ import {
   type CmvpCatalogBatchRequest,
 } from "./pipeline/cmvp-catalog-batch";
 import { reconcileStageProducts } from "./pipeline/reconcile";
+import { stageWithFallbackTerms, type FallbackStageResult } from "./pipeline/search-fallback";
 import { stageSourceProducts } from "./pipeline/stage";
 import { validateStageProducts } from "./pipeline/validate";
 
@@ -57,6 +58,15 @@ export async function replaceCheckpointAtomically(output: string, contents: stri
   }
 }
 
+function logSearch(batchId: string, staged: FallbackStageResult<{ productsFetched: number; queriesSent: number; pagesFailed: number }>) {
+  if (staged.result.pagesFailed > 0) {
+    process.stdout.write(`[refresh] ${batchId}: ${staged.result.pagesFailed} search page(s) failed; kept the ${staged.result.productsFetched} products already read\n`);
+  }
+  if (staged.attemptedTerms.length < 2) return;
+  const [term, ...retries] = staged.attemptedTerms;
+  process.stdout.write(`[refresh] ${batchId}: "${term}" returned nothing; retried ${JSON.stringify(retries)} -> "${staged.searchedTerm}" fetched ${staged.result.productsFetched}\n`);
+}
+
 export function createDependencies(output: string): CmvpCatalogBatchDependencies {
   const acquisitionMetrics = new Map<number, { queries_sent: number; products_fetched: number; products_staged: number; products_rejected: number }>();
   return {
@@ -83,9 +93,16 @@ export function createDependencies(output: string): CmvpCatalogBatchDependencies
           const run = await db.ingestionRun.create({ data: { batch_id: request.batchId, source_slug: request.source, supermarket_id: supermarket.id, started_at: startedAt, status: "RUNNING", vtex_hash: process.env.VTEX_SHA256_HASH ?? null }, select: { id: true } });
           runId = run.id;
         }
-        const stage = await stageSourceProducts({ runId, slug: request.source, dryRun: request.dryRun, queryTerms: [request.term], queryLimit: 1, count: request.count });
+        const staged = await stageWithFallbackTerms({
+          term: request.term,
+          categoryPath: request.categoryPath,
+          refresh: request.refresh === true,
+          stage: ({ term, categoryPath }) => stageSourceProducts({ runId, slug: request.source, dryRun: request.dryRun, queryTerms: [term], queryLimit: 1, count: request.count, categoryPath }),
+        });
+        const stage = staged.result;
+        logSearch(request.batchId, staged);
         const validation = await validateStageProducts({ runId, slug: request.source, products: request.dryRun ? stage.products : undefined, dryRun: request.dryRun });
-        if (runId) acquisitionMetrics.set(runId, { queries_sent: stage.queriesSent, products_fetched: stage.productsFetched, products_staged: stage.productsStaged, products_rejected: validation.rejected });
+        if (runId) acquisitionMetrics.set(runId, { queries_sent: staged.queriesSent, products_fetched: stage.productsFetched, products_staged: stage.productsStaged, products_rejected: validation.rejected });
         // The refresh rule tolerates isolated rejects, so the artifact records
         // which GTINs were rejected and why.
         const rejectedProducts = validation.candidates

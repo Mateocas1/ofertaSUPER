@@ -1,3 +1,4 @@
+import type { SimplePromotion } from "@/lib/promotions/capture";
 import type { NormalizedProduct } from "@/lib/vtex/normalize";
 
 type SourceAdapterType = "vtex" | "custom";
@@ -21,10 +22,15 @@ export type HealthResult = {
 
 export type FetchProductsResult = NormalizedProduct[] & {
   fallbackUsed?: boolean;
+  /** Promotions read from the search payload itself (paged REST search). */
+  promoByEan?: Map<string, SimplePromotion | null>;
+  pagesFailed?: number;
 };
 
 export type FetchOptions = {
   count?: number;
+  /** VTEX category path (`/<department>/<category>/`); searched instead of the terms. */
+  categoryPath?: string;
   queryLimit?: number;
 	retries?: number;
 };

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "maxBatchesPerRun": 60,
-  "resultsPerBatch": 50,
+  "maxBatchesPerRun": 90,
+  "resultsPerBatch": 200,
   "departments": {
     "disco": [
       "Almacén",
@@ -50,6 +50,23 @@
       "Perfumería y farmacia",
       "Mundo Bebé",
       "Mascotas"
+    ],
+    "vea": [
+      "Almacén",
+      "Bebidas",
+      "Frutas y Verduras",
+      "Carnes",
+      "Pescados y Mariscos",
+      "Quesos y Fiambres",
+      "Lácteos",
+      "Congelados",
+      "Panaderia y Pasteleria",
+      "Rotiseria",
+      "Perfumería",
+      "Limpieza",
+      "Mascotas",
+      "Mundo Bebe",
+      "Pastas Frescas"
     ]
   }
 }

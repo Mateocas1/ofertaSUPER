@@ -28,6 +28,14 @@ lock, applies the freshness gate, and regenerates the snapshot.
    npm run refresh:catalog
    ```
 
+   - Refreshes the stores in `src/lib/refresh-sources.ts` (Carrefour, Disco,
+     Jumbo and, since 2026-10-04, Vea). Adding a VTEX store is that list, its
+     departments in `config/catalog-discovery.json` and an active row in
+     `supermarkets` (Vea's comes from the
+     `20261004000000_vea_refresh_source` migration). Only a batch that
+     searches through the persisted query (a text search of at most 50
+     results) resolves the store's VTEX hash; the paged searches need none, so
+     a store whose hash cannot be resolved does not stop the run.
    - Builds the plan at run time: reads `config/catalog-discovery.json` (the
      allowlisted grocery departments per store, `maxBatchesPerRun` and
      `resultsPerBatch`) and reads each store's public VTEX category tree, then
@@ -40,15 +48,39 @@ lock, applies the freshness gate, and regenerates the snapshot.
      anything in that path fails (config, tree read, no allowlisted category),
      it logs `[refresh] plan: fallback`, names the discovery error and walks the
      frozen plan `artifacts/cmvp/catalog/expansion-20260920-discovery-25/acquisition-plan-cycle2.json`
-     instead, so one bad category read never blocks the day.
+     instead, so one bad category read never blocks the day. The plan takes
+     up to `maxBatchesPerRun` batches (90; ceiling 150) split across the
+     stores. The searches have a time budget (`REFRESH_SEARCH_BUDGET_MINUTES`,
+     25 by default, at most 45): once it is spent, the remaining batches are
+     skipped, not failed (`[refresh] search budget of <n>m spent: skipped the
+     last <n> batches`, and `skipped=<n>` in the summary), so the top-up and
+     the snapshot always fit in the job's 60 minutes. The rotation reaches the
+     skipped categories on another day.
    - Walks the batches with a per-day `batchId` that also carries the plan mode
      (`v1-refresh-<YYYYMMDD>-d-<ordinal>` for a discovered plan,
      `v1-refresh-<YYYYMMDD>-f-<ordinal>` for the fallback); a completed batch
      replays from its checkpoint and does not query again. The mode keeps a
      same-day discovered/fallback flip from colliding with the other plan's
-     checkpoints. A discovered batch searches up to 50 results
+     checkpoints. A discovered batch searches up to 200 results
      (`resultsPerBatch`) and carries no expected GTINs; a frozen-plan batch
-     keeps its 25-result contract.
+     keeps its 25-result contract. Each discovered batch carries the VTEX
+     path of its category (`/<department>/<category>/`, from the tree ids)
+     and searches the category itself first (`fq=C:<path>`), which is exact
+     and does not depend on how the category is named. Up to 50 results a
+     text search uses the
+     persisted-query search (the storefront autocomplete, one page); above 50
+     it pages through the public REST catalog search
+     (`/api/catalog_system/pub/products/search`, 50 per `_from/_to` page) until
+     the limit or a short page. That payload already carries the Carrefour
+     promotion teasers, so those products need no extra promo read. A later
+     page that fails keeps the pages already read and logs `[refresh]
+     <batchId>: <n> search page(s) failed`. A category name is a label, not a query
+     ("Bañaderas, Cambiadores y Pelelas" as one phrase can match nothing), so a
+     discovered batch whose category search returns no product retries with
+     the category name as text and then with up to 3 of the name's
+     meaningful words, one at a time, and keeps the first that returns
+     products (`[refresh] <batchId>: "<term>" returned nothing;
+     retried [...] -> "<word>" fetched <n>`).
    - Captures simple Carrefour promos (PromotionTeasers by EAN, public REST
      read) during staging; a failed promo read leaves the promo null, counts in
      the summary, and does not abort the batch.
@@ -58,6 +90,13 @@ lock, applies the freshness gate, and regenerates the snapshot.
      <24 h per supermarket. A batch counts as failed only when its rejected
      products exceed `max(1, 10% of the fetched)` or it admits nothing; an
      isolated rejected product is tolerated and does not block the publish.
+     A discovered category whose search (fallback words included) returns no
+     product at all (`acquisition_no_results`) is not a failure: the summary
+     counts it as `empty=<n>` and lists it under `[refresh] empty categories`.
+     Up to `max(2, 10% of the planned batches)` empty categories are
+     tolerated; above that the gate fails with `emptyBatches=<n>><limit>`,
+     because that many empty searches mean the search itself broke. A
+     frozen-plan term that returns nothing still fails its batch.
      Exits with an error if a batch failed or the worst supermarket falls below
      90%.
    - Only when the run is publishable (no failed batch, freshness ≥90%), prunes
@@ -91,10 +130,23 @@ in the summary (`top-up reads ok/failed`) without aborting the run. With the
 top-up, the first day reached 100% <24 h in the three supermarkets (327 reads,
 0 failures).
 
+The supermarkets are read at the same time (each is its own host and
+keeps its own sequential pace and delay, so no store sees more traffic than
+before); the staging and reconcile writes still run one supermarket after
+another, because Disco and Jumbo share EANs. Each source logs
+`[refresh] top-up <slug>: reads ok=<n> failed=<n> in <s>s`. The top-up grows
+with the catalog (2026-10-04: 3925 sequential reads took ~26 min of the 60-min
+job), so it is the first limit on catalog growth (#568).
+
+The summary also prints `[refresh] timings: searches=<m> topup=<m>
+snapshot=<m>` and `[refresh] catalog: products=<n> (+<new>, -<gone>);
+offers=<n> (+<new>, -<gone>)` against the previous snapshot, to measure every
+catalog-size change on a real run.
+
 ### Freshness coverage (known limitation)
 
 A batch searches by term and takes at most its configured results
-(25 for a frozen-plan batch, up to 50 for a discovered one). With each
+(25 for a frozen-plan batch, up to 200 for a discovered one). With each
 supermarket's ranking rotation, some offers can fall outside the day's
 coverage. The first refresh (2026-09-28) landed at 79.6% / 85.5% / 84.1% per
 supermarket, below the 90% target: it was reported and the options were widening
@@ -141,7 +193,8 @@ Each run:
    database (below).
 3. `npx prisma migrate deploy`, then `npm run refresh:catalog` with exactly the
    same gates as the local run (failed batches, freshness <90%, a source with
-   >20% failed reads, `VTEX_HASH_UNAVAILABLE`). A batch is only failed when its
+   >20% failed reads, too many empty discovered categories,
+   `VTEX_HASH_UNAVAILABLE`). A batch is only failed when its
    rejected products exceed `max(1, 10% of the fetched)` or it admits nothing;
    an isolated rejected product is tolerated, recorded in the batch artifact and
    printed as `[refresh] rejected: <n> products [...]` with its quality flags. A

@@ -10,8 +10,12 @@
 // searches one refresh may send (`resultsPerBatch` bounds each one) so the
 // cloud job stays far below its 60-minute timeout.
 
-export const MAX_BATCHES_PER_RUN = 60;
-export const MAX_RESULTS_PER_BATCH = 50;
+// Raised from 60 with the paged search and the concurrent top-up (#568); the
+// refresh's search time budget (scripts/lib/search-budget.ts) skips whatever
+// does not fit in a given run, so the cap no longer has to guess the timeout.
+export const MAX_BATCHES_PER_RUN = 150;
+// Above 50 a batch pages through the REST catalog search (50 per page).
+export const MAX_RESULTS_PER_BATCH = 200;
 
 export type CategoryTreeNode = {
   id: number;
@@ -33,6 +37,8 @@ export type DiscoveredBatch = {
   source: string;
   term: string;
   count: number;
+  /** VTEX category path (`/<department>/<category>/`) the batch searches first. */
+  categoryPath?: string;
 };
 
 export type DiscoveryPlan = {
@@ -54,6 +60,8 @@ export type CollectedCategoryTerms = {
   /** Raw child category nodes considered, before deduplication. */
   categoriesConsidered: number;
   departmentsMatched: number;
+  /** Term -> VTEX category path of its first occurrence in tree order. */
+  pathsByTerm: Map<string, string>;
 };
 
 // One folding rule for both the allowlist key and the search term: lowercase,
@@ -96,10 +104,36 @@ export function parseCategoryTree(payload: unknown): CategoryTreeNode[] {
 
 // A department is searched by its direct children (its subcategories), which
 // cover their own leaves without narrowing to a single product family. A
-// department that is itself a leaf falls back to its own name.
-function directChildTerms(node: CategoryTreeNode): string[] {
-  const names = (node.children.length > 0 ? node.children : [node]).map((child) => normalizeCategoryName(child.name));
-  return [...new Set(names.filter(Boolean))];
+// department that is itself a leaf falls back to its own name. Each term keeps
+// its category path, so the search can filter by the category itself
+// (`fq=C:/<department>/<category>/`) instead of guessing from its name.
+function directChildTerms(node: CategoryTreeNode): Array<{ term: string; path: string }> {
+  const entries = node.children.length > 0
+    ? node.children.map((child) => ({ term: normalizeCategoryName(child.name), path: `/${node.id}/${child.id}/` }))
+    : [{ term: normalizeCategoryName(node.name), path: `/${node.id}/` }];
+  const unique = new Map<string, { term: string; path: string }>();
+  for (const entry of entries) {
+    if (entry.term && !unique.has(entry.term)) unique.set(entry.term, entry);
+  }
+  return [...unique.values()];
+}
+
+// Connectors that never narrow a search on their own. Two-letter words drop
+// out by length already.
+const FALLBACK_STOP_WORDS = new Set(["con", "del", "las", "los", "para", "por", "sin", "una"]);
+export const MAX_FALLBACK_TERMS = 3;
+
+// A category name is a label, not a query: "Bañaderas, Cambiadores y Pelelas"
+// searched as one phrase can match nothing even though each family exists.
+// When the full name comes back empty, the batch retries with its meaningful
+// words one at a time, in name order. A one-word name has no fallback.
+export function fallbackSearchTerms(term: string): string[] {
+  const normalized = normalizeCategoryName(term);
+  const tokens = normalized
+    .split(" ")
+    .filter((token) => token.length >= 3 && !FALLBACK_STOP_WORDS.has(token) && !/^\d+$/.test(token));
+  const distinct = [...new Set(tokens)].filter((token) => token !== normalized);
+  return distinct.slice(0, MAX_FALLBACK_TERMS);
 }
 
 export function collectCategoryTerms(tree: CategoryTreeNode[], allowlist: string[]): CollectedCategoryTerms {
@@ -107,24 +141,26 @@ export function collectCategoryTerms(tree: CategoryTreeNode[], allowlist: string
   const byDepartment: string[][] = [];
   const seen = new Set<string>();
   const terms: string[] = [];
+  const pathsByTerm = new Map<string, string>();
   let categoriesConsidered = 0;
   let departmentsMatched = 0;
 
   for (const node of tree) {
     if (!allowed.has(normalizeCategoryName(node.name))) continue;
     departmentsMatched += 1;
-    const names = directChildTerms(node);
+    const entries = directChildTerms(node);
     categoriesConsidered += node.children.length > 0 ? node.children.length : 1;
-    byDepartment.push(names);
-    for (const name of names) {
-      if (!seen.has(name)) {
-        seen.add(name);
-        terms.push(name);
+    byDepartment.push(entries.map(({ term }) => term));
+    for (const { term, path } of entries) {
+      if (!seen.has(term)) {
+        seen.add(term);
+        terms.push(term);
+        pathsByTerm.set(term, path);
       }
     }
   }
 
-  return { terms, byDepartment, categoriesConsidered, departmentsMatched };
+  return { terms, byDepartment, categoriesConsidered, departmentsMatched, pathsByTerm };
 }
 
 // Round-robin across departments so a per-store quota samples every allowlisted
@@ -196,7 +232,8 @@ export function buildDiscoveryPlan({
     const ordered = interleaveCategoryTerms(rotateCategoryPlan(collected.byDepartment, dayIndex));
     if (ordered.length > limit) truncated = true;
     for (const term of ordered.slice(0, limit)) {
-      batches.push({ ordinal, source, term, count: config.resultsPerBatch });
+      const categoryPath = collected.pathsByTerm.get(term);
+      batches.push({ ordinal, source, term, count: config.resultsPerBatch, ...(categoryPath ? { categoryPath } : {}) });
       ordinal += 1;
     }
   });

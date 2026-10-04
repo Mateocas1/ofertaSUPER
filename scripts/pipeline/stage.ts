@@ -15,6 +15,8 @@ type StageSourceProductsOptions = {
   queryLimit?: number;
   count?: number;
   filterEans?: string[];
+  /** VTEX category path searched instead of the terms (discovered refresh batches). */
+  categoryPath?: string;
 };
 
 export type StageSourceProductsResult = {
@@ -26,6 +28,8 @@ export type StageSourceProductsResult = {
   products: NormalizedProduct[];
   promoReadsFailed: number;
   promosCaptured: number;
+  /** Paged search pages that failed after their retries (the batch keeps what it read). */
+  pagesFailed: number;
 };
 
 function toDecimal(value: number | null) {
@@ -35,7 +39,9 @@ function toDecimal(value: number | null) {
 export // Gate 6: simple-promotion capture. Only Carrefour exposes teasers through
 // the public REST read; a failed read stores null and counts as a failure
 // without aborting the batch — the price is staged regardless.
-async function captureSimplePromotions(slug: string, products: NormalizedProduct[]) {
+// A paged REST search already carries the teasers in its payload, so those
+// products need no second read.
+async function captureSimplePromotions(slug: string, products: NormalizedProduct[], known?: Map<string, SimplePromotion | null>) {
   const promoByEan = new Map<string, SimplePromotion | null>();
   let promoReadsFailed = 0;
   if (slug !== "carrefour") {
@@ -43,6 +49,10 @@ async function captureSimplePromotions(slug: string, products: NormalizedProduct
   }
 
   for (const product of products) {
+    if (known?.has(product.ean)) {
+      promoByEan.set(product.ean, known.get(product.ean) ?? null);
+      continue;
+    }
     try {
       promoByEan.set(product.ean, await fetchSimplePromotionByEan(getSupermarketBySlug(slug).baseUrl, product.ean));
     } catch {
@@ -104,12 +114,14 @@ export async function stageSourceProducts({
   queryLimit,
   count = 50,
   filterEans,
+  categoryPath,
 }: StageSourceProductsOptions): Promise<StageSourceProductsResult> {
   const adapter = getSourceAdapter(slug);
   const terms = queryTerms?.length ? queryTerms : await adapter.getDefaultTerms(queryLimit);
   const fetchedProducts = await adapter.fetchProducts(terms, {
     count,
     queryLimit,
+    categoryPath,
   });
   const filterSet = filterEans?.length ? new Set(filterEans) : null;
   const products = filterSet
@@ -125,7 +137,7 @@ export async function stageSourceProducts({
     !product.isAvailable && product.price === 0 ? { ...product, price: null } : product,
   );
 
-  const { promoByEan, promoReadsFailed } = await captureSimplePromotions(slug, staged);
+  const { promoByEan, promoReadsFailed } = await captureSimplePromotions(slug, staged, fetchedProducts.promoByEan);
 
   await persistStagedProducts(dryRun, runId, slug, staged, promoByEan);
 
@@ -138,5 +150,6 @@ export async function stageSourceProducts({
     products: staged,
     promoReadsFailed,
     promosCaptured: Array.from(promoByEan.values()).filter((promo) => promo !== null && promo !== undefined).length,
+    pagesFailed: fetchedProducts.pagesFailed ?? 0,
   };
 }

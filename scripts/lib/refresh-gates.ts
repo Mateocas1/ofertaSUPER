@@ -6,6 +6,17 @@
 export const FRESHNESS_FLOOR_PERCENT = 90;
 export const SOURCE_READ_FAILURE_RATIO = 0.2;
 
+// A discovered category whose search returns nothing (even after the
+// compact-term fallback) is tolerated: the store tree names it, but today it
+// has nothing searchable. Many empty categories at once mean the search itself
+// broke, so the run fails above max(2, 10% of the planned batches).
+export const EMPTY_BATCH_RATIO = 0.1;
+export const EMPTY_BATCH_FLOOR = 2;
+
+export function emptyBatchTolerance(plannedBatches: number): number {
+  return Math.max(EMPTY_BATCH_FLOOR, Math.floor(Math.max(0, plannedBatches) * EMPTY_BATCH_RATIO));
+}
+
 export type SourceReadCounts = {
   slug: string;
   readsOk: number;
@@ -19,6 +30,9 @@ export type FreshnessEntry = {
 
 export type RefreshGateInput = {
   failedBatches: number;
+  /** Discovered batches whose search returned no product (tolerated up to emptyBatchTolerance). */
+  emptyBatches?: number;
+  plannedBatches?: number;
   freshness: FreshnessEntry[];
   sourceReads: SourceReadCounts[];
 };
@@ -47,11 +61,18 @@ export function findSourceReadFailure(sourceReads: SourceReadCounts[]): SourceRe
   );
 }
 
+function emptyBatchCheck(input: RefreshGateInput) {
+  const count = Math.max(0, Math.trunc(input.emptyBatches ?? 0));
+  const limit = emptyBatchTolerance(input.plannedBatches ?? 0);
+  return { count, limit, exceeded: count > limit };
+}
+
 export function evaluateRefreshGates(input: RefreshGateInput): RefreshGateVerdict {
   const failedBatches = Math.max(0, Math.trunc(input.failedBatches));
   const worstFreshness = worstFreshnessPercent(input.freshness);
   const offendingSource = findSourceReadFailure(input.sourceReads);
-  const ok = failedBatches === 0 && worstFreshness >= FRESHNESS_FLOOR_PERCENT && offendingSource === null;
+  const empty = emptyBatchCheck(input);
+  const ok = failedBatches === 0 && !empty.exceeded && worstFreshness >= FRESHNESS_FLOOR_PERCENT && offendingSource === null;
 
   if (ok) {
     return {
@@ -64,8 +85,8 @@ export function evaluateRefreshGates(input: RefreshGateInput): RefreshGateVerdic
   }
 
   const message = `failedBatches=${failedBatches}, worstFreshness=${worstFreshness}%${
-    offendingSource ? `, sourceReadFailures=${offendingSource.slug}` : ""
-  }`;
+    empty.exceeded ? `, emptyBatches=${empty.count}>${empty.limit}` : ""
+  }${offendingSource ? `, sourceReadFailures=${offendingSource.slug}` : ""}`;
   return {
     ok,
     exitCode: 1,

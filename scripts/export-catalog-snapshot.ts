@@ -11,12 +11,14 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { REFRESH_SOURCES, REFRESH_SOURCES_SQL } from "../src/lib/refresh-sources";
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputPath = join(repoRoot, "data", "catalog-snapshot.json");
 const container = process.env.CATALOG_SNAPSHOT_CONTAINER ?? "ofertasuper-cmvp-local-bootstrap-postgres-1";
 const historyDays = 90;
 
-const SOURCES = ["carrefour", "disco", "jumbo"];
+const SOURCES = [...REFRESH_SOURCES];
 
 function psqlRows(sql: string): string[][] {
   // \u0001 never appears in catalog text, so it is a safe field separator for
@@ -98,7 +100,7 @@ async function main() {
    from supermarket_products sp
    join supermarkets s on s.id = sp.supermarket_id
    where sp.price is not null
-     and s.slug in ('carrefour', 'disco', 'jumbo')
+     and s.slug in (${REFRESH_SOURCES_SQL})
    order by sp.product_ean, s.slug`,
   )).map((row) => ({
     ean: row[0],

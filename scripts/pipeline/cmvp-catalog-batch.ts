@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 
 import { normalizeGtin } from "../../src/lib/identity/gtin";
+import { REFRESH_SOURCES } from "../../src/lib/refresh-sources";
 
 // The acquisition contract accepts exactly these stores (the staged sources of
 // the daily refresh). Discovery refuses to plan for anything else.
-export const CMVP_CATALOG_SOURCES = ["disco", "jumbo", "carrefour"] as const;
+export const CMVP_CATALOG_SOURCES = REFRESH_SOURCES;
 
 const SOURCES = new Set<string>(CMVP_CATALOG_SOURCES);
 
@@ -19,6 +20,9 @@ export type CmvpCatalogBatchRequest = {
   // Gate 6 daily refresh: the source catalog evolves, so the plan's expected
   // GTINs are not re-asserted; admitted products must match fetched instead.
   refresh?: boolean;
+  // Discovered refresh batches only: the VTEX category path searched before
+  // the term (`/<department>/<category>/`).
+  categoryPath?: string;
 };
 
 export type RejectedProduct = { gtin: string; qualityFlags: string[] };
@@ -72,7 +76,7 @@ function normalizeGtins(values: string[], label: string) {
 }
 
 function validateContractSource(source: string) {
-  if (!SOURCES.has(source)) throw new Error("source must be exactly one of disco, jumbo, carrefour");
+  if (!SOURCES.has(source)) throw new Error(`source must be exactly one of ${CMVP_CATALOG_SOURCES.join(", ")}`);
 }
 
 function normalizeContractText(input: CmvpCatalogBatchRequest) {
@@ -84,10 +88,11 @@ function normalizeContractText(input: CmvpCatalogBatchRequest) {
 }
 
 // A frozen-plan batch pins its exact 25-result contract; a discovered refresh
-// batch searches a live category and may take up to 50 results, with no known
-// expected GTINs (the plan is built from the category tree at run time).
+// batch searches a live category and may take up to 200 results (four pages of
+// the paged catalog search), with no known expected GTINs (the plan is built
+// from the category tree at run time).
 const MAX_PLAN_COUNT = 25;
-const MAX_REFRESH_COUNT = 50;
+export const MAX_REFRESH_COUNT = 200;
 
 export function validateContractCountAndGtins(input: CmvpCatalogBatchRequest) {
   const max = input.refresh ? MAX_REFRESH_COUNT : MAX_PLAN_COUNT;
@@ -103,6 +108,15 @@ export function validateContractCountAndGtins(input: CmvpCatalogBatchRequest) {
   return expectedGtins;
 }
 
+const CATEGORY_PATH = /^(\/\d+)+\/$/;
+
+function validateCategoryPath(input: CmvpCatalogBatchRequest) {
+  if (input.categoryPath === undefined) return undefined;
+  if (!input.refresh) throw new Error("categoryPath is only valid for a refresh batch");
+  if (!CATEGORY_PATH.test(input.categoryPath)) throw new Error("categoryPath must look like /<department>/<category>/");
+  return input.categoryPath;
+}
+
 function validateWriteConfirmation(input: CmvpCatalogBatchRequest) {
   if (!input.dryRun && !input.confirmWrite) throw new Error("write requires explicit confirmation");
 }
@@ -111,12 +125,15 @@ function normalizeContract(input: CmvpCatalogBatchRequest) {
   validateContractSource(input.source);
   const { batchId, term } = normalizeContractText(input);
   const expectedGtins = validateContractCountAndGtins(input);
+  const categoryPath = validateCategoryPath(input);
   validateWriteConfirmation(input);
-  return { ...input, batchId, term, expectedGtins };
+  return { ...input, batchId, term, expectedGtins, categoryPath };
 }
 
 function contractDigest(request: NormalizedRequest) {
-  return digest({ executionMode: request.dryRun ? "dry-run" : "confirmed-write", batchId: request.batchId, source: request.source, term: request.term, count: request.count, expectedGtins: request.expectedGtins });
+  // The category path joins the digest only when present, so a batch without
+  // one keeps the digest it always had.
+  return digest({ executionMode: request.dryRun ? "dry-run" : "confirmed-write", batchId: request.batchId, source: request.source, term: request.term, count: request.count, expectedGtins: request.expectedGtins, ...(request.categoryPath ? { categoryPath: request.categoryPath } : {}) });
 }
 
 function sameSet(left: string[], right: string[]) { return left.length === right.length && left.every((value, index) => value === right[index]); }
@@ -293,19 +310,26 @@ async function replayCheckpoint(request: NormalizedRequest, contract: string, de
   return replayExistingCheckpoint(request, contract, existing, dependencies);
 }
 
-function acquisitionOutcome(acquisition: AcquisitionResult) {
+// A refresh search that returns no product at all is its own outcome: the
+// category exists in the store tree but its name matched nothing searchable
+// today. The batch still blocks, and the refresh run decides whether an empty
+// discovered category is tolerable (a frozen-plan term must always return).
+export const ACQUISITION_NO_RESULTS = "acquisition_no_results";
+
+function acquisitionOutcome(acquisition: AcquisitionResult, refresh: boolean) {
   let fetchedGtins: string[] = [];
   let admittedGtins: string[] = [];
   let error = normalizedError(acquisition.error, "acquisition");
   if (!isNonNegativeInteger(acquisition.rejectedCount)) error = "invalid_acquisition_rejected_count";
   try { fetchedGtins = normalizeGtins(acquisition.fetchedGtins, "fetched"); admittedGtins = normalizeGtins(acquisition.admittedGtins, "admitted"); } catch { error = "invalid_acquisition_gtins"; }
   if (error === null && exceedsRejectionTolerance(acquisition.rejectedCount, fetchedGtins.length)) error = "acquisition_rejected_products";
+  if (error === null && refresh && fetchedGtins.length === 0) error = ACQUISITION_NO_RESULTS;
   if (error === null && admittedGtins.length === 0) error = "acquisition_no_admitted_products";
   return { fetchedGtins, admittedGtins, error };
 }
 
 async function handleAcquisitionOutcome(request: NormalizedRequest, contract: string, acquisition: AcquisitionResult, dependencies: CmvpCatalogBatchDependencies): Promise<CmvpCatalogBatchResult | CmvpCatalogBatchArtifact> {
-  const { fetchedGtins, admittedGtins, error } = acquisitionOutcome(acquisition);
+  const { fetchedGtins, admittedGtins, error } = acquisitionOutcome(acquisition, request.refresh === true);
   const artifact = createArtifact(request, contract, error ? "blocked" : "acquired", acquisition, fetchedGtins, admittedGtins, error);
   await persistArtifact(request, artifact, dependencies);
   if (error) {

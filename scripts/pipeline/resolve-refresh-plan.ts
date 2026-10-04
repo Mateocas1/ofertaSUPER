@@ -21,6 +21,8 @@ export type RefreshPlanBatch = {
   term: string;
   count: number;
   expectedGtins: string[];
+  /** Discovered batches only: VTEX category path searched before the term. */
+  categoryPath?: string;
 };
 
 export type RefreshPlanResolution = {
