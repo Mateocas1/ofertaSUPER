@@ -293,19 +293,26 @@ async function replayCheckpoint(request: NormalizedRequest, contract: string, de
   return replayExistingCheckpoint(request, contract, existing, dependencies);
 }
 
-function acquisitionOutcome(acquisition: AcquisitionResult) {
+// A refresh search that returns no product at all is its own outcome: the
+// category exists in the store tree but its name matched nothing searchable
+// today. The batch still blocks, and the refresh run decides whether an empty
+// discovered category is tolerable (a frozen-plan term must always return).
+export const ACQUISITION_NO_RESULTS = "acquisition_no_results";
+
+function acquisitionOutcome(acquisition: AcquisitionResult, refresh: boolean) {
   let fetchedGtins: string[] = [];
   let admittedGtins: string[] = [];
   let error = normalizedError(acquisition.error, "acquisition");
   if (!isNonNegativeInteger(acquisition.rejectedCount)) error = "invalid_acquisition_rejected_count";
   try { fetchedGtins = normalizeGtins(acquisition.fetchedGtins, "fetched"); admittedGtins = normalizeGtins(acquisition.admittedGtins, "admitted"); } catch { error = "invalid_acquisition_gtins"; }
   if (error === null && exceedsRejectionTolerance(acquisition.rejectedCount, fetchedGtins.length)) error = "acquisition_rejected_products";
+  if (error === null && refresh && fetchedGtins.length === 0) error = ACQUISITION_NO_RESULTS;
   if (error === null && admittedGtins.length === 0) error = "acquisition_no_admitted_products";
   return { fetchedGtins, admittedGtins, error };
 }
 
 async function handleAcquisitionOutcome(request: NormalizedRequest, contract: string, acquisition: AcquisitionResult, dependencies: CmvpCatalogBatchDependencies): Promise<CmvpCatalogBatchResult | CmvpCatalogBatchArtifact> {
-  const { fetchedGtins, admittedGtins, error } = acquisitionOutcome(acquisition);
+  const { fetchedGtins, admittedGtins, error } = acquisitionOutcome(acquisition, request.refresh === true);
   const artifact = createArtifact(request, contract, error ? "blocked" : "acquired", acquisition, fetchedGtins, admittedGtins, error);
   await persistArtifact(request, artifact, dependencies);
   if (error) {

@@ -72,6 +72,9 @@ const STAGE_FAILURE_TOKENS: Record<RefreshStage, ReadonlyArray<readonly [token: 
     // the rule (too many rejects, or nothing admitted).
     ["acquisition_rejected_products", "refresh-rejections-exceeded"],
     ["acquisition_no_admitted_products", "refresh-no-admitted-products"],
+    // Only a frozen-plan batch fails on an empty search; a discovered one is
+    // tolerated until the empty-batch gate trips (then "gate check failed").
+    ["acquisition_no_results", "refresh-no-admitted-products"],
     ["gate check failed", "refresh-gate-failed"],
   ],
   upload: [],

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  ACQUISITION_NO_RESULTS,
   exceedsRejectionTolerance,
   rejectionTolerance,
   runCmvpCatalogBatch,
@@ -146,10 +147,21 @@ describe("refresh batch rejection admission", () => {
     assert.equal(result.artifact.runs[0]!.error, "acquisition_no_admitted_products");
   });
 
-  it("blocks an empty batch with no admitted products", async () => {
+  it("blocks a refresh search that returned nothing with its own no-results error", async () => {
     const deps = dependencies({ acquire: async () => acquisition([], [], []) });
 
     const result = await runCmvpCatalogBatch(request({ count: 1, expectedGtins: [fetched[0]!], dryRun: false, confirmWrite: true }), deps);
+
+    assert.equal(result.artifact.state, "blocked");
+    assert.equal(result.artifact.runs[0]!.error, ACQUISITION_NO_RESULTS);
+    assert.ok(deps.calls.includes("finalize:FAILED"));
+    assert.equal(deps.calls.includes("reconcile"), false);
+  });
+
+  it("keeps an empty frozen-plan search as no admitted products", async () => {
+    const deps = dependencies({ acquire: async () => acquisition([], [], []) });
+
+    const result = await runCmvpCatalogBatch(request({ refresh: false, dryRun: false, confirmWrite: true }), deps);
 
     assert.equal(result.artifact.state, "blocked");
     assert.equal(result.artifact.runs[0]!.error, "acquisition_no_admitted_products");

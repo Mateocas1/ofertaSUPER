@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { evaluateRefreshGates, findSourceReadFailure, worstFreshnessPercent } from "../scripts/lib/refresh-gates";
+import { emptyBatchTolerance, evaluateRefreshGates, findSourceReadFailure, worstFreshnessPercent } from "../scripts/lib/refresh-gates";
 
 const healthyFreshness = [
   { slug: "carrefour", under24hPercent: 97.2 },
@@ -16,6 +16,27 @@ const healthySources = [
 ];
 
 describe("refresh gates", () => {
+  it("tolerates a few empty discovered categories: max(2, 10% of the plan)", () => {
+    assert.equal(emptyBatchTolerance(0), 2);
+    assert.equal(emptyBatchTolerance(19), 2);
+    assert.equal(emptyBatchTolerance(60), 6);
+
+    const tolerated = evaluateRefreshGates({ failedBatches: 0, emptyBatches: 2, plannedBatches: 60, freshness: healthyFreshness, sourceReads: healthySources });
+    assert.equal(tolerated.ok, true);
+    assert.equal(tolerated.message, null);
+
+    const atLimit = evaluateRefreshGates({ failedBatches: 0, emptyBatches: 6, plannedBatches: 60, freshness: healthyFreshness, sourceReads: healthySources });
+    assert.equal(atLimit.ok, true);
+  });
+
+  it("fails when too many discovered categories come back empty", () => {
+    const verdict = evaluateRefreshGates({ failedBatches: 0, emptyBatches: 7, plannedBatches: 60, freshness: healthyFreshness, sourceReads: healthySources });
+
+    assert.equal(verdict.ok, false);
+    assert.equal(verdict.exitCode, 1);
+    assert.equal(verdict.message, "failedBatches=0, worstFreshness=95.1%, emptyBatches=7>6");
+  });
+
   it("publishes only when every gate is satisfied", () => {
     const verdict = evaluateRefreshGates({ failedBatches: 0, freshness: healthyFreshness, sourceReads: healthySources });
 

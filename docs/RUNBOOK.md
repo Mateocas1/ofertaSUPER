@@ -48,7 +48,12 @@ lock, applies the freshness gate, and regenerates the snapshot.
      same-day discovered/fallback flip from colliding with the other plan's
      checkpoints. A discovered batch searches up to 50 results
      (`resultsPerBatch`) and carries no expected GTINs; a frozen-plan batch
-     keeps its 25-result contract.
+     keeps its 25-result contract. A category name is a label, not a query
+     ("Bañaderas, Cambiadores y Pelelas" as one phrase can match nothing), so a
+     discovered batch whose search returns no product retries with up to 3 of
+     the name's meaningful words, one at a time, and keeps the first that
+     returns products (`[refresh] <batchId>: "<term>" returned nothing;
+     retried [...] -> "<word>" fetched <n>`).
    - Captures simple Carrefour promos (PromotionTeasers by EAN, public REST
      read) during staging; a failed promo read leaves the promo null, counts in
      the summary, and does not abort the batch.
@@ -58,6 +63,13 @@ lock, applies the freshness gate, and regenerates the snapshot.
      <24 h per supermarket. A batch counts as failed only when its rejected
      products exceed `max(1, 10% of the fetched)` or it admits nothing; an
      isolated rejected product is tolerated and does not block the publish.
+     A discovered category whose search (fallback words included) returns no
+     product at all (`acquisition_no_results`) is not a failure: the summary
+     counts it as `empty=<n>` and lists it under `[refresh] empty categories`.
+     Up to `max(2, 10% of the planned batches)` empty categories are
+     tolerated; above that the gate fails with `emptyBatches=<n>><limit>`,
+     because that many empty searches mean the search itself broke. A
+     frozen-plan term that returns nothing still fails its batch.
      Exits with an error if a batch failed or the worst supermarket falls below
      90%.
    - Only when the run is publishable (no failed batch, freshness ≥90%), prunes
@@ -141,7 +153,8 @@ Each run:
    database (below).
 3. `npx prisma migrate deploy`, then `npm run refresh:catalog` with exactly the
    same gates as the local run (failed batches, freshness <90%, a source with
-   >20% failed reads, `VTEX_HASH_UNAVAILABLE`). A batch is only failed when its
+   >20% failed reads, too many empty discovered categories,
+   `VTEX_HASH_UNAVAILABLE`). A batch is only failed when its
    rejected products exceed `max(1, 10% of the fetched)` or it admits nothing;
    an isolated rejected product is tolerated, recorded in the batch artifact and
    printed as `[refresh] rejected: <n> products [...]` with its quality flags. A

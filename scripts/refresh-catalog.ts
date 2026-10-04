@@ -15,9 +15,9 @@ import {
   VtexHashUnavailableError,
 } from "../src/lib/vtex/hash-resolution";
 import { createDependencies } from "./acquire-cmvp-catalog-batch";
-import { evaluateRefreshGates } from "./lib/refresh-gates";
+import { emptyBatchTolerance, evaluateRefreshGates } from "./lib/refresh-gates";
 import { formatRejectedSummary, type RejectedRecord } from "./lib/refresh-summary";
-import { runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
+import { ACQUISITION_NO_RESULTS, runCmvpCatalogBatch, type CmvpCatalogBatchArtifact, type CmvpCatalogBatchRequest } from "./pipeline/cmvp-catalog-batch";
 import { DISCOVERY_CONFIG_PATH, FALLBACK_PLAN_PATH, refreshBatchId, resolveRefreshPlan, type RefreshPlanBatch, type RefreshPlanResolution } from "./pipeline/resolve-refresh-plan";
 import { pruneStagingProducts } from "./pipeline/staging-retention";
 import { topUpUnobservedOffers, type TopUpSummary } from "./pipeline/topup";
@@ -32,6 +32,7 @@ import { topUpUnobservedOffers, type TopUpSummary } from "./pipeline/topup";
 type BatchOutcome = {
   ok: boolean;
   failure: { batchId: string; error: string } | null;
+  empty: { batchId: string; source: string; term: string } | null;
   promosCaptured: number;
   promoReadsFailed: number;
   rejectedProducts: RejectedRecord[];
@@ -71,6 +72,19 @@ function runSummary(artifact: CmvpCatalogBatchArtifact) {
   };
 }
 
+function batchOutcome(summary: ReturnType<typeof runSummary>, batchId: string, batch: RefreshPlanBatch, mode: RefreshPlanResolution["mode"]): BatchOutcome {
+  // A discovered category that returned nothing is reported, not failed:
+  // the gate caps how many may be empty. A frozen-plan term must return.
+  if (mode === "discovered" && summary.acquisitionError === ACQUISITION_NO_RESULTS) {
+    return { ok: false, failure: null, empty: { batchId, source: batch.source, term: batch.term }, promosCaptured: 0, promoReadsFailed: 0, rejectedProducts: [] };
+  }
+  const rejectedProducts = summary.rejectedProducts.map((product) => ({ batchId, gtin: product.gtin, qualityFlags: product.qualityFlags }));
+  const failure = summary.acquisitionError !== null || summary.state !== "completed"
+    ? { batchId, error: summary.acquisitionError ?? `state=${summary.state}` }
+    : null;
+  return { ok: failure === null, failure, empty: null, promosCaptured: summary.promosCaptured, promoReadsFailed: summary.promoReadsFailed, rejectedProducts };
+}
+
 async function runBatch(batch: RefreshPlanBatch, stamp: string, mode: RefreshPlanResolution["mode"], artifactsDir: string): Promise<BatchOutcome> {
   // A completed checkpoint replays without re-querying; a failed one gets a
   // fresh batch id so the retry does not double-stage the same products.
@@ -98,18 +112,14 @@ async function runBatch(batch: RefreshPlanBatch, stamp: string, mode: RefreshPla
     const result = await runCmvpCatalogBatch(request, createDependencies(request.output));
     const summary = runSummary(result.artifact);
     process.stdout.write(`${JSON.stringify({ ...summary, batchId })}\n`);
-    const rejectedProducts = summary.rejectedProducts.map((product) => ({ batchId, gtin: product.gtin, qualityFlags: product.qualityFlags }));
-    const failure = summary.acquisitionError !== null || summary.state !== "completed"
-      ? { batchId, error: summary.acquisitionError ?? `state=${summary.state}` }
-      : null;
-    return { ok: failure === null, failure, promosCaptured: summary.promosCaptured, promoReadsFailed: summary.promoReadsFailed, rejectedProducts };
+    return batchOutcome(summary, batchId, batch, mode);
   } catch (error) {
     // The pipeline already persisted a blocked artifact when it could; the
     // catch must not overwrite the checkpoint with a non-artifact payload
     // (a malformed checkpoint would poison every later replay).
     const message = error instanceof Error ? error.message : String(error);
     process.stdout.write(`[refresh] ${batchId} failed: ${message}\n`);
-    return { ok: false, failure: { batchId, error: message }, promosCaptured: 0, promoReadsFailed: 0, rejectedProducts: [] };
+    return { ok: false, failure: { batchId, error: message }, empty: null, promosCaptured: 0, promoReadsFailed: 0, rejectedProducts: [] };
   }
 }
 
@@ -137,14 +147,21 @@ async function freshnessBySupermarket() {
   }));
 }
 
-function printSummary(stamp: string, ok: number, failures: Array<{ batchId: string; error: string }>, promosCaptured: number, promoReadsFailed: number, topUp: TopUpSummary, freshness: Array<{ slug: string; offers: number; under24hPercent: number }>, rejected: RejectedRecord[]) {
-  process.stdout.write(`\n[refresh] summary ${stamp}: batches ok=${ok} failed=${failures.length}; promos captured=${promosCaptured} readsFailed=${promoReadsFailed}; top-up reads ok=${topUp.readsOk} failed=${topUp.readsFailed}\n`);
+type EmptyBatch = NonNullable<BatchOutcome["empty"]>;
+
+function printSummary(stamp: string, ok: number, failures: Array<{ batchId: string; error: string }>, empties: EmptyBatch[], plannedBatches: number, promosCaptured: number, promoReadsFailed: number, topUp: TopUpSummary, freshness: Array<{ slug: string; offers: number; under24hPercent: number }>, rejected: RejectedRecord[]) {
+  process.stdout.write(`\n[refresh] summary ${stamp}: batches ok=${ok} failed=${failures.length} empty=${empties.length}; promos captured=${promosCaptured} readsFailed=${promoReadsFailed}; top-up reads ok=${topUp.readsOk} failed=${topUp.readsFailed}\n`);
   for (const entry of freshness) {
     process.stdout.write(`[refresh] ${entry.slug}: ${entry.under24hPercent}% of ${entry.offers} offers under 24h\n`);
   }
   // Rejected products are tolerated when they are isolated; name them and their
   // quality flags so tomorrow's log explains why a product was dropped.
   process.stdout.write(`${formatRejectedSummary(rejected)}\n`);
+  if (empties.length > 0) {
+    // Not failures: these categories exist in the store tree but neither their
+    // name nor its compact words returned a product today.
+    process.stdout.write(`[refresh] empty categories (tolerated up to ${emptyBatchTolerance(plannedBatches)}): ${JSON.stringify(empties)}\n`);
+  }
   if (failures.length > 0) {
     process.stdout.write(`[refresh] failures: ${JSON.stringify(failures, null, 2)}\n`);
   }
@@ -153,6 +170,8 @@ function printSummary(stamp: string, ok: number, failures: Array<{ batchId: stri
   // the cron nor the cloud job may publish a partially refreshed catalog.
   const gate = evaluateRefreshGates({
     failedBatches: failures.length,
+    emptyBatches: empties.length,
+    plannedBatches,
     freshness,
     sourceReads: [...topUp.perSource, { slug: "carrefour", readsOk: promosCaptured, readsFailed: promoReadsFailed }],
   });
@@ -217,6 +236,28 @@ async function runStagingRetention() {
   }
 }
 
+type RunTotals = {
+  ok: number;
+  failures: Array<{ batchId: string; error: string }>;
+  empties: EmptyBatch[];
+  promosCaptured: number;
+  promoReadsFailed: number;
+  rejected: RejectedRecord[];
+};
+
+function emptyTotals(): RunTotals {
+  return { ok: 0, failures: [], empties: [], promosCaptured: 0, promoReadsFailed: 0, rejected: [] };
+}
+
+function addOutcome(totals: RunTotals, outcome: BatchOutcome) {
+  if (outcome.ok) totals.ok += 1;
+  if (outcome.failure) totals.failures.push(outcome.failure);
+  if (outcome.empty) totals.empties.push(outcome.empty);
+  totals.promosCaptured += outcome.promosCaptured;
+  totals.promoReadsFailed += outcome.promoReadsFailed;
+  totals.rejected.push(...outcome.rejectedProducts);
+}
+
 async function main() {
   const explicitHash = process.env.VTEX_SHA256_HASH ?? null;
   const runStartedAt = new Date();
@@ -231,26 +272,18 @@ async function main() {
   const artifactsDir = resolve("artifacts/refresh", stamp);
   await mkdir(artifactsDir, { recursive: true });
 
-  let ok = 0;
-  let promosCaptured = 0;
-  let promoReadsFailed = 0;
-  const failures: Array<{ batchId: string; error: string }> = [];
-  const rejected: RejectedRecord[] = [];
+  const totals = emptyTotals();
   for (const batch of batches) {
     process.env.VTEX_SHA256_HASH = await resolveHashForSource(batch.source, explicitHash);
-    const outcome = await runBatch(batch, stamp, plan.mode, artifactsDir);
-    if (outcome.ok) ok += 1;
-    if (outcome.failure) failures.push(outcome.failure);
-    promosCaptured += outcome.promosCaptured;
-    promoReadsFailed += outcome.promoReadsFailed;
-    rejected.push(...outcome.rejectedProducts);
+    addOutcome(totals, await runBatch(batch, stamp, plan.mode, artifactsDir));
   }
+  const { ok, failures, empties, promosCaptured, promoReadsFailed, rejected } = totals;
 
   process.stdout.write("[refresh] re-reading the offers the searches missed\n");
   const topUp = await topUpUnobservedOffers({ stamp, runStartedAt });
   regenerateSnapshot();
   const freshness = await freshnessBySupermarket();
-  const publishable = printSummary(stamp, ok, failures, promosCaptured, promoReadsFailed, topUp, freshness, rejected);
+  const publishable = printSummary(stamp, ok, failures, empties, batches.length, promosCaptured, promoReadsFailed, topUp, freshness, rejected);
 
   if (publishable) await runStagingRetention();
 

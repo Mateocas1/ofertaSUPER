@@ -102,6 +102,24 @@ function directChildTerms(node: CategoryTreeNode): string[] {
   return [...new Set(names.filter(Boolean))];
 }
 
+// Connectors that never narrow a search on their own. Two-letter words drop
+// out by length already.
+const FALLBACK_STOP_WORDS = new Set(["con", "del", "las", "los", "para", "por", "sin", "una"]);
+export const MAX_FALLBACK_TERMS = 3;
+
+// A category name is a label, not a query: "Bañaderas, Cambiadores y Pelelas"
+// searched as one phrase can match nothing even though each family exists.
+// When the full name comes back empty, the batch retries with its meaningful
+// words one at a time, in name order. A one-word name has no fallback.
+export function fallbackSearchTerms(term: string): string[] {
+  const normalized = normalizeCategoryName(term);
+  const tokens = normalized
+    .split(" ")
+    .filter((token) => token.length >= 3 && !FALLBACK_STOP_WORDS.has(token) && !/^\d+$/.test(token));
+  const distinct = [...new Set(tokens)].filter((token) => token !== normalized);
+  return distinct.slice(0, MAX_FALLBACK_TERMS);
+}
+
 export function collectCategoryTerms(tree: CategoryTreeNode[], allowlist: string[]): CollectedCategoryTerms {
   const allowed = new Set(allowlist.map(normalizeCategoryName).filter(Boolean));
   const byDepartment: string[][] = [];
