@@ -58,7 +58,10 @@ export async function replaceCheckpointAtomically(output: string, contents: stri
   }
 }
 
-function logSearchFallback(batchId: string, staged: FallbackStageResult<{ productsFetched: number; queriesSent: number }>) {
+function logSearch(batchId: string, staged: FallbackStageResult<{ productsFetched: number; queriesSent: number; pagesFailed: number }>) {
+  if (staged.result.pagesFailed > 0) {
+    process.stdout.write(`[refresh] ${batchId}: ${staged.result.pagesFailed} search page(s) failed; kept the ${staged.result.productsFetched} products already read\n`);
+  }
   if (staged.attemptedTerms.length < 2) return;
   const [term, ...retries] = staged.attemptedTerms;
   process.stdout.write(`[refresh] ${batchId}: "${term}" returned nothing; retried ${JSON.stringify(retries)} -> "${staged.searchedTerm}" fetched ${staged.result.productsFetched}\n`);
@@ -96,7 +99,7 @@ export function createDependencies(output: string): CmvpCatalogBatchDependencies
           stage: (term) => stageSourceProducts({ runId, slug: request.source, dryRun: request.dryRun, queryTerms: [term], queryLimit: 1, count: request.count }),
         });
         const stage = staged.result;
-        logSearchFallback(request.batchId, staged);
+        logSearch(request.batchId, staged);
         const validation = await validateStageProducts({ runId, slug: request.source, products: request.dryRun ? stage.products : undefined, dryRun: request.dryRun });
         if (runId) acquisitionMetrics.set(runId, { queries_sent: staged.queriesSent, products_fetched: stage.productsFetched, products_staged: stage.productsStaged, products_rejected: validation.rejected });
         // The refresh rule tolerates isolated rejects, so the artifact records

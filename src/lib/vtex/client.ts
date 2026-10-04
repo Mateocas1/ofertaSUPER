@@ -7,11 +7,17 @@ import {
 } from "./encode";
 import { gtinLookupForms } from "../identity/gtin";
 import { normalizeProduct, type NormalizedProduct } from "./normalize";
+import { extractSimplePromotionFromPayload, type SimplePromotion } from "../promotions/capture";
 
 type LooseRecord = Record<string, unknown>;
 
 export type VtexProductsResult = NormalizedProduct[] & {
   fallbackUsed?: boolean;
+  /** Simple promotions read from the same REST payload (paged search only). */
+  promoByEan?: Map<string, SimplePromotion | null>;
+  /** Paged search: pages requested and pages that failed after their retries. */
+  pagesRead?: number;
+  pagesFailed?: number;
 };
 
 type VtexHttpResponse = {
@@ -653,4 +659,89 @@ export async function fetchVtexProducts({
   }
 
   throw lastError;
+}
+
+// Paged catalog search (#568). The persisted-query search above is the
+// storefront autocomplete: it has no paging and tops out at 50 results. The
+// public REST catalog search pages with _from/_to (50 per page, and VTEX
+// refuses to page beyond 2500), and searches either full text (`ft`) or a
+// category path (`fq=C:/<department>/<category>/`). Its payload is the same
+// one the EAN top-up and the promotion capture read, so the Carrefour
+// teasers come with it and need no extra read per product.
+export const VTEX_CATALOG_PAGE_SIZE = 50;
+export const MAX_VTEX_CATALOG_RESULTS = 2500;
+
+export type VtexCatalogSearch = { kind: "text"; value: string } | { kind: "category"; path: string };
+
+export function buildVtexCatalogPageRequest(search: VtexCatalogSearch, from: number, to: number) {
+  const filter = search.kind === "text"
+    // Same hand encoding as the term fallback: `ft` rejects `+` for spaces.
+    ? `ft=${encodeURIComponent(search.value)}`
+    : `fq=C:${search.path}`;
+  return { pathname: "/api/catalog_system/pub/products/search", search: `${filter}&_from=${from}&_to=${to}` };
+}
+
+async function fetchVtexCatalogPage(baseUrl: string, request: { pathname: string; search: string }, retries: number, dependencies: VtexClientDependencies) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      return (await requestVtexCatalogPayload({ baseUrl, request, dependencies })).payload;
+    } catch (error) {
+      lastError = error;
+      await waitForVtexRetry(attempt, retries, dependencies);
+    }
+  }
+  throw lastError;
+}
+
+function pageRecordCount(payload: unknown) {
+  return Array.isArray(payload) ? payload.length : 0;
+}
+
+// Reads pages until `limit` products, a short page (the search is exhausted)
+// or the VTEX paging ceiling. A first page that fails raises like any other
+// search; a later page that fails stops the paging and keeps what was read.
+export async function fetchVtexCatalogPages({
+  baseUrl,
+  search,
+  limit,
+  retries = 3,
+  dependencies = {},
+}: {
+  baseUrl: string;
+  search: VtexCatalogSearch;
+  limit: number;
+  retries?: number;
+  dependencies?: VtexClientDependencies;
+}): Promise<VtexProductsResult> {
+  const cap = Math.min(Math.max(Math.floor(limit), 1), MAX_VTEX_CATALOG_RESULTS);
+  const products = new Map<string, NormalizedProduct>();
+  const promoByEan = new Map<string, SimplePromotion | null>();
+  let pagesRead = 0;
+  let pagesFailed = 0;
+
+  for (let from = 0; from < cap; from += VTEX_CATALOG_PAGE_SIZE) {
+    const to = Math.min(from + VTEX_CATALOG_PAGE_SIZE, cap) - 1;
+    let payload: unknown;
+    try {
+      payload = await fetchVtexCatalogPage(baseUrl, buildVtexCatalogPageRequest(search, from, to), retries, dependencies);
+    } catch (error) {
+      if (pagesRead === 0) throw error;
+      pagesFailed += 1;
+      break;
+    }
+    pagesRead += 1;
+    for (const product of normalizeVtexCatalogPayload(payload, baseUrl)) {
+      if (products.has(product.ean)) continue;
+      products.set(product.ean, product);
+      promoByEan.set(product.ean, extractSimplePromotionFromPayload(payload, product.ean));
+    }
+    if (pageRecordCount(payload) < to - from + 1) break;
+  }
+
+  const result: VtexProductsResult = Array.from(products.values()).slice(0, cap);
+  result.promoByEan = promoByEan;
+  result.pagesRead = pagesRead;
+  result.pagesFailed = pagesFailed;
+  return result;
 }

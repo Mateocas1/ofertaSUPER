@@ -46,9 +46,16 @@ lock, applies the freshness gate, and regenerates the snapshot.
      `v1-refresh-<YYYYMMDD>-f-<ordinal>` for the fallback); a completed batch
      replays from its checkpoint and does not query again. The mode keeps a
      same-day discovered/fallback flip from colliding with the other plan's
-     checkpoints. A discovered batch searches up to 50 results
+     checkpoints. A discovered batch searches up to 200 results
      (`resultsPerBatch`) and carries no expected GTINs; a frozen-plan batch
-     keeps its 25-result contract. A category name is a label, not a query
+     keeps its 25-result contract. Up to 50 results a batch uses the
+     persisted-query search (the storefront autocomplete, one page); above 50
+     it pages through the public REST catalog search
+     (`/api/catalog_system/pub/products/search`, 50 per `_from/_to` page) until
+     the limit or a short page. That payload already carries the Carrefour
+     promotion teasers, so those products need no extra promo read. A later
+     page that fails keeps the pages already read and logs `[refresh]
+     <batchId>: <n> search page(s) failed`. A category name is a label, not a query
      ("Bañaderas, Cambiadores y Pelelas" as one phrase can match nothing), so a
      discovered batch whose search returns no product retries with up to 3 of
      the name's meaningful words, one at a time, and keeps the first that
@@ -119,7 +126,7 @@ catalog-size change on a real run.
 ### Freshness coverage (known limitation)
 
 A batch searches by term and takes at most its configured results
-(25 for a frozen-plan batch, up to 50 for a discovered one). With each
+(25 for a frozen-plan batch, up to 200 for a discovered one). With each
 supermarket's ranking rotation, some offers can fall outside the day's
 coverage. The first refresh (2026-09-28) landed at 79.6% / 85.5% / 84.1% per
 supermarket, below the 90% target: it was reported and the options were widening

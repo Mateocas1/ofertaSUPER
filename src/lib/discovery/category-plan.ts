@@ -11,7 +11,8 @@
 // cloud job stays far below its 60-minute timeout.
 
 export const MAX_BATCHES_PER_RUN = 60;
-export const MAX_RESULTS_PER_BATCH = 50;
+// Above 50 a batch pages through the REST catalog search (50 per page).
+export const MAX_RESULTS_PER_BATCH = 200;
 
 export type CategoryTreeNode = {
   id: number;

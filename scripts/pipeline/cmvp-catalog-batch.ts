@@ -84,10 +84,11 @@ function normalizeContractText(input: CmvpCatalogBatchRequest) {
 }
 
 // A frozen-plan batch pins its exact 25-result contract; a discovered refresh
-// batch searches a live category and may take up to 50 results, with no known
-// expected GTINs (the plan is built from the category tree at run time).
+// batch searches a live category and may take up to 200 results (four pages of
+// the paged catalog search), with no known expected GTINs (the plan is built
+// from the category tree at run time).
 const MAX_PLAN_COUNT = 25;
-const MAX_REFRESH_COUNT = 50;
+export const MAX_REFRESH_COUNT = 200;
 
 export function validateContractCountAndGtins(input: CmvpCatalogBatchRequest) {
   const max = input.refresh ? MAX_REFRESH_COUNT : MAX_PLAN_COUNT;
