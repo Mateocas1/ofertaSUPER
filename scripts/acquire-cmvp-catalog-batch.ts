@@ -88,7 +88,7 @@ export function createDependencies(output: string): CmvpCatalogBatchDependencies
       let runId: number | undefined;
       try {
         if (!request.dryRun) {
-          const supermarket = await db.supermarket.findFirst({ where: { slug: request.source, is_active: true, is_vtex: true }, select: { id: true } });
+          const supermarket = await db.supermarket.findFirst({ where: { slug: request.source, is_active: true }, select: { id: true } });
           if (!supermarket) throw new Error(`active staged source not found: ${request.source}`);
           const run = await db.ingestionRun.create({ data: { batch_id: request.batchId, source_slug: request.source, supermarket_id: supermarket.id, started_at: startedAt, status: "RUNNING", vtex_hash: process.env.VTEX_SHA256_HASH ?? null }, select: { id: true } });
           runId = run.id;

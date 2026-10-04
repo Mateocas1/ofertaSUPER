@@ -67,6 +67,14 @@
       "Mascotas",
       "Mundo Bebe",
       "Pastas Frescas"
+    ],
+    "coto": [
+      "Almacén",
+      "Frescos",
+      "Bebidas",
+      "Congelados",
+      "Perfumería",
+      "Limpieza"
     ]
   }
 }

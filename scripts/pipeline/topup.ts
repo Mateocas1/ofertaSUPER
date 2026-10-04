@@ -1,20 +1,21 @@
+import { lookupCotoByEan } from "../../src/lib/coto/client";
 import { db } from "../../src/lib/db";
 import { extractSimplePromotionFromPayload, type SimplePromotion } from "../../src/lib/promotions/capture";
 import { REFRESH_SOURCES } from "../../src/lib/refresh-sources";
 import { getSupermarketBySlug } from "../../src/lib/supermarkets";
 import { normalizeVtexCatalogPayload } from "../../src/lib/vtex/client";
 import type { NormalizedProduct } from "../../src/lib/vtex/normalize";
-import { readTopUpOffer, type TopUpRead } from "../../src/lib/vtex/topup";
+import { readTopUpOffer, type TopUpObservation } from "../../src/lib/vtex/topup";
 import { persistStagedProducts } from "./stage";
 import { reconcileStageProducts } from "./reconcile";
 import { readAllSources, readSourceOffers, type SourceReads, type TopUpOfferRef } from "./topup-reads";
 import { validateStageProducts } from "./validate";
 
 // Gate 6 top-up: offers the daily searches missed are re-read by EAN through
-// the same public REST read the promotion capture uses, staged in the same
+// the same public REST read the promotion capture uses (Coto: its own search), staged in the same
 // format with the same observation instant, and reconciled into the catalog.
 // A read failure leaves the offer untouched and counts in the summary; it
-// never aborts the top-up. The three sources are read concurrently and
+// never aborts the top-up. The sources are read concurrently and
 // written one after another (see ./topup-reads.ts).
 
 const TOP_UP_SOURCES = REFRESH_SOURCES;
@@ -62,14 +63,42 @@ async function unobservedOffers(slug: string, runStartedAt: Date): Promise<TopUp
       and sp.last_checked_at < ${runStartedAt}`;
 }
 
-function readSource(slug: string, offers: TopUpOfferRef[], delayMs: number): Promise<SourceReads<TopUpRead>> {
-  const baseUrl = getSupermarketBySlug(slug).baseUrl;
-  return readSourceOffers({ slug, offers, delayMs, sleep, readOffer: (ean) => readTopUpOffer(baseUrl, ean) });
+// One shape for every source's read: the product as the source sells it
+// (undefined when absent), its observation, and the promotion when the read
+// carries one. VTEX stores read their public REST search by EAN; Coto reads
+// its own search.
+type OfferRead = { ok: boolean; observation: TopUpObservation | null; product?: NormalizedProduct; promo?: SimplePromotion | null };
+
+async function readVtexOffer(slug: string, baseUrl: string, ean: string): Promise<OfferRead> {
+  const read = await readTopUpOffer(baseUrl, ean);
+  if (!read.ok || !read.payload) return read;
+  return {
+    ...read,
+    product: normalizeVtexCatalogPayload(read.payload, baseUrl).find((entry) => entry.ean === ean),
+    ...(slug === "carrefour" ? { promo: extractSimplePromotionFromPayload(read.payload, ean) } : {}),
+  };
 }
 
-async function writeSource(source: SourceReads<TopUpRead>, stamp: string): Promise<number> {
+async function readCotoOffer(ean: string): Promise<OfferRead> {
+  try {
+    const found = await lookupCotoByEan(ean);
+    if (!found) return { ok: true, observation: { found: false, price: null, listPrice: null, isAvailable: false, productUrl: null } };
+    const { product, promo } = found;
+    return { ok: true, product, promo, observation: { found: true, price: product.price, listPrice: product.listPrice, isAvailable: product.isAvailable, productUrl: product.productUrl } };
+  } catch {
+    return { ok: false, observation: null };
+  }
+}
+
+function readSource(slug: string, offers: TopUpOfferRef[], delayMs: number): Promise<SourceReads<OfferRead>> {
+  const baseUrl = getSupermarketBySlug(slug).baseUrl;
+  const readOffer = slug === "coto" ? readCotoOffer : (ean: string) => readVtexOffer(slug, baseUrl, ean);
+  return readSourceOffers({ slug, offers, delayMs, sleep, readOffer });
+}
+
+async function writeSource(source: SourceReads<OfferRead>, stamp: string): Promise<number> {
   const { slug } = source;
-  const supermarket = await db.supermarket.findFirst({ where: { slug, is_active: true, is_vtex: true }, select: { id: true } });
+  const supermarket = await db.supermarket.findFirst({ where: { slug, is_active: true }, select: { id: true } });
   if (!supermarket) throw new Error(`active staged source not found: ${slug}`);
 
   const batchId = `v1-refresh-${stamp}-topup-${slug}`;
@@ -78,17 +107,11 @@ async function writeSource(source: SourceReads<TopUpRead>, stamp: string): Promi
     select: { id: true },
   });
 
-  const baseUrl = getSupermarketBySlug(slug).baseUrl;
   const rows: NormalizedProduct[] = [];
   const promoByEan = new Map<string, SimplePromotion | null>();
   for (const { offer, read } of source.reads) {
-    const normalized = read.payload
-      ? normalizeVtexCatalogPayload(read.payload, baseUrl).find((entry) => entry.ean === offer.product_ean)
-      : undefined;
-    rows.push(rowFor(normalized, offer.product_ean, offer.name, read.observation!));
-    if (slug === "carrefour" && read.payload) {
-      promoByEan.set(offer.product_ean, extractSimplePromotionFromPayload(read.payload, offer.product_ean));
-    }
+    rows.push(rowFor(read.product, offer.product_ean, offer.name, read.observation!));
+    if (read.promo !== undefined) promoByEan.set(offer.product_ean, read.promo);
   }
 
   await persistStagedProducts(false, run.id, slug, rows, promoByEan);
@@ -102,7 +125,7 @@ export async function topUpUnobservedOffers({ stamp, runStartedAt, delayMs = REA
   const sources = [];
   for (const slug of TOP_UP_SOURCES) sources.push({ slug, offers: await unobservedOffers(slug, runStartedAt) });
 
-  const reads = await readAllSources<TopUpRead>(sources, ({ slug, offers }) => readSource(slug, offers, delayMs));
+  const reads = await readAllSources<OfferRead>(sources, ({ slug, offers }) => readSource(slug, offers, delayMs));
 
   let offersFresh = 0;
   for (const source of reads) {

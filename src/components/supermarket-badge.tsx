@@ -10,6 +10,7 @@ type SupermarketBadgeProps = {
 
 const badgeStyles: Record<string, string> = {
   carrefour: "bg-[#0f4c81] text-white",
+  coto: "bg-[#c8102e] text-white",
   dia: "bg-[#b81c2a] text-white",
   disco: "bg-[#a63a25] text-white",
   jumbo: "bg-[#1d6b52] text-white",

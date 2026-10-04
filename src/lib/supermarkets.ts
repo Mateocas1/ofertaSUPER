@@ -3,7 +3,7 @@ export type SupermarketDefinition = {
   slug: string;
   logoUrl: string;
   baseUrl: string;
-  adapter: "vtex";
+  adapter: "vtex" | "coto";
 };
 
 export const SUPERMARKETS: SupermarketDefinition[] = [
@@ -48,6 +48,13 @@ export const SUPERMARKETS: SupermarketDefinition[] = [
     logoUrl: "https://logo.clearbit.com/masonline.com.ar",
     baseUrl: "https://www.masonline.com.ar",
     adapter: "vtex",
+  },
+  {
+    name: "Coto",
+    slug: "coto",
+    logoUrl: "https://logo.clearbit.com/coto.com.ar",
+    baseUrl: "https://www.coto.com.ar",
+    adapter: "coto",
   },
 ];
 

@@ -224,6 +224,7 @@ export function searchSnapshotSummaries(options: {
 
 const SUPERMARKET_NAMES: Record<string, string> = {
   carrefour: "Carrefour",
+  coto: "Coto",
   disco: "Disco",
   jumbo: "Jumbo",
   vea: "Vea",
@@ -231,6 +232,7 @@ const SUPERMARKET_NAMES: Record<string, string> = {
 
 const SUPERMARKET_LOGOS: Record<string, string> = {
   carrefour: "https://logo.clearbit.com/carrefour.com.ar",
+  coto: "https://logo.clearbit.com/coto.com.ar",
   disco: "https://logo.clearbit.com/disco.com.ar",
   jumbo: "https://logo.clearbit.com/jumbo.com.ar",
   vea: "https://logo.clearbit.com/vea.com.ar",
