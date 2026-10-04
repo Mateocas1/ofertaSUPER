@@ -28,6 +28,14 @@ lock, applies the freshness gate, and regenerates the snapshot.
    npm run refresh:catalog
    ```
 
+   - Refreshes the stores in `src/lib/refresh-sources.ts` (Carrefour, Disco,
+     Jumbo and, since 2026-10-04, Vea). Adding a VTEX store is that list, its
+     departments in `config/catalog-discovery.json` and an active row in
+     `supermarkets` (Vea's comes from the
+     `20261004000000_vea_refresh_source` migration). Only a batch that
+     searches through the persisted query (a text search of at most 50
+     results) resolves the store's VTEX hash; the paged searches need none, so
+     a store whose hash cannot be resolved does not stop the run.
    - Builds the plan at run time: reads `config/catalog-discovery.json` (the
      allowlisted grocery departments per store, `maxBatchesPerRun` and
      `resultsPerBatch`) and reads each store's public VTEX category tree, then
@@ -122,7 +130,7 @@ in the summary (`top-up reads ok/failed`) without aborting the run. With the
 top-up, the first day reached 100% <24 h in the three supermarkets (327 reads,
 0 failures).
 
-The three supermarkets are read at the same time (each is its own host and
+The supermarkets are read at the same time (each is its own host and
 keeps its own sequential pace and delay, so no store sees more traffic than
 before); the staging and reconcile writes still run one supermarket after
 another, because Disco and Jumbo share EANs. Each source logs

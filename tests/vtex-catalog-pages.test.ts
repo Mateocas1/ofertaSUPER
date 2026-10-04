@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildVtexCatalogPageRequest, fetchVtexCatalogPages } from "../src/lib/vtex/client";
+import { buildVtexCatalogPageRequest, fetchVtexCatalogPages, searchUsesPersistedQuery } from "../src/lib/vtex/client";
 
 const baseUrl = "https://www.example.com";
 
@@ -44,6 +44,13 @@ function client(...responses: Array<unknown[] | Error>) {
 }
 
 describe("paged VTEX catalog search", () => {
+  it("needs the persisted query (and its hash) only for a one-page text search", () => {
+    assert.equal(searchUsesPersistedQuery({ count: 25 }), true);
+    assert.equal(searchUsesPersistedQuery({ count: 50 }), true);
+    assert.equal(searchUsesPersistedQuery({ count: 51 }), false);
+    assert.equal(searchUsesPersistedQuery({ count: 25, categoryPath: "/1/2/" }), false);
+  });
+
   it("builds text and category page requests (spaces percent-encoded, never +)", () => {
     assert.equal(buildVtexCatalogPageRequest({ kind: "text", value: "carne de cerdo" }, 50, 99).search, "ft=carne%20de%20cerdo&_from=50&_to=99");
     const category = buildVtexCatalogPageRequest({ kind: "category", path: "/12/345/" }, 0, 49);

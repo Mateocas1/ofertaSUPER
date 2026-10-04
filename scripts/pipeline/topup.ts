@@ -1,5 +1,6 @@
 import { db } from "../../src/lib/db";
 import { extractSimplePromotionFromPayload, type SimplePromotion } from "../../src/lib/promotions/capture";
+import { REFRESH_SOURCES } from "../../src/lib/refresh-sources";
 import { getSupermarketBySlug } from "../../src/lib/supermarkets";
 import { normalizeVtexCatalogPayload } from "../../src/lib/vtex/client";
 import type { NormalizedProduct } from "../../src/lib/vtex/normalize";
@@ -16,7 +17,7 @@ import { validateStageProducts } from "./validate";
 // never aborts the top-up. The three sources are read concurrently and
 // written one after another (see ./topup-reads.ts).
 
-const TOP_UP_SOURCES = ["carrefour", "disco", "jumbo"];
+const TOP_UP_SOURCES = REFRESH_SOURCES;
 const READ_DELAY_MS = 200;
 
 export type TopUpSummary = {

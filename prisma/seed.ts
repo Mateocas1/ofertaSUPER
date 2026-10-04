@@ -6,6 +6,7 @@ const CMVP_SUPERMARKETS = [
   { name: "Disco", slug: "disco", logo_url: "https://logo.clearbit.com/disco.com.ar", base_url: "https://www.disco.com.ar" },
   { name: "Jumbo", slug: "jumbo", logo_url: "https://logo.clearbit.com/jumbo.com.ar", base_url: "https://www.jumbo.com.ar" },
   { name: "Carrefour", slug: "carrefour", logo_url: "https://logo.clearbit.com/carrefour.com.ar", base_url: "https://www.carrefour.com.ar" },
+  { name: "Vea", slug: "vea", logo_url: "https://logo.clearbit.com/vea.com.ar", base_url: "https://www.vea.com.ar" },
 ] as const;
 
 async function main() {

@@ -671,6 +671,13 @@ export async function fetchVtexProducts({
 export const VTEX_CATALOG_PAGE_SIZE = 50;
 export const MAX_VTEX_CATALOG_RESULTS = 2500;
 
+// Only an up-to-one-page text search goes through the persisted query (and so
+// needs the store's persisted-query hash); everything else is the paged REST
+// search, which needs no hash at all.
+export function searchUsesPersistedQuery({ count, categoryPath }: { count: number; categoryPath?: string }) {
+  return !categoryPath && count <= VTEX_CATALOG_PAGE_SIZE;
+}
+
 export type VtexCatalogSearch = { kind: "text"; value: string } | { kind: "category"; path: string };
 
 export function buildVtexCatalogPageRequest(search: VtexCatalogSearch, from: number, to: number) {

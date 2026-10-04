@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 
 import { normalizeGtin } from "../../src/lib/identity/gtin";
+import { REFRESH_SOURCES } from "../../src/lib/refresh-sources";
 
 // The acquisition contract accepts exactly these stores (the staged sources of
 // the daily refresh). Discovery refuses to plan for anything else.
-export const CMVP_CATALOG_SOURCES = ["disco", "jumbo", "carrefour"] as const;
+export const CMVP_CATALOG_SOURCES = REFRESH_SOURCES;
 
 const SOURCES = new Set<string>(CMVP_CATALOG_SOURCES);
 
@@ -75,7 +76,7 @@ function normalizeGtins(values: string[], label: string) {
 }
 
 function validateContractSource(source: string) {
-  if (!SOURCES.has(source)) throw new Error("source must be exactly one of disco, jumbo, carrefour");
+  if (!SOURCES.has(source)) throw new Error(`source must be exactly one of ${CMVP_CATALOG_SOURCES.join(", ")}`);
 }
 
 function normalizeContractText(input: CmvpCatalogBatchRequest) {

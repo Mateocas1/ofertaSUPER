@@ -18,7 +18,8 @@
       "Limpieza",
       "Mascotas",
       "Mundo Bebe",
-      "Pastas Frescas"
+      "Pastas Frescas",
+      "Felices Fiestas"
     ],
     "jumbo": [
       "Almacén",
@@ -35,7 +36,8 @@
       "Limpieza",
       "Mascotas",
       "Mundo Bebe",
-      "Pastas Frescas"
+      "Pastas Frescas",
+      "Felices Fiestas"
     ],
     "carrefour": [
       "Almacén",
@@ -50,6 +52,24 @@
       "Perfumería y farmacia",
       "Mundo Bebé",
       "Mascotas"
+    ],
+    "vea": [
+      "Almacén",
+      "Bebidas",
+      "Frutas y Verduras",
+      "Carnes",
+      "Pescados y Mariscos",
+      "Quesos y Fiambres",
+      "Lácteos",
+      "Congelados",
+      "Panaderia y Pasteleria",
+      "Rotiseria",
+      "Perfumería",
+      "Limpieza",
+      "Mascotas",
+      "Mundo Bebe",
+      "Pastas Frescas",
+      "Felices Fiestas"
     ]
   }
 }

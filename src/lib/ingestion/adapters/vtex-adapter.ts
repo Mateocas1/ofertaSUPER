@@ -6,7 +6,7 @@ import {
 	fetchVtexDirectProducts,
 	fetchVtexProducts,
 	probeVtexHash,
-	VTEX_CATALOG_PAGE_SIZE,
+	searchUsesPersistedQuery,
 	type VtexCatalogSearch,
 } from "@/lib/vtex/client";
 import type { NormalizedProduct } from "@/lib/vtex/normalize";
@@ -50,11 +50,11 @@ export class VtexSourceAdapter implements SourceAdapter {
     const count = options.count ?? 50;
     // A category path, or more results than one autocomplete page holds,
     // goes through the paged REST catalog search instead.
-    if (options.categoryPath) {
-      return this.fetchCatalogPages([{ kind: "category", path: options.categoryPath }], count, options.retries);
-    }
-    if (count > VTEX_CATALOG_PAGE_SIZE) {
-      return this.fetchCatalogPages(terms.map((value) => ({ kind: "text", value })), count, options.retries);
+    if (!searchUsesPersistedQuery({ count, categoryPath: options.categoryPath })) {
+      const searches: VtexCatalogSearch[] = options.categoryPath
+        ? [{ kind: "category", path: options.categoryPath }]
+        : terms.map((value) => ({ kind: "text", value }));
+      return this.fetchCatalogPages(searches, count, options.retries);
     }
 
     const uniqueProducts = new Map<string, NormalizedProduct>();

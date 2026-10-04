@@ -7,6 +7,8 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { db } from "../src/lib/db";
+import { REFRESH_SOURCES } from "../src/lib/refresh-sources";
+import { searchUsesPersistedQuery } from "../src/lib/vtex/client";
 import { getSupermarketBySlug } from "../src/lib/supermarkets";
 import {
   handleVtexHashUnavailable,
@@ -140,7 +142,7 @@ async function freshnessBySupermarket() {
            count(*) filter (where sp.last_checked_at >= now() - interval '24 hours') as fresh
     from supermarket_products sp
     join supermarkets s on s.id = sp.supermarket_id
-    where s.slug in ('carrefour', 'disco', 'jumbo') and sp.price is not null
+    where s.slug = any(${[...REFRESH_SOURCES]}) and sp.price is not null
     group by s.slug
     order by s.slug`;
   return rows.map(({ slug, total, fresh }) => ({
@@ -264,6 +266,18 @@ function addOutcome(totals: RunTotals, outcome: BatchOutcome) {
   totals.rejected.push(...outcome.rejectedProducts);
 }
 
+// Only a batch that searches through the persisted query needs the store's
+// hash. A paged batch (category or more than 50 results) runs without one, so
+// a store whose hash cannot be resolved (e.g. a newly added one) does not take
+// the run down, and its runs do not record another store's hash.
+async function applyHashFor(batch: RefreshPlanBatch, explicitHash: string | null) {
+  if (searchUsesPersistedQuery(batch)) {
+    process.env.VTEX_SHA256_HASH = await resolveHashForSource(batch.source, explicitHash);
+  } else {
+    delete process.env.VTEX_SHA256_HASH;
+  }
+}
+
 async function runBatches(batches: RefreshPlanBatch[], stamp: string, mode: RefreshPlanResolution["mode"], artifactsDir: string, explicitHash: string | null) {
   const totals = emptyTotals();
   const budgetMs = searchBudgetMs();
@@ -274,7 +288,7 @@ async function runBatches(batches: RefreshPlanBatch[], stamp: string, mode: Refr
       process.stdout.write(`[refresh] search budget of ${budgetMs / 60_000}m spent: skipped the last ${totals.skipped} batches (searched on a later rotation)\n`);
       break;
     }
-    process.env.VTEX_SHA256_HASH = await resolveHashForSource(batch.source, explicitHash);
+    await applyHashFor(batch, explicitHash);
     addOutcome(totals, await runBatch(batch, stamp, mode, artifactsDir));
   }
   return totals;
