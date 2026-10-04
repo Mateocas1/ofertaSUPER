@@ -95,8 +95,9 @@ export function createDependencies(output: string): CmvpCatalogBatchDependencies
         }
         const staged = await stageWithFallbackTerms({
           term: request.term,
+          categoryPath: request.categoryPath,
           refresh: request.refresh === true,
-          stage: (term) => stageSourceProducts({ runId, slug: request.source, dryRun: request.dryRun, queryTerms: [term], queryLimit: 1, count: request.count }),
+          stage: ({ term, categoryPath }) => stageSourceProducts({ runId, slug: request.source, dryRun: request.dryRun, queryTerms: [term], queryLimit: 1, count: request.count, categoryPath }),
         });
         const stage = staged.result;
         logSearch(request.batchId, staged);

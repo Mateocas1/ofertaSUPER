@@ -256,3 +256,22 @@ test("parseDiscoveryConfig normalizes the allowlist and applies the configured c
   assert.equal(parsed.resultsPerBatch, 40);
   assert.deepEqual(parsed.departments.disco, ["almacen", "bebidas"]);
 });
+
+test("discovered batches carry the VTEX category path of their child category", () => {
+  const plan = buildDiscoveryPlan({
+    config: config({ maxBatchesPerRun: 4, departments: { disco: ["Almacén", "Bebidas"] } }),
+    treesBySource: { disco: parseCategoryTree(ROTATION_TREE) },
+    rotationDay: 0,
+  });
+
+  assert.deepEqual(
+    plan.batches.map(({ term, categoryPath }) => [term, categoryPath]),
+    [["arroz", "/1/2/"], ["aguas", "/5/6/"], ["cafe", "/1/3/"], ["gaseosas", "/5/7/"]],
+  );
+});
+
+test("a leaf department is searched by its own category path", () => {
+  const leaf = parseCategoryTree([{ id: 9, name: "Frutas y Verduras", hasChildren: false, children: [] }]);
+  const collected = collectCategoryTerms(leaf, ["frutas y verduras"]);
+  assert.equal(collected.pathsByTerm.get("frutas y verduras"), "/9/");
+});

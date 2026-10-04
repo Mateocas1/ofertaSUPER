@@ -1,11 +1,16 @@
 import { fallbackSearchTerms } from "../../src/lib/discovery/category-plan";
 
-// Option 2 of the empty-category fix: a discovered refresh batch whose
-// category name returns nothing retries with the name's meaningful words. The
-// first word that returns products wins; the rest are not searched, so a
-// batch never sends more than 1 + MAX_FALLBACK_TERMS queries. A batch that
-// returned anything on its first search never falls back, and a frozen-plan
-// batch (refresh=false) never does either: its term is a pinned contract.
+// The search attempts of one batch, tried in order until one returns products:
+// 1. the VTEX category itself (`fq=C:/<department>/<category>/`), when the
+//    discovered plan knows its path — exact, and independent of how the
+//    category is named;
+// 2. the category name as full text;
+// 3. up to MAX_FALLBACK_TERMS meaningful words of the name, one at a time
+//    ("Bañaderas, Cambiadores y Pelelas" as one phrase can match nothing).
+// A batch that returned anything stops there. A frozen-plan batch
+// (refresh=false) only ever searches its term: it is a pinned contract.
+
+export type SearchAttempt = { term: string; categoryPath?: string };
 
 export type StagedSearch = { productsFetched: number; queriesSent: number };
 
@@ -16,28 +21,42 @@ export type FallbackStageResult<T extends StagedSearch> = {
   queriesSent: number;
 };
 
+export function searchAttempts({ term, categoryPath, refresh }: { term: string; categoryPath?: string; refresh: boolean }): SearchAttempt[] {
+  if (!refresh) return [{ term }];
+  return [
+    ...(categoryPath ? [{ term, categoryPath }] : []),
+    { term },
+    ...fallbackSearchTerms(term).map((word) => ({ term: word })),
+  ];
+}
+
+export function attemptLabel(attempt: SearchAttempt) {
+  return attempt.categoryPath ? `category ${attempt.categoryPath}` : attempt.term;
+}
+
 export async function stageWithFallbackTerms<T extends StagedSearch>({
   term,
+  categoryPath,
   refresh,
   stage,
 }: {
   term: string;
+  categoryPath?: string;
   refresh: boolean;
-  stage: (term: string) => Promise<T>;
+  stage: (attempt: SearchAttempt) => Promise<T>;
 }): Promise<FallbackStageResult<T>> {
-  let result = await stage(term);
-  let searchedTerm = term;
+  const [first, ...rest] = searchAttempts({ term, categoryPath, refresh });
+  let result = await stage(first!);
+  let searchedTerm = attemptLabel(first!);
   let queriesSent = result.queriesSent;
-  const attemptedTerms = [term];
-  if (!refresh || result.productsFetched > 0) return { result, searchedTerm, attemptedTerms, queriesSent };
+  const attemptedTerms = [searchedTerm];
 
-  for (const fallback of fallbackSearchTerms(term)) {
-    const retry = await stage(fallback);
-    attemptedTerms.push(fallback);
-    queriesSent += retry.queriesSent;
-    result = retry;
-    searchedTerm = fallback;
-    if (retry.productsFetched > 0) break;
+  for (const attempt of rest) {
+    if (result.productsFetched > 0) break;
+    result = await stage(attempt);
+    searchedTerm = attemptLabel(attempt);
+    attemptedTerms.push(searchedTerm);
+    queriesSent += result.queriesSent;
   }
   return { result, searchedTerm, attemptedTerms, queriesSent };
 }

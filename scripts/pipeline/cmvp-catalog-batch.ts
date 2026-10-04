@@ -19,6 +19,9 @@ export type CmvpCatalogBatchRequest = {
   // Gate 6 daily refresh: the source catalog evolves, so the plan's expected
   // GTINs are not re-asserted; admitted products must match fetched instead.
   refresh?: boolean;
+  // Discovered refresh batches only: the VTEX category path searched before
+  // the term (`/<department>/<category>/`).
+  categoryPath?: string;
 };
 
 export type RejectedProduct = { gtin: string; qualityFlags: string[] };
@@ -104,6 +107,15 @@ export function validateContractCountAndGtins(input: CmvpCatalogBatchRequest) {
   return expectedGtins;
 }
 
+const CATEGORY_PATH = /^(\/\d+)+\/$/;
+
+function validateCategoryPath(input: CmvpCatalogBatchRequest) {
+  if (input.categoryPath === undefined) return undefined;
+  if (!input.refresh) throw new Error("categoryPath is only valid for a refresh batch");
+  if (!CATEGORY_PATH.test(input.categoryPath)) throw new Error("categoryPath must look like /<department>/<category>/");
+  return input.categoryPath;
+}
+
 function validateWriteConfirmation(input: CmvpCatalogBatchRequest) {
   if (!input.dryRun && !input.confirmWrite) throw new Error("write requires explicit confirmation");
 }
@@ -112,12 +124,15 @@ function normalizeContract(input: CmvpCatalogBatchRequest) {
   validateContractSource(input.source);
   const { batchId, term } = normalizeContractText(input);
   const expectedGtins = validateContractCountAndGtins(input);
+  const categoryPath = validateCategoryPath(input);
   validateWriteConfirmation(input);
-  return { ...input, batchId, term, expectedGtins };
+  return { ...input, batchId, term, expectedGtins, categoryPath };
 }
 
 function contractDigest(request: NormalizedRequest) {
-  return digest({ executionMode: request.dryRun ? "dry-run" : "confirmed-write", batchId: request.batchId, source: request.source, term: request.term, count: request.count, expectedGtins: request.expectedGtins });
+  // The category path joins the digest only when present, so a batch without
+  // one keeps the digest it always had.
+  return digest({ executionMode: request.dryRun ? "dry-run" : "confirmed-write", batchId: request.batchId, source: request.source, term: request.term, count: request.count, expectedGtins: request.expectedGtins, ...(request.categoryPath ? { categoryPath: request.categoryPath } : {}) });
 }
 
 function sameSet(left: string[], right: string[]) { return left.length === right.length && left.every((value, index) => value === right[index]); }

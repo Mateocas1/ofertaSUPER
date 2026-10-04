@@ -115,6 +115,24 @@ describe("CMVP catalog batch", () => {
     ]) await assert.rejects(() => runCmvpCatalogBatch(invalid, dependencies()));
   });
 
+  it("accepts a category path only on a refresh batch and only as /<id>/<id>/", async () => {
+    const admitted = ["7790000000003"];
+    const refreshDependencies = () => dependencies({
+      acquire: async () => ({ runId: 12, startedAt: "2026-03-11T00:00:00.000Z", finishedAt: "2026-03-11T00:00:01.000Z", fetchedGtins: [...admitted], admittedGtins: [...admitted], rejectedCount: 0, rejectedProducts: [], error: null }),
+    });
+
+    const withPath = await runCmvpCatalogBatch(request({ refresh: true, count: 200, expectedGtins: [], categoryPath: "/12/345/" }), refreshDependencies());
+    const withoutPath = await runCmvpCatalogBatch(request({ refresh: true, count: 200, expectedGtins: [] }), refreshDependencies());
+    assert.equal(withPath.artifact.state, "completed");
+    assert.notEqual(withPath.artifact.contractDigest, withoutPath.artifact.contractDigest);
+
+    for (const invalid of [
+      request({ categoryPath: "/12/345/" }),
+      request({ refresh: true, count: 200, expectedGtins: [], categoryPath: "12/345" }),
+      request({ refresh: true, count: 200, expectedGtins: [], categoryPath: "/12/abc/" }),
+    ]) await assert.rejects(() => runCmvpCatalogBatch(invalid, dependencies()));
+  });
+
   it("creates deterministic dry-run artifacts without persistence", async () => {
     const result = await runCmvpCatalogBatch(request(), dependencies());
     assert.equal(result.artifact.state, "completed");

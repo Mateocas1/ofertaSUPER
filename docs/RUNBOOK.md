@@ -48,7 +48,11 @@ lock, applies the freshness gate, and regenerates the snapshot.
      same-day discovered/fallback flip from colliding with the other plan's
      checkpoints. A discovered batch searches up to 200 results
      (`resultsPerBatch`) and carries no expected GTINs; a frozen-plan batch
-     keeps its 25-result contract. Up to 50 results a batch uses the
+     keeps its 25-result contract. Each discovered batch carries the VTEX
+     path of its category (`/<department>/<category>/`, from the tree ids)
+     and searches the category itself first (`fq=C:<path>`), which is exact
+     and does not depend on how the category is named. Up to 50 results a
+     text search uses the
      persisted-query search (the storefront autocomplete, one page); above 50
      it pages through the public REST catalog search
      (`/api/catalog_system/pub/products/search`, 50 per `_from/_to` page) until
@@ -57,9 +61,10 @@ lock, applies the freshness gate, and regenerates the snapshot.
      page that fails keeps the pages already read and logs `[refresh]
      <batchId>: <n> search page(s) failed`. A category name is a label, not a query
      ("Bañaderas, Cambiadores y Pelelas" as one phrase can match nothing), so a
-     discovered batch whose search returns no product retries with up to 3 of
-     the name's meaningful words, one at a time, and keeps the first that
-     returns products (`[refresh] <batchId>: "<term>" returned nothing;
+     discovered batch whose category search returns no product retries with
+     the category name as text and then with up to 3 of the name's
+     meaningful words, one at a time, and keeps the first that returns
+     products (`[refresh] <batchId>: "<term>" returned nothing;
      retried [...] -> "<word>" fetched <n>`).
    - Captures simple Carrefour promos (PromotionTeasers by EAN, public REST
      read) during staging; a failed promo read leaves the promo null, counts in

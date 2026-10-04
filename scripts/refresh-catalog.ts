@@ -105,6 +105,7 @@ async function runBatch(batch: RefreshPlanBatch, stamp: string, mode: RefreshPla
     dryRun: false,
     confirmWrite: true,
     refresh: true,
+    ...(batch.categoryPath ? { categoryPath: batch.categoryPath } : {}),
     output: resolve(artifactsDir, `${batchId}.checkpoint.json`),
   };
 

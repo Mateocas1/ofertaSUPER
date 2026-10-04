@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { fallbackSearchTerms, MAX_FALLBACK_TERMS } from "../src/lib/discovery/category-plan";
-import { stageWithFallbackTerms } from "../scripts/pipeline/search-fallback";
+import { searchAttempts, stageWithFallbackTerms, type SearchAttempt } from "../scripts/pipeline/search-fallback";
 
 describe("fallback search terms", () => {
   it("splits a multi-family category name into its meaningful words", () => {
@@ -27,9 +27,10 @@ describe("stage with fallback terms", () => {
     const calls: string[] = [];
     return {
       calls,
-      stage: async (term: string) => {
-        calls.push(term);
-        return { productsFetched: fetchedByTerm[term] ?? 0, queriesSent: 1 };
+      stage: async ({ term, categoryPath }: SearchAttempt) => {
+        const key = categoryPath ? `C:${categoryPath}` : term;
+        calls.push(key);
+        return { productsFetched: fetchedByTerm[key] ?? 0, queriesSent: 1 };
       },
     };
   };
@@ -59,6 +60,28 @@ describe("stage with fallback terms", () => {
 
     assert.equal(calls.length, 4);
     assert.equal(outcome.result.productsFetched, 0);
+  });
+
+  it("searches the category first and stops there when it returns products", async () => {
+    const { calls, stage } = stageReturning({ "C:/10/20/": 120, "banaderas cambiadores y pelelas": 3 });
+    const outcome = await stageWithFallbackTerms({ term: "banaderas cambiadores y pelelas", categoryPath: "/10/20/", refresh: true, stage });
+
+    assert.deepEqual(calls, ["C:/10/20/"]);
+    assert.equal(outcome.searchedTerm, "category /10/20/");
+    assert.equal(outcome.result.productsFetched, 120);
+  });
+
+  it("falls back from an empty category to the name and then its words", async () => {
+    const { calls, stage } = stageReturning({ pelelas: 5 });
+    const outcome = await stageWithFallbackTerms({ term: "banaderas cambiadores y pelelas", categoryPath: "/10/20/", refresh: true, stage });
+
+    assert.deepEqual(calls, ["C:/10/20/", "banaderas cambiadores y pelelas", "banaderas", "cambiadores", "pelelas"]);
+    assert.equal(outcome.searchedTerm, "pelelas");
+    assert.equal(outcome.queriesSent, 5);
+  });
+
+  it("never searches a category or a fallback for a frozen-plan batch", () => {
+    assert.deepEqual(searchAttempts({ term: "cafe molido", categoryPath: "/1/2/", refresh: false }), [{ term: "cafe molido" }]);
   });
 
   it("never falls back for a frozen-plan batch", async () => {
