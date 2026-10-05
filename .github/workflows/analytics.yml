@@ -47,9 +47,9 @@ jobs:
         working-directory: analytics
         run: uv run python scripts/publish_basket_index.py --skip-build --out tests/fixtures/basket-index.sample.json --check
 
-      - name: Verify the committed production payload is the honest placeholder
+      - name: Verify the committed production payload is honest
         working-directory: analytics
-        run: uv run python scripts/publish_basket_index.py --placeholder --source release --check
+        run: uv run python scripts/publish_basket_index.py --verify-production
 
       - name: Verify the sample chart fixture is reproducible
         working-directory: analytics
