@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-05T00:47:09.211Z",
+  "generatedAt": "2026-10-05T04:11:58.239Z",
   "source": "release",
   "status": "insufficient",
   "statusReason": "insufficient_series",
@@ -17,7 +17,7 @@
     "seriesEnd": "2026-10-05",
     "days": 1,
     "stores": 5,
-    "products": 10812,
+    "products": 22081,
     "basketProducts": 12,
     "basketProductsCovered": 0,
     "totalWeight": 1.0,
