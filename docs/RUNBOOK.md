@@ -62,7 +62,11 @@ lock, applies the freshness gate, and regenerates the snapshot.
      frozen plan `artifacts/cmvp/catalog/expansion-20260920-discovery-25/acquisition-plan-cycle2.json`
      instead, so one bad category read never blocks the day. The plan takes
      up to `maxBatchesPerRun` batches (90; ceiling 150) split across the
-     stores. The searches have a time budget (`REFRESH_SEARCH_BUDGET_MINUTES`,
+     stores. A store listed in `sourceOverrides` is planned on its own quota
+     instead (`maxBatches`, `resultsPerBatch` up to 2500): Coto's search serves
+     200 products a request, so it is read whole every day (all ~68 allowlisted
+     categories, ~15.5k products, ~114 requests) instead of rotating 18
+     categories a day. The searches have a time budget (`REFRESH_SEARCH_BUDGET_MINUTES`,
      25 by default, at most 45): once it is spent, the remaining batches are
      skipped, not failed (`[refresh] search budget of <n>m spent: skipped the
      last <n> batches`, and `skipped=<n>` in the summary), so the top-up and

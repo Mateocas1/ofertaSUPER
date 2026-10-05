@@ -14,8 +14,9 @@
 // refresh's search time budget (scripts/lib/search-budget.ts) skips whatever
 // does not fit in a given run, so the cap no longer has to guess the timeout.
 export const MAX_BATCHES_PER_RUN = 150;
-// Above 50 a batch pages through the REST catalog search (50 per page).
-export const MAX_RESULTS_PER_BATCH = 200;
+// Above 50 a batch pages through the REST catalog search (50 per page); 2500
+// is the deepest page either store's search serves.
+export const MAX_RESULTS_PER_BATCH = 2500;
 
 export type CategoryTreeNode = {
   id: number;
@@ -30,7 +31,15 @@ export type DiscoveryConfig = {
   resultsPerBatch: number;
   /** Store slug -> normalized allowlisted department names. */
   departments: Record<string, string[]>;
+  /**
+   * Stores planned on their own quota instead of a share of maxBatchesPerRun
+   * (#568): a store whose search is cheap enough (Coto serves 200 products a
+   * request) can be read whole every day instead of rotating its categories.
+   */
+  sourceOverrides: Record<string, SourceOverride>;
 };
+
+export type SourceOverride = { maxBatches: number; resultsPerBatch: number };
 
 export type DiscoveredBatch = {
   ordinal: number;
@@ -212,9 +221,15 @@ export function buildDiscoveryPlan({
   rotationDay?: number;
 }): DiscoveryPlan {
   const sources = Object.keys(config.departments);
+  const shared = sources.filter((source) => !config.sourceOverrides[source]);
   const cap = Math.min(config.maxBatchesPerRun, MAX_BATCHES_PER_RUN);
-  const perSource = Math.floor(cap / sources.length);
-  const remainder = cap % sources.length;
+  const perSource = shared.length > 0 ? Math.floor(cap / shared.length) : 0;
+  const remainder = shared.length > 0 ? cap % shared.length : 0;
+  const quotaFor = (source: string) => {
+    const override = config.sourceOverrides[source];
+    if (override) return { limit: override.maxBatches, count: override.resultsPerBatch };
+    return { limit: perSource + (shared.indexOf(source) < remainder ? 1 : 0), count: config.resultsPerBatch };
+  };
   const dayIndex = Math.max(0, Math.floor(rotationDay));
   const batches: DiscoveredBatch[] = [];
   let ordinal = 1;
@@ -223,8 +238,8 @@ export function buildDiscoveryPlan({
   let departmentsMatched = 0;
   let windowDays = 0;
 
-  sources.forEach((source, index) => {
-    const limit = perSource + (index < remainder ? 1 : 0);
+  sources.forEach((source) => {
+    const { limit, count } = quotaFor(source);
     const collected = collectCategoryTerms(treesBySource[source] ?? [], config.departments[source] ?? []);
     categoriesConsidered += collected.categoriesConsidered;
     departmentsMatched += collected.departmentsMatched;
@@ -233,7 +248,7 @@ export function buildDiscoveryPlan({
     if (ordered.length > limit) truncated = true;
     for (const term of ordered.slice(0, limit)) {
       const categoryPath = collected.pathsByTerm.get(term);
-      batches.push({ ordinal, source, term, count: config.resultsPerBatch, ...(categoryPath ? { categoryPath } : {}) });
+      batches.push({ ordinal, source, term, count, ...(categoryPath ? { categoryPath } : {}) });
       ordinal += 1;
     }
   });
@@ -278,6 +293,24 @@ function parseDepartments(value: unknown): Record<string, string[]> {
   return departments;
 }
 
+function parseSourceOverrides(value: unknown, departments: Record<string, string[]>): Record<string, SourceOverride> {
+  if (value === undefined) return {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("invalid discovery config: sourceOverrides must be an object");
+  }
+  const overrides: Record<string, SourceOverride> = {};
+  for (const [rawSlug, raw] of Object.entries(value as Record<string, unknown>)) {
+    const slug = rawSlug.trim().toLowerCase();
+    if (!departments[slug]) throw new Error(`invalid discovery config: sourceOverrides.${slug} has no departments`);
+    const entry = (raw ?? {}) as Record<string, unknown>;
+    overrides[slug] = {
+      maxBatches: requireInteger(entry.maxBatches, `sourceOverrides.${slug}.maxBatches`, MAX_BATCHES_PER_RUN),
+      resultsPerBatch: requireInteger(entry.resultsPerBatch, `sourceOverrides.${slug}.resultsPerBatch`, MAX_RESULTS_PER_BATCH),
+    };
+  }
+  return overrides;
+}
+
 export function parseDiscoveryConfig(payload: unknown): DiscoveryConfig {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error("invalid discovery config: payload must be an object");
@@ -286,10 +319,12 @@ export function parseDiscoveryConfig(payload: unknown): DiscoveryConfig {
   if (record.schemaVersion !== 1) {
     throw new Error("invalid discovery config: unsupported schemaVersion");
   }
+  const departments = parseDepartments(record.departments);
   return {
     schemaVersion: 1,
     maxBatchesPerRun: requireInteger(record.maxBatchesPerRun, "maxBatchesPerRun", MAX_BATCHES_PER_RUN),
     resultsPerBatch: requireInteger(record.resultsPerBatch, "resultsPerBatch", MAX_RESULTS_PER_BATCH),
-    departments: parseDepartments(record.departments),
+    departments,
+    sourceOverrides: parseSourceOverrides(record.sourceOverrides, departments),
   };
 }

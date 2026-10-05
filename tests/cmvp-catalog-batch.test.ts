@@ -97,19 +97,19 @@ describe("CMVP catalog batch", () => {
     assert.deepEqual(deps.calls, []);
   });
 
-  it("lets a discovered refresh batch search up to 200 results with no expected GTINs", async () => {
+  it("lets a discovered refresh batch search up to 2500 results with no expected GTINs", async () => {
     const admitted = ["7790000000003"];
     const refreshDependencies = () => dependencies({
       acquire: async () => ({ runId: 12, startedAt: "2026-03-11T00:00:00.000Z", finishedAt: "2026-03-11T00:00:01.000Z", fetchedGtins: [...admitted], admittedGtins: [...admitted], rejectedCount: 0, rejectedProducts: [], error: null }),
     });
 
-    const result = await runCmvpCatalogBatch(request({ refresh: true, count: 200, expectedGtins: [] }), refreshDependencies());
+    const result = await runCmvpCatalogBatch(request({ refresh: true, count: 2500, expectedGtins: [] }), refreshDependencies());
     assert.equal(result.artifact.state, "completed");
-    assert.equal(result.artifact.count, 200);
+    assert.equal(result.artifact.count, 2500);
     assert.deepEqual(result.artifact.expectedGtins, []);
 
     for (const invalid of [
-      request({ refresh: true, count: 201, expectedGtins: [] }),
+      request({ refresh: true, count: 2501, expectedGtins: [] }),
       request({ refresh: false, count: 25, expectedGtins: [] }),
       request({ refresh: true, count: 2, expectedGtins: [expectedGtins[0]] }),
     ]) await assert.rejects(() => runCmvpCatalogBatch(invalid, dependencies()));

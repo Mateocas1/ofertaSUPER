@@ -27,6 +27,7 @@ function config(overrides: Partial<DiscoveryConfig> = {}): DiscoveryConfig {
     maxBatchesPerRun: DEFAULT_LIMITS.maxBatchesPerRun,
     resultsPerBatch: DEFAULT_LIMITS.resultsPerBatch,
     departments: { disco: ["Almacén"], carrefour: ["Bebidas"] },
+    sourceOverrides: {},
     ...overrides,
   };
 }
@@ -274,4 +275,31 @@ test("a leaf department is searched by its own category path", () => {
   const leaf = parseCategoryTree([{ id: 9, name: "Frutas y Verduras", hasChildren: false, children: [] }]);
   const collected = collectCategoryTerms(leaf, ["frutas y verduras"]);
   assert.equal(collected.pathsByTerm.get("frutas y verduras"), "/9/");
+});
+
+test("a source override plans the whole store on its own quota and size, outside the shared cap", () => {
+  const plan = buildDiscoveryPlan({
+    config: config({
+      maxBatchesPerRun: 2,
+      departments: { disco: ["Almacén", "Bebidas"], coto: ["Almacén", "Bebidas"] },
+      sourceOverrides: { coto: { maxBatches: 80, resultsPerBatch: 2500 } },
+    }),
+    treesBySource: { disco: parseCategoryTree(ROTATION_TREE), coto: parseCategoryTree(ROTATION_TREE) },
+    rotationDay: 0,
+  });
+
+  const disco = plan.batches.filter((batch) => batch.source === "disco");
+  const coto = plan.batches.filter((batch) => batch.source === "coto");
+  assert.equal(disco.length, 2, "the shared cap goes to the stores without an override");
+  assert.ok(disco.every((batch) => batch.count === 50));
+  assert.equal(coto.length, 5, "every category of the overridden store, every day");
+  assert.ok(coto.every((batch) => batch.count === 2500));
+});
+
+test("source overrides are validated against the stores and the ceilings", () => {
+  const base = { schemaVersion: 1, maxBatchesPerRun: 6, resultsPerBatch: 50, departments: { coto: ["Almacén"] } };
+  assert.deepEqual(parseDiscoveryConfig(base).sourceOverrides, {});
+  assert.deepEqual(parseDiscoveryConfig({ ...base, sourceOverrides: { coto: { maxBatches: 80, resultsPerBatch: 2500 } } }).sourceOverrides, { coto: { maxBatches: 80, resultsPerBatch: 2500 } });
+  assert.throws(() => parseDiscoveryConfig({ ...base, sourceOverrides: { vea: { maxBatches: 5, resultsPerBatch: 50 } } }), /no departments/);
+  assert.throws(() => parseDiscoveryConfig({ ...base, sourceOverrides: { coto: { maxBatches: 5, resultsPerBatch: 2501 } } }), /resultsPerBatch/);
 });
