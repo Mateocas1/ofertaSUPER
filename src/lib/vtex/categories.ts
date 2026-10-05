@@ -25,19 +25,3 @@ export const DETAILED_CATEGORIES: DetailedCategory[] = [
 export const DEFAULT_SEARCH_TERMS = Array.from(
   new Set(DETAILED_CATEGORIES.flatMap((category) => category.keywords)),
 );
-
-export function inferCategoryFromText(text: string | null | undefined) {
-  if (!text) {
-    return null;
-  }
-
-  const normalized = text.toLowerCase();
-
-  for (const category of DETAILED_CATEGORIES) {
-    if (category.keywords.some((keyword) => normalized.includes(keyword))) {
-      return category.name;
-    }
-  }
-
-  return null;
-}

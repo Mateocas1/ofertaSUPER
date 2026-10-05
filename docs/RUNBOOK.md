@@ -668,3 +668,26 @@ it has no-Production authority.
 - [ ] Retention is 2–90; recovery is rehearsed separately before relying on a
       backup.
 - [ ] The daily cron log shows a published snapshot or an explicit brake.
+
+## Product categories
+
+The app shows exactly the 15 categories of `DETAILED_CATEGORIES`
+(`src/lib/vtex/categories.ts`); `/categoria/<slug>` and the category counts only
+see products whose `category` is one of those names. Every staged product is
+classified by `src/lib/catalog/category-classifier.ts`:
+
+1. **The store's own category path decides.** VTEX stores send
+   `categories: ["/Almacén/Aceites y Vinagres/Aceites Comunes/", ...]` and Coto
+   its group path ("Frescos / Lácteos / Leches / Leches Enteras"). A decisive
+   department (Limpieza, Bebidas, Mascotas, Congelados, Mundo Bebé, Lácteos)
+   settles it; otherwise the most specific segment that an ordered rule knows
+   wins (a narrow category before a broad one: "vegetales congelados" is
+   Congelados before Frutas y Verduras, "infusiones" Desayuno before Almacén).
+2. **Only a product without a usable path** falls back to whole words of its
+   name with the same rules ("aceite" is no longer "te", "Jabón ... Leche de
+   Coco" is not dairy).
+
+Reconcile replaces a product's category whenever the fresh classification
+differs, so a refresh corrects earlier guesses instead of only filling blanks.
+To tune it, edit the ordered `PATH_RULES` / `DECISIVE_DEPARTMENTS` and extend
+`tests/category-classifier.test.ts` with the real path.

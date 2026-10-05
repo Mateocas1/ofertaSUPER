@@ -218,11 +218,12 @@ function buildProtectiveMerge(
       candidate.images,
       hasImages,
     ),
-    category: preferMissingValue(
-      existingProduct.category,
-      candidate.category,
-      hasText,
-    ),
+    // Categories come from the store's own path now (one of the app's
+    // categories or nothing), so a fresh one replaces an outdated guess
+    // instead of only filling a blank one.
+    category: hasText(candidate.category) && candidate.category !== existingProduct.category
+      ? candidate.category
+      : null,
   };
 }
 
