@@ -181,7 +181,7 @@ jobs:
             # master can move during the ~25-minute run (a merge, another
             # data commit): rebase this data-only commit onto it and retry.
             for attempt in 1 2 3; do
-              git pull --rebase --quiet origin master && git push origin HEAD:master && break
+              git pull --rebase --autostash --quiet origin master && git push origin HEAD:master && break
               if [ "$attempt" = 3 ]; then exit 1; fi
               sleep 5
             done 2>&1 | tee -a "$LOG_FILE"
@@ -205,7 +205,7 @@ jobs:
             # master can move during the ~25-minute run (a merge, another
             # data commit): rebase this data-only commit onto it and retry.
             for attempt in 1 2 3; do
-              git pull --rebase --quiet origin master && git push origin HEAD:master && break
+              git pull --rebase --autostash --quiet origin master && git push origin HEAD:master && break
               if [ "$attempt" = 3 ]; then exit 1; fi
               sleep 5
             done 2>&1 | tee -a "$LOG_FILE"
