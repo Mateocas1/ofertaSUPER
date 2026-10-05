@@ -18,10 +18,11 @@ Usage:
     # Regenerate the canonical production placeholder (no dbt needed).
     uv run python scripts/publish_basket_index.py --placeholder --source release
 
-    # CI: verify the committed fixture and placeholder are reproducible.
+    # CI: verify the committed fixture is reproducible and the published
+    # payload is honest (the daily refresh keeps its coverage current).
     uv run python scripts/publish_basket_index.py --skip-build \
         --out tests/fixtures/basket-index.sample.json --check
-    uv run python scripts/publish_basket_index.py --placeholder --source release --check
+    uv run python scripts/publish_basket_index.py --verify-production
 """
 
 from __future__ import annotations
@@ -383,6 +384,33 @@ def write_or_check(out: Path, payload: dict, check: bool) -> int:
     return 0
 
 
+# The daily refresh republishes the production payload with the live coverage
+# (series start, offers seen), so it cannot equal a fixed placeholder. What CI
+# can still hold it to is honesty: a release payload of the current schema that,
+# while the series is insufficient, publishes no base date and no index points.
+def verify_production(out: Path) -> int:
+    if not out.exists():
+        print(f"publish_basket_index: {out} does not exist", file=sys.stderr)
+        return 1
+    payload = json.loads(out.read_text())
+    problems = []
+    if payload.get("schemaVersion") != SCHEMA_VERSION:
+        problems.append(f"schemaVersion {payload.get('schemaVersion')} != {SCHEMA_VERSION}")
+    if payload.get("source") != "release":
+        problems.append(f"source {payload.get('source')!r} != 'release'")
+    if payload.get("status") == "insufficient":
+        if payload.get("baseDate") is not None:
+            problems.append("insufficient payload publishes a baseDate")
+        for key in ("basketDaily", "basketMonthly", "topRisers", "topFallers"):
+            if payload.get(key):
+                problems.append(f"insufficient payload publishes {key}")
+    if problems:
+        print(f"publish_basket_index: {out} is not honest: " + "; ".join(problems), file=sys.stderr)
+        return 1
+    print(f"publish_basket_index: {out} is an honest {payload.get('status')} release payload")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--glob", default="sample/*.parquet", help="Parquet glob dbt reads")
@@ -393,7 +421,11 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="compare with the committed JSON instead of writing")
     parser.add_argument("--placeholder", action="store_true", help="write the canonical insufficient payload (no dbt)")
     parser.add_argument("--series-start", default=DEFAULT_SERIES_START)
+    parser.add_argument("--verify-production", action="store_true", help="check the published payload is honest (no dbt)")
     args = parser.parse_args()
+
+    if args.verify_production:
+        return verify_production(args.out)
 
     if args.placeholder:
         return write_or_check(args.out, build_placeholder(args.series_start, args.source), args.check)
