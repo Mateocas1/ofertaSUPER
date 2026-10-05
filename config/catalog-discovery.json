@@ -76,5 +76,11 @@
       "Perfumería",
       "Limpieza"
     ]
+  },
+  "sourceOverrides": {
+    "coto": {
+      "maxBatches": 80,
+      "resultsPerBatch": 2500
+    }
   }
 }

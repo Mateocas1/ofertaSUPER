@@ -74,7 +74,7 @@ test("resolveRefreshPlan falls back to the frozen plan when a category tree cann
 
 test("resolveRefreshPlan falls back for an invalid config, an unsupported source or an empty match", async () => {
   const cases: Array<{ config: unknown; fetchTree?: ReturnType<typeof treeFetcher>; reason: RegExp }> = [
-    { config: { ...CONFIG, resultsPerBatch: 500 }, reason: /resultsPerBatch/ },
+    { config: { ...CONFIG, resultsPerBatch: 2501 }, reason: /resultsPerBatch/ },
     { config: { ...CONFIG, departments: { dia: ["Almacén"] } }, reason: /not an acquisition source/ },
     { config: CONFIG, fetchTree: treeFetcher({ disco: [], carrefour: [] }), reason: /no allowlisted category/ },
   ];

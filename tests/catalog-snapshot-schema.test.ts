@@ -8,6 +8,7 @@ import {
   SNAPSHOT_SCHEMA_VERSION,
   SnapshotUnavailableError,
 } from "../src/lib/catalog-snapshot";
+import { REFRESH_SOURCES } from "../src/lib/refresh-sources";
 import { loadSnapshotFixture } from "./helpers/snapshot-fixture";
 
 // The snapshot is committed to the repo and served by the deployment, so its
@@ -25,6 +26,9 @@ const PRODUCT_KEYS = ["ean", "name", "brand", "imageUrl", "category", "categoryS
 const OFFER_KEYS = ["ean", "source", "price", "listPrice", "promo", "available", "productUrl", "observedAt", "history"].sort();
 const HISTORY_KEYS = ["price", "listPrice", "observedAt"].sort();
 const PROMO_KEYS = ["type", "percent", "nth", "maxUnits", "label"].sort();
+// SimplePromotion: "nth" belongs to the nth-unit shape only ("2do al 70%");
+// a percent-off promotion ("25% OFF") carries no unit position.
+const PERCENT_OFF_KEYS = PROMO_KEYS.filter((key) => key !== "nth");
 
 describe("catalog snapshot data contract", () => {
   it("exposes only the allowed keys on every product", () => {
@@ -47,8 +51,9 @@ describe("catalog snapshot data contract", () => {
   it("keeps every captured promotion within the allowed shape", () => {
     for (const offer of snapshot.offers) {
       if (offer.promo === null) continue;
-      assert.deepEqual(Object.keys(offer.promo as Record<string, unknown>).sort(), PROMO_KEYS, `promo leaked keys on ${offer.ean}`);
       const promo = offer.promo as { type: string; percent: number; label: string };
+      const expectedKeys = promo.type === "percent-off" ? PERCENT_OFF_KEYS : PROMO_KEYS;
+      assert.deepEqual(Object.keys(promo).sort(), expectedKeys, `promo leaked keys on ${offer.ean}`);
       assert.ok(["nth-unit", "percent-off"].includes(promo.type), `promo type invalid on ${offer.ean}`);
       assert.ok(promo.percent > 0 && promo.percent <= 99, `promo percent out of range on ${offer.ean}`);
       assert.ok(promo.label.length > 0, `promo label empty on ${offer.ean}`);
@@ -58,7 +63,7 @@ describe("catalog snapshot data contract", () => {
   it("keeps top-level metadata honest", () => {
     assert.equal(snapshot.schemaVersion, 2);
     assert.ok(!Number.isNaN(Date.parse(snapshot.generatedAt)));
-    assert.deepEqual(snapshot.sources, ["carrefour", "disco", "jumbo"]);
+    assert.deepEqual(snapshot.sources, [...REFRESH_SOURCES]);
   });
 });
 
