@@ -2,7 +2,7 @@ import axios from "axios";
 
 import { normalizeGtin } from "../identity/gtin";
 import { parseSimplePromotion, type SimplePromotion } from "../promotions/simple-promos";
-import { inferCategoryFromText } from "../vtex/categories";
+import { classifyProductCategory } from "../catalog/category-classifier";
 import type { NormalizedProduct } from "../vtex/normalize";
 
 // Coto (#568) is not a VTEX store. Its site (www.coto.com.ar, an Angular app)
@@ -145,9 +145,13 @@ function slugify(value: string) {
   return value.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
 }
 
-function departmentOf(data: LooseRecord) {
+// Coto's category path: the group's ancestors below the "Categorias" root,
+// then the group itself ("Frescos / Lácteos / Leches / Leches Enteras").
+function storePathOf(data: LooseRecord): string[] {
   const group = records(data.groups)[0];
-  return asString(records(group?.path_list)[1]?.display_name);
+  if (!group) return [];
+  const ancestors = records(group.path_list).filter((entry) => entry.id !== "categoria").map((entry) => asString(entry.display_name));
+  return [...ancestors, asString(group.display_name)].filter((name): name is string => Boolean(name));
 }
 
 function promoOf(data: LooseRecord) {
@@ -198,7 +202,7 @@ export function normalizeCotoResult(result: unknown, storeId = DEFAULT_STORE_ID)
       description: asString(data.sku_description),
       imageUrl,
       images: imageUrl ? [imageUrl] : [],
-      category: inferCategoryFromText(name) ?? departmentOf(data),
+      category: classifyProductCategory({ name, storePath: storePathOf(data) }),
       skuId: asString(data.sku_id),
       sellerId: storeId,
       productUrl: productUrlOf(data, name),

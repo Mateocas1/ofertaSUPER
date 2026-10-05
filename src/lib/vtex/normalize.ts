@@ -1,5 +1,5 @@
 import { normalizeGtin } from "../identity/gtin";
-import { inferCategoryFromText } from "./categories";
+import { classifyProductCategory, splitCategoryPath } from "../catalog/category-classifier";
 
 type LooseRecord = Record<string, unknown>;
 
@@ -66,17 +66,20 @@ function asRecordArray(value: unknown) {
   return Array.isArray(value) ? value.map((entry) => asRecord(entry)).filter((entry): entry is LooseRecord => Boolean(entry)) : [];
 }
 
-function normalizeCategoryValue(value: string | null) {
-  if (!value) {
-    return null;
+// The store's own category path, most specific entry first in VTEX's list
+// ("/Almacén/Aceites y Vinagres/Aceites Comunes/"); the persisted-query
+// payload carries a categoryTree instead, and a bare category name is a
+// one-segment path.
+function storeCategoryPath(rawProduct: LooseRecord): string[] {
+  if (Array.isArray(rawProduct.categories)) {
+    const deepest = rawProduct.categories
+      .map((entry) => splitCategoryPath(asString(entry)))
+      .reduce<string[]>((best, path) => (path.length > best.length ? path : best), []);
+    if (deepest.length > 0) return deepest;
   }
-
-  if (!value.includes("/")) {
-    return value;
-  }
-
-  const parts = value.split("/").map((entry) => entry.trim()).filter(Boolean);
-  return parts.at(-1) ?? null;
+  const tree = asRecordArray(rawProduct.categoryTree).map((node) => asString(node.name)).filter((name): name is string => Boolean(name));
+  if (tree.length > 0) return tree;
+  return splitCategoryPath(asString(rawProduct.category));
 }
 
 function normalizeListPrice(price: number | null, listPrice: number | null) {
@@ -203,15 +206,7 @@ export function normalizeProduct(rawProduct: LooseRecord, baseUrl: string): Norm
 
   const description = stripHtml(pickFirstString(rawProduct.description, rawProduct.metaTagDescription));
   const brand = stripHtml(pickFirstString(rawProduct.brand, rawProduct.brandName));
-  const category = stripHtml(
-    pickFirstString(
-      inferCategoryFromText(name),
-      asRecordArray(rawProduct.categoryTree)[0]?.name,
-      normalizeCategoryValue(
-        Array.isArray(rawProduct.categories) ? asString(rawProduct.categories[0]) : asString(rawProduct.category),
-      ),
-    ),
-  );
+  const category = classifyProductCategory({ name, storePath: storeCategoryPath(rawProduct) });
 
   return {
     ean,
