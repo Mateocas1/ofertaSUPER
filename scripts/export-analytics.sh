@@ -62,7 +62,7 @@ commit_basket_index() {
   # master can move during the run: rebase this data-only commit and retry.
   local attempt
   for attempt in 1 2 3; do
-    git pull --rebase --quiet origin master && git push origin HEAD:master && return 0
+    git pull --rebase --autostash --quiet origin master && git push origin HEAD:master && return 0
     sleep 5
   done
   return 1
