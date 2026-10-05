@@ -178,7 +178,13 @@ jobs:
             echo "snapshot and price drops unchanged; nothing to publish" | tee -a "$LOG_FILE"
           else
             git commit -m "chore(catalog): refresh $(date -u +%F) [cloud]"
-            git push origin HEAD:master 2>&1 | tee -a "$LOG_FILE"
+            # master can move during the ~25-minute run (a merge, another
+            # data commit): rebase this data-only commit onto it and retry.
+            for attempt in 1 2 3; do
+              git pull --rebase --quiet origin master && git push origin HEAD:master && break
+              if [ "$attempt" = 3 ]; then exit 1; fi
+              sleep 5
+            done 2>&1 | tee -a "$LOG_FILE"
           fi
 
       - name: Regenerate the README price chart (weekly, best effort)
@@ -196,7 +202,13 @@ jobs:
             echo "price chart unchanged; nothing to publish" | tee -a "$LOG_FILE"
           else
             git commit -m "chore(analytics): refresh the price chart $(date -u +%F) [cloud]"
-            git push origin HEAD:master 2>&1 | tee -a "$LOG_FILE"
+            # master can move during the ~25-minute run (a merge, another
+            # data commit): rebase this data-only commit onto it and retry.
+            for attempt in 1 2 3; do
+              git pull --rebase --quiet origin master && git push origin HEAD:master && break
+              if [ "$attempt" = 3 ]; then exit 1; fi
+              sleep 5
+            done 2>&1 | tee -a "$LOG_FILE"
           fi
 
       - name: Post the price drops digest to Telegram
