@@ -32,4 +32,14 @@ describe("ingestion quality gates", () => {
       assert.ok(result.qualityFlags.includes("valid_ean"));
     }
   });
+
+  it("rejects a 5x price spike only for an offer that is in stock", () => {
+    // Out-of-stock VTEX offers keep stale placeholder prices ($99.99 for 5 kg
+    // of charcoal); their price is not an offer, so it is never a spike.
+    const spike = { ...candidate, ean: "7790139101695", price: 8000 };
+    assert.ok(evaluateStageCandidate(spike, { historicalAverage: 100 }).qualityFlags.includes("price_no_spike"));
+    assert.ok(evaluateStageCandidate({ ...spike, isAvailable: true }, { historicalAverage: 100 }).qualityFlags.includes("price_no_spike"));
+    assert.ok(!evaluateStageCandidate({ ...spike, isAvailable: false }, { historicalAverage: 100 }).qualityFlags.includes("price_no_spike"));
+    assert.ok(!evaluateStageCandidate(spike, { historicalAverage: 2000 }).qualityFlags.includes("price_no_spike"));
+  });
 });

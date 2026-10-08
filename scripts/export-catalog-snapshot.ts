@@ -12,11 +12,16 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { REFRESH_SOURCES, REFRESH_SOURCES_SQL } from "../src/lib/refresh-sources";
+import { DETAILED_CATEGORIES } from "../src/lib/vtex/categories";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputPath = join(repoRoot, "data", "catalog-snapshot.json");
 const container = process.env.CATALOG_SNAPSHOT_CONTAINER ?? "ofertasuper-cmvp-local-bootstrap-postgres-1";
 const historyDays = 90;
+// Only the app's own categories are published. A product the classifier
+// cannot place (decoration, pool toys) keeps whatever raw store name an older
+// run stored, because a refresh never blanks a category, so it is dropped here.
+const appCategories = new Set(DETAILED_CATEGORIES.map((category) => category.name));
 
 const SOURCES = [...REFRESH_SOURCES];
 
@@ -72,8 +77,8 @@ async function main() {
     name: row[1],
     brand: row[2] === "" ? null : row[2],
     imageUrl: row[3] === "" ? null : row[3],
-    category: row[4] === "" ? null : row[4],
-    categorySlug: row[5] === "" ? null : row[5],
+    category: appCategories.has(row[4]) ? row[4] : null,
+    categorySlug: appCategories.has(row[4]) && row[5] !== "" ? row[5] : null,
   }));
 
   const cutoff = `${historyDays} days`;

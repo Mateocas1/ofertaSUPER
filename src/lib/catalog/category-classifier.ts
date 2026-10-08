@@ -27,17 +27,20 @@ const PATH_RULES: Array<[CategoryName, string[]]> = [
   ["Mascotas", ["mascota*", "perro*", "gato*", "animales", "felino*", "canino*", "piedras sanitarias"]],
   ["Sin TACC", ["sin tacc", "libre de gluten", "celiac*"]],
   ["Congelados", ["congelad*", "helado*", "hielo"]],
+  // Filled fresh pasta reads as pasta before its filling ("Sorrentinos Jamón
+  // y Queso" is not cheese, "Ravioles Ricota" is not dairy).
+  ["Panadería", ["ravioles", "sorrentinos", "noquis", "capeletis", "canelones"]],
   ["Higiene Personal", ["higiene", "cuidado bucal", "bucal", "dental", "cuidado del cabello", "cuidado capilar", "capilar", "shampoo*", "acondicionador*", "desodorante*", "antitranspirante*", "proteccion femenina", "femenina", "afeitado", "depilacion", "papel higienico", "panuelo*", "jabon de tocador", "jabones de tocador", "jabones", "jabon"]],
   ["Perfumería", ["perfumeria", "farmacia", "cuidado personal", "cuidado corporal", "cuidado facial", "maquillaje", "cosmetica", "fragancia*", "perfume*", "botiquin", "protector solar", "proteccion solar", "repelente*", "algodon*"]],
   ["Limpieza", ["limpieza", "lavado", "lavandina*", "detergente*", "suavizante*", "insecticida*", "desinfectante*", "limpiador*", "lustramueble*", "aromatizante*", "desodorante de ambiente", "desodorantes de ambiente", "papeles", "rollos de cocina", "servilleta*", "bolsas de residuos", "accesorios de limpieza"]],
   ["Desayuno y Merienda", ["desayuno*", "merienda*", "infusion*", "yerba*", "cafe*", "te", "tes", "mate cocido", "galletit*", "bizcocho*", "tostada*", "cereal*", "mermelada*", "dulce de leche", "cacao*", "chocolatada*", "budin*", "bizcochuelo*", "magdalena*", "endulzante*", "edulcorante*", "azucar*"]],
-  ["Lácteos", ["lacteo*", "leche*", "yogur*", "queso*", "manteca*", "crema de leche", "postres lacteos", "margarina*", "huevo*"]],
-  ["Carnes", ["carne*", "vacun*", "pollo*", "cerdo*", "porcino*", "cordero*", "granja", "aves", "menudencia*", "achura*", "embutido*", "fiambre*", "salchicha*", "hamburguesa*", "milanesa*", "pescado*", "marisco*", "mariscos", "pescaderia", "carniceria"]],
-  ["Frutas y Verduras", ["fruta*", "verdura*", "hortaliza*", "vegetal*", "ensalada*", "frutos secos", "legumbres frescas", "hongos", "verduleria"]],
+  ["Lácteos", ["lacteo*", "leche*", "yogur*", "queso*", "manteca*", "crema de leche", "postres lacteos", "margarina*", "huevo*", "ques", "camembert", "mozzarella", "muzzarella", "muzz", "bocconcin*", "flan", "flanes"]],
+  ["Carnes", ["carne*", "vacun*", "pollo*", "cerdo*", "porcino*", "cordero*", "granja", "aves", "menudencia*", "achura*", "embutido*", "fiambre*", "salchicha*", "salchichon*", "salame*", "leberwurst", "mortadela*", "bondiola*", "hamburguesa*", "milanesa*", "pescado*", "marisco*", "mariscos", "pescaderia", "carniceria"]],
+  ["Frutas y Verduras", ["fruta*", "verdura*", "hortaliza*", "vegetal*", "ensalada*", "frutos secos", "legumbres frescas", "hongos", "verduleria", "rucula", "lechuga*", "espinaca*"]],
   ["Panadería", ["panaderia", "pasteleria", "panificado*", "panes", "pan", "facturas", "prepizza*", "tapas", "pastas frescas", "rotiseria", "comidas preparadas", "comidas elaboradas", "comidas refrigeradas", "platos principales", "listos para", "elaboracion"]],
   ["Bebidas", ["bebida*", "gaseosa*", "agua*", "jugo*", "cerveza*", "vino*", "espumante*", "sidra*", "licor*", "aperitivo*", "fernet*", "whisky*", "vodka*", "gin", "isotonica*", "energizante*", "amargo*", "soda*", "bodega"]],
   ["Electro Hogar", ["electro*", "pila*", "lampara*", "iluminacion", "tecnologia", "electrodomestico*"]],
-  ["Almacén", ["almacen", "aceite*", "vinagre*", "conserva*", "enlatado*", "pasta*", "fideo*", "arroz*", "legumbre*", "harina*", "condimento*", "especia*", "aderezo*", "salsa*", "mayonesa*", "snack*", "golosina*", "chocolate*", "caramelo*", "alfajor*", "sopa*", "caldo*", "pure*", "encurtido*", "aceituna*", "rebozador*", "polvo*", "reposteria", "frutos", "semilla*", "almacen saludable", "dulce*"]],
+  ["Almacén", ["almacen", "aceite*", "vinagre*", "conserva*", "enlatado*", "pasta*", "fideo*", "arroz*", "legumbre*", "harina*", "condimento*", "especia*", "aderezo*", "salsa*", "mayonesa*", "snack*", "golosina*", "chocolate*", "caramelo*", "alfajor*", "sopa*", "caldo*", "pure*", "encurtido*", "aceituna*", "rebozador*", "polvo*", "reposteria", "frutos", "semilla*", "almacen saludable", "dulce*", "gelatina*", "hummus"]],
 ];
 
 function patternFor(word: string) {

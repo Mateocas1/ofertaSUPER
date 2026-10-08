@@ -51,6 +51,21 @@ describe("product category classification", () => {
     assert.notEqual(classifyProductCategory({ name: "Mousse Casero Dulce De Leche" }), "Lácteos");
   });
 
+  it("places Coto products whose path is only their department (live 2026-10 cases)", () => {
+    const shallow = (name: string) => byPath("/Frescos/", name);
+    assert.equal(shallow("Ravioles ricota nuez COTO 280g"), "Panadería", "filled pasta is not its ricotta");
+    assert.equal(shallow("Sorrentinos Jamón y Queso"), "Panadería", "filled pasta is not its cheese");
+    assert.equal(shallow("Ñoquis Remolacha Bja 1 Uni"), "Panadería");
+    assert.equal(shallow("Ques.Camembert . Ile De Fran Cja 125 Grm"), "Lácteos");
+    assert.equal(shallow("Ques.Muzz.D/Lat Mini Bocconcin WAPI Pou 100 Grm"), "Lácteos");
+    assert.equal(shallow("Flan Casero X Uni"), "Lácteos");
+    assert.equal(shallow("Leberwurst PALADINI Finas Hierbas Paq 200 Grm"), "Carnes");
+    assert.equal(shallow("Mini Salchichón Triple Paladini Uni 300 Grm"), "Carnes");
+    assert.equal(shallow("Rucula Rie La Huerta 70g"), "Frutas y Verduras");
+    assert.equal(shallow("Hummus ONNEG Red Pepper Hummus 250g"), "Almacén");
+    assert.equal(byPath("/Almacén/", "Gelatina Cereza 1u"), "Almacén");
+  });
+
   it("prefers the store path over the name", () => {
     assert.equal(byPath("/Perfumería/Jabones/", "Jabón Líquido Leche De Coco 250 Ml Dove"), "Higiene Personal");
   });

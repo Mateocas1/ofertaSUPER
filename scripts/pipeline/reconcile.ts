@@ -585,6 +585,34 @@ type ChunkPersistResult = {
   promotedBySource: Record<string, number>;
 };
 
+type SkuOwnerRow = { product_ean: string; supermarket_id: number; sku_id: string | null };
+
+// A store SKU identifies at most one offer per supermarket, but stores move a
+// SKU to a new EAN (Coto re-barcoded sku00570228). The SKU follows its newest
+// EAN: within the chunk only the last row keeps it, and any other offer of the
+// same supermarket still holding it gives it up before the upsert.
+async function releaseReassignedSkus(tx: Prisma.TransactionClient, rows: SkuOwnerRow[]) {
+  const ownerBySku = new Map<string, SkuOwnerRow>();
+  for (const row of rows) {
+    if (row.sku_id === null) continue;
+    const key = `${row.supermarket_id}:${row.sku_id}`;
+    const previous = ownerBySku.get(key);
+    if (previous) previous.sku_id = null;
+    ownerBySku.set(key, row);
+  }
+  const owners = Array.from(ownerBySku.values());
+  if (owners.length === 0) return;
+  const values = owners.map((row) => Prisma.sql`(${row.product_ean}, ${row.supermarket_id}::int, ${row.sku_id})`);
+  await tx.$executeRaw`
+    UPDATE supermarket_products AS sp
+    SET sku_id = NULL
+    FROM (VALUES ${Prisma.join(values)}) AS owner(product_ean, supermarket_id, sku_id)
+    WHERE sp.supermarket_id = owner.supermarket_id
+      AND sp.sku_id = owner.sku_id
+      AND sp.product_ean <> owner.product_ean
+  `;
+}
+
 async function persistReconcileChunk(args: {
   tx: Prisma.TransactionClient;
   candidates: EvaluatedStageCandidate[];
@@ -649,6 +677,7 @@ async function persistReconcileChunk(args: {
   let refreshedSupermarketProducts: UpsertedSupermarketProductRow[] = [];
 
   if (!dryRun && upsertRows.length > 0) {
+    await releaseReassignedSkus(tx, upsertRows);
     const upsertValues = upsertRows.map((row) =>
       Prisma.sql`(${row.product_ean}, ${row.supermarket_id}, ${row.price}, ${row.list_price}, ${row.reference_price}, ${row.reference_unit}, ${row.is_available}, ${row.sku_id}, ${row.seller_id}, ${row.product_url}, ${row.promo === null ? Prisma.sql`NULL` : Prisma.sql`${JSON.stringify(row.promo)}::jsonb`}, ${row.last_checked_at})`,
     );
