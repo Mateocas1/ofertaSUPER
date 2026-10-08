@@ -10,6 +10,9 @@ export type StageValidationCandidate = {
   imageUrl: string | null;
   images: string[];
   price: number | null;
+  // Out-of-stock VTEX offers keep a stale placeholder price ($99.99 for 5 kg
+  // of charcoal), so their price is neither checked for spikes nor trusted.
+  isAvailable?: boolean;
 };
 
 export type StageValidationResult = {
@@ -50,6 +53,7 @@ const QUALITY_GATES: QualityGate[] = [
     severity: "BLOCK",
     passes: (candidate, context) =>
       candidate.price === null ||
+      candidate.isAvailable === false ||
       context.historicalAverage === null ||
       context.historicalAverage <= 0 ||
       candidate.price <= context.historicalAverage * 5,

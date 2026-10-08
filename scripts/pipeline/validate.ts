@@ -86,6 +86,9 @@ function decimalToNumber(value: Prisma.Decimal | null) {
   return value === null ? null : Number(value);
 }
 
+// The spike baseline only averages offers that are in stock: out-of-stock VTEX
+// offers carry stale placeholder prices that would make every real price look
+// like a 5x spike.
 async function getHistoricalAverages(eans: string[]) {
   if (eans.length === 0) {
     return new Map<string, number | null>();
@@ -96,6 +99,7 @@ async function getHistoricalAverages(eans: string[]) {
     FROM price_history ph
     INNER JOIN supermarket_products sp ON sp.id = ph.supermarket_product_id
     WHERE sp.product_ean IN (${Prisma.join(eans)})
+      AND sp.is_available
       AND ph.price IS NOT NULL
     GROUP BY sp.product_ean
   `;
