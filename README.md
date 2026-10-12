@@ -1,8 +1,8 @@
 # ofertasSUPER
 
-Comparador de precios y ofertas de supermercados de Argentina (Carrefour, Disco y
-Jumbo) por GTIN-14: buscás un producto, ves el precio y la oferta en cada súper,
-y armás un carrito que puede mezclar súpers.
+Comparador de precios y ofertas de supermercados de Argentina (Carrefour, Coto,
+Disco, Jumbo y Vea) por GTIN-14: buscás un producto, ves el precio y la oferta en
+cada súper, y armás un carrito que puede mezclar súpers.
 
 - **Sitio en vivo:** https://ofertasuper.com
 - **Runbook operativo** (actualización diaria, cron, Postgres, backups): [docs/RUNBOOK.md](docs/RUNBOOK.md)
@@ -10,7 +10,8 @@ y armás un carrito que puede mezclar súpers.
 
 ## Cómo fluyen los datos
 
-Los scrapers VTEX leen el catálogo de cada súper y lo escriben en tablas de
+Los lectores de catálogo (la API pública VTEX de Carrefour, Disco, Jumbo y Vea, y
+la búsqueda Constructor.io que usa el sitio de Coto) leen el catálogo de cada súper y lo escriben en tablas de
 staging de un Postgres local; un reconcile transaccional con advisory lock
 fusiona cada observación en el catálogo vivo (identidad GTIN-14 con checksum),
 un gate de frescura decide qué precio es "actual", y el pipeline exporta
@@ -75,7 +76,8 @@ Postgres están en [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 ## Limitaciones honestas
 
-- Las promos simples son de Carrefour; Disco y Jumbo no exponen teasers por producto.
+- Las promos simples (porcentaje, 2x1, 2do al X %) vienen de Carrefour y Coto; Disco,
+  Jumbo y Vea no exponen teasers por producto.
 - Las promos bancarias y de fidelidad están fuera de v1.
 - La frescura depende del refresh diario: el sitio siempre muestra el último
   snapshot commiteado, con su fecha de observación.
