@@ -18,7 +18,12 @@ describe("cloud refresh workflow contract", () => {
   it("serializes writers and grants only the needed permissions", () => {
     assert.match(workflow, /concurrency:\s*\n\s*group: daily-refresh\s*\n\s*cancel-in-progress: false/);
     assert.match(workflow, /permissions:\s*\n\s*contents: write\s*\n\s*issues: write/);
-    assert.match(workflow, /timeout-minutes: 60/);
+    // The refresh took 52 of its 60 minutes on 10/10 and the top-up grows with
+    // the catalog; from 11/10 every run hit the cap and published nothing.
+    assert.match(workflow, /refresh:[\s\S]*?timeout-minutes: 120/);
+    // The refresh step has its own, shorter cap: a step timeout fails the
+    // step, so the failure() reporter still runs inside the job's budget.
+    assert.match(workflow, /- name: Refresh the catalog \(gates enforced\)\n(?:\s*#.*\n)*\s*timeout-minutes: 100\n/);
   });
 
   it("uses a healthy Postgres 16 service container", () => {
@@ -100,7 +105,9 @@ describe("cloud refresh workflow contract", () => {
   it("keeps the single tracking issue wired to the reporter", () => {
     assert.match(workflow, /scripts\/cloud-refresh-report\.ts resolve/);
     assert.match(workflow, /scripts\/cloud-refresh-report\.ts fail/);
-    assert.match(workflow, /if: \$\{\{ failure\(\) \}\}/);
+    // A job that hits timeout-minutes ends as cancelled, not failed; it must
+    // still open the tracking issue instead of going stale in silence.
+    assert.match(workflow, /- name: Report failure\s*\n\s*if: \$\{\{ failure\(\) \|\| cancelled\(\) \}\}/);
   });
 
   it("never prints the database URL or the password", () => {
