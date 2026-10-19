@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-18T14:59:35.061Z",
+  "generatedAt": "2026-10-19T18:00:59.940Z",
   "source": "release",
   "status": "insufficient",
   "statusReason": "insufficient_series",
-  "statusNote": "La serie de precios del catálogo arranca el 2026-10-18. El índice necesita al menos 2 meses de canasta y un mes de IPC del INDEC superpuesto.",
+  "statusNote": "La serie de precios del catálogo arranca el 2026-10-19. El índice necesita al menos 2 meses de canasta y un mes de IPC del INDEC superpuesto.",
   "requirements": {
     "minimumBasketMonths": 2,
     "minimumOverlappingCpiMonths": 1
@@ -13,11 +13,11 @@
   "currency": "ARS",
   "baseDate": null,
   "coverage": {
-    "seriesStart": "2026-10-18",
-    "seriesEnd": "2026-10-18",
+    "seriesStart": "2026-10-19",
+    "seriesEnd": "2026-10-19",
     "days": 1,
     "stores": 5,
-    "products": 35653,
+    "products": 36139,
     "basketProducts": 12,
     "basketProductsCovered": 0,
     "totalWeight": 1.0,
@@ -202,7 +202,7 @@
   "comparison": {
     "baseMonth": null,
     "overlapMonths": [],
-    "note": "La serie de precios del catálogo arranca el 2026-10-18. El índice necesita al menos 2 meses de canasta y un mes de IPC del INDEC superpuesto."
+    "note": "La serie de precios del catálogo arranca el 2026-10-19. El índice necesita al menos 2 meses de canasta y un mes de IPC del INDEC superpuesto."
   },
   "topRisers": [],
   "topFallers": []
