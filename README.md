@@ -27,7 +27,7 @@ precios a Parquet y la modela con DuckDB + dbt (`analytics/`):
 <!-- price-chart:start -->
 ![Evolución de precios de la canasta](analytics/assets/price-evolution.png)
 
-Fuente: snapshot real `data/catalog-snapshot.json` · Rango 2026-09-20 → 2026-10-19 · 13 días relevados.
+Fuente: snapshot real `data/catalog-snapshot.json` · Rango 2026-09-20 → 2026-10-26 · 19 días relevados.
 <!-- price-chart:end -->
 
 - `scripts/export-price-series.ts` escribe una fila por (fecha, GTIN-14, súper)
