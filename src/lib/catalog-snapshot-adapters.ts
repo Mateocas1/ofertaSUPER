@@ -10,6 +10,7 @@ import {
   getSnapshotProduct,
   searchSnapshotProducts,
   type OfferWithFreshness,
+  type SnapshotOffer,
   type SnapshotProduct,
 } from "@/lib/catalog-snapshot";
 
@@ -66,6 +67,13 @@ function buildEntry(offer: OfferWithFreshness, now: Date) {
     bestPromotion: null,
     finalPrice: price,
   };
+}
+
+// True exactly when toProductSummary reports an automatic discount for these
+// offers, without building the summary: a cheap pre-filter for offers-only lists.
+export function hasAutomaticDiscount(offers: readonly SnapshotOffer[]): boolean {
+  return offers.some((offer) =>
+    detectAutomaticDiscount(toNumberOrNull(offer.price), toNumberOrNull(offer.listPrice)) !== null);
 }
 
 function buildEntries(offers: OfferWithFreshness[], now: Date) {

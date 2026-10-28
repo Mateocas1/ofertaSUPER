@@ -116,12 +116,6 @@ function withFreshness(offer: SnapshotOffer, now: Date): OfferWithFreshness {
   return { ...offer, freshness: offerFreshness(offer, now) };
 }
 
-function matchesQuery(product: SnapshotProduct, haystack: string): boolean {
-  return [product.name, product.brand ?? "", product.ean]
-    .map(normalizeQuery)
-    .some((field) => field.includes(haystack));
-}
-
 // Snapshot keys are canonical GTIN-14 (older snapshots hold the source form);
 // any GTIN form of a key, such as an EAN-13 from an old link, matches it.
 function gtinKey(value: string): string {
@@ -161,14 +155,60 @@ export type SnapshotProductResult = {
   freshCount: number;
 };
 
+// Everything the read path needs per EAN, built in one pass over the snapshot
+// and kept for the life of the process. Without it every product scanned every
+// offer, so a full catalog pass cost products x offers (about 10-16 s of CPU
+// on the October 2026 snapshot) on each request to /sitemap.xml, /ofertas and
+// /categoria. Keyed by snapshot object so a test override gets its own index.
+type SnapshotIndex = {
+  offersByEan: Map<string, SnapshotOffer[]>;
+  pricedOfferCount: Map<string, number>;
+  productByGtin: Map<string, SnapshotProduct>;
+  gtinKeys: string[];
+  searchFields: string[][];
+  defaultOrder: SnapshotProduct[] | null;
+};
+
+const snapshotIndexes = new WeakMap<CatalogSnapshot, SnapshotIndex>();
+// Same ordering as String.prototype.localeCompare with no arguments, without
+// building a collator on each comparison.
+const nameCollator = new Intl.Collator();
+
+function snapshotIndex(snapshot: CatalogSnapshot): SnapshotIndex {
+  const cached = snapshotIndexes.get(snapshot);
+  if (cached) return cached;
+
+  const offersByEan = new Map<string, SnapshotOffer[]>();
+  const pricedOfferCount = new Map<string, number>();
+  for (const offer of snapshot.offers) {
+    const offers = offersByEan.get(offer.ean);
+    if (offers) offers.push(offer);
+    else offersByEan.set(offer.ean, [offer]);
+    if (offer.available && offer.price !== null) {
+      pricedOfferCount.set(offer.ean, (pricedOfferCount.get(offer.ean) ?? 0) + 1);
+    }
+  }
+
+  const productByGtin = new Map<string, SnapshotProduct>();
+  const gtinKeys = snapshot.products.map((product) => {
+    const key = gtinKey(product.ean);
+    if (!productByGtin.has(key)) productByGtin.set(key, product);
+    return key;
+  });
+  const searchFields = snapshot.products.map((product) =>
+    [product.name, product.brand ?? "", product.ean].map(normalizeQuery));
+
+  const index = { offersByEan, pricedOfferCount, productByGtin, gtinKeys, searchFields, defaultOrder: null };
+  snapshotIndexes.set(snapshot, index);
+  return index;
+}
+
 function buildProductResult(
-  snapshot: CatalogSnapshot,
+  index: SnapshotIndex,
   product: SnapshotProduct,
   now: Date,
 ): SnapshotProductResult {
-  const offers = snapshot.offers
-    .filter((offer) => offer.ean === product.ean)
-    .map((offer) => withFreshness(offer, now));
+  const offers = (index.offersByEan.get(product.ean) ?? []).map((offer) => withFreshness(offer, now));
   const eligible = offers.filter((offer) => offer.available && offer.price !== null);
 
   return {
@@ -190,29 +230,56 @@ export type SnapshotListResult = {
 
 function filterAndRankProducts(
   snapshot: CatalogSnapshot,
+  index: SnapshotIndex,
   query: string | null,
   supermarket: string | null,
 ): SnapshotProduct[] {
-  const matching = snapshot.products
-    .filter((product) => query === null || matchesQuery(product, query))
-    .filter((product) => {
-      if (supermarket === null) return true;
-      return snapshot.offers.some(
-        (offer) => offer.ean === product.ean && offer.source === supermarket,
-      );
-    });
+  const unfiltered = query === null && supermarket === null;
+  if (unfiltered && index.defaultOrder) return index.defaultOrder;
 
-  const offersWithPrice = new Map<string, number>();
-  for (const offer of snapshot.offers) {
-    if (offer.available && offer.price !== null) {
-      offersWithPrice.set(offer.ean, (offersWithPrice.get(offer.ean) ?? 0) + 1);
-    }
-  }
-  matching.sort((left, right) =>
-    snapshotMatchRank(left, query ?? "") - snapshotMatchRank(right, query ?? "")
-    || (offersWithPrice.get(right.ean) ?? 0) - (offersWithPrice.get(left.ean) ?? 0)
-    || left.name.localeCompare(right.name));
+  // Rank is computed once per product, not once per comparison. With no query
+  // every name starts with the empty term, so only an EAN equal to the empty
+  // query's key can rank above the rest.
+  const emptyKey = gtinKey("");
+  const ranked: { product: SnapshotProduct; rank: number }[] = [];
+  snapshot.products.forEach((product, position) => {
+    if (query !== null && !index.searchFields[position].some((field) => field.includes(query))) return;
+    if (supermarket !== null
+      && !(index.offersByEan.get(product.ean) ?? []).some((offer) => offer.source === supermarket)) return;
+    const rank = query === null
+      ? (index.gtinKeys[position] === emptyKey ? 0 : 1)
+      : snapshotMatchRank(product, query);
+    ranked.push({ product, rank });
+  });
+
+  ranked.sort((left, right) =>
+    left.rank - right.rank
+    || (index.pricedOfferCount.get(right.product.ean) ?? 0) - (index.pricedOfferCount.get(left.product.ean) ?? 0)
+    || nameCollator.compare(left.product.name, right.product.name));
+  const matching = ranked.map(({ product }) => product);
+  if (unfiltered) index.defaultOrder = matching;
   return matching;
+}
+
+/**
+ * Products matching a search, in search ranking order, without building their
+ * offers, so callers can cut to a page before paying for offer results.
+ * Treat the returned array as read-only: the unfiltered order is shared.
+ */
+export function rankSnapshotProducts(options: { query?: string; supermarket?: string }): readonly SnapshotProduct[] {
+  const snapshot = readSnapshot();
+  const query = options.query !== undefined ? normalizeQuery(options.query) : null;
+  return filterAndRankProducts(snapshot, snapshotIndex(snapshot), query, options.supermarket ?? null);
+}
+
+/** Raw offers of one EAN in the current snapshot, in snapshot order. */
+export function getSnapshotOffers(ean: string): readonly SnapshotOffer[] {
+  return snapshotIndex(readSnapshot()).offersByEan.get(ean) ?? [];
+}
+
+/** Offers, price range and freshness for one product of the current snapshot. */
+export function buildSnapshotProductResult(product: SnapshotProduct, now: Date): SnapshotProductResult {
+  return buildProductResult(snapshotIndex(readSnapshot()), product, now);
 }
 
 export function searchSnapshotProducts(options: {
@@ -223,13 +290,14 @@ export function searchSnapshotProducts(options: {
   now?: Date;
 }): SnapshotListResult {
   const snapshot = readSnapshot();
+  const index = snapshotIndex(snapshot);
   const now = options.now ?? new Date();
   const pageSize = options.pageSize ?? PAGE_SIZE;
   const query = options.query !== undefined ? normalizeQuery(options.query) : null;
   const supermarket = options.supermarket ?? null;
   const page = Math.max(1, options.page ?? 1);
 
-  const matching = filterAndRankProducts(snapshot, query, supermarket);
+  const matching = filterAndRankProducts(snapshot, index, query, supermarket);
 
   const start = (page - 1) * pageSize;
   const slice = matching.slice(start, start + pageSize);
@@ -239,16 +307,15 @@ export function searchSnapshotProducts(options: {
     page,
     pageSize,
     totalPages: Math.ceil(matching.length / pageSize) || 1,
-    products: slice.map((product) => buildProductResult(snapshot, product, now)),
+    products: slice.map((product) => buildProductResult(index, product, now)),
   };
 }
 
 export function getSnapshotProduct(ean: string, now?: Date): SnapshotProductResult | null {
-  const snapshot = readSnapshot();
-  const key = gtinKey(ean);
-  const product = snapshot.products.find((entry) => gtinKey(entry.ean) === key);
+  const index = snapshotIndex(readSnapshot());
+  const product = index.productByGtin.get(gtinKey(ean));
   if (!product) return null;
-  return buildProductResult(snapshot, product, now ?? new Date());
+  return buildProductResult(index, product, now ?? new Date());
 }
 
 export function getSnapshotSources(): string[] {
