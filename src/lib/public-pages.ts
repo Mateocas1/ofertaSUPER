@@ -1,13 +1,16 @@
 import "server-only";
 
 import {
+  buildSnapshotProductResult,
   getSnapshotGeneratedAt,
+  getSnapshotOffers,
   getSnapshotProduct,
   normalizeQuery,
-  searchSnapshotProducts,
+  rankSnapshotProducts,
   SnapshotUnavailableError,
+  type SnapshotProduct,
 } from "@/lib/catalog-snapshot";
-import { toProductDetail, toProductSummary } from "@/lib/catalog-snapshot-adapters";
+import { hasAutomaticDiscount, toProductDetail, toProductSummary } from "@/lib/catalog-snapshot-adapters";
 import type { ProductDetail, ProductHistory, ProductSummary } from "@/lib/catalog";
 import {
   getPublicLatestCheckedAt,
@@ -48,37 +51,47 @@ const SORTERS: Record<string, (left: ProductSummary, right: ProductSummary) => n
   updated: (left, right) => (right.latestCheckedAt ?? "").localeCompare(left.latestCheckedAt ?? ""),
 };
 
-function matchesCategory(product: ProductSummary, category: string) {
+function matchesCategory(product: SnapshotProduct, category: string) {
   return product.category !== null && normalizeQuery(product.category) === normalizeQuery(category);
+}
+
+function toListPage<T>(items: readonly T[], page: number, limit: number) {
+  const start = (page - 1) * limit;
+  return { items: items.slice(start, start + limit), total: items.length, page, limit, totalPages: Math.ceil(items.length / limit) || 1 };
+}
+
+function needsEverySummary(filters: SnapshotProductListFilters, sorter: unknown): boolean {
+  return Boolean(filters.offersOnly) || filters.minPrice !== undefined || filters.maxPrice !== undefined || sorter !== undefined;
 }
 
 export function loadSnapshotProductList(filters: SnapshotProductListFilters, now: Date = new Date()): SnapshotProductListPage {
   const limit = filters.limit ?? 24;
   const page = Math.max(1, filters.page ?? 1);
-  const result = searchSnapshotProducts({
-    query: filters.query,
-    supermarket: filters.supermarket,
-    page: 1,
-    pageSize: Number.MAX_SAFE_INTEGER,
-    now,
-  });
   const sorter = filters.sort ? SORTERS[filters.sort] : undefined;
-  const items = result.products
-    .map((entry) => toProductSummary(entry.product, entry.offers, now))
-    .filter((product) => !filters.category || matchesCategory(product, filters.category))
+  const toSummary = (product: SnapshotProduct) => {
+    const entry = buildSnapshotProductResult(product, now);
+    return toProductSummary(entry.product, entry.offers, now);
+  };
+  // Category lives on the product, so it narrows the list before any offer is
+  // built. Without price filters or a sort the ranked order is final and only
+  // the requested page needs offers.
+  const ranked = rankSnapshotProducts({ query: filters.query, supermarket: filters.supermarket })
+    .filter((product) => !filters.category || matchesCategory(product, filters.category));
+
+  if (!needsEverySummary(filters, sorter)) {
+    const listPage = toListPage(ranked, page, limit);
+    return { ...listPage, items: listPage.items.map(toSummary) };
+  }
+
+  const items = ranked
+    .filter((product) => !filters.offersOnly || hasAutomaticDiscount(getSnapshotOffers(product.ean)))
+    .map(toSummary)
     .filter((product) => !filters.offersOnly || product.automaticDiscountPercent !== null)
     .filter((product) => filters.minPrice === undefined || (product.minPrice !== null && product.minPrice >= filters.minPrice))
     .filter((product) => filters.maxPrice === undefined || (product.minPrice !== null && product.minPrice <= filters.maxPrice))
     .sort(sorter);
 
-  const start = (page - 1) * limit;
-  return {
-    items: items.slice(start, start + limit),
-    total: items.length,
-    page,
-    limit,
-    totalPages: Math.ceil(items.length / limit) || 1,
-  };
+  return toListPage(items, page, limit);
 }
 
 export type SnapshotProductPageCatalog = {
@@ -155,12 +168,13 @@ export async function resolveSnapshotCatalogPage<T extends object, Shell>(
   loadData: () => T,
 ): Promise<PublicCatalogPageResult<T, Shell>> {
   try {
+    const loaded = loadData();
     const data: PublicCatalogData<T> = {
-      ...loadData(),
+      ...loaded,
       dataSource: "database",
       degraded: false,
       verifiedAt: getSnapshotGeneratedAt(),
-      latestCheckedAt: getPublicLatestCheckedAt(loadData()),
+      latestCheckedAt: getPublicLatestCheckedAt(loaded),
     };
     return createPublicCatalogPageResult(shell, data);
   } catch (error) {
@@ -173,8 +187,8 @@ export async function resolveSnapshotCatalogPage<T extends object, Shell>(
 
 export async function loadSnapshotSitemapCatalog(): Promise<{ products: Array<{ ean: string }> }> {
   try {
-    const result = searchSnapshotProducts({ page: 1, pageSize: Number.MAX_SAFE_INTEGER });
-    return { products: result.products.map(({ product }) => ({ ean: product.ean })) };
+    // Only EANs are needed, in search order: no offers are built.
+    return { products: rankSnapshotProducts({}).map((product) => ({ ean: product.ean })) };
   } catch (error) {
     if (error instanceof SnapshotUnavailableError) {
       throw new PublicCatalogUnavailableError();
