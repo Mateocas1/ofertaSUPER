@@ -101,6 +101,23 @@ product page and sitemap always declare the GTIN-14 URL as canonical.
 - Prices older than the supermarket SLA are not presented as current.
 - Availability is an observation of the source at `observedAt`, not a promise.
 
+## Request cost (Vercel Hobby)
+
+The site runs on Vercel Hobby, which allows 4 hours of Active CPU a month; going
+over pauses the project for 30 days. The read path is therefore kept linear:
+
+- `src/lib/catalog-snapshot.ts` builds a per-EAN index (offers by EAN, product by
+  GTIN, search fields) once per snapshot and process. No request scans every
+  offer once per product; `tests/catalog-snapshot-index.test.ts` pins the output
+  to the previous full scan and counts offer reads.
+- List pages cut to the requested page before building offers, unless a price
+  filter, offers-only or a sort needs every summary.
+- `/sitemap.xml` is generated at build time (the snapshot ships with the deploy).
+- `next.config.ts` sends `Vercel-CDN-Cache-Control: s-maxage=3600,
+  stale-while-revalidate=86400` for `/ofertas`, `/buscar`, `/categoria/:slug`
+  and `/producto/:ean`, so each URL renders at most about once an hour.
+- `src/app/robots.ts` disallows bulk AI crawlers; Googlebot and `*` are unchanged.
+
 ## Operations
 
 The daily refresh, cron, Postgres backup/restore and the encrypted R2 path are

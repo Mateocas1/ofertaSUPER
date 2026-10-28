@@ -23,6 +23,16 @@ const securityHeaders = [
   },
 ];
 
+// Catalog pages read searchParams, so Next.js renders them per request and
+// marks them private. They hold no per-user data and the snapshot changes once
+// a day, so Vercel's CDN may keep each URL for an hour and serve it stale for
+// a day while it refreshes. Vercel strips this header before the browser.
+const CDN_CACHED_ROUTES = ["/ofertas", "/buscar", "/categoria/:slug", "/producto/:ean"];
+const CDN_CACHE_HEADER = {
+  key: "Vercel-CDN-Cache-Control",
+  value: "s-maxage=3600, stale-while-revalidate=86400",
+};
+
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
@@ -40,6 +50,7 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: securityHeaders,
       },
+      ...CDN_CACHED_ROUTES.map((source) => ({ source, headers: [CDN_CACHE_HEADER] })),
     ];
   },
 };

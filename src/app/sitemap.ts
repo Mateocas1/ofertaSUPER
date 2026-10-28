@@ -5,8 +5,8 @@ import { loadSnapshotSitemapCatalog } from "@/lib/public-pages";
 import { buildSitemap, type SitemapCatalog } from "@/lib/sitemap";
 import { DETAILED_CATEGORIES } from "@/lib/vtex/categories";
 
-export const dynamic = "force-dynamic";
-
+// No route segment config: the snapshot ships with the deployment, so the
+// sitemap is generated once at build time and served as a static file.
 export default function sitemap() {
   return buildSitemap(
     loadSnapshotSitemapCatalog as () => Promise<SitemapCatalog>,
