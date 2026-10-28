@@ -4,7 +4,9 @@ Comparador de precios y ofertas de supermercados de Argentina (Carrefour, Disco 
 Jumbo) por GTIN-14: buscás un producto, ves el precio y la oferta en cada súper,
 y armás un carrito que puede mezclar súpers.
 
-- **Sitio en vivo:** https://ofertasuper.com
+- **Sitio:** https://ofertasuper.com (Vercel lo pausó del 15/10 al 14/11/2026 por
+  pasarse de la CPU del plan gratuito; causa y arreglo en el
+  [postmortem](docs/postmortem-2026-10-vercel-cpu-pause.md))
 - **Runbook operativo** (actualización diaria, cron, Postgres, backups): [docs/RUNBOOK.md](docs/RUNBOOK.md)
 - **Arquitectura** (flujo de datos y módulos clave): [ARCHITECTURE.md](ARCHITECTURE.md)
 
@@ -18,6 +20,26 @@ un gate de frescura decide qué precio es "actual", y el pipeline exporta
 repo. Vercel sirve ese snapshot a la app Next.js y a las APIs públicas, sin base
 de datos en el camino de lectura; si falta o está corrupto, el sitio muestra "no
 disponible", nunca datos demo. Detalle en [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Costo por request (Vercel Hobby, USD 0)
+
+El sitio corre en el plan gratuito de Vercel, que incluye 4 horas de CPU activa
+por mes. En octubre de 2026 se pasó y quedó pausado 30 días: cada producto
+recorría todas las ofertas (24.547 × 48.419 ≈ 1.200 millones de comparaciones,
+10-16 s de CPU por request) en el sitemap, `/ofertas` y `/categoria`, sin caché.
+
+El arreglo mantiene el sitio gratis y con la misma salida:
+
+- Índice por EAN armado una vez por proceso: las páginas más pesadas pasaron de
+  10-16 s a 18-173 ms de CPU, medido con el snapshot real.
+- Sitemap generado en el build y caché del CDN de Vercel (1 h) en páginas y
+  APIs públicas; los errores y los 429 nunca se cachean.
+- robots.txt deja afuera a los crawlers de IA, los filtros y la búsqueda interna.
+- Un test compara contra el algoritmo anterior y otro cuenta lecturas de
+  ofertas: si un camino caliente vuelve a escalar como productos × ofertas, falla.
+
+Detalle, mediciones y decisiones descartadas (Pro, Cloudflare, ISR) en el
+[postmortem](docs/postmortem-2026-10-vercel-cpu-pause.md).
 
 ## Producto de datos: series diarias e índice de canasta
 
