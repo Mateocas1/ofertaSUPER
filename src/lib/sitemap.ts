@@ -36,7 +36,6 @@ export async function buildSitemap(
     { url: buildAbsoluteUrl("/ofertas"), changeFrequency: "daily", priority: 0.9 },
     { url: buildAbsoluteUrl("/bajas"), changeFrequency: "daily", priority: 0.8 },
     { url: buildAbsoluteUrl(PRICE_DROPS_FEED_PATH), changeFrequency: "daily", priority: 0.4 },
-    { url: buildAbsoluteUrl("/buscar"), changeFrequency: "weekly", priority: 0.6 },
   ];
   const categoryRoutes: MetadataRoute.Sitemap = flattenCategories(categories).map(({ slug }) => ({
     url: buildAbsoluteUrl(`/categoria/${slug}`), changeFrequency: "weekly", priority: 0.7,
