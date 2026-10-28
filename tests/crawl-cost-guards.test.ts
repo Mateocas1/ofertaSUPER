@@ -57,6 +57,13 @@ describe("catalog page CDN caching", () => {
   });
 });
 
+describe("image optimizer", () => {
+  it("is off, so /_next/image cannot be used to transform arbitrary remote images", () => {
+    assert.equal(nextConfig.images?.unoptimized, true);
+    assert.equal(nextConfig.images?.remotePatterns, undefined);
+  });
+});
+
 describe("robots.txt", () => {
   const rules = [robots().rules].flat();
 

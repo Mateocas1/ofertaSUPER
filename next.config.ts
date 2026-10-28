@@ -36,13 +36,11 @@ const CDN_CACHE_HEADER = {
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // Product images come from the supermarkets' CDNs and render unoptimized.
+  // Turning the optimizer off makes /_next/image answer 404, so nobody can use
+  // it to transform arbitrary remote images against the Hobby image quota.
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**",
-      },
-    ],
+    unoptimized: true,
   },
   async headers() {
     return [
