@@ -57,15 +57,25 @@ describe("catalog page CDN caching", () => {
   });
 });
 
+describe("image optimizer", () => {
+  it("is off, so /_next/image cannot be used to transform arbitrary remote images", () => {
+    assert.equal(nextConfig.images?.unoptimized, true);
+    assert.equal(nextConfig.images?.remotePatterns, undefined);
+  });
+});
+
 describe("robots.txt", () => {
   const rules = [robots().rules].flat();
+  // Faceted filters and internal search results duplicate canonical pages:
+  // crawling them only multiplies function renders and CDN cache keys.
+  const NOT_CRAWLED = ["/admin/", "/api/", "/buscar", "/*?*super=", "/*?*sort=", "/*?*maxPrice=", "/*?*offers=", "/*?*wallet=", "/*?*type="];
 
-  it("keeps the rules for every crawler and Googlebot unchanged", () => {
-    assert.deepEqual(rules[0], { userAgent: "*", allow: "/", disallow: ["/admin/", "/api/"] });
+  it("keeps catalog pages crawlable and blocks facets and internal search for every crawler", () => {
+    assert.deepEqual(rules[0], { userAgent: "*", allow: "/", disallow: NOT_CRAWLED });
     assert.deepEqual(rules[1], {
       userAgent: "Googlebot",
-      allow: ["/", "/ofertas", "/buscar", "/categoria/", "/producto/", "/canasta"],
-      disallow: ["/admin/", "/api/"],
+      allow: ["/", "/ofertas", "/categoria/", "/producto/", "/canasta"],
+      disallow: NOT_CRAWLED,
     });
   });
 

@@ -15,6 +15,7 @@ import {
 } from "@/lib/catalog-snapshot-adapters";
 import { getSnapshotCategoryCounts, getSnapshotGeneratedAt, SnapshotUnavailableError } from "@/lib/catalog-snapshot";
 import type { CategorySummary, ProductDetail, ProductSummary, PromotionSummary } from "@/lib/catalog";
+import { withCatalogCdnCache } from "@/lib/http-cache";
 import { handleProductHistoryRequest } from "@/lib/product-history";
 import { publicCatalogUnavailable, type PublicCatalogData } from "@/lib/public-catalog-api";
 import { promotionListQuerySchema } from "@/lib/schemas/promotion";
@@ -91,7 +92,7 @@ export async function handleSearch(request: NextRequest, deps: PublicApiDeps = d
       latestCheckedAt: latestCheckedAtOf(summaries.products),
     };
     const result = buildDatabaseCatalogResponse(data, publicCatalogUnavailable());
-    return withRateLimitHeaders(NextResponse.json(result.body, { status: result.status }), admitted.client);
+    return withCatalogCdnCache(withRateLimitHeaders(NextResponse.json(result.body, { status: result.status }), admitted.client));
   } catch (error) {
     const response = error instanceof SnapshotUnavailableError
       ? NextResponse.json(publicCatalogUnavailable(), { status: 503 })
@@ -141,7 +142,7 @@ export async function handleProducts(request: NextRequest, deps: PublicApiDeps =
   }
   const response = NextResponse.json(body, { status });
   void limiter.state.pending;
-  return withRateLimitHeaders(response, limiter.state);
+  return withCatalogCdnCache(withRateLimitHeaders(response, limiter.state));
 }
 
 export async function handleProductDetail(request: NextRequest, ean: string, deps: PublicApiDeps = defaultDeps()) {
@@ -163,7 +164,7 @@ export async function handleProductDetail(request: NextRequest, ean: string, dep
       verifiedAt: getSnapshotGeneratedAt(),
       latestCheckedAt: null,
     };
-    return withRateLimitHeaders(NextResponse.json(body), admitted.client);
+    return withCatalogCdnCache(withRateLimitHeaders(NextResponse.json(body), admitted.client));
   } catch (error) {
     const response = error instanceof SnapshotUnavailableError
       ? NextResponse.json(publicCatalogUnavailable(), { status: 503 })
@@ -191,7 +192,7 @@ export async function handleProductHistory(request: NextRequest, ean: string, de
   const response = NextResponse.json(result.body, { status: result.status });
 
   void limiter.state.pending;
-  return withRateLimitHeaders(response, limiter.state);
+  return withCatalogCdnCache(withRateLimitHeaders(response, limiter.state));
 }
 
 function toBasketProduct(detail: ProductDetail): BasketProduct {
@@ -243,9 +244,10 @@ export async function handleProductsBatch(request: NextRequest, deps: PublicApiD
       const detail = findSnapshotAdaptedProduct(ean, now);
       return detail ? [{ ...toBasketProduct(detail), ean }] : [];
     });
+    const found = new Set(items.map((item) => item.ean));
     body = {
       items,
-      missing: eans.filter((ean) => !items.some((item) => item.ean === ean)),
+      missing: eans.filter((ean) => !found.has(ean)),
       dataSource: "database",
       degraded: items.some((item) => item.priceEntries.some((entry) => entry.price !== null && entry.freshnessStatus !== "fresh")),
       verifiedAt: getSnapshotGeneratedAt(),
@@ -299,7 +301,7 @@ export async function handleCategories(request: NextRequest, deps: PublicApiDeps
   }
   const response = NextResponse.json(body, { status });
   void limiter.state.pending;
-  return withRateLimitHeaders(response, limiter.state);
+  return withCatalogCdnCache(withRateLimitHeaders(response, limiter.state));
 }
 
 // The snapshot stores per-offer promotions only, never promotion rows, so the
@@ -329,5 +331,5 @@ export async function handlePromotions(request: NextRequest, deps: PublicApiDeps
   }
   const response = NextResponse.json(body, { status });
   void limiter.state.pending;
-  return withRateLimitHeaders(response, limiter.state);
+  return withCatalogCdnCache(withRateLimitHeaders(response, limiter.state));
 }

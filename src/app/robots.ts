@@ -28,18 +28,23 @@ const AI_CRAWLERS = [
   "YouBot",
 ];
 
+// Faceted filters and internal search results duplicate canonical pages (the
+// pages declare their unfiltered URL as canonical). Crawling them only
+// multiplies function renders and CDN cache keys, so no crawler fetches them.
+const NOT_CRAWLED = ["/admin/", "/api/", "/buscar", "/*?*super=", "/*?*sort=", "/*?*maxPrice=", "/*?*offers=", "/*?*wallet=", "/*?*type="];
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/admin/", "/api/"],
+        disallow: NOT_CRAWLED,
       },
       {
         userAgent: "Googlebot",
-        allow: ["/", "/ofertas", "/buscar", "/categoria/", "/producto/", "/canasta"],
-        disallow: ["/admin/", "/api/"],
+        allow: ["/", "/ofertas", "/categoria/", "/producto/", "/canasta"],
+        disallow: NOT_CRAWLED,
       },
       {
         userAgent: AI_CRAWLERS,

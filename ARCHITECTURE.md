@@ -113,10 +113,19 @@ over pauses the project for 30 days. The read path is therefore kept linear:
 - List pages cut to the requested page before building offers, unless a price
   filter, offers-only or a sort needs every summary.
 - `/sitemap.xml` is generated at build time (the snapshot ships with the deploy).
-- `next.config.ts` sends `Vercel-CDN-Cache-Control: s-maxage=3600,
-  stale-while-revalidate=86400` for `/ofertas`, `/buscar`, `/categoria/:slug`
-  and `/producto/:ean`, so each URL renders at most about once an hour.
-- `src/app/robots.ts` disallows bulk AI crawlers; Googlebot and `*` are unchanged.
+- `Vercel-CDN-Cache-Control: s-maxage=3600, stale-while-revalidate=86400`
+  (`src/lib/http-cache.ts`) is sent by `next.config.ts` for `/ofertas`,
+  `/buscar`, `/categoria/:slug` and `/producto/:ean`, and by the public API
+  handlers on successful GET responses only (never on 4xx, 429 or 503), so each
+  URL renders at most about once an hour.
+- The image optimizer is off (`images.unoptimized`): `/_next/image` answers 404
+  and cannot be used to transform arbitrary remote images.
+- `src/app/robots.ts` keeps faceted filters (`super`, `sort`, `maxPrice`,
+  `offers`, `wallet`, `type`) and internal search (`/buscar`) out of every
+  crawler, and disallows bulk AI crawlers. `/buscar` is not in the sitemap.
+- Not used on purpose: ISR for `/producto/[ean]`. A daily crawl of ~24.5k
+  products would exceed Hobby's ISR write quota; the CDN cache has no write
+  quota.
 
 ## Operations
 
