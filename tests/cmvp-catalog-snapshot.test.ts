@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+	durableObservationsQuery,
 	executeCmvpCatalogSnapshot,
 	parseCmvpCatalogSnapshotCliOptions,
 	requireDatabaseUrl,
@@ -130,6 +131,54 @@ describe("CMVP catalog snapshot", () => {
 			{ source: "jumbo", observationProven: true },
 		]);
 		assert.equal(gate({ targetManifest, snapshot: generated }).observations.freshDistinctUsefulProducts, 1);
+	});
+
+	it("extracts the durable identity from either item-key shape while preserving the entity, source, and window filters", () => {
+		const query = durableObservationsQuery(["disco", "jumbo"], new Date("2026-09-18T12:00:00.000Z"), new Date("2026-09-19T12:05:00.000Z"));
+		assert.match(query.text, /COALESCE\(\s*item\."item_key"::jsonb ->> 'ean',\s*item\."item_key"::jsonb ->> 'product_ean'\s*\)/);
+		assert.match(query.text, /NULLIF\(item\."after_facts" ->> 'skuId', ''\)/);
+		assert.match(query.text, /item\."entity" IN \('product', 'offer'\)/);
+		assert.match(query.text, /op\."source" IN \(\$1,\$2\)/);
+		assert.match(query.text, /op\."observed_at" >= \$3/);
+		assert.match(query.text, /op\."observed_at" <= \$4/);
+		assert.deepEqual(query.values, ["disco", "jumbo", new Date("2026-09-18T12:00:00.000Z"), new Date("2026-09-19T12:05:00.000Z")]);
+	});
+
+	it("corroborates an offer-level capture keyed as { product_ean } by EAN and keeps a product-level capture keyed as { ean } working", async () => {
+		const repository: CmvpCatalogSnapshotRepository = {
+			async listOffers() {
+				return [
+					{ source: "disco", productEan: ean, sourceSku: "disco-sku-7", available: true, price: 1100, observedAt: "2026-09-19T11:00:00.000Z" },
+					{ source: "jumbo", productEan: ean, available: true, price: 1200, observedAt: "2026-09-19T11:00:00.000Z" },
+				];
+			},
+			async listDurableObservations() {
+				return [
+					durableObservation({ source: "disco", productEan: ean, sourceSku: null }),
+					durableObservation({ source: "jumbo" }),
+				];
+			},
+		};
+		const generated = await buildCmvpCatalogSnapshot({ targetManifest, repository, observedAt: "2026-09-19T12:00:00.000Z" });
+		assert.deepEqual(generated.offers.map((offer) => ({ source: offer.source, observationProven: offer.observationProven })), [
+			{ source: "disco", observationProven: true },
+			{ source: "jumbo", observationProven: true },
+		]);
+		assert.equal(gate({ targetManifest, snapshot: generated }).observations.freshDistinctUsefulProducts, 1);
+	});
+
+	it("leaves an offer unproven when a durable capture identity matches neither the EAN nor the SKU", async () => {
+		const repository: CmvpCatalogSnapshotRepository = {
+			async listOffers() {
+				return [{ source: "disco", productEan: ean, sourceSku: "disco-sku-7", available: true, price: 1100, observedAt: "2026-09-19T11:00:00.000Z" }];
+			},
+			async listDurableObservations() {
+				return [durableObservation({ source: "disco", productEan: "7790000000010", sourceSku: "disco-sku-9" })];
+			},
+		};
+		const generated = await buildCmvpCatalogSnapshot({ targetManifest, repository, observedAt: "2026-09-19T12:00:00.000Z" });
+		assert.equal(generated.offers[0].observationProven, false);
+		assert.equal(gate({ targetManifest, snapshot: generated }).observations.freshDistinctUsefulProducts, 0);
 	});
 
 	it("treats an offer whose only evidence is a processing clock last_checked_at as unproven", async () => {

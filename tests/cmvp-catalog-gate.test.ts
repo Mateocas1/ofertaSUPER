@@ -19,7 +19,7 @@ const manifest: CmvpTargetManifest = {
 	products: [{ targetId: "milk-1l", useful: true, ean, pack: "bottle", quantity: "1 l", measurementUnit: "l", variant: "whole" }],
 };
 
-	const snapshot: CmvpCatalogSnapshot = {
+const snapshot: CmvpCatalogSnapshot = {
 	schemaVersion: 1,
 	cycleId: "cycle-002",
 	observedAt: "2026-09-19T12:00:00.000Z",

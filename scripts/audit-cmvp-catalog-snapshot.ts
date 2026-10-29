@@ -64,6 +64,20 @@ export function requireDatabaseUrl(environment: Record<string, string | undefine
 	if (!environment.DATABASE_URL?.trim()) throw new Error("DATABASE_URL is required for the read-only CMVP catalog snapshot");
 }
 
+export function durableObservationsQuery(sources: string[], windowStart: Date, windowEnd: Date): Prisma.Sql {
+	return Prisma.sql`
+		SELECT op."source" AS source,
+			COALESCE(item."item_key"::jsonb ->> 'ean', item."item_key"::jsonb ->> 'product_ean') AS product_ean,
+			NULLIF(item."after_facts" ->> 'skuId', '') AS sku,
+			op."observed_at" AS observed_at
+		FROM public."source_capture_operations" op
+		JOIN public."source_capture_items" item ON item."operation_id" = op."id"
+		WHERE item."entity" IN ('product', 'offer')
+			AND op."source" IN (${Prisma.join(sources)})
+			AND op."observed_at" >= ${windowStart}
+			AND op."observed_at" <= ${windowEnd}`;
+}
+
 export function createPrismaCmvpCatalogSnapshotRepository(): CmvpCatalogSnapshotRepository {
 	return {
 		async listOffers({ sources, productEans }) {
@@ -95,17 +109,7 @@ export function createPrismaCmvpCatalogSnapshotRepository(): CmvpCatalogSnapshot
 			});
 		},
 		async listDurableObservations({ sources, windowStart, windowEnd }) {
-			const rows = await db.$queryRaw<Array<{ source: string; product_ean: string | null; sku: string | null; observed_at: Date }>>`
-				SELECT op."source" AS source,
-					item."item_key"::jsonb ->> 'ean' AS product_ean,
-					NULLIF(item."after_facts" ->> 'skuId', '') AS sku,
-					op."observed_at" AS observed_at
-				FROM public."source_capture_operations" op
-				JOIN public."source_capture_items" item ON item."operation_id" = op."id"
-				WHERE item."entity" IN ('product', 'offer')
-					AND op."source" IN (${Prisma.join(sources)})
-					AND op."observed_at" >= ${new Date(windowStart)}
-					AND op."observed_at" <= ${new Date(windowEnd)}`;
+			const rows = await db.$queryRaw<Array<{ source: string; product_ean: string | null; sku: string | null; observed_at: Date }>>(durableObservationsQuery(sources, new Date(windowStart), new Date(windowEnd)));
 			return rows.map((row) => ({
 				source: row.source,
 				productEan: row.product_ean,
