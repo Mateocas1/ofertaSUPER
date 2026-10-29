@@ -49,6 +49,7 @@ tmp-dev-server*.log
 next-env.d.ts
 
 # local agent/runtime artifacts
+.codegraph/
 .atl/
 .pi/
 .pi-lens/

@@ -4,6 +4,8 @@ ofertasSUPER is a supermarket price and offer comparison app for Argentina. It i
 
 > Status: the functional portfolio MVP is complete and green at merged functional baseline `45d014f`. This is **not** production launch or live-operations sign-off. See the [current evidence report](docs/reports/portfolio-readiness/2026-08-13-functional-mvp-closure.md).
 
+> Consumer MVP: the accepted path from the portfolio baseline to a small consumer MVP is documented in the [consumer MVP roadmap](docs/consumer-mvp-roadmap.md). It is a planned execution contract, not evidence of live-catalog or public-pilot readiness.
+
 ## Demo
 
 - Public demo: https://ofertas-super.vercel.app
