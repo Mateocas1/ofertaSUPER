@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { formatDateTime } from "@/lib/format";
+import { DropThumb } from "@/components/bajas/drop-thumb";
+import { DropsFilter, type DropFilterCategory, type DropFilterRow } from "@/components/bajas/drops-filter";
+import { formatDiscountPercent } from "@/lib/format";
 import {
   buildPriceDropsView,
   formatDropAmount,
-  formatDropPercent,
   loadPriceDrops,
   storeLabel,
   type PriceDrop,
@@ -28,6 +29,11 @@ export const metadata: Metadata = createMetadata({
   feeds: [{ path: PRICE_DROPS_FEED_PATH, title: PRICE_DROPS_FEED_TITLE }],
 });
 
+// "4 nov" (the shared formatDate pads the day: "04-nov").
+function formatDay(value: string): string {
+  return new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short", timeZone: "America/Argentina/Buenos_Aires" }).format(new Date(value)).replace(".", "");
+}
+
 function loadView(): PriceDropsView {
   try {
     return buildPriceDropsView(loadPriceDrops());
@@ -38,73 +44,90 @@ function loadView(): PriceDropsView {
 
 function DropRow({ drop }: { drop: PriceDrop }) {
   return (
-    <article className="grid gap-3 border-b-2 border-dashed border-border py-4 last:border-b-0 md:grid-cols-[1.7fr_0.8fr_1fr_0.7fr_0.6fr] md:items-center md:gap-4">
-      <div className="min-w-0">
-        <h2 className="truncate text-sm font-semibold text-foreground">{drop.name}</h2>
-        <p className="mt-1 truncate text-xs text-muted-foreground">
-          {drop.brand ?? "Sin marca"} · {drop.category ?? "Sin categoría"}
-        </p>
-      </div>
-      <p className="text-sm font-medium text-foreground">{storeLabel(drop.source)}</p>
-      <p className="font-mono text-xs tabular-nums text-muted-foreground">
-        <span className="line-through">{formatDropAmount(drop.previousPrice)}</span>
-        <span aria-hidden="true"> → </span>
-        <span className="text-foreground">{formatDropAmount(drop.currentPrice)}</span>
-      </p>
-      <p className="price text-xl text-primary">-{formatDropPercent(drop.percentDrop)}</p>
-      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-        <time dateTime={drop.observedAt}>{formatDateTime(drop.observedAt)}</time>
-        <Link
-          href={canonicalProductPath(drop.ean)}
-          className="inline-flex min-h-11 w-fit items-center font-semibold text-primary hover:underline"
-        >
-          Ver producto
-        </Link>
+    <article className="flex items-center gap-3 px-4 py-3 sm:gap-4 md:px-5">
+      <DropThumb src={drop.imageUrl} alt="" />
+      <div className="grid min-w-0 flex-1 gap-x-4 gap-y-1 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+        <div className="min-w-0">
+          <h2 className="text-sm font-medium text-foreground md:text-base">
+            <Link
+              href={canonicalProductPath(drop.ean)}
+              className="line-clamp-2 after:absolute after:inset-0 hover:text-primary focus-visible:outline-none focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+            >
+              {drop.name}
+            </Link>
+          </h2>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {drop.brand ?? "Sin marca"} · {drop.category ?? "Sin categoría"}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {storeLabel(drop.source)} · <time dateTime={drop.observedAt}>{formatDay(drop.observedAt)}</time>
+          </p>
+        </div>
+        <div className="flex items-baseline gap-3 md:flex-col md:items-end md:gap-0.5">
+          <p className="price text-base text-primary">
+            <span className="text-xs font-normal text-muted-foreground">Bajó </span>
+            {formatDiscountPercent(drop.percentDrop, 1)}
+          </p>
+          <p className="text-sm tabular-nums text-muted-foreground">
+            <span className="sr-only">Antes </span>
+            <span className="line-through">{formatDropAmount(drop.previousPrice)}</span>
+            <span aria-hidden="true"> → </span>
+            <span className="sr-only">, ahora </span>
+            <span className="price text-foreground">{formatDropAmount(drop.currentPrice)}</span>
+          </p>
+        </div>
       </div>
     </article>
   );
 }
 
+function dropSummary(view: PriceDropsView): string {
+  const payload = view.payload;
+  if (!payload) return view.summary;
+  const day = formatDay(`${payload.date}T12:00:00`);
+  if (payload.drops.length === 0) return `En el relevamiento del ${day} no hubo bajas por encima de los umbrales.`;
+  const total = payload.totalDrops;
+  const verb = total === 1 ? "precio bajó" : "precios bajaron";
+  const shown =
+    payload.drops.length < total
+      ? `; mostramos ${payload.drops.length === 1 ? "la mayor" : `las ${payload.drops.length} mayores`}`
+      : "";
+  return `${total} ${verb} en el relevamiento del ${day}${shown}.`;
+}
+
 function Header({ view }: { view: PriceDropsView }) {
   return (
-    <section className="surface p-6 sm:p-8 lg:p-10" aria-labelledby="price-drops-title">
-      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Precios registrados</p>
-      <h1 id="price-drops-title" className="mt-2 text-3xl font-bold tracking-[-0.03em] text-foreground sm:text-4xl">
+    <header aria-labelledby="price-drops-title">
+      <h1 id="price-drops-title" className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
         Bajas de precio
       </h1>
-      <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground">
-        Todos los días comparamos el precio de cada oferta contra su última observación distinta y publicamos las
-        caídas que superan los umbrales. Cada línea muestra el precio anterior, el más reciente y la fecha de cada
-        registro, con el supermercado que lo publicó.
-      </p>
-      <p className="mt-3 max-w-3xl text-base leading-7 text-foreground">{view.summary}</p>
-      <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">{view.thresholdsNote}</p>
-      <div className="mt-5 flex flex-wrap items-center gap-3">
+      <p className="mt-2 text-base text-muted-foreground">{dropSummary(view)}</p>
+      <p className="mt-1 flex flex-wrap items-center gap-x-4 text-sm text-muted-foreground">
         <Link
-          href="/ofertas"
-          className="press inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          href="/metodologia#umbrales-de-bajas"
+          className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-foreground"
         >
-          Ver ofertas disponibles
+          Cómo elegimos qué baja se publica
         </Link>
         <a
           href={PRICE_DROPS_FEED_PATH}
           type="application/atom+xml"
-          className="press inline-flex min-h-11 items-center rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground hover:border-primary hover:text-primary"
+          className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-foreground"
         >
           Suscribirse al feed Atom
         </a>
-      </div>
-    </section>
+      </p>
+    </header>
   );
 }
 
 function UnavailableState({ view }: { view: PriceDropsView }) {
   return (
-    <section className="surface p-6 sm:p-8" aria-labelledby="price-drops-unavailable">
-      <h2 id="price-drops-unavailable" className="text-2xl font-bold tracking-[-0.03em] text-foreground">
+    <section className="surface p-4 md:p-5" aria-labelledby="price-drops-unavailable">
+      <h2 id="price-drops-unavailable" className="text-xl font-semibold text-foreground">
         Bajas no disponibles
       </h2>
-      <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground" role="alert">
+      <p className="mt-2 max-w-prose text-base text-muted-foreground" role="alert">
         {view.summary}
       </p>
     </section>
@@ -113,53 +136,49 @@ function UnavailableState({ view }: { view: PriceDropsView }) {
 
 function EmptyState({ view }: { view: PriceDropsView }) {
   return (
-    <section className="surface p-6 sm:p-8" aria-labelledby="price-drops-empty">
-      <h2 id="price-drops-empty" className="text-2xl font-bold tracking-[-0.03em] text-foreground">
+    <section className="surface p-4 md:p-5" aria-labelledby="price-drops-empty">
+      <h2 id="price-drops-empty" className="text-xl font-semibold text-foreground">
         Sin bajas por encima de los umbrales
       </h2>
-      <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">{view.summary}</p>
-      <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground">
-        Una caída menor a los umbrales no se publica para no mostrar movimientos que el visitante no puede aprovechar.
-      </p>
+      <p className="mt-2 max-w-prose text-base text-muted-foreground">{dropSummary(view)}</p>
     </section>
   );
 }
 
+function categoryCounts(drops: PriceDrop[]): DropFilterCategory[] {
+  const counts = new Map<string, number>();
+  for (const drop of drops) {
+    const name = drop.category ?? "Sin categoría";
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "es-AR"));
+}
+
 function DropList({ view }: { view: PriceDropsView }) {
-  return (
-    <section className="surface p-6 sm:p-8" aria-labelledby="price-drops-list">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 id="price-drops-list" className="text-2xl font-bold tracking-[-0.03em] text-foreground">
-          {view.drops.length === 1 ? "1 baja publicada" : `${view.drops.length} bajas publicadas`}
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          Ordenadas por variación porcentual; se publican hasta {view.payload?.rules.limit ?? 0} por día.
-        </p>
-      </div>
-      <div className="mt-2">
-        {view.drops.map((drop) => (
-          <DropRow key={`${drop.ean}:${drop.source}:${drop.date}`} drop={drop} />
-        ))}
-      </div>
-    </section>
-  );
+  const rows: DropFilterRow[] = view.drops.map((drop) => ({
+    id: `${drop.ean}:${drop.source}:${drop.date}`,
+    category: drop.category,
+    node: <DropRow drop={drop} />,
+  }));
+
+  return <DropsFilter rows={rows} categories={categoryCounts(view.drops)} />;
 }
 
 export default function PriceDropsPage() {
   const view = loadView();
 
   return (
-    <div className="px-4 py-8 sm:px-6 md:py-12">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <Header view={view} />
-        {view.unavailable ? <UnavailableState view={view} /> : null}
-        {!view.unavailable && view.isEmpty ? <EmptyState view={view} /> : null}
-        {!view.unavailable && !view.isEmpty ? <DropList view={view} /> : null}
-        <p className="text-xs leading-5 text-muted-foreground">
-          Los precios son observaciones registradas por el refresh diario del catálogo; compará siempre la fecha de
-          cada registro antes de decidir una compra.
-        </p>
-      </div>
+    <div className="container-page flex flex-col gap-6 py-8 md:py-10">
+      <Header view={view} />
+      {view.unavailable ? <UnavailableState view={view} /> : null}
+      {!view.unavailable && view.isEmpty ? <EmptyState view={view} /> : null}
+      {!view.unavailable && !view.isEmpty ? <DropList view={view} /> : null}
+      <p className="max-w-prose text-xs text-muted-foreground">
+        Los precios son observaciones registradas del catálogo; fijate en la fecha de cada una antes de decidir una
+        compra.
+      </p>
     </div>
   );
 }

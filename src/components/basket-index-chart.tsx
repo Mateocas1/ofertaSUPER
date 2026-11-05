@@ -3,6 +3,10 @@
 // is shipped for this chart. The geometry is a pure function so it can be
 // tested without a renderer.
 
+function shortDate(isoDate: string): string {
+  return new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" }).format(new Date(`${isoDate}T12:00:00`));
+}
+
 const WIDTH = 760;
 const HEIGHT = 300;
 const PADDING = { top: 16, right: 16, bottom: 34, left: 52 };
@@ -74,7 +78,7 @@ export function buildChartGeometry(points: BasketIndexChartPoint[]): BasketIndex
     basketPath: linePath(points, "basket", x, y),
     cpiPath: linePath(points, "cpi", x, y),
     valueTicks: niceTicks(lo, hi, 4).map((value) => ({ y: y(value), label: value.toFixed(1) })),
-    dateTicks: [...tickIndexes].map((index) => ({ x: x(index), label: points[index].date.slice(5) })),
+    dateTicks: [...tickIndexes].map((index) => ({ x: x(index), label: shortDate(points[index].date) })),
   };
 }
 
@@ -82,7 +86,7 @@ export function BasketIndexChart({ points }: { points: BasketIndexChartPoint[] }
   const geometry = buildChartGeometry(points);
   if (!geometry) {
     return (
-      <p className="rounded-xl bg-surface-2 p-4 text-sm text-muted-foreground">
+      <p className="surface-soft p-4 text-sm text-muted-foreground">
         Todavía no hay suficientes días comparables para dibujar la serie.
       </p>
     );
@@ -107,7 +111,7 @@ export function BasketIndexChart({ points }: { points: BasketIndexChartPoint[] }
             />
           ))}
         </g>
-        <g className="fill-muted-foreground text-[11px]">
+        <g className="fill-muted-foreground text-xs">
           {geometry.valueTicks.map((tick) => (
             <text key={tick.label} x={padding.left - 8} y={tick.y + 4} textAnchor="end">
               {tick.label}
@@ -124,10 +128,10 @@ export function BasketIndexChart({ points }: { points: BasketIndexChartPoint[] }
       </svg>
       <figcaption className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-2">
-          <span className="h-0.5 w-6 bg-primary" aria-hidden="true" /> Índice de canasta (base {points[0].date})
+          <span className="h-0.5 w-6 bg-primary" aria-hidden="true" /> Índice de canasta (base {shortDate(points[0].date)})
         </span>
         <span className="inline-flex items-center gap-2">
-          <span className="h-0.5 w-6 border-t-2 border-dashed border-muted-foreground" aria-hidden="true" /> IPC INDEC (rebajado a la misma base)
+          <span className="h-0.5 w-6 border-t-2 border-dashed border-muted-foreground" aria-hidden="true" /> IPC INDEC (llevado a la misma base)
         </span>
       </figcaption>
     </figure>

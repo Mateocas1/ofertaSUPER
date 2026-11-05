@@ -40,6 +40,16 @@ describe("price drops page contract", () => {
     assert.match(source, /Suscribirse al feed Atom/);
   });
 
+  it("stays static: the category filter is client-side and the page never reads searchParams", () => {
+    const source = readFileSync(PAGE_PATH, "utf8");
+
+    assert.match(source, /export const revalidate/);
+    assert.doesNotMatch(source, /searchParams/);
+    assert.match(source, /DropsFilter/);
+    assert.match(source, /formatDiscountPercent/);
+    assert.match(source, /metodologia#umbrales-de-bajas/);
+  });
+
   it("keeps the page copy honest and free from red flags", () => {
     assert.equal(existsSync(PAGE_PATH), true);
     const source = readFileSync(PAGE_PATH, "utf8");
