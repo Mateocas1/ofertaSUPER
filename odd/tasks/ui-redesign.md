@@ -110,19 +110,128 @@ Constraints (from `ARCHITECTURE.md` and the existing test contracts):
 6. Integration: lint, typecheck, tests, build, browser screenshots desktop /
    mobile / dark, independent review.
 
+## Decisions
+
+Taken autonomously during an overnight run (the owner asked not to be blocked
+on decisions). Each one records what was decided, why, and how to revert it.
+The ones marked **review** are the ones the owner may want to revisit.
+
+1. **ODD, not SDD, for this change.** One task file (this one) with goal,
+   rationale, scope, tasks, evidence, progress and next steps, as gentle-shell
+   documents its daily workflow. SDD's five artifacts would be ceremony for a
+   UI change with no new domain model.
+2. **Parallel agents in isolated worktrees, disjoint file ownership.** Shared
+   foundations (tokens, formatters, shell) were committed first so every
+   agent built on the same contract; each agent owned a page set and could
+   not edit shared files. Merges were clean except one test file.
+3. **Tests that pinned the old illustrative home were rewritten, not deleted.**
+   `tests/home-ui-data.test.ts` and `tests/home-cta.browser.ts` pinned the
+   fake basket ("Canasta ilustrativa", Vea/DIA totals). They now pin the new
+   contract and keep every honesty regex (emoji, jargon, red flags, misleading
+   current-price claims) over all remaining home copy, plus a check that no
+   "ilustrativo/ejemplo" text renders. Navigation checks assert each
+   destination's H1, not only its URL.
+4. **One "precio anterior" rule** (`src/lib/price-movement.ts`): the last
+   *different*, positive price before the current observation within 14 days —
+   the rule /bajas already published with. It now feeds /bajas, the public
+   API, the search cards and the product page. Fixes a real bug: every
+   movement read 0% because the last history point *is* the current
+   observation. **API-visible**: `previousPrice`/`deltaPercent` in
+   `/api/products*` now carry the real movement, and entries gain
+   `previousObservedAt` (additive). Cost: ~25 ms over all 46,721 offers,
+   only on list sorts that need every summary (CDN-cached for an hour).
+5. **The fixed basket is shown honestly even though no supermarket is
+   complete today** (**review**). Of its 12 GTINs only 3 (leche, papas fritas,
+   aceite) are carried by all five supermarkets; yerba by none. Re-seeding
+   the basket is a methodology change to the Laspeyres index (`analytics/`),
+   so it was not done here; the home never ranks an incomplete basket as
+   equivalent to a complete one and says why no total is "la más barata".
+6. **Header navigation: Buscar · Ofertas · Bajas · Inflación + Canasta
+   button with count.** "Inicio" removed (the wordmark links home); /bajas and
+   /inflacion were only reachable from deep links before.
+7. **Brand mark**: the favicon's idea (a shopping list whose price goes down)
+   became the single mark for header, favicon, PWA icons and manifest, in the
+   brand green with the promo orange. The old header rings didn't match
+   anything else. **review** if a designer owns the brand.
+8. **Prices in ink, green only for savings, orange only for promos.** CTAs
+   stay green (conventional for the domain; changing `--primary` would cascade
+   into focus rings and links). "Solo en {súper}" is neutral, not green.
+9. **No monospace.** Geist Mono removed from the font payload; numbers use
+   Geist with tabular figures. Bricolage only for wordmark and home H1
+   (weight 800 subset only).
+10. **Product chart axis does not start at zero** but always spans at least
+    20% of the top price (comment in `price-history-model.ts`): a zero
+    baseline flattened real 2–5% moves into invisibility; the min-span rule
+    keeps small noise from looking dramatic. Step lines on a real time axis.
+11. **/bajas category filter is client-side** over the 100 server-rendered
+    rows so the page stays static (ISR 6 h). URL-driven filtering would have
+    made it dynamic (Vercel Hobby CPU budget).
+12. **Search relevance**: only `snapshotMatchRank` changed (generic product
+    first: "Leche entera" before "Leche Bebé…"). Per-product cost unchanged;
+    the pinned index-contract tests pass. The "specialized words" list is
+    hand-picked (**review**: it is a heuristic, see Next steps).
+13. **Dates**: one set of Buenos Aires formatters in `src/lib/format.ts`
+    ("4 nov", "4 nov 2026", "15:15"); calendar dates (`YYYY-MM-DD`) are
+    formatted in UTC so no time zone shifts them. Five local copies removed.
+14. **Unavailable product page is in Spanish for users**, but the English
+    metadata title "Catalog temporarily unavailable" stays: it is pinned by
+    `ARCHITECTURE.md` and `tests/product-page.test.ts` as the fail-closed
+    contract.
+15. **Not committed: `AGENTS.md` changes made by `next dev`.** Next 16
+    rewrites its agent-rules block on every dev start; that churn is
+    unrelated to this change. Set `agentRules: false` in `next.config.ts` or
+    commit the block once in a separate commit.
+16. **Pre-existing failure left alone**: `tests/price-chart.test.ts`
+    "renders the committed real snapshot" expects exactly 12 series and
+    today's data has 11. It fails on the base commit too and is unrelated to
+    the UI; it should assert a range, not an exact count.
+
 ## Evidence
 
-_Filled in at integration: commands run, results, screenshots._
+Base `6180e61` → branch `claude/fervent-mendel-gq0rgr`.
+
+- `npx eslint .` → exit 0, 0 warnings. `npm run audit:complexity` → PASS
+  (0 over threshold, 0 regressed).
+- `NODE_OPTIONS=--max-old-space-size=7000 npx tsc --noEmit` → exit 0 (the
+  default heap OOMs on the 43 MB JSON import; pre-existing).
+- `npm test` → 773 tests, 771 pass, 1 skipped, 1 fail (the pre-existing
+  chart-count test, decision 16).
+- `npm run build` → OK; `/`, `/bajas`, `/inflacion`, `/metodologia`,
+  `/canasta` stay static (`/` and `/bajas` ISR 6 h).
+- Browser test `tests/home-cta.browser.ts` against the production build →
+  4/4 pass.
+- Full-page heights for the same content, before → after:
+  `/buscar?q=leche` desktop 4,924 → 2,425 px, mobile 15,912 → 8,287 px;
+  `/` mobile 4,876 → 2,619 px; `/bajas` mobile 26,290 → 13,135 px. On a phone
+  the first search result moved from y≈740 to y≈379.
+- Search "leche": first results were baby formula; now plain
+  descremada/entera.
 
 ## Progress
 
-- [ ] 1 Foundations
-- [ ] 2 Home
-- [ ] 3 Product card + search
-- [ ] 4 Product page
-- [ ] 5 Secondary pages
-- [ ] 6 Integration
+- [x] 1 Foundations
+- [x] 2 Home
+- [x] 3 Product card + search
+- [x] 4 Product page
+- [x] 5 Secondary pages
+- [x] 6 Integration (lint, types, tests, build, browser test, screenshots,
+      independent review)
 
 ## Next steps
 
-_Filled in at integration._
+1. **Basket seed** (analytics): re-pick the 12 basket GTINs for coverage
+   across all supermarkets (yerba is missing everywhere; 4 items exist in a
+   single store), so the home can name the cheapest complete basket.
+2. **Search**: multi-word queries match only as one contiguous string
+   ("leche serenisima" finds nothing); tokenized matching needs the pinned
+   index contract to change. Replace the hand-picked specialized-words list
+   with a signal from data (e.g. category depth or sales-rank if available).
+3. **Pagination** on /buscar, /categoria and /ofertas (today: first 24).
+4. **/ofertas** is sorted by discount, so non-grocery items lead; add the same
+   category filter /bajas has. Its supermarket filter keeps products sold
+   there that have a discount anywhere (logic in `public-pages.ts`).
+5. **Typecheck memory**: stop importing the 43 MB snapshot as a typed JSON
+   module (read it with `fs` + a schema) so `tsc` runs on the default heap.
+6. Fix the data-coupled chart-count test (decision 16).
+7. Product images: verify real thumbnails in production (the sandbox cannot
+   load vteximg.com.br, so only the placeholder state was seen here).
