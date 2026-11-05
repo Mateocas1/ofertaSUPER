@@ -73,7 +73,7 @@ export function buildPriceDropsFeed(payload: PriceDropsPayload): string {
   const feedUrl = buildAbsoluteUrl(PRICE_DROPS_FEED_PATH);
   const subtitle =
     payload.drops.length === 0
-      ? "Sin bajas por encima de los umbrales publicados en el último refresh del catálogo."
+      ? "Sin bajas por encima de los umbrales publicados en el último relevamiento del catálogo."
       : `${payload.totalDrops} bajas detectadas en el refresh del ${payload.date}, ordenadas por variación porcentual.`;
 
   return [

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Price drops export (#548 slice 2). Reads the committed snapshot the refresh
 // just wrote and publishes the day's drops as data/price-drops.json: each drop
-// is the current price against the last different observation inside the
-// window, above both thresholds, excluding stale offers and promo-only
-// artifacts.
+// is the current price against the previous different price, when the change
+// happened inside the window (src/lib/price-movement.ts), above both
+// thresholds, excluding stale offers and promo-only artifacts.
 //
 // Thresholds and window are configurable with the flags below or with the
 // matching PRICE_DROP_* environment variables:

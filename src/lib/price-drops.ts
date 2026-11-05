@@ -391,7 +391,7 @@ export type PriceDropsView = {
 function thresholdsNote(rules: PriceDropRules): string {
   return (
     `Umbrales publicados: caída de al menos ${percentFormatter.format(rules.minPercentDrop)}% y ` +
-    `${formatDropAmount(rules.minAmountDrop)}, contra la última observación distinta dentro de ${rules.windowDays} días. ` +
+    `${formatDropAmount(rules.minAmountDrop)} contra el precio anterior, con el cambio ocurrido en los últimos ${rules.windowDays} días. ` +
     "Los movimientos sospechosos (por ejemplo, caídas que un cambio de presentación o un error de carga explican mejor) no se publican."
   );
 }
@@ -413,8 +413,8 @@ export function buildPriceDropsView(payload: PriceDropsPayload | null): PriceDro
   const published = payload.drops.length;
   const summary =
     published === 0
-      ? `El refresh del catálogo del ${payload.date} no registró bajas por encima de los umbrales publicados.`
-      : `El refresh del catálogo del ${payload.date} registró ${payload.totalDrops} ${payload.totalDrops === 1 ? "baja" : "bajas"}; se publican las ${published} mayores por variación porcentual.`;
+      ? `El relevamiento del ${payload.date} no registró bajas por encima de los umbrales publicados.`
+      : `El relevamiento del ${payload.date} registró ${payload.totalDrops} ${payload.totalDrops === 1 ? "baja" : "bajas"}; se publican las ${published} mayores por variación porcentual.`;
 
   return {
     payload,

@@ -43,11 +43,33 @@ describe("last different price", () => {
     });
   });
 
-  it("returns null when the price never changed or the change is outside the window", () => {
+  it("returns null when the price never changed or the change itself is outside the window", () => {
     assert.equal(findLastDifferentPrice([{ price: 500, observedAt: CURRENT }], 500, CURRENT), null);
-    const old = [{ price: 900, observedAt: "2026-10-01T10:00:00.000Z" }, { price: 500, observedAt: CURRENT }];
-    assert.equal(findLastDifferentPrice(old, 500, CURRENT), null);
-    assert.deepEqual(findLastDifferentPrice(old, 500, CURRENT, 60), { price: 900, observedAt: "2026-10-01T10:00:00.000Z" });
+    // 900 held since 1 sep and changed to 500 on 1 oct: the change is 34 days old.
+    const oldChange = [
+      { price: 900, observedAt: "2026-09-01T10:00:00.000Z" },
+      { price: 500, observedAt: "2026-10-01T10:00:00.000Z" },
+    ];
+    assert.equal(findLastDifferentPrice(oldChange, 500, CURRENT), null);
+    assert.deepEqual(findLastDifferentPrice(oldChange, 500, CURRENT, 60), { price: 900, observedAt: "2026-09-01T10:00:00.000Z" });
+  });
+
+  it("windows on when the price changed, not on when the previous price started", () => {
+    // The history is a change log. Carrefour, 00000075076870 in the 2026-11-04
+    // snapshot: $18.250 from 17 oct, $10.950 from 2 nov. The previous price is
+    // 18 days old but the drop is 2 days old, so it is a movement in the window.
+    const history = [
+      { price: 16300, observedAt: "2026-10-13T08:45:00.000Z" },
+      { price: 18250, observedAt: "2026-10-17T14:47:00.000Z" },
+      { price: 10950, observedAt: "2026-11-02T21:42:00.000Z" },
+    ];
+    assert.deepEqual(findLastDifferentPrice(history, 10950, "2026-11-04T18:16:00.000Z"), {
+      price: 18250,
+      observedAt: "2026-10-17T14:47:00.000Z",
+    });
+    // A price that held since 1 oct and changed today is a change inside the window.
+    const changedToday = [{ price: 900, observedAt: "2026-10-01T10:00:00.000Z" }, { price: 500, observedAt: CURRENT }];
+    assert.deepEqual(findLastDifferentPrice(changedToday, 500, CURRENT), { price: 900, observedAt: "2026-10-01T10:00:00.000Z" });
   });
 
   it("ignores observations after the current one and a missing current price", () => {

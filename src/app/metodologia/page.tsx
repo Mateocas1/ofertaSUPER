@@ -41,8 +41,8 @@ function DropThresholds({ rules }: { rules: PriceDropRules }) {
         La baja es de al menos {formatPercentage(rules.minPercentDrop, 0)} y {formatCurrency(rules.minAmountDrop)}.
       </li>
       <li>
-        Se compara contra la última observación con un precio distinto, dentro de los {rules.windowDays} días
-        anteriores.
+        Se compara contra el precio anterior distinto, y el cambio tiene que haber ocurrido en los últimos{" "}
+        {rules.windowDays} días.
       </li>
       <li>El precio nuevo tiene que haberse registrado en las últimas {rules.maxAgeHours} horas.</li>
       <li>
