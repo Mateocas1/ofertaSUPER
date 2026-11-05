@@ -58,7 +58,7 @@ test("keeps representative product images unoptimized", async () => {
   const componentPaths = [
     "src/components/product-card.tsx",
     "src/components/search-bar.tsx",
-    "src/components/canasta-page.tsx",
+    "src/components/bajas/drop-thumb.tsx",
   ];
   const components = await Promise.all(componentPaths.map(read));
 

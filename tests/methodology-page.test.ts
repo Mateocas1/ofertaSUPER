@@ -26,4 +26,16 @@ describe("methodology route", () => {
 		assert.match(source, /Cobertura transparente/);
 		assert.doesNotMatch(source, PUBLIC_RED_FLAG_PATTERN);
 	});
+
+	it("exposes stable section ids and reads the drop thresholds from the payload", () => {
+		const source = readFileSync(METHODOLOGY_PAGE_PATH, "utf8");
+
+		for (const id of ["umbrales-de-bajas", "frescura", "cobertura", "comparacion-por-ean"]) {
+			assert.match(source, new RegExp(`id="${id}"`));
+		}
+		assert.match(source, /loadPriceDrops/);
+		assert.match(source, /DEFAULT_PRICE_DROP_RULES/);
+		assert.match(source, /rules\.minPercentDrop/);
+		assert.doesNotMatch(source, /refresh|JSON precalculado/i);
+	});
 });

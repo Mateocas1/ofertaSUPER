@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { formatCurrency, formatPercentage } from "@/lib/format";
+import { DEFAULT_PRICE_DROP_RULES, loadPriceDrops, type PriceDropRules } from "@/lib/price-drops";
 import { createMetadata } from "@/lib/seo/metadata";
 
 export const metadata: Metadata = createMetadata({
@@ -9,99 +11,133 @@ export const metadata: Metadata = createMetadata({
   path: "/metodologia",
 });
 
-const METHOD_STEPS = [
-  {
-    title: "Comparación por EAN",
-    label: "01",
-    body: "Cada producto se agrupa por su código EAN para comparar el mismo artículo entre supermercados y reducir mezclas entre presentaciones parecidas.",
-  },
-  {
-    title: "Frescura visible",
-    label: "02",
-    body: "Los precios se muestran como registros guardados. Cuando una fuente supera su ventana esperada, la interfaz lo marca como dato viejo para que la decisión sea conservadora.",
-  },
-  {
-    title: "Cobertura transparente",
-    label: "03",
-    body: "La canasta informa cuántos productos encuentra cada supermercado. Un total con menor cobertura no se presenta como equivalente a una compra completa.",
-  },
-] as const;
+// The thresholds come from the same payload the drops page renders, so this
+// text can never disagree with what /bajas publishes.
+function loadRules(): PriceDropRules {
+  try {
+    return loadPriceDrops().rules;
+  } catch {
+    return DEFAULT_PRICE_DROP_RULES;
+  }
+}
 
-const QUALITY_RULES = [
-  "Un precio registrado no se presenta como valor instantáneo.",
-  "La mejor canasta prioriza cobertura y contexto, no sólo el número más bajo.",
-  "Las fuentes se revisan con controles de salud antes de usar sus datos para comparar.",
-] as const;
+const SECTION_LINK = "text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground";
+
+function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+  return (
+    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-24 py-8 first:pt-0">
+      <h2 id={`${id}-title`} className="text-2xl font-semibold tracking-tight text-foreground">
+        {title}
+      </h2>
+      <div className="mt-3 space-y-3 text-base leading-7 text-muted-foreground">{children}</div>
+    </section>
+  );
+}
+
+function DropThresholds({ rules }: { rules: PriceDropRules }) {
+  return (
+    <ul className="list-disc space-y-1 pl-5">
+      <li>
+        La baja es de al menos {formatPercentage(rules.minPercentDrop, 0)} y {formatCurrency(rules.minAmountDrop)}.
+      </li>
+      <li>
+        Se compara contra la última observación con un precio distinto, dentro de los {rules.windowDays} días
+        anteriores.
+      </li>
+      <li>El precio nuevo tiene que haberse registrado en las últimas {rules.maxAgeHours} horas.</li>
+      <li>
+        Una caída de más de {formatPercentage(rules.maxPercentDrop, 0)} se descarta: suele ser un cambio de
+        presentación o un error de carga, no una oferta.
+      </li>
+      <li>Se publican las {rules.limit} mayores por variación porcentual.</li>
+    </ul>
+  );
+}
 
 export default function MethodologyPage() {
+  const rules = loadRules();
+
   return (
-    <div className="px-4 py-8 sm:px-6 md:py-12">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <section className="surface overflow-hidden p-6 sm:p-8 lg:p-10">
-          <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-end">
-            <div className="max-w-3xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Metodología
-              </p>
-              <h1 className="mt-3 max-w-4xl text-4xl font-extrabold leading-[0.98] tracking-[-0.045em] text-foreground text-balance sm:text-5xl lg:text-6xl">
-                Comparaciones claras para decidir con precios registrados.
-              </h1>
-            </div>
-            <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8 lg:justify-self-end">
-              ofertasSUPER cruza productos por EAN, muestra la frescura de cada registro y separa cobertura de precio para evitar lecturas engañosas.
+    <div className="container-page py-8 md:py-10">
+      <article className="max-w-[70ch]">
+        <header className="pb-8">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">Metodología</h1>
+          <p className="mt-3 text-lg leading-7 text-muted-foreground">
+            ofertasSUPER cruza productos por EAN, muestra la fecha de cada registro y separa la cobertura del precio
+            para evitar lecturas engañosas.
+          </p>
+          <nav aria-label="En esta página" className="mt-4 flex flex-wrap gap-x-4">
+            <a className={`${SECTION_LINK} inline-flex min-h-11 items-center`} href="#comparacion-por-ean">
+              Comparación
+            </a>
+            <a className={`${SECTION_LINK} inline-flex min-h-11 items-center`} href="#frescura">
+              Frescura
+            </a>
+            <a className={`${SECTION_LINK} inline-flex min-h-11 items-center`} href="#cobertura">
+              Cobertura
+            </a>
+            <a className={`${SECTION_LINK} inline-flex min-h-11 items-center`} href="#umbrales-de-bajas">
+              Bajas de precio
+            </a>
+          </nav>
+        </header>
+
+        <div className="divide-y divide-border border-t border-border pt-8">
+          <Section id="comparacion-por-ean" title="Comparación por EAN">
+            <p>
+              Cada producto se agrupa por su código EAN para comparar el mismo artículo entre supermercados y reducir
+              mezclas entre presentaciones parecidas.
             </p>
-          </div>
-        </section>
+          </Section>
 
-        <section className="grid gap-5 lg:grid-cols-[1.12fr_0.88fr]">
-          <div className="surface p-5 sm:p-6 lg:p-7">
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Cómo se calcula</p>
-                <h2 className="mt-2 text-3xl font-bold  text-foreground">Del producto a la canasta</h2>
-              </div>
-              <Link
-                href="/buscar"
-                className="press inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-              >
-                Buscar productos
+          <Section id="frescura" title="Frescura visible">
+            <p>
+              Los precios se muestran como registros guardados, con la fecha en que se relevaron. Un precio registrado
+              no es un valor instantáneo: puede haber cambiado en la góndola o en la tienda online.
+            </p>
+            <p>
+              Cuando una fuente supera su ventana esperada, lo marcamos como dato viejo para que la decisión sea
+              conservadora.
+            </p>
+          </Section>
+
+          <Section id="cobertura" title="Cobertura transparente">
+            <p>
+              La canasta informa cuántos productos encuentra cada supermercado. Un total con menor cobertura no se
+              presenta como equivalente a una compra completa: si falta algún producto, el total queda marcado como
+              parcial.
+            </p>
+            <p>
+              La mejor canasta prioriza la cobertura y el contexto, no sólo el número más bajo. Los descuentos
+              condicionales de billeteras o bancos no se suman.
+            </p>
+          </Section>
+
+          <Section id="umbrales-de-bajas" title="Umbrales de las bajas de precio">
+            <p>
+              <Link href="/bajas" className="text-foreground underline underline-offset-2">
+                Las bajas
+              </Link>{" "}
+              se calculan una vez por día con las mismas reglas para todos los supermercados:
+            </p>
+            <DropThresholds rules={rules} />
+          </Section>
+
+          <Section id="fuentes" title="Fuentes y controles">
+            <p>
+              Las fuentes se revisan con controles de salud antes de usar sus datos para comparar. Si el catálogo no
+              está disponible, mostramos ese estado en lugar de datos de ejemplo.
+            </p>
+            <p>
+              Para la evolución de una canasta fija frente al IPC del INDEC, mirá{" "}
+              <Link href="/inflacion" className="text-foreground underline underline-offset-2">
+                la página de inflación
               </Link>
-            </div>
-
-            <div className="grid gap-4">
-              {METHOD_STEPS.map((step) => (
-                <article key={step.title} className="grid gap-4 rounded-xl bg-surface-2 p-4 ring-1 ring-border sm:grid-cols-[4.5rem_1fr] sm:p-5">
-                  <span className="font-mono text-3xl font-semibold tracking-[-0.08em] text-primary/80" aria-hidden="true">
-                    {step.label}
-                  </span>
-                  <div>
-                    <h3 className="text-xl font-semibold tracking-[-0.03em] text-foreground">{step.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{step.body}</p>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-
-          <aside className="surface-soft p-5 sm:p-6 lg:p-7" aria-labelledby="quality-rules-title">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">Criterios de confianza</p>
-            <h2 id="quality-rules-title" className="mt-2 text-3xl font-bold  text-foreground">
-              Lectura conservadora de datos
-            </h2>
-            <ul className="mt-6 space-y-4">
-              {QUALITY_RULES.map((rule) => (
-                <li key={rule} className="flex gap-3 rounded-xl bg-surface-2 px-4 py-3 ring-1 ring-border text-sm leading-6 text-muted-foreground">
-                  <span className="mt-2 size-2 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-                  <span>{rule}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-6 rounded-xl border-2 border-dashed border-primary/40 bg-accent/60 p-4 text-sm leading-6 text-foreground">
-              Si un supermercado no cubre todos los productos de una canasta, ofertasSUPER lo muestra como cobertura parcial. Así el total no se confunde con una compra equivalente.
-            </div>
-          </aside>
-        </section>
-      </div>
+              .
+            </p>
+          </Section>
+        </div>
+      </article>
     </div>
   );
 }
