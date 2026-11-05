@@ -8,6 +8,9 @@ const PUBLIC_COPY_FILES = [
 	"src/app/producto/[ean]/page.tsx",
 	"src/components/canasta-page.tsx",
 	"src/lib/home-ui-data.ts",
+	"src/components/home/home-hero.tsx",
+	"src/components/home/home-drops.tsx",
+	"src/components/home/home-basket.tsx",
 	"src/lib/seo/schema.ts",
 ] as const;
 
