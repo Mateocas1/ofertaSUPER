@@ -1,13 +1,16 @@
 import { cache } from "react";
+import Link from "next/link";
 import type { Metadata } from "next";
 
 import { CatalogProvenanceNotice } from "@/components/catalog-provenance-notice";
-import { ProductCard } from "@/components/product-card";
 import { SearchBar } from "@/components/search-bar";
+import { FilterSelect, SupermarketFilter, type FilterOption } from "@/components/search/catalog-filters";
+import { CatalogMessage, CatalogUnavailable, ProductGrid } from "@/components/search/catalog-states";
+import { FilterForm } from "@/components/search/filter-form";
+import { resultCountLabel } from "@/components/search/result-count";
 import { loadSnapshotProductList, resolveSnapshotCatalogPage } from "@/lib/public-pages";
 import { getSingleParam } from "@/lib/page-params";
 import { createMetadata, createUnavailableCatalogMetadata } from "@/lib/seo/metadata";
-import { SUPERMARKETS } from "@/lib/supermarkets";
 
 export const revalidate = 21600;
 
@@ -21,6 +24,16 @@ type SearchFilters = {
   sort?: "relevance" | "discount" | "price-asc" | "price-desc" | "updated";
 };
 
+const SORT_OPTIONS: FilterOption[] = [
+  { value: "", label: "Relevancia" },
+  { value: "price-asc", label: "Precio más bajo" },
+  { value: "price-desc", label: "Precio más alto" },
+  { value: "discount", label: "Mayor descuento" },
+  { value: "updated", label: "Relevamiento más reciente" },
+];
+
+const EXAMPLE_QUERIES = ["leche", "yerba", "arroz", "aceite", "café"];
+
 const loadSearchPage = cache(async (
   query: string,
   supermarket: SearchFilters["supermarket"],
@@ -32,88 +45,85 @@ const loadSearchPage = cache(async (
 })));
 
 type SearchPageData = Awaited<ReturnType<typeof loadSearchPage>>;
+type SearchResult = NonNullable<Extract<SearchPageData, { availability: "eligible" }>["catalog"]["products"]>;
 
 function filtersFrom(params: Record<string, string | string[] | undefined>): SearchFilters {
   return {
-    query: getSingleParam(params.q) ?? "",
-    supermarket: getSingleParam(params.super),
-    sort: getSingleParam(params.sort) as SearchFilters["sort"],
+    query: getSingleParam(params.q)?.trim() ?? "",
+    supermarket: getSingleParam(params.super) || undefined,
+    sort: (getSingleParam(params.sort) || undefined) as SearchFilters["sort"],
   };
 }
 
-function SearchHeader({ filters }: { filters: SearchFilters }) {
-  const { query, supermarket, sort } = filters;
-
+function SearchHeading({ query, result }: { query: string; result: SearchResult | null }) {
   return (
-    <section className="surface p-8 md:p-10">
-      <div className="flex flex-col gap-6">
-        <div>
-          <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Búsqueda</p>
-          <h1 className="mt-2 text-4xl font-extrabold text-foreground md:text-6xl">
-            {query ? `Resultados para "${query}"` : "Encontrá el producto exacto"}
-          </h1>
-          <p className="mt-3 max-w-2xl text-lg text-muted-foreground">
-            Buscá productos, compará coincidencias por supermercado y afiná los filtros sin perder contexto.
-          </p>
-        </div>
-
-        <SearchBar defaultValue={query} />
-
-        <form className="surface-soft grid gap-3 p-4 md:grid-cols-3" action="/buscar">
-          <input type="hidden" name="q" value={query} />
-          <label className="sr-only" htmlFor="search-supermarket-filter">Supermercado</label>
-          <select id="search-supermarket-filter" name="super" defaultValue={supermarket ?? ""} className="min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground">
-            <option value="">Todos los supers</option>
-            {SUPERMARKETS.map((item) => (
-              <option key={item.slug} value={item.slug}>{item.name}</option>
-            ))}
-          </select>
-          <label className="sr-only" htmlFor="search-sort-filter">Ordenar resultados</label>
-          <select id="search-sort-filter" name="sort" defaultValue={sort ?? "relevance"} className="min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground">
-            <option value="relevance">Relevancia</option>
-            <option value="discount">Mayor descuento</option>
-            <option value="price-asc">Precio más bajo</option>
-            <option value="price-desc">Precio más alto</option>
-            <option value="updated">Más reciente</option>
-          </select>
-          <button className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Refinar</button>
-        </form>
-      </div>
-    </section>
+    <div>
+      <h1 className="text-2xl font-semibold text-foreground md:text-3xl">
+        {query ? `Resultados para “${query}”` : "Buscá un producto"}
+      </h1>
+      {result ? (
+        <p className="mt-1 text-sm text-muted-foreground">{resultCountLabel(result.total, result.items.length)}</p>
+      ) : null}
+    </div>
   );
 }
 
-function SearchCatalogState({ filters, page }: { filters: SearchFilters; page: SearchPageData }) {
+function SearchFiltersForm({ filters }: { filters: SearchFilters }) {
+  return (
+    <FilterForm key={`${filters.query}|${filters.supermarket ?? ""}|${filters.sort ?? ""}`} action="/buscar" label="Filtrar resultados">
+      <input type="hidden" name="q" value={filters.query} />
+      <SupermarketFilter id="search-supermarket-filter" value={filters.supermarket} />
+      <FilterSelect id="search-sort-filter" name="sort" label="Ordenar por" value={filters.sort} options={SORT_OPTIONS} />
+    </FilterForm>
+  );
+}
+
+function ExampleQueries() {
+  return (
+    <CatalogMessage title="Escribí un producto o una marca">
+      <p>
+        Probá con{" "}
+        {EXAMPLE_QUERIES.map((example, index) => (
+          <span key={example}>
+            <Link href={`/buscar?q=${encodeURIComponent(example)}`} className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+              {example}
+            </Link>
+            {index < EXAMPLE_QUERIES.length - 1 ? ", " : "."}
+          </span>
+        ))}
+      </p>
+    </CatalogMessage>
+  );
+}
+
+function NoResults({ filters }: { filters: SearchFilters }) {
+  return (
+    <CatalogMessage title={`No encontramos productos para “${filters.query}”.`}>
+      <p>Revisá la ortografía o probá con una palabra más general.</p>
+      {filters.supermarket ? (
+        <p className="mt-2">
+          <Link href={`/buscar?q=${encodeURIComponent(filters.query)}`} className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+            Buscar en todos los supermercados
+          </Link>
+        </p>
+      ) : null}
+    </CatalogMessage>
+  );
+}
+
+function SearchResults({ filters, page }: { filters: SearchFilters; page: SearchPageData }) {
   if (page.availability === "unavailable") {
-    return (
-      <section role="alert" className="rounded-xl border-2 border-dashed border-warning/60 bg-deal-soft px-5 py-4 text-sm leading-6 text-foreground">
-        <p className="font-semibold">El catálogo no está disponible.</p>
-        <p className="mt-1">No podemos mostrar resultados reales en este momento. Probá de nuevo más tarde.</p>
-      </section>
-    );
+    return <CatalogUnavailable>No podemos mostrar resultados reales en este momento. Probá de nuevo más tarde.</CatalogUnavailable>;
   }
 
   const result = page.catalog.products;
-  if (!filters.query) {
-    return (
-      <section className="surface-soft p-6 text-sm text-muted-foreground">
-        Probá con marcas, categorías o productos concretos. Ejemplos: Coca Cola, yerba, arroz.
-      </section>
-    );
-  }
+  if (!filters.query || !result) return <ExampleQueries />;
+  if (result.items.length === 0) return <NoResults filters={filters} />;
 
-  if (!result) return null;
   return (
     <>
-      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <h2 className="sr-only">Resultados de búsqueda</h2>
-        {result.items.map((product) => <ProductCard key={product.ean} product={product} />)}
-      </section>
-      {result.items.length === 0 ? (
-        <section className="surface-soft p-6 text-sm text-muted-foreground">
-          No encontramos coincidencias para esa búsqueda con los filtros actuales.
-        </section>
-      ) : null}
+      <CatalogProvenanceNotice {...page.catalog} />
+      <ProductGrid products={result.items} label="Resultados de búsqueda" />
     </>
   );
 }
@@ -138,12 +148,13 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const result = page.availability === "eligible" ? page.catalog.products : null;
 
   return (
-    <div className="px-6 py-8 md:py-10">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <SearchHeader filters={filters} />
-        {page.availability === "eligible" && result ? <CatalogProvenanceNotice {...page.catalog} /> : null}
-        <SearchCatalogState filters={filters} page={page} />
-      </div>
+    <div className="container-page flex flex-col gap-5 py-6 md:py-8">
+      <header className="flex flex-col gap-4">
+        <SearchHeading query={filters.query} result={result} />
+        <SearchBar defaultValue={filters.query} variant="compact" />
+        {result && filters.query && (result.total > 0 || filters.supermarket) ? <SearchFiltersForm filters={filters} /> : null}
+      </header>
+      <SearchResults filters={filters} page={page} />
     </div>
   );
 }

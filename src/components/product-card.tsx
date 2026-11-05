@@ -1,14 +1,25 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Package } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { BasketControls } from "@/components/basket-controls";
 import { FavoriteButton } from "@/components/favorite-button";
+import { ThumbFrame } from "@/components/product-card/thumb-frame";
 import { PromotionBadge } from "@/components/promotion-badge";
 import { StruckListPrice } from "@/components/struck-list-price";
-import { SupermarketBadge } from "@/components/supermarket-badge";
-import { buttonVariants } from "@/components/ui/button-variants";
-import { formatCurrency, formatPercent } from "@/lib/format";
-import { getPriceFreshnessCopy, type PriceFreshnessStatus } from "@/lib/price-freshness";
+import { formatCurrency, formatDiscountPercent } from "@/lib/format";
+import { type PriceFreshnessStatus } from "@/lib/price-freshness";
+import {
+  cardCoverageLabel,
+  cardVerdictLabel,
+  formatObservedDay,
+  promotionLabel,
+  summarizeCardOffers,
+  type CardOfferRow,
+  type CardOfferSummary,
+} from "@/lib/product-card-offers";
+import { detectAutomaticDiscount } from "@/lib/promotions/detect";
 import type { SimplePromotion } from "@/lib/promotions/simple-promos";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +33,7 @@ type ProductCardEntry = {
   price: number | null;
   listPrice: number | null;
   promo: SimplePromotion | null;
+  isAvailable?: boolean;
 };
 
 type ProductCardProduct = {
@@ -46,118 +58,115 @@ type ProductCardProps = {
   product: ProductCardProduct;
 };
 
-function ProductCardBadges({ product }: { product: ProductCardProduct }) {
+// The image is decorative (the linked name sits next to it), so it has an
+// empty alt and a calm placeholder underneath for missing or broken images.
+function ProductThumb({ product, href }: { product: ProductCardProduct; href: string }) {
   return (
-    <div className="flex flex-wrap gap-2">
-      {product.category ? (
-        <span className="rounded-md bg-surface-3 px-2 py-0.5 text-[0.7rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          {product.category}
-        </span>
+    <Link href={href} tabIndex={-1} aria-hidden="true" className="shrink-0">
+      <ThumbFrame className="relative size-16 overflow-hidden rounded-lg bg-muted">
+        <Package className="absolute inset-0 m-auto size-6 text-muted-foreground/50" aria-hidden="true" />
+        {product.imageUrl ? (
+          <Image src={product.imageUrl} alt="" fill sizes="64px" className="img-outline object-contain" unoptimized />
+        ) : null}
+      </ThumbFrame>
+    </Link>
+  );
+}
+
+function HeadlinePrice({ price, entry }: { price: number | null; entry: ProductCardEntry | undefined }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      <p className="price text-2xl text-foreground">{price === null ? "Sin precio" : formatCurrency(price)}</p>
+      {entry ? <StruckListPrice price={entry.price} listPrice={entry.listPrice} /> : null}
+      {entry?.promo ? (
+        <PromotionBadge type={entry.promo.type === "nth-unit" ? "2nd_50" : "percentage"} label={promotionLabel(entry.promo)} />
       ) : null}
-      {product.automaticDiscountPercent ? (
-        <PromotionBadge type="percentage" label={`${formatPercent(product.automaticDiscountPercent, 0)} OFF`} />
-      ) : null}
     </div>
   );
 }
 
-function ProductCardImage({ product }: { product: ProductCardProduct }) {
+function RowDifference({ row }: { row: CardOfferRow<ProductCardEntry> }) {
+  if (row.olderCheaper) return <span className="text-xs text-muted-foreground">dato anterior</span>;
+  return <span className="text-xs tabular-nums text-muted-foreground">+{formatCurrency(row.difference)}</span>;
+}
+
+function RowDeal({ entry }: { entry: ProductCardEntry }) {
+  const discount = detectAutomaticDiscount(entry.price, entry.listPrice);
+  const label = entry.promo ? promotionLabel(entry.promo) : discount ? formatDiscountPercent(discount.percentOff) : null;
+  return label ? <span className="truncate text-xs font-medium tabular-nums text-deal-ink">{label}</span> : null;
+}
+
+function OfferRow({ entry, children }: { entry: ProductCardEntry; children: ReactNode }) {
   return (
-    <div className="relative size-18 overflow-hidden rounded-xl bg-surface-3/70 md:size-24">
-      {product.imageUrl ? (
-        <Image src={product.imageUrl} alt={product.name} fill sizes="96px" className="img-outline object-cover" unoptimized />
-      ) : (
-        <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Sin foto
-        </div>
-      )}
-    </div>
+    <li data-supermarket={entry.supermarket.slug} className="flex items-baseline gap-2 py-0.5 text-sm">
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">{entry.supermarket.name}</span>
+      <RowDeal entry={entry} />
+      <span className="tabular-nums text-foreground">{formatCurrency(entry.price)}</span>
+      <span className="w-14 shrink-0 text-right">{children}</span>
+    </li>
   );
 }
 
-// The struck list price belongs to the entry that set the displayed price.
-function displayStrikeEntry(entries: ProductCardEntry[], displayPrice: number | null) {
-  return entries.find((entry) => entry.price === displayPrice) ?? null;
-}
-
-function ProductCardPricePanel({ product, displayPrice, isStale, freshnessCopy }: { product: ProductCardProduct; displayPrice: number | null; isStale: boolean; freshnessCopy: ReturnType<typeof getPriceFreshnessCopy> }) {
-  const displayEntry = displayStrikeEntry(product.entries, displayPrice);
+function OfferRows({ product, summary }: { product: ProductCardProduct; summary: CardOfferSummary<ProductCardEntry> }) {
+  if (summary.unnamedCheapest.length === 0 && summary.others.length === 0) return null;
   return (
-    <div className="mt-6 flex items-end justify-between gap-4 rounded-xl border-2 border-dashed border-border bg-surface-1 p-4">
-      <div>
-        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{freshnessCopy.priceLabel}</p>
-        <p className="price mt-1 text-3xl text-primary">{formatCurrency(displayPrice)}</p>
-        <div className="mt-1 flex flex-wrap items-baseline gap-2">
-          <StruckListPrice price={displayEntry?.price ?? null} listPrice={displayEntry?.listPrice ?? null} />
-          {displayEntry?.promo ? <PromotionBadge type={displayEntry.promo.type === "nth-unit" ? "2nd_50" : "percentage"} label={displayEntry.promo.label} /> : null}
-        </div>
-        {isStale ? <p className="mt-1 text-xs font-medium text-warning">{freshnessCopy.badgeLabel}</p> : null}
-      </div>
-      <div className="text-right">
-        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Rango</p>
-        <p className="mt-1 font-mono text-sm font-medium tabular-nums text-foreground">
-          {formatCurrency(displayPrice)} - {formatCurrency(product.maxPrice)}
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">{product.priceCount} supers con precio</p>
-      </div>
-    </div>
+    <ul aria-label={`Precios por supermercado: ${product.name}`} className="divide-y divide-border border-t border-border">
+      {summary.unnamedCheapest.map((entry) => (
+        <OfferRow key={entry.supermarket.slug} entry={entry}><span className="text-xs text-muted-foreground">igual</span></OfferRow>
+      ))}
+      {summary.others.map((row) => (
+        <OfferRow key={row.entry.supermarket.slug} entry={row.entry}><RowDifference row={row} /></OfferRow>
+      ))}
+    </ul>
   );
+}
+
+// Observation date and coverage, never a live-price claim: a stale headline
+// says so in words, in the warning tone.
+function ObservationLine({ product, coverage }: { product: ProductCardProduct; coverage: number }) {
+  const checkedAt = product.displayPriceCheckedAt ?? product.bestPriceCheckedAt;
+  const stale = (product.displayPriceFreshnessStatus ?? product.bestPriceFreshnessStatus) === "stale";
+  const day = checkedAt ? formatObservedDay(checkedAt) : null;
+  const parts = [
+    stale ? "Dato viejo" : null,
+    day ? `${stale ? "relevado" : "Relevado"} el ${day}` : null,
+    cardCoverageLabel(coverage),
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return <p className={cn("text-xs", stale ? "font-medium text-warning" : "text-muted-foreground")}>{parts.join(" · ")}</p>;
 }
 
 export function ProductCard({ product }: ProductCardProps) {
-  const topEntries = product.entries.slice(0, 3);
-  const displayPrice = product.displayPrice ?? product.minPrice;
-  const displayPriceCheckedAt = product.displayPriceCheckedAt ?? product.bestPriceCheckedAt;
-  const displayPriceFreshnessStatus = product.displayPriceFreshnessStatus ?? product.bestPriceFreshnessStatus;
-  const freshnessCopy = getPriceFreshnessCopy({
-    status: displayPriceFreshnessStatus,
-    checkedAt: displayPriceCheckedAt,
-    ageHours: null,
-    maxAgeHours: 0,
-  });
-  const isStale = displayPriceFreshnessStatus === "stale";
+  const href = `/producto/${product.ean}`;
+  const headline = product.displayPrice ?? product.minPrice;
+  const summary = summarizeCardOffers(product.entries, headline);
+  const verdict = cardVerdictLabel(summary.verdict);
 
   return (
-    <article className="surface lift flex h-full flex-col overflow-hidden p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-3">
-          <ProductCardBadges product={product} />
-
-          <div>
-            <h3 className="font-display text-xl font-bold leading-tight text-balance text-foreground">{product.name}</h3>
-            {product.brand ? <p className="mt-1 text-sm text-muted-foreground">{product.brand}</p> : null}
-          </div>
+    <article className="surface flex h-full flex-col gap-3 p-4">
+      <div className="flex items-start gap-3">
+        <ProductThumb product={product} href={href} />
+        <div className="min-w-0 flex-1">
+          <h3 className="line-clamp-2 text-sm font-medium leading-5 text-foreground">
+            <Link href={href} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+              {product.name}
+            </Link>
+          </h3>
+          {product.brand ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{product.brand}</p> : null}
         </div>
-
-        <div className="flex shrink-0 flex-col items-end gap-3">
-          <FavoriteButton ean={product.ean} productName={product.name} size="sm" />
-          <ProductCardImage product={product} />
-        </div>
+        <FavoriteButton ean={product.ean} productName={product.name} size="sm" className="-mr-1 -mt-1" />
       </div>
 
-      <ProductCardPricePanel product={product} displayPrice={displayPrice} isStale={isStale} freshnessCopy={freshnessCopy} />
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {topEntries.map((entry) => (
-          <SupermarketBadge
-            key={`${product.ean}-${entry.supermarket.slug}`}
-            name={entry.supermarket.name}
-            slug={entry.supermarket.slug}
-            logoUrl={entry.supermarket.logoUrl}
-            price={formatCurrency(entry.price)}
-          />
-        ))}
-      </div>
-
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-4 pt-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs uppercase tracking-[0.16em] text-muted-foreground">EAN {product.ean}</span>
-          <BasketControls ean={product.ean} productName={product.name} compact />
+      <div className="space-y-0.5">
+        <div className="flex items-center justify-between gap-2">
+          <HeadlinePrice price={headline} entry={summary.cheapest[0]} />
+          <BasketControls ean={product.ean} productName={product.name} compact className="shrink-0" />
         </div>
-        <Link href={`/producto/${product.ean}`} className={cn(buttonVariants({ size: "sm" }), "press rounded-full px-4")}>
-          Ver comparativa
-        </Link>
+        {verdict ? <p className="text-sm font-medium text-primary">{verdict}</p> : null}
+        <ObservationLine product={product} coverage={summary.coverage} />
       </div>
+
+      <OfferRows product={product} summary={summary} />
     </article>
   );
 }

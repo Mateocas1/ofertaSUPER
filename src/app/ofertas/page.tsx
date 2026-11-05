@@ -1,15 +1,19 @@
 import { cache } from "react";
+import Link from "next/link";
 import type { Metadata } from "next";
 
 import { CatalogProvenanceNotice } from "@/components/catalog-provenance-notice";
-import { ProductCard } from "@/components/product-card";
 import { PromotionBadge } from "@/components/promotion-badge";
-import { SupermarketBadge } from "@/components/supermarket-badge";
+import { FilterSelect, SupermarketFilter, type FilterOption } from "@/components/search/catalog-filters";
+import { CatalogMessage, CatalogUnavailable, ProductGrid } from "@/components/search/catalog-states";
+import { FilterForm } from "@/components/search/filter-form";
+import { resultCountLabel } from "@/components/search/result-count";
 import { getSingleParam } from "@/lib/page-params";
 import { loadSnapshotProductList, resolveSnapshotCatalogPage } from "@/lib/public-pages";
 import type { PromotionSummary } from "@/lib/catalog";
 import { createMetadata, createUnavailableCatalogMetadata } from "@/lib/seo/metadata";
-import { SUPERMARKETS } from "@/lib/supermarkets";
+
+import { filterPromotions, promotionPaymentNames, type PromotionFilters } from "./promotion-filters";
 
 export const revalidate = 21600;
 
@@ -17,15 +21,19 @@ type OffersPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-type OfferFilters = {
-  supermarket?: string;
-  wallet?: string;
-  type?: string;
-};
+const PROMOTION_TYPE_OPTIONS: FilterOption[] = [
+  { value: "", label: "Todos" },
+  { value: "2x1", label: "2x1" },
+  { value: "2nd_50", label: "2da al 50%" },
+  { value: "wallet_discount", label: "Billetera" },
+  { value: "bank_discount", label: "Banco" },
+  { value: "percentage", label: "Porcentaje" },
+];
 
-// The snapshot has no manual promotions yet (Gate 4c); the hub shows the
-// automatic list-price discounts it can prove from the committed data.
-const loadOffersPage = cache(async (supermarket: OfferFilters["supermarket"]) =>
+// The snapshot carries no bank or wallet promotions yet (Gate 4c), so the
+// page shows the list-price discounts it can prove from the committed data and
+// renders the promotions section only when promotions exist.
+const loadOffersPage = cache(async (supermarket: PromotionFilters["supermarket"]) =>
   resolveSnapshotCatalogPage({}, () => ({
     promotions: [] as PromotionSummary[],
     discountedProducts: loadSnapshotProductList({
@@ -38,74 +46,86 @@ const loadOffersPage = cache(async (supermarket: OfferFilters["supermarket"]) =>
   })));
 
 type OffersPageData = Awaited<ReturnType<typeof loadOffersPage>>;
+type OffersCatalog = Extract<OffersPageData, { availability: "eligible" }>["catalog"];
 
-function filtersFrom(params: Record<string, string | string[] | undefined>): OfferFilters {
+function filtersFrom(params: Record<string, string | string[] | undefined>): PromotionFilters {
   return {
-    supermarket: getSingleParam(params.super),
-    wallet: getSingleParam(params.wallet),
-    type: getSingleParam(params.type) as OfferFilters["type"],
+    supermarket: getSingleParam(params.super) || undefined,
+    wallet: getSingleParam(params.wallet) || undefined,
+    type: getSingleParam(params.type) || undefined,
   };
 }
 
-function OffersHeader({ filters }: { filters: OfferFilters }) {
+function OffersFilters({ filters, promotions }: { filters: PromotionFilters; promotions: PromotionSummary[] }) {
+  const paymentOptions: FilterOption[] = [
+    { value: "", label: "Todas" },
+    ...promotionPaymentNames(promotions).map((name) => ({ value: name, label: name })),
+  ];
   return (
-    <section className="surface p-8 md:p-10">
-      <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Hub de ofertas</p>
-          <h1 className="mt-2 text-4xl font-extrabold text-foreground md:text-6xl">Promos manuales y descuentos detectados</h1>
-          <p className="mt-3 max-w-3xl text-lg text-muted-foreground">
-            Cruza promociones activas de bancos y billeteras con descuentos detectados automaticamente por diferencia entre list price y precio registrado.
-          </p>
-        </div>
+    <FilterForm key={`${filters.supermarket ?? ""}|${filters.wallet ?? ""}|${filters.type ?? ""}`} action="/ofertas" label="Filtrar ofertas">
+      <SupermarketFilter id="offers-supermarket-filter" value={filters.supermarket} />
+      {promotions.length > 0 ? (
+        <>
+          <FilterSelect id="offers-wallet-filter" name="wallet" label="Banco o billetera" value={filters.wallet} options={paymentOptions} />
+          <FilterSelect id="offers-type-filter" name="type" label="Tipo de promoción" value={filters.type} options={PROMOTION_TYPE_OPTIONS} />
+        </>
+      ) : null}
+    </FilterForm>
+  );
+}
 
-        <form className="surface-soft grid gap-3 p-4 md:grid-cols-4" action="/ofertas">
-          <label className="sr-only" htmlFor="offers-supermarket-filter">Supermercado</label>
-          <select id="offers-supermarket-filter" name="super" defaultValue={filters.supermarket ?? ""} className="min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground">
-            <option value="">Todos los supers</option>
-            {SUPERMARKETS.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}
-          </select>
-          <label className="sr-only" htmlFor="offers-wallet-filter">Billetera o banco</label>
-          <input id="offers-wallet-filter" type="text" name="wallet" defaultValue={filters.wallet ?? ""} placeholder="Billetera o banco" className="min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground" />
-          <label className="sr-only" htmlFor="offers-type-filter">Tipo de promoción</label>
-          <select id="offers-type-filter" name="type" defaultValue={filters.type ?? ""} className="min-h-11 rounded-xl border border-input bg-card px-3 py-2 text-sm text-foreground">
-            <option value="">Todos los tipos</option><option value="2x1">2x1</option><option value="2nd_50">2da al 50%</option><option value="wallet_discount">Billetera</option><option value="bank_discount">Banco</option><option value="percentage">% Off</option>
-          </select>
-          <button className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Filtrar</button>
-        </form>
-      </div>
+function PromotionsSection({ promotions }: { promotions: PromotionSummary[] }) {
+  return (
+    <section aria-labelledby="promotions-heading" className="flex flex-col gap-3">
+      <h2 id="promotions-heading" className="text-lg font-semibold text-foreground">Promociones de bancos y billeteras</h2>
+      <ul className="surface divide-y divide-border">
+        {promotions.map((promotion) => (
+          <li key={promotion.id} className="flex flex-col gap-1 p-4 md:flex-row md:items-baseline md:gap-4">
+            <div className="flex items-center gap-2">
+              <PromotionBadge type={promotion.type} />
+              <span className="text-sm font-medium text-foreground">{promotion.supermarket.name}</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground">{promotion.title}</p>
+              <p className="text-sm text-muted-foreground">
+                {[promotion.walletProvider, promotion.bankName, promotion.conditions].filter(Boolean).join(" · ") || "Sin condiciones registradas"}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
 
-function OffersCatalogState({ page }: { page: OffersPageData }) {
-  if (page.availability === "unavailable") {
+function DiscountedProducts({ catalog }: { catalog: OffersCatalog }) {
+  const { discountedProducts } = catalog;
+  if (discountedProducts.items.length === 0) {
     return (
-      <section role="alert" className="rounded-xl border-2 border-dashed border-warning/60 bg-deal-soft px-5 py-4 text-sm leading-6 text-foreground">
-        <p className="font-semibold">El catálogo no está disponible.</p>
-        <p className="mt-1">No podemos mostrar promociones ni descuentos reales en este momento. Probá de nuevo más tarde.</p>
-      </section>
+      <CatalogMessage title="No hay productos con descuento para este filtro.">
+        <p>Probá con otro supermercado.</p>
+      </CatalogMessage>
     );
   }
+  return (
+    <section aria-labelledby="discounts-heading" className="flex flex-col gap-3">
+      <h2 id="discounts-heading" className="sr-only">Productos con descuento, de mayor a menor</h2>
+      <ProductGrid products={discountedProducts.items} label="Productos con descuento" />
+    </section>
+  );
+}
 
-  const { promotions, discountedProducts } = page.catalog;
+function OffersResults({ page, filters }: { page: OffersPageData; filters: PromotionFilters }) {
+  if (page.availability === "unavailable") {
+    return <CatalogUnavailable>No podemos mostrar promociones ni descuentos reales en este momento. Probá de nuevo más tarde.</CatalogUnavailable>;
+  }
+
+  const promotions = filterPromotions(page.catalog.promotions, filters);
   return (
     <>
       <CatalogProvenanceNotice {...page.catalog} />
-      <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="surface p-6">
-          <div><p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Promociones activas</p><h2 className="mt-2 text-3xl font-bold text-foreground">Carga manual administrable</h2></div>
-          <div className="mt-6 space-y-4">
-            {promotions.map((promotion) => <article key={promotion.id} className="surface-soft p-5"><div className="flex flex-wrap items-center gap-2"><PromotionBadge type={promotion.type} /><SupermarketBadge name={promotion.supermarket.name} slug={promotion.supermarket.slug} logoUrl={promotion.supermarket.logoUrl} /></div><h3 className="mt-4 text-xl font-semibold text-foreground">{promotion.title}</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{[promotion.walletProvider, promotion.bankName, promotion.conditions].filter(Boolean).join(" • ") || "Sin condiciones registradas"}</p></article>)}
-            {promotions.length === 0 ? <article className="rounded-xl border-2 border-dashed border-border bg-surface-1 p-5 text-sm text-muted-foreground">No hay promociones manuales activas con estos filtros.</article> : null}
-          </div>
-        </div>
-        <div className="space-y-5">
-          <div><p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">Descuento automatico</p><h2 className="mt-2 text-3xl font-bold text-foreground">Productos con list price por encima del precio registrado</h2></div>
-          <div className="grid gap-5 md:grid-cols-2">{discountedProducts.items.map((product) => <ProductCard key={product.ean} product={product} />)}</div>
-          {discountedProducts.items.length === 0 ? <article className="rounded-xl border-2 border-dashed border-border bg-surface-1 p-5 text-sm text-muted-foreground">No hay descuentos automáticos recientes con estos filtros.</article> : null}
-        </div>
-      </section>
+      {promotions.length > 0 ? <PromotionsSection promotions={promotions} /> : null}
+      <DiscountedProducts catalog={page.catalog} />
     </>
   );
 }
@@ -116,8 +136,8 @@ export async function generateMetadata({ searchParams }: OffersPageProps): Promi
   if (page.availability === "unavailable") return createUnavailableCatalogMetadata();
 
   return createMetadata({
-    title: "Hub de ofertas",
-    description: "Promociones activas y productos con descuento detectado en supermercados argentinos.",
+    title: "Ofertas",
+    description: "Productos con precio por debajo de su precio de lista en supermercados argentinos, según el último relevamiento.",
     path: "/ofertas",
   });
 }
@@ -125,13 +145,26 @@ export async function generateMetadata({ searchParams }: OffersPageProps): Promi
 export default async function OffersPage({ searchParams }: OffersPageProps) {
   const filters = filtersFrom(await searchParams);
   const page = await loadOffersPage(filters.supermarket);
+  const catalog = page.availability === "eligible" ? page.catalog : null;
 
   return (
-    <div className="px-6 py-8 md:py-10">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <OffersHeader filters={filters} />
-        <OffersCatalogState page={page} />
-      </div>
+    <div className="container-page flex flex-col gap-5 py-6 md:py-8">
+      <header className="flex flex-col gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground md:text-3xl">Ofertas</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Productos con precio por debajo de su precio de lista, según el último relevamiento.{" "}
+            <Link href="/metodologia" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">Cómo lo medimos</Link>
+          </p>
+          {catalog ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {resultCountLabel(catalog.discountedProducts.total, catalog.discountedProducts.items.length)}, de mayor a menor descuento
+            </p>
+          ) : null}
+        </div>
+        {catalog ? <OffersFilters filters={filters} promotions={catalog.promotions} /> : null}
+      </header>
+      <OffersResults page={page} filters={filters} />
     </div>
   );
 }

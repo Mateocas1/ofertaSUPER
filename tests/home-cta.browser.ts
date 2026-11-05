@@ -51,23 +51,27 @@ test("home shows real drops and the basket honestly on mobile, with no illustrat
 test("header navigation reaches every section and returns home", async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	const nav = page.getByRole("navigation", { name: "Principal" });
+	// Each destination is checked by URL and by its one H1, so a broken page
+	// cannot pass as a navigation.
 	const destinations = [
-		["Buscar", /\/buscar$/],
-		["Ofertas", /\/ofertas/],
-		["Bajas", /\/bajas$/],
-		["Inflación", /\/inflacion$/],
+		["Buscar", /\/buscar$/, "Buscá un producto"],
+		["Ofertas", /\/ofertas/, "Ofertas"],
+		["Bajas", /\/bajas$/, "Bajas de precio"],
+		["Inflación", /\/inflacion$/, "Inflación por producto"],
 	] as const;
 
-	for (const [name, url] of destinations) {
+	for (const [name, url, heading] of destinations) {
 		await page.goto("/");
 		await nav.getByRole("link", { name, exact: true }).click();
 		await expect(page).toHaveURL(url);
+		await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeVisible();
 		await page.getByRole("link", { name: "ofertasSUPER, inicio" }).click();
 		await expect(page).toHaveURL(/\/$/);
 	}
 
 	await page.getByRole("link", { name: /^Canasta/ }).first().click();
 	await expect(page).toHaveURL(/\/canasta$/);
+	await expect(page.getByRole("heading", { level: 1, name: "Todavía no agregaste productos" })).toBeVisible();
 });
 
 test("each home link performs its stated navigation", async ({ page }) => {
