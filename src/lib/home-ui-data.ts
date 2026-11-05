@@ -1,217 +1,116 @@
-export const HOME_HEADER_NAV = [
-	{ href: "/", label: "Inicio" },
-	{ href: "/buscar", label: "Buscar" },
-	{ href: "/ofertas", label: "Ofertas" },
-	{ href: "/canasta", label: "Canasta" },
-] as const;
+// Copy of the home page. Every number the home shows comes from the committed
+// snapshot, the price-drops payload or the basket index; this file only holds
+// words and the helpers that put those numbers into sentences.
 
 export const HOME_HERO = {
-	heading: "Compará precios. Armá tu canasta. Comprá mejor.",
-	body: "Buscá productos y compará precios registrados por EAN cuando el catálogo esté disponible.",
-	searchPlaceholder: "Buscar leche, yerba, arroz, aceite...",
+	heading: "Cuánto sale el mismo producto en cada súper.",
+	body: "Buscá por nombre, marca o código de barras y compará los precios registrados, con el supermercado y la fecha de cada uno.",
+	searchLabel: "Buscar producto",
+	searchPlaceholder: "Leche, yerba, arroz, aceite…",
+	searchAction: "Buscar",
+	quickSearchesLabel: "Probá con",
 	quickSearches: ["leche", "yerba", "arroz", "aceite"],
-	signals: ["Comparación por EAN", "Fecha del registro", "Cobertura por supermercado"],
+	unavailable: "El catálogo no está disponible: no se muestran precios ni fechas de relevamiento.",
 } as const;
-
-export const SMART_BASKET = {
-	title: "Canasta ilustrativa",
-	summary: "Ejemplo · 4 productos",
-	basketLabel: "Ejemplo de canasta",
-	comparisonLabel: "Comparación ilustrativa de canastas",
-	totalsLabel: "Totales ilustrativos; no representan una canasta actual.",
-	products: [
-		{
-			name: "Leche entera 1L",
-			brand: "La Serenísima Clásica",
-			shortLabel: "LE",
-			tone: "mint",
-		},
-		{
-			name: "Yerba mate 1kg",
-			brand: "Taragüí Tradicional",
-			shortLabel: "YM",
-			tone: "blue",
-		},
-		{
-			name: "Arroz largo fino 1kg",
-			brand: "Gallo Oro",
-			shortLabel: "AR",
-			tone: "orange",
-		},
-		{
-			name: "Aceite girasol 1,5L",
-			brand: "Natura",
-			shortLabel: "AC",
-			tone: "yellow",
-		},
-	],
-	ranking: [
-		{
-			supermarket: "Vea",
-			mark: "Vea",
-			total: "$ 10.847",
-			coverage: "4/4 productos",
-			status: "Completa",
-			badge: "Ejemplo · mejor canasta completa",
-			accent: "green",
-		},
-		{
-			supermarket: "Carrefour",
-			mark: "C",
-			total: "$ 11.236",
-			coverage: "4/4 productos",
-			status: "Completa",
-			accent: "blue",
-			badge: null,
-		},
-		{
-			supermarket: "DIA",
-			mark: "DIA",
-			total: "$ 11.985",
-			coverage: "3/4 productos",
-			status: "Falta 1",
-			accent: "red",
-			badge: null,
-		},
-		{
-			supermarket: "Jumbo",
-			mark: "Jumbo",
-			total: "$ 12.509",
-			coverage: "4/4 productos",
-			status: "Completa",
-			accent: "green",
-			badge: null,
-		},
-	],
-	note: "Ejemplo ilustrativo: verificá fecha y fuente antes de comparar precios registrados.",
-} as const;
-
-export const HOME_PRODUCT_ROWS = [
-	{
-		product: "Leche entera 1L",
-		brand: "La Serenísima Clásica",
-		shortLabel: "LE",
-		tone: "mint",
-		minPrice: "$ 1.099",
-		supermarket: "Vea",
-		range: "$ 1.099 - $ 1.349",
-		updatedAt: "Ejemplo ilustrativo",
-		action: "Buscar producto",
-	},
-	{
-		product: "Yerba mate 1kg",
-		brand: "Taragüí Tradicional",
-		shortLabel: "YM",
-		tone: "blue",
-		minPrice: "$ 2.150",
-		supermarket: "Carrefour",
-		range: "$ 2.150 - $ 2.599",
-		updatedAt: "Ejemplo ilustrativo",
-		action: "Buscar producto",
-	},
-	{
-		product: "Arroz largo fino 1kg",
-		brand: "Gallo Oro",
-		shortLabel: "AR",
-		tone: "orange",
-		minPrice: "$ 1.699",
-		supermarket: "Vea",
-		range: "$ 1.699 - $ 2.299",
-		updatedAt: "Ejemplo ilustrativo",
-		action: "Buscar producto",
-	},
-	{
-		product: "Aceite girasol 1,5L",
-		brand: "Natura",
-		shortLabel: "AC",
-		tone: "yellow",
-		minPrice: "$ 2.849",
-		supermarket: "Vea",
-		range: "$ 2.849 - $ 3.599",
-		updatedAt: "Ejemplo ilustrativo",
-		action: "Buscar producto",
-	},
-] as const;
-
-export const MARKET_PULSE_ITEMS = [
-	{
-		title: "Referencia de yerba",
-		description: "Lectura ilustrativa de un registro para comparar.",
-		value: "Registro",
-		tone: "green",
-		points: "4,14 16,20 28,12 40,28 52,18 64,34 76,38",
-	},
-	{
-		title: "Rango de aceite",
-		description: "Lectura ilustrativa de una diferencia entre supermercados.",
-		value: "Rango",
-		tone: "amber",
-		points: "4,12 16,24 28,18 40,32 52,20 64,28 76,16",
-	},
-	{
-		title: "Cobertura de leche",
-		description: "Lectura ilustrativa de una comparación por EAN.",
-		value: "Cobertura",
-		tone: "green",
-		points: "4,28 16,22 28,26 40,18 52,24 64,20 76,24",
-	},
-] as const;
 
 export const HOME_PRICE_DROPS = {
-	title: "Bajas de precio",
-	body: "Los precios que cayeron contra su registro anterior, con la fecha de cada observación y el supermercado que lo publicó.",
-	action: "Ver bajas de precio",
-	feedLabel: "Suscribirse al feed Atom",
-	feedNote: "Un lector de feeds puede seguir las bajas de cada día.",
+	title: "Bajaron de precio",
+	body: "Contra el precio anterior registrado del mismo producto en el mismo supermercado.",
+	action: "Ver todas las bajas",
+	feedLabel: "Feed Atom",
+	dropped: "Bajó",
+	previousPrice: "Antes",
+	empty: "El último relevamiento no registró bajas por encima de los umbrales publicados.",
+	unavailable: "El archivo de bajas no está disponible, así que no se muestra ningún movimiento.",
+	imageFallback: "Sin foto",
 } as const;
 
-export function getApprovedHomeCopy() {
+export const HOME_BASKET = {
+	title: "Canasta básica",
+	body: "Los mismos productos todos los días, una unidad de cada uno, sumados por supermercado.",
+	columns: { store: "Supermercado", coverage: "Productos", total: "Total" },
+	cheapestComplete: "La más barata completa",
+	complete: "Completa",
+	incomplete: "Incompleta",
+	noComplete:
+		"Ningún supermercado tiene precio registrado para todos los productos, así que ningún total se marca como el más barato.",
+	incompleteNote: "Un total con menos productos no se compara con uno completo.",
+	linesSummary: "Precio más bajo de cada producto",
+	noPrice: "Sin precio registrado",
+	staleOnly:
+		"Los precios de la canasta tienen más de 24 horas, así que no se suman hasta el próximo relevamiento.",
+	footnote: "Solo se suman precios relevados en las últimas 24 horas. Verificá en el supermercado antes de comprar.",
+	methodLink: "Cómo evoluciona esta canasta",
+	ownBasketLink: "Armá tu propia canasta",
+	unavailable: "El catálogo no está disponible, así que la canasta no se calcula y no se muestran totales.",
+} as const;
+
+const TIME_ZONE = "America/Argentina/Buenos_Aires";
+const dayMonthFormatter = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short", timeZone: TIME_ZONE });
+const yearFormatter = new Intl.DateTimeFormat("es-AR", { year: "numeric", timeZone: TIME_ZONE });
+const listFormatter = new Intl.ListFormat("es", { type: "conjunction" });
+const countFormatter = new Intl.NumberFormat("es-AR");
+
+/** "4 nov" in Buenos Aires time. */
+export function formatShortDate(iso: string): string {
+	return dayMonthFormatter.format(new Date(iso));
+}
+
+/** "4 nov 2026" in Buenos Aires time. */
+export function formatBulletinDate(iso: string): string {
+	const date = new Date(iso);
+	return `${dayMonthFormatter.format(date)} ${yearFormatter.format(date)}`;
+}
+
+/** "Precios relevados el 4 nov 2026 en Carrefour, Coto y Vea · 24.948 productos". */
+export function provenanceLine(generatedAt: string, supermarkets: readonly string[], productCount: number): string {
+	const where = supermarkets.length > 0 ? ` en ${listFormatter.format(supermarkets)}` : "";
+	const noun = productCount === 1 ? "producto" : "productos";
+	return `Precios relevados el ${formatBulletinDate(generatedAt)}${where} · ${countFormatter.format(productCount)} ${noun}`;
+}
+
+/** "Ver las 100 bajas". */
+export function dropsActionLabel(count: number): string {
+	return count === 1 ? "Ver la baja" : `Ver las ${countFormatter.format(count)} bajas`;
+}
+
+/** "9 de 12 productos". */
+export function basketCoverageLabel(covered: number, itemCount: number): string {
+	const { ratio, noun } = basketCoverageParts(covered, itemCount);
+	return `${ratio} ${noun}`;
+}
+
+/** The ratio and the noun apart, so narrow screens can drop the noun under its column header. */
+export function basketCoverageParts(covered: number, itemCount: number): { ratio: string; noun: string } {
+	return { ratio: `${covered} de ${itemCount}`, noun: itemCount === 1 ? "producto" : "productos" };
+}
+
+/** "12 productos fijos". */
+export function basketSizeLabel(itemCount: number): string {
+	return `${itemCount} ${itemCount === 1 ? "producto fijo" : "productos fijos"}`;
+}
+
+/** "Incompleta: faltan 3", "Incompleta: falta 1". */
+export function basketMissingLabel(missing: number): string {
+	return `${HOME_BASKET.incomplete}: ${missing === 1 ? "falta 1" : `faltan ${missing}`}`;
+}
+
+/** "Relevado el 4 nov". */
+export function observedLabel(iso: string): string {
+	return `Relevado el ${formatShortDate(iso)}`;
+}
+
+/** Every user-facing string of the home, static copy plus the shapes of the generated sentences. */
+export function getApprovedHomeCopy(): string[] {
 	return [
-		...HOME_HEADER_NAV.map((item) => item.label),
-		HOME_HERO.heading,
-		HOME_HERO.body,
-		HOME_HERO.searchPlaceholder,
-		...HOME_HERO.quickSearches,
-		...HOME_HERO.signals,
-		SMART_BASKET.title,
-		SMART_BASKET.summary,
-		SMART_BASKET.basketLabel,
-		SMART_BASKET.comparisonLabel,
-		SMART_BASKET.totalsLabel,
-		SMART_BASKET.note,
-		...SMART_BASKET.products.flatMap((item) => [item.name, item.brand]),
-		...SMART_BASKET.ranking.flatMap((item) => [
-			item.supermarket,
-			item.total,
-			item.coverage,
-			item.status,
-			item.badge ?? "",
-		]),
-		"Ejemplo de precios por producto",
-		"4 productos de ejemplo",
-		"Estos precios son ejemplos ilustrativos; no son precios actuales.",
-		"Abrir búsqueda de productos",
-		...HOME_PRODUCT_ROWS.flatMap((item) => [
-			item.product,
-			item.brand,
-			item.minPrice,
-			item.supermarket,
-			item.range,
-			item.updatedAt,
-			item.action,
-		]),
-		"Ejemplos de lectura del catálogo",
-		"Las líneas son ilustrativas y no representan una serie observada.",
-		"Ver ofertas disponibles",
-		HOME_PRICE_DROPS.title,
-		HOME_PRICE_DROPS.body,
-		HOME_PRICE_DROPS.action,
-		HOME_PRICE_DROPS.feedLabel,
-		HOME_PRICE_DROPS.feedNote,
-		...MARKET_PULSE_ITEMS.flatMap((item) => [
-			item.title,
-			item.description,
-			item.value,
-		]),
-	].filter(Boolean);
+		...Object.values(HOME_HERO).flat(),
+		...Object.values(HOME_PRICE_DROPS),
+		...Object.values(HOME_BASKET).flatMap((value) => (typeof value === "string" ? [value] : Object.values(value))),
+		provenanceLine("2026-11-04T19:00:00.000Z", ["Carrefour", "Coto", "Disco", "Jumbo", "Vea"], 24948),
+		dropsActionLabel(100),
+		basketCoverageLabel(9, 12),
+		basketSizeLabel(12),
+		basketMissingLabel(3),
+		observedLabel("2026-11-04T19:00:00.000Z"),
+	];
 }
