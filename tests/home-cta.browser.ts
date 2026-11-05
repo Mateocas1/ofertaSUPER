@@ -40,13 +40,13 @@ test("home labels static examples and the offers recovery honestly on mobile", a
 
 	await page.getByRole("link", { name: "Buscar", exact: true }).click();
 	await expect(page).toHaveURL(/\/buscar$/);
-	await expect(page.getByRole("heading", { name: "Encontrá el producto exacto" })).toBeVisible();
+	await expect(page.getByRole("heading", { level: 1, name: "Buscá un producto" })).toBeVisible();
 	await page.getByRole("link", { name: "Inicio", exact: true }).click();
 	await expect(page).toHaveURL(/\/$/);
 	await expect(page.getByRole("heading", { name: "Compará precios. Armá tu canasta. Comprá mejor." })).toBeVisible();
 	await page.getByRole("link", { name: "Ofertas", exact: true }).click();
 	await expect(page).toHaveURL(/\/ofertas/);
-	await expect(page.getByRole("heading", { name: "Promos manuales y descuentos detectados" })).toBeVisible();
+	await expect(page.getByRole("heading", { level: 1, name: "Ofertas", exact: true })).toBeVisible();
 	await page.getByRole("link", { name: "Canasta", exact: true }).click();
 	await expect(page).toHaveURL(/\/canasta/);
 	await expect(page.getByRole("heading", { name: "Todavia no agregaste productos." })).toBeVisible();
