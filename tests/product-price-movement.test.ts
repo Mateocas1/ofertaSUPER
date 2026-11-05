@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { detectPriceDrops, type PriceDropRules } from "../src/lib/price-drops";
-import { findLastDifferentPrice, previousObservedAtOf } from "../src/lib/product-history";
+import { findLastDifferentPrice } from "../src/lib/price-movement";
 import { loadSnapshotProductPage } from "../src/lib/public-pages";
 import { installSnapshotFixture } from "./helpers/snapshot-fixture";
 
@@ -70,7 +70,7 @@ describe("product page movements", () => {
       const offer = fixture.offers.find((candidate) => candidate.ean === sample.ean && candidate.source === entry.supermarket.slug)!;
       const reference = offer.history[offer.history.length - 2];
       assert.equal(entry.previousPrice, reference.price);
-      assert.equal(previousObservedAtOf(entry), reference.observedAt);
+      assert.equal(entry.previousObservedAt, reference.observedAt);
       assert.ok(entry.deltaPercent !== null && entry.deltaPercent < 0, "the fixture price fell");
       assert.equal(entry.priceDropAlert?.previousPrice, reference.price);
     }
@@ -89,7 +89,7 @@ describe("product page movements", () => {
       const entry = data.product?.priceEntries.find((candidate) => candidate.supermarket.slug === drop.source);
       assert.ok(entry, `${drop.ean} ${drop.source} is on the product page`);
       assert.equal(entry.previousPrice, drop.previousPrice);
-      assert.equal(previousObservedAtOf(entry), drop.previousObservedAt);
+      assert.equal(entry.previousObservedAt, drop.previousObservedAt);
       assert.equal(entry.deltaPercent, -drop.percentDrop);
     }
   });

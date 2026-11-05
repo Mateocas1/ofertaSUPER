@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { DropThumb } from "@/components/bajas/drop-thumb";
 import { DropsFilter, type DropFilterCategory, type DropFilterRow } from "@/components/bajas/drops-filter";
-import { formatDiscountPercent } from "@/lib/format";
+import { formatDate, formatDiscountPercent } from "@/lib/format";
 import {
   buildPriceDropsView,
   formatDropAmount,
@@ -28,11 +28,6 @@ export const metadata: Metadata = createMetadata({
   path: "/bajas",
   feeds: [{ path: PRICE_DROPS_FEED_PATH, title: PRICE_DROPS_FEED_TITLE }],
 });
-
-// "4 nov" (the shared formatDate pads the day: "04-nov").
-function formatDay(value: string): string {
-  return new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short", timeZone: "America/Argentina/Buenos_Aires" }).format(new Date(value)).replace(".", "");
-}
 
 function loadView(): PriceDropsView {
   try {
@@ -60,7 +55,7 @@ function DropRow({ drop }: { drop: PriceDrop }) {
             {drop.brand ?? "Sin marca"} · {drop.category ?? "Sin categoría"}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {storeLabel(drop.source)} · <time dateTime={drop.observedAt}>{formatDay(drop.observedAt)}</time>
+            {storeLabel(drop.source)} · <time dateTime={drop.observedAt}>{formatDate(drop.observedAt)}</time>
           </p>
         </div>
         <div className="flex items-baseline gap-3 md:flex-col md:items-end md:gap-0.5">
@@ -84,7 +79,7 @@ function DropRow({ drop }: { drop: PriceDrop }) {
 function dropSummary(view: PriceDropsView): string {
   const payload = view.payload;
   if (!payload) return view.summary;
-  const day = formatDay(`${payload.date}T12:00:00`);
+  const day = formatDate(`${payload.date}T12:00:00`);
   if (payload.drops.length === 0) return `En el relevamiento del ${day} no hubo bajas por encima de los umbrales.`;
   const total = payload.totalDrops;
   const verb = total === 1 ? "precio bajó" : "precios bajaron";

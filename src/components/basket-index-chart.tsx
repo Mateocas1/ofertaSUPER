@@ -1,11 +1,9 @@
+import { formatCalendarDate } from "@/lib/format";
+
 // Server-rendered SVG chart for /inflacion: the daily Laspeyres basket index
 // against the INDEC CPI rebased to the same base month. No client JavaScript
 // is shipped for this chart. The geometry is a pure function so it can be
 // tested without a renderer.
-
-function shortDate(isoDate: string): string {
-  return new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" }).format(new Date(`${isoDate}T12:00:00`));
-}
 
 const WIDTH = 760;
 const HEIGHT = 300;
@@ -78,7 +76,7 @@ export function buildChartGeometry(points: BasketIndexChartPoint[]): BasketIndex
     basketPath: linePath(points, "basket", x, y),
     cpiPath: linePath(points, "cpi", x, y),
     valueTicks: niceTicks(lo, hi, 4).map((value) => ({ y: y(value), label: value.toFixed(1) })),
-    dateTicks: [...tickIndexes].map((index) => ({ x: x(index), label: shortDate(points[index].date) })),
+    dateTicks: [...tickIndexes].map((index) => ({ x: x(index), label: formatCalendarDate(points[index].date) })),
   };
 }
 
@@ -128,7 +126,7 @@ export function BasketIndexChart({ points }: { points: BasketIndexChartPoint[] }
       </svg>
       <figcaption className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-2">
-          <span className="h-0.5 w-6 bg-primary" aria-hidden="true" /> Índice de canasta (base {shortDate(points[0].date)})
+          <span className="h-0.5 w-6 bg-primary" aria-hidden="true" /> Índice de canasta (base {formatCalendarDate(points[0].date)})
         </span>
         <span className="inline-flex items-center gap-2">
           <span className="h-0.5 w-6 border-t-2 border-dashed border-muted-foreground" aria-hidden="true" /> IPC INDEC (llevado a la misma base)

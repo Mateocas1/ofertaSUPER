@@ -110,6 +110,8 @@ export type ProductDetail = {
   priceEntries: Array<
     ProductPriceEntry & {
       previousPrice: number | null;
+      /** When the previous (different) price was observed; null when unknown. */
+      previousObservedAt: string | null;
       deltaPercent: number | null;
       priceDropAlert: PriceDropAlert | null;
       automaticDiscountPercent: number | null;
@@ -714,6 +716,8 @@ const getProductDetailCached = cache(async (ean: string): Promise<ProductDetail 
           maxAgeHours: entry.supermarket.freshness_sla_hours,
         }).status,
         previousPrice: priceMovement.previousPrice,
+        // The database path keeps only the last two prices, without dates.
+        previousObservedAt: null,
         deltaPercent: priceMovement.deltaPercent,
         priceDropAlert: priceMovement.priceDropAlert,
         automaticDiscountPercent: automaticDiscount?.percentOff ?? null,

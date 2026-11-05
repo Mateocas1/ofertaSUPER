@@ -1,31 +1,21 @@
-import { formatCurrency, formatDiscountPercent, formatSignedPercent, pluralize } from "@/lib/format";
+import { formatClock, formatCurrency, formatDate, formatDiscountPercent, formatSignedPercent, pluralize } from "@/lib/format";
 import type { PriceFreshnessStatus } from "@/lib/price-freshness";
 import type { SimplePromotion } from "@/lib/promotions/simple-promos";
 
 // Pure view logic of the product page, kept out of the components so it can be
 // tested without rendering: ordering, the cheapest offer, movement and copy.
 
-// Observations are instants; they are shown on the Buenos Aires calendar and
-// clock whatever time zone renders the page (the server runs on UTC).
-const AR_TIME_ZONE = "America/Argentina/Buenos_Aires";
-const shortDayFormatter = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short", timeZone: AR_TIME_ZONE });
-const clockFormatter = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: AR_TIME_ZONE });
-
-function validDate(value: string): Date | null {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
+// Dates come from src/lib/format.ts (Buenos Aires calendar and clock).
 
 /** "30 oct". */
 export function formatShortDay(value: string): string {
-  const date = validDate(value);
-  return date ? shortDayFormatter.format(date) : "fecha desconocida";
+  return formatDate(value);
 }
 
 /** "4 nov a las 15:15". */
 export function formatObservedAt(value: string): string {
-  const date = validDate(value);
-  return date ? `${shortDayFormatter.format(date)} a las ${clockFormatter.format(date)}` : "fecha desconocida";
+  if (Number.isNaN(new Date(value).getTime())) return formatDate(value);
+  return `${formatDate(value)} a las ${formatClock(value)}`;
 }
 
 export type ComparableEntry = {
