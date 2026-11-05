@@ -5,42 +5,27 @@ type SupermarketBadgeProps = {
   slug: string;
   logoUrl: string | null;
   price?: string | null;
+  /** Marks the cheapest offer: green text plus words, never color alone. */
+  highlight?: boolean;
   className?: string;
 };
 
-const badgeStyles: Record<string, string> = {
-  carrefour: "bg-[#0f4c81] text-white",
-  coto: "bg-[#c8102e] text-white",
-  dia: "bg-[#b81c2a] text-white",
-  disco: "bg-[#a63a25] text-white",
-  jumbo: "bg-[#1d6b52] text-white",
-  mas: "bg-[#7a2e9b] text-white",
-  vea: "bg-[#8f5a0c] text-white",
-};
-
-function getInitials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
-export function SupermarketBadge({ name, slug, price, className }: SupermarketBadgeProps) {
+// Supermarkets are identified by name. Colored initials were dropped: Carrefour
+// and Coto both read "C", and Coto and Disco are both red.
+export function SupermarketBadge({ name, slug, price, highlight = false, className }: SupermarketBadgeProps) {
   return (
-    <div
+    <span
+      data-supermarket={slug}
       className={cn(
-        "inline-flex items-center gap-2 rounded-full bg-surface-3/70 py-1.5 pl-1.5 pr-3 text-sm text-foreground",
+        "inline-flex items-baseline gap-1.5 rounded-full border px-2.5 py-1 text-sm",
+        highlight ? "border-primary/40 bg-accent text-accent-foreground" : "border-border bg-card text-foreground",
         className,
       )}
     >
-      <div className={cn("flex size-7 items-center justify-center rounded-full text-[10px] font-bold uppercase", badgeStyles[slug] ?? "bg-muted text-muted-foreground") }>
-        <span aria-hidden="true">{getInitials(name)}</span>
-      </div>
-      <span className="font-medium text-foreground">{name}</span>
-      {price ? <span className="font-mono font-semibold tabular-nums text-muted-foreground">{price}</span> : null}
-    </div>
+      <span className="font-medium">{name}</span>
+      {price ? (
+        <span className={cn("tabular-nums", highlight ? "font-semibold" : "text-muted-foreground")}>{price}</span>
+      ) : null}
+    </span>
   );
 }

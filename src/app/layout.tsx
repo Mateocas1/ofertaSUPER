@@ -1,12 +1,14 @@
 import { SerwistProvider } from "@serwist/next/react";
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
+import { Bricolage_Grotesque, Geist } from "next/font/google";
 import { SiteHeader } from "@/components/site-header";
+import { FOOTER_LINKS } from "@/lib/site-nav";
 import "./globals.css";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
-const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
-const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-bricolage", display: "swap" });
+// Bricolage is the display face for the wordmark and the home H1 only.
+const bricolage = Bricolage_Grotesque({ subsets: ["latin"], weight: ["800"], variable: "--font-bricolage", display: "swap" });
 
 const APP_NAME = "ofertasSUPER";
 const APP_DESCRIPTION = "Comparador de precios y canastas de supermercados argentinos.";
@@ -67,7 +69,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es-AR" className={`${geist.variable} ${geistMono.variable} ${bricolage.variable} h-full antialiased`}>
+    <html lang="es-AR" className={`${geist.variable} ${bricolage.variable} h-full antialiased`}>
       <body className="min-h-full bg-background text-foreground">
         <SerwistProvider
           swUrl="/sw.js"
@@ -75,18 +77,40 @@ export default function RootLayout({
           cacheOnNavigation={false}
           reloadOnOnline
         />
-        <div className="relative flex min-h-full flex-col">
+        <div className="flex min-h-full flex-col">
           <a href="#main-content" className="skip-link">
             Saltar al contenido
           </a>
           <SiteHeader />
-          <main id="main-content" className="relative flex-1">
+          <main id="main-content" className="flex-1">
             {children}
           </main>
-          <footer className="relative border-t-2 border-dashed border-border bg-surface-1 px-6 py-8">
-            <div className="mx-auto flex w-full max-w-[1512px] flex-col gap-2 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-              <p>ofertasSUPER compara productos, precios y canastas de supermercados argentinos.</p>
-              <p>Datos agregados por producto, supermercado y cobertura.</p>
+          <footer className="border-t border-border bg-surface-1">
+            <div className="container-page flex flex-col gap-6 py-8 text-sm text-muted-foreground md:flex-row md:items-start md:justify-between">
+              <div className="max-w-md space-y-2">
+                <p className="font-medium text-foreground">ofertasSUPER</p>
+                <p>
+                  Precios registrados de supermercados argentinos, comparados por código de barras. Cada precio
+                  muestra la fecha en que se relevó: verificalo en la web del supermercado antes de comprar.
+                </p>
+              </div>
+              <nav aria-label="Pie de página">
+                <ul className="grid grid-cols-2 gap-x-8 gap-y-1 sm:flex sm:gap-6">
+                  {FOOTER_LINKS.map((link) => (
+                    <li key={link.href}>
+                      {link.href.endsWith(".xml") ? (
+                        <a href={link.href} type="application/atom+xml" className="inline-flex min-h-11 items-center hover:text-foreground">
+                          {link.label}
+                        </a>
+                      ) : (
+                        <Link href={link.href} className="inline-flex min-h-11 items-center hover:text-foreground">
+                          {link.label}
+                        </Link>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </nav>
             </div>
           </footer>
         </div>
