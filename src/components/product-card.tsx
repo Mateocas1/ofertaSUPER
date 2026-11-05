@@ -13,6 +13,7 @@ import { type PriceFreshnessStatus } from "@/lib/price-freshness";
 import {
   cardCoverageLabel,
   cardVerdictLabel,
+  isSavingsVerdict,
   formatObservedDay,
   promotionLabel,
   summarizeCardOffers,
@@ -162,7 +163,9 @@ export function ProductCard({ product }: ProductCardProps) {
           <HeadlinePrice price={headline} entry={summary.cheapest[0]} />
           <BasketControls ean={product.ean} productName={product.name} compact className="shrink-0" />
         </div>
-        {verdict ? <p className="text-sm font-medium text-primary">{verdict}</p> : null}
+        {verdict ? (
+          <p className={cn("text-sm font-medium", isSavingsVerdict(summary.verdict) ? "text-primary" : "text-foreground")}>{verdict}</p>
+        ) : null}
         <ObservationLine product={product} coverage={summary.coverage} />
       </div>
 

@@ -1,4 +1,4 @@
-import { formatDiscountPercent, pluralize } from "@/lib/format";
+import { formatDate, formatDiscountPercent, pluralize } from "@/lib/format";
 import type { SimplePromotion } from "@/lib/promotions/simple-promos";
 
 // Pure logic behind the product card's price comparison: which supermarkets
@@ -107,6 +107,14 @@ export function cardVerdictLabel(verdict: CardVerdict): string | null {
   }
 }
 
+/**
+ * Green means "cheapest / you save". A product sold in a single supermarket has
+ * nothing to be cheaper than, so "Solo en …" reads as neutral information.
+ */
+export function isSavingsVerdict(verdict: CardVerdict): boolean {
+  return verdict.kind === "cheapest" || verdict.kind === "tie" || verdict.kind === "recent-cheapest";
+}
+
 /** "en 3 supermercados", "en 1 supermercado". */
 export function cardCoverageLabel(coverage: number): string | null {
   return coverage > 0 ? `en ${pluralize(coverage, "supermercado")}` : null;
@@ -120,15 +128,7 @@ export function promotionLabel(promo: Pick<SimplePromotion, "type" | "percent" |
   return promo.type === "percent-off" ? `Promo ${formatDiscountPercent(promo.percent)}` : promo.label;
 }
 
-const observedDayFormatter = new Intl.DateTimeFormat("es-AR", {
-  day: "numeric",
-  month: "short",
-  timeZone: "America/Argentina/Buenos_Aires",
-});
-
-/** "4 nov": the day a price was observed, in Argentine time. */
+/** "4 nov": the day a price was observed, in Argentine time; null when unknown. */
 export function formatObservedDay(value: string): string | null {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return observedDayFormatter.format(date).replace(/\.$/, "");
+  return Number.isNaN(Date.parse(value)) ? null : formatDate(value);
 }

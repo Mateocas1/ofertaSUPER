@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { cardCoverageLabel, cardVerdictLabel, formatObservedDay, promotionLabel, summarizeCardOffers } from "../src/lib/product-card-offers";
+import {
+  cardCoverageLabel,
+  cardVerdictLabel,
+  formatObservedDay,
+  isSavingsVerdict,
+  promotionLabel,
+  summarizeCardOffers,
+} from "../src/lib/product-card-offers";
 
 const SUPERMARKETS: Record<string, string> = { carrefour: "Carrefour", coto: "Coto", disco: "Disco", jumbo: "Jumbo", vea: "Vea" };
 
@@ -76,5 +83,11 @@ describe("product card offer summary", () => {
   it("treats entries without an availability flag as available", () => {
     const summary = summarizeCardOffers([{ supermarket: { name: "Disco", slug: "disco" }, price: 10 }], 10);
     assert.equal(summary.coverage, 1);
+  });
+
+  it("keeps green for savings: a single-supermarket product is neutral", () => {
+    assert.equal(isSavingsVerdict({ kind: "only", names: ["Carrefour"] }), false);
+    assert.equal(isSavingsVerdict({ kind: "cheapest", names: ["Disco"] }), true);
+    assert.equal(isSavingsVerdict({ kind: "none" }), false);
   });
 });
