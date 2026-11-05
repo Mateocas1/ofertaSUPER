@@ -11,13 +11,15 @@ import {
   type SnapshotProduct,
 } from "@/lib/catalog-snapshot";
 import { hasAutomaticDiscount, toProductDetail, toProductSummary } from "@/lib/catalog-snapshot-adapters";
-import type { ProductDetail, ProductHistory, ProductSummary } from "@/lib/catalog";
+import { seriesColorFor } from "@/components/product/series-palette";
+import type { ProductHistory, ProductSummary } from "@/lib/catalog";
 import {
   getPublicLatestCheckedAt,
   PublicCatalogUnavailableError,
   publicCatalogUnavailable,
   type PublicCatalogData,
 } from "@/lib/public-catalog-api";
+import { withLastDifferentPrices, type ProductPageDetail } from "@/lib/product-history";
 import { createPublicCatalogPageResult, type PublicCatalogPageResult } from "@/lib/seo/public-catalog-page";
 
 // Server-side page loaders backed by the committed snapshot. They return the
@@ -95,7 +97,7 @@ export function loadSnapshotProductList(filters: SnapshotProductListFilters, now
 }
 
 export type SnapshotProductPageCatalog = {
-  product: ProductDetail | null;
+  product: ProductPageDetail | null;
   history: ProductHistory;
 };
 
@@ -106,9 +108,12 @@ export async function loadSnapshotProductPage(
 ): Promise<PublicCatalogData<SnapshotProductPageCatalog>> {
   try {
     const entry = getSnapshotProduct(ean, now);
+    // Movements use the /bajas "last different price" rule, so this page and
+    // /bajas never disagree about the previous price.
+    const product = entry ? withLastDifferentPrices(toProductDetail(entry.product, entry.offers, now), entry.offers) : null;
     return {
-      product: entry ? toProductDetail(entry.product, entry.offers, now) : null,
-      history: buildSnapshotHistory(ean, days, entry, now),
+      product,
+      history: buildSnapshotHistory(ean, days, entry && product ? { offers: entry.offers, product } : null, now),
       dataSource: "database",
       degraded: false,
       verifiedAt: getSnapshotGeneratedAt(),
@@ -122,17 +127,32 @@ export async function loadSnapshotProductPage(
   }
 }
 
-// Same series palette the guarded history loader used.
-const SERIES_COLORS = ["#d24726", "#2a6f58", "#4259d6"];
+type HistorySource = {
+  offers: NonNullable<ReturnType<typeof getSnapshotProduct>>["offers"];
+  product: ProductPageDetail;
+};
 
-function buildSnapshotHistory(ean: string, days: number, entry: ReturnType<typeof getSnapshotProduct>, now: Date): ProductHistory {
+// Most snapshot histories stop before the offer's current observation, so the
+// chart would end days before the "Relevado" date the table shows. The current
+// observation is appended unless the history already ends with it.
+function offerObservations(offer: HistorySource["offers"][number]): Array<{ price: number | null; observedAt: string }> {
+  const last = offer.history[offer.history.length - 1];
+  if (last?.observedAt === offer.observedAt) return offer.history;
+  return [...offer.history, { price: offer.available ? offer.price : null, observedAt: offer.observedAt }];
+}
+
+function bySupermarketName(left: { name: string }, right: { name: string }) {
+  return left.name.localeCompare(right.name, "es");
+}
+
+function buildSnapshotHistory(ean: string, days: number, entry: HistorySource | null, now: Date): ProductHistory {
   if (!entry) return { ean, days, series: [], points: [] };
 
   const cutoff = now.getTime() - days * 86_400_000;
-  const namesBySlug = new Map(toProductDetail(entry.product, entry.offers, now).priceEntries
+  const namesBySlug = new Map(entry.product.priceEntries
     .map((priceEntry) => [priceEntry.supermarket.slug, priceEntry.supermarket.name] as const));
   const observations = entry.offers
-    .flatMap((offer) => offer.history.map((point) => ({ source: offer.source, price: point.price, observedAt: point.observedAt })))
+    .flatMap((offer) => offerObservations(offer).map((point) => ({ source: offer.source, price: point.price, observedAt: point.observedAt })))
     .filter((observation) => {
       const observed = Date.parse(observation.observedAt);
       return !Number.isNaN(observed) && observed >= cutoff;
@@ -146,7 +166,8 @@ function buildSnapshotHistory(ean: string, days: number, entry: ReturnType<typeo
       series.set(observation.source, {
         slug: observation.source,
         name: namesBySlug.get(observation.source) ?? observation.source,
-        color: SERIES_COLORS[series.size % SERIES_COLORS.length],
+        // Light-theme hex for API consumers; the chart swaps in the dark step itself.
+        color: seriesColorFor(observation.source).light,
       });
     }
     const date = observation.observedAt.slice(0, 10);
@@ -155,7 +176,8 @@ function buildSnapshotHistory(ean: string, days: number, entry: ReturnType<typeo
     pointsByDate.set(date, point);
   }
 
-  return { ean, days, series: Array.from(series.values()), points: Array.from(pointsByDate.values()) };
+  // Stable legend order (and the order the palette was validated in).
+  return { ean, days, series: Array.from(series.values()).sort(bySupermarketName), points: Array.from(pointsByDate.values()) };
 }
 
 /**
