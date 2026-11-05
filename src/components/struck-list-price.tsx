@@ -1,4 +1,4 @@
-import { formatCurrency, formatPercent } from "@/lib/format";
+import { formatCurrency, formatDiscountPercent } from "@/lib/format";
 import { detectAutomaticDiscount } from "@/lib/promotions/detect";
 
 // Gate 4a: one shared strike-through for every surface. The discount math
@@ -12,7 +12,7 @@ export function StruckListPrice({ price, listPrice }: { price: number | null; li
       <s className="text-sm tabular-nums text-muted-foreground" aria-label={`Precio de lista ${formatCurrency(listPrice)}`}>
         {formatCurrency(listPrice)}
       </s>
-      <span className="text-sm font-medium tabular-nums text-primary">{formatPercent(discount.percentOff, 0)} OFF</span>
+      <span className="text-sm font-medium tabular-nums text-deal-ink">{formatDiscountPercent(discount.percentOff)}</span>
     </span>
   );
 }

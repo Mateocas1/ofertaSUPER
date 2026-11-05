@@ -74,7 +74,7 @@
 :root {
   color-scheme: light;
   --font-ui: var(--font-geist), "Geist", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-code: var(--font-geist-mono), "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-code: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --font-display: var(--font-bricolage), var(--font-ui);
   --background: oklch(0.975 0.012 95);
   --foreground: oklch(0.2 0.02 200);
@@ -107,11 +107,10 @@
   --chart-3: oklch(0.52 0.11 250);
   --chart-4: oklch(0.65 0.15 40);
   --chart-5: oklch(0.58 0.14 20);
-  --radius: 0.75rem;
+  --radius: 0.625rem;
   --elevation-1: 0 1px 0 oklch(0.3 0.03 120 / 6%);
   --elevation-2: 0 1px 2px oklch(0.3 0.03 120 / 6%), 0 8px 24px oklch(0.3 0.03 120 / 8%);
   --elevation-3: 0 2px 4px oklch(0.3 0.03 120 / 8%), 0 20px 48px oklch(0.3 0.03 120 / 14%);
-  --grain-opacity: 0.035;
   --sidebar: oklch(0.975 0.012 95);
   --sidebar-foreground: oklch(0.2 0.02 200);
   --sidebar-primary: oklch(0.43 0.115 148);
@@ -159,7 +158,6 @@
     --elevation-1: 0 1px 0 oklch(0 0 0 / 30%);
     --elevation-2: 0 1px 0 oklch(1 0 0 / 4%) inset, 0 8px 24px oklch(0 0 0 / 35%);
     --elevation-3: 0 1px 0 oklch(1 0 0 / 6%) inset, 0 20px 48px oklch(0 0 0 / 50%);
-    --grain-opacity: 0.05;
     --sidebar: oklch(0.2 0.013 165);
     --sidebar-foreground: oklch(0.94 0.012 95);
     --sidebar-primary: oklch(0.76 0.15 148);
@@ -207,7 +205,6 @@
   --elevation-1: 0 1px 0 oklch(0 0 0 / 30%);
   --elevation-2: 0 1px 0 oklch(1 0 0 / 4%) inset, 0 8px 24px oklch(0 0 0 / 35%);
   --elevation-3: 0 1px 0 oklch(1 0 0 / 6%) inset, 0 20px 48px oklch(0 0 0 / 50%);
-  --grain-opacity: 0.05;
   --sidebar: oklch(0.2 0.013 165);
   --sidebar-foreground: oklch(0.94 0.012 95);
   --sidebar-primary: oklch(0.76 0.15 148);
@@ -235,30 +232,20 @@
     font-feature-settings: "cv11", "ss01";
   }
 
-  /* Paper grain: inline SVG noise, decorative, never intercepts input. */
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    opacity: var(--grain-opacity);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
-
-  h1,
   p,
   li {
     text-wrap: pretty;
   }
 
+  /* Headings share the UI family; Bricolage (font-display) is opt-in for the
+     wordmark and the home H1 only. */
+  h1,
   h2,
   h3,
   h4,
   h5,
   h6 {
-    font-family: var(--font-display);
-    letter-spacing: -0.025em;
+    letter-spacing: -0.02em;
     text-wrap: balance;
   }
 
@@ -268,41 +255,48 @@
 }
 
 @layer utilities {
-  /* Elevation system: surface (raised card), surface-soft (quiet tone step, no border), surface-inset (recessed well). */
-  .surface {
-    @apply rounded-2xl border border-border/70 bg-card;
-    box-shadow: var(--elevation-2);
+  /* One page width for header, footer and every route, so edges align. */
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
   }
 
-  .surface-soft {
-    @apply rounded-xl bg-surface-1;
+  /* One surface level. Inside a surface, separate with hairline dividers
+     (divide-y divide-border), never with another card.
+     surface-soft is a quiet tone step for callouts; surface-inset a recessed well. */
+  .surface {
+    @apply rounded-xl border border-border bg-card;
     box-shadow: var(--elevation-1);
   }
 
+  .surface-soft {
+    @apply rounded-lg bg-surface-1;
+  }
+
   .surface-inset {
-    @apply rounded-xl bg-surface-3/60;
+    @apply rounded-lg bg-surface-3/60;
   }
 
+  /* Deprecated alias of .surface; kept so older markup renders the same. */
   .surface-raised {
-    @apply rounded-2xl border border-border/70 bg-card;
-    box-shadow: var(--elevation-3);
+    @apply rounded-xl border border-border bg-card;
+    box-shadow: var(--elevation-1);
   }
 
-  /* Price-tag chip: notch on the left edge. */
+  /* Price-tag chip: notch on the left edge. Reserved for the basket receipt. */
   .price-tag {
-    @apply inline-flex items-center gap-1 rounded-md bg-deal px-2 py-0.5 pl-3 font-mono text-xs font-bold tabular-nums text-deal-foreground;
+    @apply inline-flex items-center gap-1 rounded-md bg-deal px-2 py-0.5 pl-3 text-xs font-semibold tabular-nums text-deal-foreground;
     -webkit-mask: radial-gradient(circle 3px at 0 50%, transparent 98%, #000) ;
     mask: radial-gradient(circle 3px at 0 50%, transparent 98%, #000);
   }
 
-  /* Dashed tear-off divider. */
+  /* Dashed tear-off divider. Reserved for the basket receipt. */
   .tear-off {
     border: 0;
     height: 0;
     border-top: 2px dashed color-mix(in oklab, var(--foreground) 22%, transparent);
   }
 
-  /* Perforated ticket edges (top and bottom notches) for basket / ranking cards. */
+  /* Perforated ticket edges. Reserved for the basket receipt. */
   .ticket {
     --notch: 9px;
     -webkit-mask:
@@ -313,9 +307,10 @@
       radial-gradient(circle var(--notch) at 100% 50%, transparent 98%, #000) right / 51% 100% no-repeat;
   }
 
+  /* Every number: the UI family with tabular figures, never a monospace. */
   .price {
-    @apply font-mono font-bold tabular-nums;
-    letter-spacing: -0.03em;
+    @apply font-sans font-semibold tabular-nums;
+    letter-spacing: -0.015em;
   }
 
   .skip-link {
