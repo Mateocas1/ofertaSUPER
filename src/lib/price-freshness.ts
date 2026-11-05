@@ -71,15 +71,15 @@ export function getPriceFreshnessCopy(freshness: PriceFreshness) {
       };
     case "stale":
       return {
-        priceLabel: "Ultimo precio registrado",
+        priceLabel: "Último precio registrado",
         badgeLabel: "Dato viejo",
-        helperText: "Puede estar desactualizado. Revisalo en la web del super antes de comprar.",
+        helperText: "Puede estar desactualizado. Revisalo en la web del súper antes de comprar.",
       };
     default:
       return {
         priceLabel: "Precio registrado",
         badgeLabel: "Sin fecha",
-        helperText: "No tenemos fecha de actualizacion para este precio.",
+        helperText: "No tenemos la fecha en que se relevó este precio.",
       };
   }
 }

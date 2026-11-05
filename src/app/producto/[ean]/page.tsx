@@ -8,7 +8,6 @@ import { cheapestCopy, cheapestEntries, hasComparablePrice } from "@/components/
 import { createGuardedProductMetadata } from "@/lib/seo/metadata";
 import { createGuardedProductPageLoader } from "@/lib/seo/public-catalog-page";
 import { buildGuardedProductPageSchema, serializeJsonLd } from "@/lib/seo/schema";
-import { previousObservedAtOf } from "@/lib/product-history";
 import { loadSnapshotProductPage } from "@/lib/public-pages";
 
 export const revalidate = 21600;
@@ -45,14 +44,9 @@ function ProductSchema({ page }: { page: EligibleProductPage }) {
   return structuredData ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(structuredData) }} /> : null;
 }
 
-// The snapshot loader measures every movement against the last different
-// price and adds that observation's date to each entry.
-function comparisonEntries(product: Product): PriceComparisonEntry[] {
-  return product.priceEntries.map((entry) => ({ ...entry, previousObservedAt: previousObservedAtOf(entry) }));
-}
 
 function ProductDetails({ page, product }: { page: EligibleProductPage; product: Product }) {
-  const entries = comparisonEntries(product);
+  const entries: PriceComparisonEntry[] = product.priceEntries;
   const cheapest = cheapestEntries(entries, product.displayPrice);
   // A row is marked "Más barato" only when something costs more: not for a
   // single offer, nor when every offer ties.

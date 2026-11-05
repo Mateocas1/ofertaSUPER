@@ -1,5 +1,6 @@
 import { normalizeGtin } from "@/lib/identity/gtin";
 import { comparePriceAgainstHistory, type PriceDropAlert } from "@/lib/promotions/alerts";
+import { findLastDifferentPrice, PREVIOUS_PRICE_WINDOW_DAYS } from "@/lib/price-movement";
 import { SUPERMARKETS } from "@/lib/supermarkets";
 
 import priceDropsJson from "../../data/price-drops.json";
@@ -29,7 +30,7 @@ export type PriceDropRules = {
 export const DEFAULT_PRICE_DROP_RULES: PriceDropRules = {
   minPercentDrop: 10,
   minAmountDrop: 100,
-  windowDays: 14,
+  windowDays: PREVIOUS_PRICE_WINDOW_DAYS,
   maxAgeHours: 24,
   maxPercentDrop: 60,
   limit: 100,
@@ -138,25 +139,11 @@ function unitPriceOf(point: { unitPrice?: number | null }): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-// The reference is the most recent observation strictly before the current one
-// whose price differs from it, inside the configured window.
-function lastDifferentPrice(
-  offer: PriceDropSnapshotOffer,
-  currentPrice: number,
-  currentObserved: number,
-  windowDays: number,
-): ReferencePrice | null {
-  const cutoff = currentObserved - windowDays * 86_400_000;
-  let reference: ReferencePrice | null = null;
-  for (const point of offer.history) {
-    if (point.price === null || point.price === currentPrice) continue;
-    const observed = Date.parse(point.observedAt);
-    if (Number.isNaN(observed) || observed < cutoff || observed >= currentObserved) continue;
-    if (reference === null || observed > Date.parse(reference.observedAt)) {
-      reference = { price: point.price, observedAt: point.observedAt, unitPrice: unitPriceOf(point) };
-    }
-  }
-  return reference;
+// The reference follows the one shared rule (src/lib/price-movement.ts), so the
+// product page and the API agree with every published drop.
+function lastDifferentPrice(offer: PriceDropSnapshotOffer, currentPrice: number, windowDays: number): ReferencePrice | null {
+  const point = findLastDifferentPrice(offer.history, currentPrice, offer.observedAt, windowDays);
+  return point ? { price: point.price, observedAt: point.observedAt, unitPrice: unitPriceOf(point) } : null;
 }
 
 // When both points carry a unit price, it decides: a smaller pack at a lower
@@ -246,9 +233,8 @@ function candidateForOffer(
   const currentPrice = offer.price;
   if (currentPrice === null || !isUsableOffer(offer, now, rules)) return null;
 
-  const currentObserved = Date.parse(offer.observedAt);
-  const reference = lastDifferentPrice(offer, currentPrice, currentObserved, rules.windowDays);
-  if (!reference || !(reference.price > 0)) return null;
+  const reference = lastDifferentPrice(offer, currentPrice, rules.windowDays);
+  if (!reference) return null;
 
   // The shared movement helper owns the rounding and the "is it a drop" rule.
   const alert = comparePriceAgainstHistory(currentPrice, reference.price).priceDropAlert;

@@ -11,15 +11,14 @@ import {
   type SnapshotProduct,
 } from "@/lib/catalog-snapshot";
 import { hasAutomaticDiscount, toProductDetail, toProductSummary } from "@/lib/catalog-snapshot-adapters";
-import { seriesColorFor } from "@/components/product/series-palette";
-import type { ProductHistory, ProductSummary } from "@/lib/catalog";
+import { seriesColorFor } from "@/lib/series-palette";
+import type { ProductDetail, ProductHistory, ProductSummary } from "@/lib/catalog";
 import {
   getPublicLatestCheckedAt,
   PublicCatalogUnavailableError,
   publicCatalogUnavailable,
   type PublicCatalogData,
 } from "@/lib/public-catalog-api";
-import { withLastDifferentPrices, type ProductPageDetail } from "@/lib/product-history";
 import { createPublicCatalogPageResult, type PublicCatalogPageResult } from "@/lib/seo/public-catalog-page";
 
 // Server-side page loaders backed by the committed snapshot. They return the
@@ -97,7 +96,7 @@ export function loadSnapshotProductList(filters: SnapshotProductListFilters, now
 }
 
 export type SnapshotProductPageCatalog = {
-  product: ProductPageDetail | null;
+  product: ProductDetail | null;
   history: ProductHistory;
 };
 
@@ -108,9 +107,7 @@ export async function loadSnapshotProductPage(
 ): Promise<PublicCatalogData<SnapshotProductPageCatalog>> {
   try {
     const entry = getSnapshotProduct(ean, now);
-    // Movements use the /bajas "last different price" rule, so this page and
-    // /bajas never disagree about the previous price.
-    const product = entry ? withLastDifferentPrices(toProductDetail(entry.product, entry.offers, now), entry.offers) : null;
+    const product = entry ? toProductDetail(entry.product, entry.offers, now) : null;
     return {
       product,
       history: buildSnapshotHistory(ean, days, entry && product ? { offers: entry.offers, product } : null, now),
@@ -129,7 +126,7 @@ export async function loadSnapshotProductPage(
 
 type HistorySource = {
   offers: NonNullable<ReturnType<typeof getSnapshotProduct>>["offers"];
-  product: ProductPageDetail;
+  product: ProductDetail;
 };
 
 // Most snapshot histories stop before the offer's current observation, so the

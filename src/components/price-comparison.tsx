@@ -16,7 +16,7 @@ import {
 } from "@/components/product/product-price-model";
 import { formatCurrency, formatSignedPercent, pluralize } from "@/lib/format";
 import type { PriceFreshnessStatus } from "@/lib/price-freshness";
-import { PREVIOUS_PRICE_WINDOW_DAYS } from "@/lib/product-history";
+import { PREVIOUS_PRICE_WINDOW_DAYS } from "@/lib/price-movement";
 import type { SimplePromotion } from "@/lib/promotions/simple-promos";
 import { cn } from "@/lib/utils";
 

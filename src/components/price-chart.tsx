@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { PriceHistoryTable } from "@/components/product/price-history-table";
-import { SUPERMARKET_SERIES_COLORS, UNKNOWN_SERIES_COLOR } from "@/components/product/series-palette";
+import { SUPERMARKET_SERIES_COLORS, UNKNOWN_SERIES_COLOR } from "@/lib/series-palette";
 import {
   dayTicks,
   formatAxisDay,

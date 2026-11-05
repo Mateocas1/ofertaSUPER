@@ -12,7 +12,7 @@ import {
   type BasketIndexPayload,
   type BasketIndexView,
 } from "@/lib/analytics/basket-index";
-import { formatSignedPercent } from "@/lib/format";
+import { formatCalendarDate, formatSignedPercent } from "@/lib/format";
 import { createMetadata } from "@/lib/seo/metadata";
 
 export const metadata: Metadata = createMetadata({
@@ -24,15 +24,10 @@ export const metadata: Metadata = createMetadata({
 
 const ISO_DATE = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
 
-function formatLongDate(isoDate: string): string {
-  return new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short", year: "numeric" }).format(
-    new Date(`${isoDate}T12:00:00`),
-  );
-}
 
 /** The payload notes carry raw ISO dates; readers get "4 nov 2026". */
 function humanizeDates(text: string): string {
-  return text.replace(ISO_DATE, (match) => formatLongDate(match));
+  return text.replace(ISO_DATE, (match) => formatCalendarDate(match, { withYear: true }));
 }
 
 function UnavailablePage() {
@@ -261,7 +256,7 @@ export default function InflationPage() {
           del INDEC.
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          {humanizeDates(view.summary)} Calculado el {formatLongDate(payload.generatedAt.slice(0, 10))}.
+          {humanizeDates(view.summary)} Calculado el {formatCalendarDate(payload.generatedAt.slice(0, 10), { withYear: true })}.
         </p>
       </header>
 

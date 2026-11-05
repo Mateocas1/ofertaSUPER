@@ -5,8 +5,10 @@
 // pairs, in this order) against the card surface of each theme:
 // light #fefdf8: worst adjacent CVD ΔE 16.3, normal-vision ΔE 19.6;
 // dark  #131c18: worst adjacent CVD ΔE 13.2, normal-vision ΔE 19.3, all >= 3:1.
-// Green, orange and red are left out on purpose: in this UI green means
-// "cheapest / dropped", orange means "promo" and red means "went up".
+// The UI's semantic colors are avoided on purpose: the brand/"cheapest" green
+// (#1F6B3B), the promo orange (#E05A33) and the "went up" red. Coto's teal and
+// Jumbo's amber are distinct hues from those, and the chart lives in its own
+// legend-keyed context.
 // Three light steps sit below 3:1 on the card, so the chart always ships a
 // legend with names, a tooltip and a data table (the relief rule).
 export type SeriesColor = { light: string; dark: string };

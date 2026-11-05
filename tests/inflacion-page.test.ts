@@ -162,7 +162,7 @@ describe("formatting", () => {
   it("formats months and signed percentages in Spanish", () => {
     assert.equal(formatMonthLabel("2026-06-01").replace(/\s/g, " "), "jun 2026");
     assert.equal(formatPercent(2.785), "+2,79%");
-    assert.equal(formatPercent(-2.6442), "-2,64%");
+    assert.equal(formatPercent(-2.6442), "\u22122,64%");
     assert.equal(formatPercent(null), "—");
   });
 });

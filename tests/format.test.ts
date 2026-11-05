@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  formatCalendarDate,
+  formatClock,
+  formatDate,
+  formatDateTime,
+  formatDateWithYear,
   formatDiscountPercent,
   formatPercent,
   formatPercentage,
@@ -36,5 +41,20 @@ describe("es-AR number formatting", () => {
     assert.equal(pluralize(3, "supermercado"), "3 supermercados");
     assert.equal(pluralize(0, "baja"), "0 bajas");
     assert.equal(pluralize(2, "promoción", "promociones"), "2 promociones");
+  });
+
+  it("formats observation instants on the Buenos Aires calendar and clock", () => {
+    // 02:30 UTC on the 5th is still the 4th in Buenos Aires (UTC-3).
+    const instant = "2026-11-05T02:30:00Z";
+    assert.equal(formatDate(instant), "4 nov");
+    assert.equal(formatDateWithYear(instant), "4 nov 2026");
+    assert.equal(formatClock(instant), "23:30");
+    assert.equal(formatDateTime(instant), "4 nov 2026, 23:30");
+    assert.equal(formatDate("not a date"), "fecha desconocida");
+  });
+
+  it("never shifts a calendar date by time zone", () => {
+    assert.equal(formatCalendarDate("2026-11-04"), "4 nov");
+    assert.equal(formatCalendarDate("2026-11-04", { withYear: true }), "4 nov 2026");
   });
 });

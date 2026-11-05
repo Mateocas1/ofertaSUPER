@@ -1,3 +1,5 @@
+import { formatDate, formatDateWithYear } from "@/lib/format";
+
 // Copy of the home page. Every number the home shows comes from the committed
 // snapshot, the price-drops payload or the basket index; this file only holds
 // words and the helpers that put those numbers into sentences.
@@ -45,21 +47,17 @@ export const HOME_BASKET = {
 	unavailable: "El catálogo no está disponible, así que la canasta no se calcula y no se muestran totales.",
 } as const;
 
-const TIME_ZONE = "America/Argentina/Buenos_Aires";
-const dayMonthFormatter = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short", timeZone: TIME_ZONE });
-const yearFormatter = new Intl.DateTimeFormat("es-AR", { year: "numeric", timeZone: TIME_ZONE });
 const listFormatter = new Intl.ListFormat("es", { type: "conjunction" });
 const countFormatter = new Intl.NumberFormat("es-AR");
 
 /** "4 nov" in Buenos Aires time. */
 export function formatShortDate(iso: string): string {
-	return dayMonthFormatter.format(new Date(iso));
+	return formatDate(iso);
 }
 
 /** "4 nov 2026" in Buenos Aires time. */
 export function formatBulletinDate(iso: string): string {
-	const date = new Date(iso);
-	return `${dayMonthFormatter.format(date)} ${yearFormatter.format(date)}`;
+	return formatDateWithYear(iso);
 }
 
 /** "Precios relevados el 4 nov 2026 en Carrefour, Coto y Vea · 24.948 productos". */

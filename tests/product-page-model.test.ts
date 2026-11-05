@@ -25,7 +25,7 @@ import {
   timeDomain,
   toTimePoints,
 } from "../src/components/product/price-history-model";
-import { seriesColorFor, SUPERMARKET_SERIES_COLORS } from "../src/components/product/series-palette";
+import { seriesColorFor, SUPERMARKET_SERIES_COLORS } from "../src/lib/series-palette";
 
 function entry(name: string, price: number | null, isAvailable = true) {
   return { supermarket: { name, slug: name.toLowerCase() }, price, isAvailable };
