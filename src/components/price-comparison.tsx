@@ -5,7 +5,6 @@ import { PromotionBadge } from "@/components/promotion-badge";
 import { StruckListPrice } from "@/components/struck-list-price";
 import { buttonVariants } from "@/components/ui/button-variants";
 import {
-  formatShortDay,
   hasComparablePrice,
   movementOf,
   previousPriceCopy,
@@ -14,7 +13,7 @@ import {
   promoPriceOf,
   sortByPrice,
 } from "@/components/product/product-price-model";
-import { formatCurrency, formatSignedPercent, pluralize } from "@/lib/format";
+import { formatCurrency, formatDate, formatSignedPercent, pluralize } from "@/lib/format";
 import type { PriceFreshnessStatus } from "@/lib/price-freshness";
 import { PREVIOUS_PRICE_WINDOW_DAYS } from "@/lib/price-movement";
 import type { SimplePromotion } from "@/lib/promotions/simple-promos";
@@ -92,7 +91,7 @@ function MovementCell({ entry }: { entry: PriceComparisonEntry }) {
 function ObservedCell({ entry }: { entry: PriceComparisonEntry }) {
   return (
     <span className="flex flex-col items-start gap-0.5 text-sm text-muted-foreground">
-      <time dateTime={entry.lastCheckedAt}>{formatShortDay(entry.lastCheckedAt)}</time>
+      <time dateTime={entry.lastCheckedAt}>{formatDate(entry.lastCheckedAt)}</time>
       {entry.freshnessStatus === "stale" ? <span className="text-xs font-medium text-warning">Dato viejo</span> : null}
     </span>
   );

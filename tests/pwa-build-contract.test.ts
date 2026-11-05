@@ -56,9 +56,10 @@ test("keeps the install manifest and offline fallback route", async () => {
 
 test("keeps representative product images unoptimized", async () => {
   const componentPaths = [
-    "src/components/product-card.tsx",
+    // Every product photo goes through ProductThumb; the search suggestions
+    // render their own small image.
+    "src/components/product-thumb.tsx",
     "src/components/search-bar.tsx",
-    "src/components/bajas/drop-thumb.tsx",
   ];
   const components = await Promise.all(componentPaths.map(read));
 

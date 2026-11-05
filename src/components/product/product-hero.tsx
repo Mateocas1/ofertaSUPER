@@ -6,9 +6,10 @@ import { FavoriteButton } from "@/components/favorite-button";
 import { PromotionBadge } from "@/components/promotion-badge";
 import { StruckListPrice } from "@/components/struck-list-price";
 import type { PriceComparisonEntry } from "@/components/price-comparison";
-import { ProductImage } from "@/components/product/product-image";
+import { ProductThumb } from "@/components/product-thumb";
 import {
   cheapestCopy,
+  hasCheaperOlderPrice,
   displayBrand,
   dropHeadline,
   hasComparablePrice,
@@ -73,7 +74,7 @@ function PromoPriceLine({ product }: { product: ProductHeroProduct }) {
 function PriceLines({ product, entries, cheapest }: ProductHeroProps) {
   const headlineEntry = cheapest[0];
   const comparableCount = entries.filter(hasComparablePrice).length;
-  const cheapestText = cheapestCopy(cheapest, comparableCount);
+  const cheapestText = cheapestCopy(cheapest, comparableCount, hasCheaperOlderPrice(entries, product.displayPrice));
   const promo = cheapest.find((entry) => entry.promo !== null)?.promo ?? null;
   const dropEntry = headlineDropEntry(cheapest);
   const drop = dropEntry ? dropHeadline(dropEntry) : null;
@@ -124,7 +125,7 @@ export function ProductHero(props: ProductHeroProps) {
   const { product } = props;
   return (
     <section className="grid gap-6 md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] md:gap-8 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-      <ProductImage src={product.imageUrl} alt={product.name} className="mx-auto max-w-56 md:max-w-none" />
+      <ProductThumb src={product.imageUrl} alt={product.name} size="hero" priority className="mx-auto max-w-56 rounded-xl md:max-w-none" />
       <div className="flex min-w-0 flex-col gap-5">
         <ProductTitle product={product} />
         <PriceBlock {...props} />

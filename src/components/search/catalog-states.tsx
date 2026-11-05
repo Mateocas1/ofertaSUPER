@@ -22,10 +22,14 @@ export function CatalogMessage({ title, children }: { title: string; children?: 
   );
 }
 
+// The sr-only h2 keeps the heading outline h1 > h2 > h3 (each card is an h3).
 export function ProductGrid({ products, label }: { products: ProductSummary[]; label: string }) {
   return (
-    <section aria-label={label} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {products.map((product) => <ProductCard key={product.ean} product={product} />)}
+    <section aria-label={label}>
+      <h2 className="sr-only">{label}</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {products.map((product) => <ProductCard key={product.ean} product={product} />)}
+      </div>
     </section>
   );
 }

@@ -29,7 +29,7 @@ const HOME_SOURCES = [
 	"src/components/home/home-hero.tsx",
 	"src/components/home/home-drops.tsx",
 	"src/components/home/home-basket.tsx",
-	"src/components/home/drop-thumb.tsx",
+	"src/components/product-thumb.tsx",
 ] as const;
 
 const read = (path: string) => readFileSync(path, "utf8");
@@ -122,8 +122,11 @@ describe("home source contract", () => {
 	});
 
 	it("keeps product photos unoptimized with a calm fallback", () => {
-		const thumb = read("src/components/home/drop-thumb.tsx");
+		const thumb = read("src/components/product-thumb.tsx");
 		assert.match(thumb, /<Image\s+src=[\s\S]*?\bunoptimized\s*\/>/);
 		assert.match(thumb, /onError/);
+		// Errors that fire before hydration must also fall back to the placeholder.
+		assert.match(thumb, /naturalWidth === 0/);
+		assert.match(read("src/components/home/home-drops.tsx"), /<ProductThumb\b/);
 	});
 });

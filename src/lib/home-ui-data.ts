@@ -50,21 +50,11 @@ export const HOME_BASKET = {
 const listFormatter = new Intl.ListFormat("es", { type: "conjunction" });
 const countFormatter = new Intl.NumberFormat("es-AR");
 
-/** "4 nov" in Buenos Aires time. */
-export function formatShortDate(iso: string): string {
-	return formatDate(iso);
-}
-
-/** "4 nov 2026" in Buenos Aires time. */
-export function formatBulletinDate(iso: string): string {
-	return formatDateWithYear(iso);
-}
-
 /** "Precios relevados el 4 nov 2026 en Carrefour, Coto y Vea · 24.948 productos". */
 export function provenanceLine(generatedAt: string, supermarkets: readonly string[], productCount: number): string {
 	const where = supermarkets.length > 0 ? ` en ${listFormatter.format(supermarkets)}` : "";
 	const noun = productCount === 1 ? "producto" : "productos";
-	return `Precios relevados el ${formatBulletinDate(generatedAt)}${where} · ${countFormatter.format(productCount)} ${noun}`;
+	return `Precios relevados el ${formatDateWithYear(generatedAt)}${where} · ${countFormatter.format(productCount)} ${noun}`;
 }
 
 /** "Ver las 100 bajas". */
@@ -95,7 +85,7 @@ export function basketMissingLabel(missing: number): string {
 
 /** "Relevado el 4 nov". */
 export function observedLabel(iso: string): string {
-	return `Relevado el ${formatShortDate(iso)}`;
+	return `Relevado el ${formatDate(iso)}`;
 }
 
 /** Every user-facing string of the home, static copy plus the shapes of the generated sentences. */

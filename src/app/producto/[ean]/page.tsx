@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { LazyPriceChart } from "@/components/lazy-price-chart";
 import { PriceComparison, type PriceComparisonEntry } from "@/components/price-comparison";
 import { ProductHero } from "@/components/product/product-hero";
-import { cheapestCopy, cheapestEntries, hasComparablePrice } from "@/components/product/product-price-model";
+import { cheapestCopy, cheapestEntries, hasCheaperOlderPrice, hasComparablePrice } from "@/components/product/product-price-model";
 import { createGuardedProductMetadata } from "@/lib/seo/metadata";
 import { createGuardedProductPageLoader } from "@/lib/seo/public-catalog-page";
 import { buildGuardedProductPageSchema, serializeJsonLd } from "@/lib/seo/schema";
@@ -48,9 +48,11 @@ function ProductSchema({ page }: { page: EligibleProductPage }) {
 function ProductDetails({ page, product }: { page: EligibleProductPage; product: Product }) {
   const entries: PriceComparisonEntry[] = product.priceEntries;
   const cheapest = cheapestEntries(entries, product.displayPrice);
-  // A row is marked "Más barato" only when something costs more: not for a
-  // single offer, nor when every offer ties.
-  const markCheapest = cheapestCopy(cheapest, entries.filter(hasComparablePrice).length)?.isCheapest ?? false;
+  // A row is marked "Más barato" only when something costs more and nothing
+  // (not even an older reading) costs less: not for a single offer, nor a full tie.
+  const comparableCount = entries.filter(hasComparablePrice).length;
+  const markCheapest =
+    cheapestCopy(cheapest, comparableCount, hasCheaperOlderPrice(entries, product.displayPrice))?.isCheapest ?? false;
 
   return (
     <div className="container-page flex flex-col gap-10 py-6 md:gap-14 md:py-10">
