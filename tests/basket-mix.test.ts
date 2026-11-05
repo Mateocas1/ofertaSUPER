@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildBasketSummaries, computeBasketPlan } from "../src/lib/basket-mix";
+import { buildBasketSummaries, compareMixToBestSingle, computeBasketPlan, type BasketSuperSummary } from "../src/lib/basket-mix";
 import type { BasketProduct } from "../src/lib/basket-products-contract";
 
 // Gate 5: the basket rules. The case from the plan: A x2 + B x1, with A=$1000
@@ -135,5 +135,22 @@ describe("basket plan (Gate 5 mix)", () => {
     assert.equal(plan.mixedMissing, 1, "the absent product is missing in the mix too");
     assert.equal(plan.savings, null, "no savings claim while the mix is incomplete");
     assert.equal(plan.mixedTotal, 2400, "A x2 at Disco plus B at its cheapest (Carrefour)");
+  });
+});
+
+describe("mix against the best single-supermarket basket", () => {
+  const bestSingle: BasketSuperSummary = {
+    slug: "disco", name: "Disco", logoUrl: null, total: 1000, coveredItems: 2, missingItems: 0, complete: true,
+  };
+
+  it("tells saving, equal and costing more apart (savings alone is clamped at zero)", () => {
+    assert.deepEqual(compareMixToBestSingle({ mixedTotal: 900, mixedMissing: 0, bestSingle }), { kind: "saves", amount: 100, bestSingle });
+    assert.deepEqual(compareMixToBestSingle({ mixedTotal: 1000, mixedMissing: 0, bestSingle }), { kind: "same", bestSingle });
+    assert.deepEqual(compareMixToBestSingle({ mixedTotal: 1250, mixedMissing: 0, bestSingle }), { kind: "costs-more", amount: 250, bestSingle });
+  });
+
+  it("does not compare an incomplete mix or a missing complete basket", () => {
+    assert.deepEqual(compareMixToBestSingle({ mixedTotal: 900, mixedMissing: 1, bestSingle }), { kind: "incomplete", missing: 1 });
+    assert.deepEqual(compareMixToBestSingle({ mixedTotal: 900, mixedMissing: 0, bestSingle: null }), { kind: "no-complete-single" });
   });
 });

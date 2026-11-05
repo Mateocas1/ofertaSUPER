@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AlertCircle, Trash2 } from "lucide-react";
 
-import { DropThumb } from "@/components/bajas/drop-thumb";
+import { ProductThumb } from "@/components/product-thumb";
 import { BasketControls } from "@/components/basket-controls";
 import { FavoriteButton } from "@/components/favorite-button";
 import { PromotionBadge } from "@/components/promotion-badge";
@@ -12,6 +12,7 @@ import type { CanastaItem } from "@/hooks/use-canasta";
 import type { BasketPlanItem } from "@/lib/basket-mix";
 import type { BasketProduct } from "@/lib/basket-products-contract";
 import { formatCurrency } from "@/lib/format";
+import { promotionLabel } from "@/lib/product-card-offers";
 import { cn } from "@/lib/utils";
 
 type RowProps = {
@@ -104,7 +105,7 @@ function ProductPrices({ item, product, chosenSlug }: { item: CanastaItem; produ
           <PromotionBadge
             key={`${item.ean}-${entry.supermarket.slug}-promo`}
             type={entry.promo!.type === "nth-unit" ? "2nd_50" : "percentage"}
-            label={entry.promo!.label}
+            label={promotionLabel(entry.promo!)}
           />
         ))}
       {entries
@@ -119,7 +120,7 @@ function ProductPrices({ item, product, chosenSlug }: { item: CanastaItem; produ
 export function BasketItemRow({ item, product, planItem, degradedDemo, removeItem, onSelect }: RowProps) {
   return (
     <article className="flex gap-3 p-4 sm:gap-4 md:p-5">
-      <DropThumb src={product?.imageUrl ?? null} alt="" />
+      <ProductThumb src={product?.imageUrl ?? null} />
       <div className="min-w-0 flex-1">
         <ItemTitle item={item} product={product} />
         <ChosenLine planItem={planItem} degradedDemo={degradedDemo} />

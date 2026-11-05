@@ -151,7 +151,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     <div className="container-page flex flex-col gap-5 py-6 md:py-8">
       <header className="flex flex-col gap-4">
         <SearchHeading query={filters.query} result={result} />
-        <SearchBar defaultValue={filters.query} variant="compact" />
+        <SearchBar defaultValue={filters.query} />
         {result && filters.query && (result.total > 0 || filters.supermarket) ? <SearchFiltersForm filters={filters} /> : null}
       </header>
       <SearchResults filters={filters} page={page} />

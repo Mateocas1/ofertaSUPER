@@ -1,5 +1,5 @@
 import { getAdminIngestionDashboard, type AdminIngestionHealthStat, type IngestionTrendPoint } from "@/lib/admin/ingestion";
-import { formatCompactNumber, formatDate, formatDateTime, formatPercentage } from "@/lib/format";
+import { formatCalendarDate, formatCompactNumber, formatDateTime, formatPercentage } from "@/lib/format";
 
 const healthStyles: Record<AdminIngestionHealthStat["state"], { label: string; className: string }> = {
   healthy: {
@@ -335,7 +335,7 @@ export default async function AdminIngestionPage() {
                   />
                 </div>
                 <div className="text-center text-xs text-muted-foreground">
-                  <p className="font-medium text-foreground">{formatDate(point.date)}</p>
+                  <p className="font-medium text-foreground">{formatCalendarDate(point.date)}</p>
                   <p>{point.detectedProducts} / {point.promotedProducts}</p>
                 </div>
               </div>

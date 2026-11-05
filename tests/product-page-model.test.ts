@@ -3,11 +3,11 @@ import { describe, it } from "node:test";
 
 import {
   cheapestCopy,
+  hasCheaperOlderPrice,
   cheapestEntries,
   displayBrand,
   dropHeadline,
   formatObservedAt,
-  formatShortDay,
   headlineDropEntry,
   joinNames,
   movementOf,
@@ -51,6 +51,14 @@ describe("product page price model", () => {
     assert.equal(cheapestCopy([], 0), null);
   });
 
+  it("never calls the headline the cheapest when an older reading is lower", () => {
+    // Coto is fresh at $1000; Disco's $900 is older, so the headline is Coto's.
+    const entries = [entry("Coto", 1000), entry("Disco", 900), entry("Vea", 1200)];
+    assert.equal(hasCheaperOlderPrice(entries, 1000), true);
+    assert.equal(hasCheaperOlderPrice(entries, 900), false);
+    assert.deepEqual(cheapestCopy([entries[0]], 3, true), { text: "Menor precio reciente en Coto", isCheapest: false });
+  });
+
   it("shows all-caps brands capitalized, keeps mixed case and acronyms", () => {
     assert.equal(displayBrand("LA SERENISIMA"), "La Serenisima");
     assert.equal(displayBrand("CONAPROLE"), "Conaprole");
@@ -75,7 +83,7 @@ describe("product page price model", () => {
   });
 
   it("labels promos without English or a plus sign", () => {
-    assert.equal(promoLabel({ type: "percent-off", percent: 15, maxUnits: null, label: "15% OFF" }), "−15% en promo");
+    assert.equal(promoLabel({ type: "percent-off", percent: 15, maxUnits: null, label: "15% OFF" }), "Promo −15%");
     assert.equal(promoLabel({ type: "nth-unit", nth: 2, percent: 50, maxUnits: null, label: "2do al 50%" }), "2do al 50%");
   });
 
@@ -87,9 +95,7 @@ describe("product page price model", () => {
 
   it("shows observation instants on the Buenos Aires calendar and clock", () => {
     assert.equal(formatObservedAt("2026-11-04T18:15:06.801Z"), "4 nov a las 15:15");
-    // 01:30 UTC on 5 nov is still 4 nov in Buenos Aires.
-    assert.equal(formatShortDay("2026-11-05T01:30:00.000Z"), "4 nov");
-    assert.equal(formatShortDay("not a date"), "fecha desconocida");
+    assert.equal(formatObservedAt("not a date"), "fecha desconocida");
   });
 
   it("states the observation date and says when it is old", () => {

@@ -1,16 +1,12 @@
-import { formatClock, formatCurrency, formatDate, formatDiscountPercent, formatSignedPercent, pluralize } from "@/lib/format";
+import { formatClock, formatCurrency, formatDate, formatSignedPercent, pluralize } from "@/lib/format";
 import type { PriceFreshnessStatus } from "@/lib/price-freshness";
+import { promotionLabel } from "@/lib/product-card-offers";
 import type { SimplePromotion } from "@/lib/promotions/simple-promos";
 
 // Pure view logic of the product page, kept out of the components so it can be
 // tested without rendering: ordering, the cheapest offer, movement and copy.
 
 // Dates come from src/lib/format.ts (Buenos Aires calendar and clock).
-
-/** "30 oct". */
-export function formatShortDay(value: string): string {
-  return formatDate(value);
-}
 
 /** "4 nov a las 15:15". */
 export function formatObservedAt(value: string): string {
@@ -61,14 +57,27 @@ export function joinNames(names: readonly string[]): string {
 export type CheapestCopy = { text: string; isCheapest: boolean };
 
 /**
+ * The headline prefers fresh prices, so an older reading can sit below it.
+ * When one does, the headline is the cheapest *recent* price, not the cheapest.
+ */
+export function hasCheaperOlderPrice(entries: readonly ComparableEntry[], headlinePrice: number | null): boolean {
+  return headlinePrice !== null && entries.some((entry) => hasComparablePrice(entry) && entry.price < headlinePrice);
+}
+
+/**
  * Words for the supermarkets at the headline price. "Más barato" is only said
  * when there is something cheaper than: one offer, or every offer tied, is
  * stated plainly instead.
  */
-export function cheapestCopy(cheapest: readonly ComparableEntry[], comparableCount: number): CheapestCopy | null {
+export function cheapestCopy(
+  cheapest: readonly ComparableEntry[],
+  comparableCount: number,
+  cheaperOlderPrice = false,
+): CheapestCopy | null {
   if (cheapest.length === 0) return null;
   const names = joinNames(cheapest.map((entry) => entry.supermarket.name));
   if (comparableCount <= 1) return { text: `Precio relevado solo en ${names}`, isCheapest: false };
+  if (cheaperOlderPrice) return { text: `Menor precio reciente en ${names}`, isCheapest: false };
   if (cheapest.length === comparableCount) {
     return { text: `Mismo precio en los ${pluralize(comparableCount, "supermercado")}`, isCheapest: false };
   }
@@ -87,7 +96,7 @@ export function movementOf(deltaPercent: number | null): Movement | null {
 /** "desde $37.399 (30 oct)" for a movement measured against the last different price. */
 export function previousPriceCopy(entry: MovementEntry): string | null {
   if (entry.previousPrice === null) return null;
-  const date = entry.previousObservedAt ? ` (${formatShortDay(entry.previousObservedAt)})` : "";
+  const date = entry.previousObservedAt ? ` (${formatDate(entry.previousObservedAt)})` : "";
   return `${formatCurrency(entry.previousPrice)}${date}`;
 }
 
@@ -105,10 +114,9 @@ export function headlineDropEntry<T extends MovementEntry>(cheapest: readonly T[
     .reduce<T | null>((best, entry) => (best === null || entry.deltaPercent! < best.deltaPercent! ? entry : best), null);
 }
 
-/** Sentence-case promo label: "2do al 50%", "−15% en promo". No "OFF". */
+/** The same promo wording as the product card: "Promo −15%", "2do al 50%". No "OFF". */
 export function promoLabel(promo: SimplePromotion): string {
-  if (promo.type === "percent-off") return `${formatDiscountPercent(promo.percent)} en promo`;
-  return promo.label;
+  return promotionLabel(promo);
 }
 
 export function promoBadgeType(promo: SimplePromotion): "2nd_50" | "percentage" {

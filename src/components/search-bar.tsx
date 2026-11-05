@@ -26,7 +26,6 @@ type SearchSuggestion = {
 type SearchBarProps = {
   defaultValue?: string;
   placeholder?: string;
-  variant?: "hero" | "compact";
 };
 
 type SuggestionOptionProps = {
@@ -77,23 +76,9 @@ function SuggestionOption({ result, id, active, onActivate }: SuggestionOptionPr
   );
 }
 
-const VARIANT_STYLES = {
-  hero: {
-    field: "min-h-14 py-1.5 pl-4 pr-1.5",
-    input: "text-base md:text-lg",
-    buttonSize: "default",
-  },
-  compact: {
-    field: "min-h-12 py-0.5 pl-3 pr-0.5",
-    input: "text-base",
-    buttonSize: "default",
-  },
-} as const;
-
 export function SearchBar({
   defaultValue = "",
   placeholder = "Buscá yerba, leche, arroz o una marca",
-  variant = "hero",
 }: SearchBarProps) {
   const router = useRouter();
   const searchId = useId();
@@ -104,7 +89,6 @@ export function SearchBar({
   const [hasInteracted, setHasInteracted] = useState(false);
   const [isPending, startTransition] = useTransition();
   const deferredQuery = useDeferredValue(query);
-  const styles = VARIANT_STYLES[variant];
   const resultsId = `${searchId}-results`;
   const activeOptionId = activeIndex >= 0 ? `${searchId}-option-${activeIndex}` : undefined;
 
@@ -203,18 +187,18 @@ export function SearchBar({
   return (
     <div className="relative">
       <form action="/buscar" onSubmit={handleSubmit} role="search" aria-label="Buscar productos" className="relative">
-        <label htmlFor={`${searchId}-${variant}`} className="sr-only">
+        <label htmlFor={`${searchId}-input`} className="sr-only">
           Buscar producto
         </label>
         <div
           className={cn(
             "flex items-center gap-2 rounded-lg border border-input bg-card transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30",
-            styles.field,
+            "min-h-12 py-0.5 pl-3 pr-0.5",
           )}
         >
           <Search className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
-            id={`${searchId}-${variant}`}
+            id={`${searchId}-input`}
             name="q"
             type="search"
             value={query}
@@ -236,7 +220,7 @@ export function SearchBar({
             autoComplete="off"
             className={cn(
               "min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden",
-              styles.input,
+              "text-base",
             )}
             role="combobox"
             aria-expanded={open}
@@ -246,7 +230,7 @@ export function SearchBar({
             aria-activedescendant={activeOptionId}
           />
 
-          <button type="submit" className={cn(buttonVariants({ size: styles.buttonSize }), "press px-4")}>
+          <button type="submit" className={cn(buttonVariants(), "press px-4")}>
             {isPending ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : null}
             Buscar
           </button>

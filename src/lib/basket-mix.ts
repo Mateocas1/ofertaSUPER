@@ -145,3 +145,25 @@ export function computeBasketPlan(
 
   return { summaries, items: planItems, mixedTotal, mixedMissing, bestSingle, savings };
 }
+
+export type MixComparison =
+  | { kind: "incomplete"; missing: number }
+  | { kind: "no-complete-single" }
+  | { kind: "saves"; amount: number; bestSingle: BasketSuperSummary }
+  | { kind: "same"; bestSingle: BasketSuperSummary }
+  | { kind: "costs-more"; amount: number; bestSingle: BasketSuperSummary };
+
+/**
+ * How the person's mix compares with the cheapest complete single-supermarket
+ * basket. `savings` is clamped at zero, so it cannot tell "same" from "your
+ * choices cost more"; this can.
+ */
+export function compareMixToBestSingle(plan: Pick<BasketPlan, "mixedTotal" | "mixedMissing" | "bestSingle">): MixComparison {
+  if (plan.mixedMissing > 0) return { kind: "incomplete", missing: plan.mixedMissing };
+  const { bestSingle } = plan;
+  if (bestSingle === null) return { kind: "no-complete-single" };
+  const difference = bestSingle.total - plan.mixedTotal;
+  if (difference > 0) return { kind: "saves", amount: difference, bestSingle };
+  if (difference < 0) return { kind: "costs-more", amount: -difference, bestSingle };
+  return { kind: "same", bestSingle };
+}

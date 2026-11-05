@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
-import { DropThumb } from "@/components/home/drop-thumb";
+import { ProductThumb } from "@/components/product-thumb";
 import { formatCurrency, formatDiscountPercent } from "@/lib/format";
 import type { HomeDropsData } from "@/lib/home-catalog";
 import { HOME_PRICE_DROPS, dropsActionLabel, observedLabel } from "@/lib/home-ui-data";
@@ -30,7 +30,7 @@ function DropRow({ drop }: { drop: PriceDrop }) {
 				href={canonicalProductPath(drop.ean)}
 				className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 hover:bg-surface-1 focus-visible:bg-surface-1 focus-visible:outline-none md:px-5"
 			>
-				<DropThumb src={drop.imageUrl} />
+				<ProductThumb src={drop.imageUrl} size="sm" />
 				<div className="min-w-0">
 					<p className="line-clamp-2 text-sm font-medium text-foreground group-hover:underline">{drop.name}</p>
 					<p className="mt-0.5 text-xs text-muted-foreground">

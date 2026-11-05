@@ -1,11 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
-import { Package } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { BasketControls } from "@/components/basket-controls";
 import { FavoriteButton } from "@/components/favorite-button";
-import { ThumbFrame } from "@/components/product-card/thumb-frame";
+import { ProductThumb } from "@/components/product-thumb";
 import { PromotionBadge } from "@/components/promotion-badge";
 import { StruckListPrice } from "@/components/struck-list-price";
 import { formatCurrency, formatDiscountPercent } from "@/lib/format";
@@ -59,17 +57,12 @@ type ProductCardProps = {
   product: ProductCardProduct;
 };
 
-// The image is decorative (the linked name sits next to it), so it has an
-// empty alt and a calm placeholder underneath for missing or broken images.
-function ProductThumb({ product, href }: { product: ProductCardProduct; href: string }) {
+// The image is decorative (the linked name sits next to it), so it is out of
+// the tab order and the accessibility tree.
+function CardThumb({ product, href }: { product: ProductCardProduct; href: string }) {
   return (
     <Link href={href} tabIndex={-1} aria-hidden="true" className="shrink-0">
-      <ThumbFrame className="relative size-16 overflow-hidden rounded-lg bg-muted">
-        <Package className="absolute inset-0 m-auto size-6 text-muted-foreground/50" aria-hidden="true" />
-        {product.imageUrl ? (
-          <Image src={product.imageUrl} alt="" fill sizes="64px" className="img-outline object-contain" unoptimized />
-        ) : null}
-      </ThumbFrame>
+      <ProductThumb src={product.imageUrl} />
     </Link>
   );
 }
@@ -146,7 +139,7 @@ export function ProductCard({ product }: ProductCardProps) {
   return (
     <article className="surface flex h-full flex-col gap-3 p-4">
       <div className="flex items-start gap-3">
-        <ProductThumb product={product} href={href} />
+        <CardThumb product={product} href={href} />
         <div className="min-w-0 flex-1">
           <h3 className="line-clamp-2 text-sm font-medium leading-5 text-foreground">
             <Link href={href} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">

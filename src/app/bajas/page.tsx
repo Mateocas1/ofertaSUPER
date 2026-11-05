@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { DropThumb } from "@/components/bajas/drop-thumb";
+import { ProductThumb } from "@/components/product-thumb";
 import { DropsFilter, type DropFilterCategory, type DropFilterRow } from "@/components/bajas/drops-filter";
 import { formatDate, formatDiscountPercent } from "@/lib/format";
 import {
@@ -40,7 +40,7 @@ function loadView(): PriceDropsView {
 function DropRow({ drop }: { drop: PriceDrop }) {
   return (
     <article className="flex items-center gap-3 px-4 py-3 sm:gap-4 md:px-5">
-      <DropThumb src={drop.imageUrl} alt="" />
+      <ProductThumb src={drop.imageUrl} />
       <div className="grid min-w-0 flex-1 gap-x-4 gap-y-1 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
         <div className="min-w-0">
           <h2 className="text-sm font-medium text-foreground md:text-base">
