@@ -262,7 +262,7 @@
 
   /* One surface level. Inside a surface, separate with hairline dividers
      (divide-y divide-border), never with another card.
-     surface-soft is a quiet tone step for callouts; surface-inset a recessed well. */
+     surface-soft is a quiet tone step for callouts. */
   .surface {
     @apply rounded-xl border border-border bg-card;
     box-shadow: var(--elevation-1);
@@ -270,16 +270,6 @@
 
   .surface-soft {
     @apply rounded-lg bg-surface-1;
-  }
-
-  .surface-inset {
-    @apply rounded-lg bg-surface-3/60;
-  }
-
-  /* Deprecated alias of .surface; kept so older markup renders the same. */
-  .surface-raised {
-    @apply rounded-xl border border-border bg-card;
-    box-shadow: var(--elevation-1);
   }
 
   /* Price-tag chip: notch on the left edge. Reserved for the basket receipt. */
@@ -318,27 +308,6 @@
     transition: transform 200ms var(--ease-out);
   }
 
-  .animate-enter {
-    animation: enter-soft 320ms var(--ease-out) both;
-  }
-
-  /* Stagger children entrance; capped at 8 items. Set --i via nth-child. */
-  .stagger > * {
-    animation: enter-soft 300ms var(--ease-out) both;
-  }
-  .stagger > :nth-child(2) { animation-delay: 40ms; }
-  .stagger > :nth-child(3) { animation-delay: 80ms; }
-  .stagger > :nth-child(4) { animation-delay: 120ms; }
-  .stagger > :nth-child(5) { animation-delay: 160ms; }
-  .stagger > :nth-child(6) { animation-delay: 200ms; }
-  .stagger > :nth-child(7) { animation-delay: 240ms; }
-  .stagger > :nth-child(n + 8) { animation-delay: 280ms; }
-
-  /* Best row settles in: slight lift + fade. */
-  .settle {
-    animation: settle 420ms var(--ease-out) 120ms both;
-  }
-
   .press {
     transition: scale 160ms var(--ease-out), opacity 160ms var(--ease-out);
   }
@@ -346,47 +315,11 @@
     scale: 0.96;
   }
 
-  /* 1px low-opacity outline on images: black in light, white in dark; inset so it never bleeds. */
+  /* Hairline on product images, derived from the ink so it follows the theme
+     (class or system preference). Inset so it never bleeds. */
   .img-outline {
-    outline: 1px solid oklch(0 0 0 / 0.1);
+    outline: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
     outline-offset: -1px;
-  }
-  .dark .img-outline {
-    outline-color: oklch(1 0 0 / 0.1);
-  }
-
-  @media (hover: hover) {
-    .lift {
-      transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
-    }
-    .lift:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--elevation-3);
-    }
-  }
-}
-
-@keyframes enter-soft {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes settle {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.97);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
   }
 }
 
