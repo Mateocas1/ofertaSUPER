@@ -126,25 +126,69 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Search ranking, shared by /api/search, /api/products and /buscar:
-// 0) exact EAN match; 1) name starts with the term; 2) term as a whole word
-// in the name without a preceding "de" (so "dulce de leche" is not leche);
-// 3) any other name or brand match. Ties break by supermarkets with an
-// offer, then by name.
-export function snapshotMatchRank(
-  product: { ean: string; name: string },
-  query: string,
-): 0 | 1 | 2 | 3 {
-  if (gtinKey(product.ean) === gtinKey(query.trim())) return 0;
-  const term = normalizeQuery(query);
-  const name = normalizeQuery(product.name);
-  if (name.startsWith(term)) return 1;
+// Words that turn a staple into another product family or audience: "leche"
+// should answer with milk before "Leche Bebé…", "Leche chocolatada…" or
+// "Leche en polvo…". A word only counts when the query does not name it, so
+// "leche en polvo" still ranks powdered milk first.
+const SPECIALIZING_WORDS = new Set([
+  "bebe", "bebes", "baby", "infantil", "etapa", "kids",
+  "chocolatada", "fermentada", "cultivada", "condensada", "saborizada", "polvo", "preparado", "preparada",
+  "light", "diet", "tacc", "gluten", "stevia", "eritritol", "edulcorante",
+  "micelar", "aromatizante",
+]);
+// A connector right after the term makes a compound product: "Arroz con
+// leche", "Arroz para sushi", "Leche y tónico". "de" is not one of them
+// ("Aceite de girasol", "Pan de molde" are the generic products).
+const COMPOUND_CONNECTORS = new Set(["con", "y", "&", "para"]);
+// Categories outside the grocery staples. A term that names both a food and a
+// cleanser ("agua", "aceite", "leche") answers with the food first; when every
+// match is in one of these categories the penalty is uniform and harmless.
+const NON_STAPLE_CATEGORIES = new Set(["bebes", "perfumeria", "higiene personal", "limpieza", "mascotas", "electro hogar"]);
+const WORD_SEPARATOR = /[^\p{L}\p{N}&]+/u;
+const WORD_CHAR = /[\p{L}\p{N}]/u;
+
+function isSpecializedMatch(name: string, term: string, category: string | null | undefined, termEnd: number): boolean {
+  if (category && NON_STAPLE_CATEGORIES.has(normalizeQuery(category))) return true;
+  const nextWord = name.slice(termEnd).split(WORD_SEPARATOR).find(Boolean);
+  if (nextWord !== undefined && COMPOUND_CONNECTORS.has(nextWord)) return true;
+  const queryWords = new Set(term.split(WORD_SEPARATOR));
+  return name.split(WORD_SEPARATOR).some((word) => SPECIALIZING_WORDS.has(word) && !queryWords.has(word));
+}
+
+/** Where the term sits in the name: 1 at the start as a whole word, 3 at the start mid-word, 5 as a whole word elsewhere, 7 elsewhere. */
+function nameMatchTier(name: string, term: string): { tier: 1 | 3 | 5 | 7; termEnd: number } {
+  if (name.startsWith(term)) {
+    const midWord = WORD_CHAR.test(term.at(-1)!) && WORD_CHAR.test(name.charAt(term.length));
+    return { tier: midWord ? 3 : 1, termEnd: term.length };
+  }
   const wholeWord = new RegExp(
     `(?<![\\p{L}\\p{N}])(?<!de )${escapeRegExp(term)}(?![\\p{L}\\p{N}])`,
     "u",
-  );
-  if (term.length > 0 && wholeWord.test(name)) return 2;
-  return 3;
+  ).exec(name);
+  return wholeWord ? { tier: 5, termEnd: wholeWord.index + term.length } : { tier: 7, termEnd: -1 };
+}
+
+export type SnapshotMatchRank = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+// Search ranking, shared by /api/search, /api/products and /buscar (lower
+// first): 0) exact EAN match; 1-2) name starts with the term as a whole word;
+// 3-4) name starts with the term mid-word ("lech" while typing, "pan" in
+// "Pañal"); 5-6) term as a whole word elsewhere, not after "de" (so "dulce de
+// leche" is not leche); 7) any other name or brand match. Inside each pair the
+// generic product comes first and the specialized one second (see
+// isSpecializedMatch). Ties break by supermarkets with an offer, then by name.
+// Per product, linear in the name length: no snapshot-wide statistics.
+export function snapshotMatchRank(
+  product: { ean: string; name: string; category?: string | null },
+  query: string,
+): SnapshotMatchRank {
+  if (gtinKey(product.ean) === gtinKey(query.trim())) return 0;
+  const term = normalizeQuery(query);
+  if (term.length === 0) return 1;
+  const name = normalizeQuery(product.name);
+  const { tier, termEnd } = nameMatchTier(name, term);
+  if (tier === 7) return 7;
+  return (isSpecializedMatch(name, term, product.category, termEnd) ? tier + 1 : tier) as SnapshotMatchRank;
 }
 
 export type SnapshotProductResult = {

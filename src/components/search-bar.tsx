@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useEffect, useId, useState, useTransition } from "react";
-import { LoaderCircle, Search } from "lucide-react";
+import { LoaderCircle, Package, Search } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency } from "@/lib/format";
@@ -37,6 +37,7 @@ type SuggestionOptionProps = {
 };
 
 function SuggestionOption({ result, id, active, onActivate }: SuggestionOptionProps) {
+  const [imageFailed, setImageFailed] = useState(false);
   return (
     <Link
       id={id}
@@ -44,24 +45,23 @@ function SuggestionOption({ result, id, active, onActivate }: SuggestionOptionPr
       role="option"
       aria-selected={active}
       className={cn(
-        "flex min-h-16 items-center gap-4 border-t border-dashed border-border px-4 py-3 first:border-t-0 hover:bg-accent/60 focus-visible:bg-accent/60",
-        active && "bg-accent/60",
+        "flex min-h-14 items-center gap-3 px-3 py-2 hover:bg-muted focus-visible:bg-muted",
+        active && "bg-muted",
       )}
       onMouseEnter={onActivate}
     >
-      <div className="relative size-14 overflow-hidden rounded-xl bg-surface-3/70">
-        {result.imageUrl ? (
-          <Image src={result.imageUrl} alt={result.name} fill sizes="56px" className="img-outline object-cover" unoptimized />
+      <div className="relative size-10 shrink-0 overflow-hidden rounded-md bg-muted">
+        <Package className="absolute inset-0 m-auto size-4 text-muted-foreground/50" aria-hidden="true" />
+        {result.imageUrl && !imageFailed ? (
+          <Image src={result.imageUrl} alt="" fill sizes="40px" className="img-outline object-contain" onError={() => setImageFailed(true)} unoptimized />
         ) : null}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-foreground">{result.name}</p>
-        <p className="truncate text-sm text-muted-foreground">
-          {[result.brand, result.category].filter(Boolean).join(" • ") || "Sin datos extra"}
-        </p>
+        <p className="truncate text-sm font-medium text-foreground">{result.name}</p>
+        {result.brand ? <p className="truncate text-xs text-muted-foreground">{result.brand}</p> : null}
       </div>
       <div className="text-right">
-        <p className="price text-sm text-primary">{formatCurrency(result.displayPrice ?? result.minPrice)}</p>
+        <p className="price text-sm text-foreground">{formatCurrency(result.displayPrice ?? result.minPrice)}</p>
         {result.freshnessStatus === "stale" ? (
           <p className="mt-1 text-xs font-medium text-warning">
             {getPriceFreshnessCopy({
@@ -79,20 +79,20 @@ function SuggestionOption({ result, id, active, onActivate }: SuggestionOptionPr
 
 const VARIANT_STYLES = {
   hero: {
-    field: "rounded-[1.625rem] px-4 py-4 md:px-5",
+    field: "min-h-14 py-1.5 pl-4 pr-1.5",
     input: "text-base md:text-lg",
-    buttonSize: "lg",
+    buttonSize: "default",
   },
   compact: {
-    field: "rounded-[1.375rem] px-3 py-3",
-    input: "text-sm",
-    buttonSize: "sm",
+    field: "min-h-12 py-0.5 pl-3 pr-0.5",
+    input: "text-base",
+    buttonSize: "default",
   },
 } as const;
 
 export function SearchBar({
   defaultValue = "",
-  placeholder = "Buscar yerba, leche, arroz o una marca puntual",
+  placeholder = "Buscá yerba, leche, arroz o una marca",
   variant = "hero",
 }: SearchBarProps) {
   const router = useRouter();
@@ -121,7 +121,9 @@ export function SearchBar({
   useEffect(() => {
     const trimmed = deferredQuery.trim();
 
-    if (trimmed.length < 2) {
+    // No suggestions request until the person types or focuses the field: a
+    // results page that arrives with ?q= must not call /api/search on load.
+    if (!hasInteracted || trimmed.length < 2) {
       setResults([]);
       setOpen(false);
       return;
@@ -200,19 +202,21 @@ export function SearchBar({
 
   return (
     <div className="relative">
-      <form onSubmit={handleSubmit} role="search" aria-label="Buscar productos" className="relative">
+      <form action="/buscar" onSubmit={handleSubmit} role="search" aria-label="Buscar productos" className="relative">
         <label htmlFor={`${searchId}-${variant}`} className="sr-only">
           Buscar producto
         </label>
         <div
           className={cn(
-            "flex items-center gap-3 border-2 border-foreground/15 bg-card shadow-[var(--elevation-2)] [transition:border-color_200ms_var(--ease-out),box-shadow_200ms_var(--ease-out)] focus-within:border-primary focus-within:shadow-[var(--elevation-3)]",
+            "flex items-center gap-2 rounded-lg border border-input bg-card transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30",
             styles.field,
           )}
         >
           <Search className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             id={`${searchId}-${variant}`}
+            name="q"
+            type="search"
             value={query}
             onChange={(event) => {
               setHasInteracted(true);
@@ -231,7 +235,7 @@ export function SearchBar({
             placeholder={placeholder}
             autoComplete="off"
             className={cn(
-              "w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground",
+              "min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden",
               styles.input,
             )}
             role="combobox"
@@ -242,12 +246,9 @@ export function SearchBar({
             aria-activedescendant={activeOptionId}
           />
 
-          <button
-            type="submit"
-            className={cn(buttonVariants({ size: styles.buttonSize }), "press px-4")}
-            aria-label="Ejecutar búsqueda"
-          >
-            {isPending ? <LoaderCircle className="size-4 animate-spin" /> : "Buscar"}
+          <button type="submit" className={cn(buttonVariants({ size: styles.buttonSize }), "press px-4")}>
+            {isPending ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : null}
+            Buscar
           </button>
         </div>
       </form>
@@ -260,7 +261,7 @@ export function SearchBar({
         <div
           id={resultsId}
           role="listbox"
-          className="absolute inset-x-0 top-[calc(100%+0.75rem)] z-50 overflow-hidden rounded-2xl border border-border bg-popover shadow-[var(--elevation-3)]"
+          className="absolute inset-x-0 top-full z-50 mt-2 divide-y divide-border overflow-hidden rounded-xl border border-border bg-popover shadow-3"
         >
           {results.length > 0 ? (
             results.map((result, index) => (
@@ -273,7 +274,7 @@ export function SearchBar({
               />
             ))
           ) : (
-            <div className="px-4 py-5 text-sm text-muted-foreground">Sin coincidencias por ahora.</div>
+            <div className="px-4 py-4 text-sm text-muted-foreground">No encontramos coincidencias.</div>
           )}
         </div>
       ) : null}
