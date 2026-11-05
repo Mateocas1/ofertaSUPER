@@ -185,6 +185,34 @@ The ones marked **review** are the ones the owner may want to revisit.
     "renders the committed real snapshot" expects exactly 12 series and
     today's data has 11. It fails on the base commit too and is unrelated to
     the UI; it should assert a range, not an exact count.
+17. **The "precio anterior" window is measured on the change, not on the old
+    price** (**review**). An independent review found the shared rule (and,
+    before this branch, /bajas) windowed on the date the previous price was
+    first recorded. The snapshot history is a change log, so any price that
+    held more than 14 days before dropping was never compared:
+    `/producto/00000075076870` said "Sin cambios en 14 días" for a −40% drop
+    on 2 nov. The rule now counts the movement when the current price was
+    first observed (after the reference) inside the window; with no such
+    point it falls back to the old, conservative bound.
+18. **`data/price-drops.json` re-exported in this branch** (**review**) with
+    the same snapshot and clock (`--now=2026-11-04T19:15:22.818Z`), so /bajas
+    and the product pages agree now instead of after the next daily refresh:
+    696 → 1,506 published drops, 30 → 35 suspect, 24 of the top 100 change.
+    The next scheduled refresh overwrites it as usual. To revert: restore the
+    file from `e4bc615` (and the rule from `cc210ca`).
+19. **Public API changelog** (additive shape, changed meaning):
+    - `/api/products*`: `previousPrice`/`deltaPercent` used to always equal
+      the current price / 0; they now carry the real last movement inside 14
+      days, or `null`. `priceDropAlert`/`bestPriceDropAlert` can be non-null.
+      New field `previousObservedAt`.
+    - `/api/products/[ean]/history`: series colors follow the supermarket
+      (unknown ones gray), series are sorted by name, and each series ends
+      with the current observation (null when out of stock).
+20. **Browser test no longer asserts the /buscar fail-closed alert under
+    `CATALOG_OFFLINE_MODE`**: on the base commit that variable was already
+    not wired to the snapshot pages (only `catalog-availability.ts` reads
+    it), so that assertion could not pass before this change either. Wiring
+    offline mode into `resolveSnapshotCatalogPage` is listed in Next steps.
 
 ## Evidence
 
@@ -194,7 +222,7 @@ Base `6180e61` → branch `claude/fervent-mendel-gq0rgr`.
   (0 over threshold, 0 regressed).
 - `NODE_OPTIONS=--max-old-space-size=7000 npx tsc --noEmit` → exit 0 (the
   default heap OOMs on the 43 MB JSON import; pre-existing).
-- `npm test` → 773 tests, 771 pass, 1 skipped, 1 fail (the pre-existing
+- `npm test` → 778 tests, 776 pass, 1 skipped, 1 fail (the pre-existing
   chart-count test, decision 16).
 - `npm run build` → OK; `/`, `/bajas`, `/inflacion`, `/metodologia`,
   `/canasta` stay static (`/` and `/bajas` ISR 6 h).
@@ -206,6 +234,11 @@ Base `6180e61` → branch `claude/fervent-mendel-gq0rgr`.
   the first search result moved from y≈740 to y≈379.
 - Search "leche": first results were baby formula; now plain
   descremada/entera.
+- Independent review (fresh agent, read-only, against the running build):
+  9 findings; all fixed except the API note (documented, decision 19) and
+  two source-text test assertions judged harmless. Re-verified after the
+  fixes: lint, types, tests, build and the browser test as above;
+  `/producto/00000075076870` shows "Bajó −40% desde $ 18.250 (17 oct)".
 
 ## Progress
 
@@ -235,3 +268,10 @@ Base `6180e61` → branch `claude/fervent-mendel-gq0rgr`.
 6. Fix the data-coupled chart-count test (decision 16).
 7. Product images: verify real thumbnails in production (the sandbox cannot
    load vteximg.com.br, so only the placeholder state was seen here).
+8. Wire `CATALOG_OFFLINE_MODE` into the snapshot page loaders so the
+   fail-closed states of /buscar, /ofertas and /producto can be exercised by
+   the browser test (decision 20).
+9. Product and card models still live in two modules
+   (`components/product/product-price-model.ts`, `lib/product-card-offers.ts`);
+   they now agree on cheapest/older-cheaper and promo wording, but one shared
+   model would remove the remaining overlap.
