@@ -6,11 +6,11 @@ snapshot; the database never serves traffic.
 ## Flow
 
 ```
-VTEX public catalog API (Carrefour, Disco, Jumbo)
-        │  browser-like REST reads + persisted-query hash
-        ▼
-src/lib/vtex/client.ts · src/lib/ingestion/adapters/* · scripts/pipeline/cmvp-catalog-batch.ts
-        │  normalize + capture Carrefour simple promos
+VTEX public catalog API (Carrefour, Disco, Jumbo, Vea)   Constructor.io search (Coto)
+        │  browser-like REST reads + persisted-query hash      │  public client key, branch 200
+        ▼                                                      ▼
+src/lib/vtex/client.ts · src/lib/coto/client.ts · src/lib/ingestion/adapters/* · scripts/pipeline/cmvp-catalog-batch.ts
+        │  normalize + capture Carrefour and Coto simple promos
         ▼
 staging rows (staging_products)                 scripts/pipeline/stage.ts
         │  quality gates (valid GTIN, sane price, …)
@@ -70,9 +70,10 @@ product page and sitemap always declare the GTIN-14 URL as canonical.
 | `src/lib/identity/gtin.ts` | GTIN validation + canonical GTIN-14; lookup forms |
 | `src/lib/vtex/client.ts` | VTEX REST client (query, persisted-query hash) |
 | `src/lib/vtex/normalize.ts` | Raw VTEX payload → normalized product/offer |
+| `src/lib/coto/client.ts` | Coto Constructor.io client: category tree, browse/search, EAN top-up, promo parsing |
 | `src/lib/ingestion/adapters/*` | Per-supermarket acquisition adapters |
 | `src/lib/ingestion/quality-gates.ts` | Block/warn staging candidate gates |
-| `src/lib/promotions/capture.ts` | Simple promo capture by EAN (Carrefour) |
+| `src/lib/promotions/capture.ts` | Simple promo capture by EAN (Carrefour; Coto promos come with its search) |
 | `scripts/refresh-catalog.ts` | The single daily refresh command |
 | `scripts/pipeline/cmvp-catalog-batch.ts` | Batch acquisition + reconcile orchestrator |
 | `scripts/pipeline/stage.ts` | Write normalized products into staging |
