@@ -83,3 +83,9 @@ analytics/.venv/
 analytics/*.duckdb
 analytics/*.duckdb.wal
 analytics/.user.yml
+
+# Local notes
+CLAUDE.md
+AGENTS.md
+.github/prompts/
+scripts/orchestration/
