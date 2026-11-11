@@ -18,10 +18,12 @@ function getFavoriteLabel(active: boolean, productName: string) {
   return active ? `Quitar ${productName} de favoritos` : `Guardar ${productName} en favoritos`;
 }
 
-function getFavoriteButtonClassName(active: boolean, size: "sm" | "default", className?: string) {
+// Without a label the button is a square icon target (44px); a label widens it.
+function getFavoriteButtonClassName(active: boolean, size: "sm" | "default", showLabel: boolean, className?: string) {
+  const iconSize = size === "sm" ? "icon-sm" : "icon";
   return cn(
-    buttonVariants({ variant: active ? "secondary" : "outline", size: size === "sm" ? "sm" : "default" }),
-    "press rounded-full",
+    buttonVariants({ variant: active ? "secondary" : "outline", size: showLabel ? size : iconSize }),
+    "press",
     active && "text-deal-ink",
     className,
   );
@@ -29,7 +31,7 @@ function getFavoriteButtonClassName(active: boolean, size: "sm" | "default", cla
 
 function getFavoriteText(active: boolean, showLabel: boolean) {
   if (!showLabel) return null;
-  return active ? "Guardado" : "Favorito";
+  return active ? "Guardado" : "Guardar";
 }
 
 export function FavoriteButton({
@@ -51,9 +53,9 @@ export function FavoriteButton({
       title={label}
       disabled={!hasHydrated}
       onClick={() => toggleFavorite(ean)}
-      className={getFavoriteButtonClassName(active, size, className)}
+      className={getFavoriteButtonClassName(active, size, showLabel, className)}
     >
-      <Heart className={cn("size-4", active && "fill-current")} />
+      <Heart className={cn("size-4", active && "fill-current")} aria-hidden="true" />
       {getFavoriteText(active, showLabel)}
     </button>
   );

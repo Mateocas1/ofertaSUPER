@@ -20,7 +20,7 @@ const styles: Record<PromotionType, { label: string; className: string }> = {
     className: "border-deal/40 bg-deal-soft text-deal-ink",
   },
   percentage: {
-    label: "% OFF",
+    label: "Descuento",
     className: "border-transparent bg-deal text-deal-foreground",
   },
 };
@@ -35,7 +35,7 @@ export function PromotionBadge({ type, label, className }: PromotionBadgeProps) 
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-xs font-bold uppercase tracking-[0.08em] tabular-nums",
+        "inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-semibold tabular-nums",
         styles[type].className,
         className,
       )}

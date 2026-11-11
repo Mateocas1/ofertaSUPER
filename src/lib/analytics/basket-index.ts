@@ -1,6 +1,7 @@
 import "server-only";
 
 import basketIndexJson from "../../../data/analytics/basket-index.json";
+import { formatSignedPercent } from "@/lib/format";
 
 export const BASKET_INDEX_SCHEMA_VERSION = 2;
 
@@ -143,8 +144,7 @@ export function formatNumber(value: number | null, options: Intl.NumberFormatOpt
 
 export function formatPercent(value: number | null): string {
   if (value === null || value === undefined) return "—";
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(value)}%`;
+  return formatSignedPercent(value, 2);
 }
 
 /** Honest one-liner about what the index actually covers. */

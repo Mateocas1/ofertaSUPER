@@ -10,12 +10,12 @@ export function CatalogProvenanceNotice({ degraded }: CatalogProvenanceNoticePro
   return (
     <section
       aria-label="Información de frescura del catálogo"
-      className="rounded-xl border-2 border-dashed border-warning/60 bg-deal-soft px-5 py-4 text-sm leading-6 text-foreground"
+      className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground"
       role="status"
     >
-      <p className="font-semibold">Información histórica del catálogo.</p>
-      <p className="mt-1">
-        Estos son resultados reales de una publicación anterior. Revisá la fecha, la fuente y el enlace oficial antes de comprar porque los precios o las promociones pueden haber cambiado.
+      <p>
+        <span className="font-semibold">Información histórica del catálogo.</span>{" "}
+        Son resultados reales de una publicación anterior: los precios o las promociones pueden haber cambiado. Revisá la fecha y la fuente antes de comprar.
       </p>
     </section>
   );

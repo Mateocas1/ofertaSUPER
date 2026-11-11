@@ -4,6 +4,7 @@ import type { PriceDropAlert } from "@/lib/promotions/alerts";
 import { comparePriceAgainstHistory } from "@/lib/promotions/alerts";
 import { detectAutomaticDiscount } from "@/lib/promotions/detect";
 import { classifyPriceFreshness, type PriceFreshnessStatus } from "@/lib/price-freshness";
+import { findLastDifferentPrice } from "@/lib/price-movement";
 import type { ProductDetail, ProductSummary } from "@/lib/catalog";
 
 import {
@@ -32,11 +33,11 @@ function stableOfferId(ean: string, source: string): number {
 }
 
 function buildEntry(offer: OfferWithFreshness, now: Date) {
-  const previousPrice = offer.history.length > 0
-    ? toNumberOrNull(offer.history[offer.history.length - 1].price)
-    : null;
-  const movement = comparePriceAgainstHistory(toNumberOrNull(offer.price), previousPrice);
   const price = toNumberOrNull(offer.price);
+  // Movement against the last DIFFERENT price (the rule /bajas publishes with);
+  // the last history point is the current observation itself.
+  const reference = findLastDifferentPrice(offer.history, price, offer.observedAt);
+  const movement = comparePriceAgainstHistory(price, reference?.price ?? null);
   const priceDropAlert = movement.priceDropAlert;
 
   return {
@@ -61,6 +62,7 @@ function buildEntry(offer: OfferWithFreshness, now: Date) {
       now,
     }).status as PriceFreshnessStatus,
     previousPrice: movement.previousPrice,
+    previousObservedAt: reference?.observedAt ?? null,
     deltaPercent: movement.deltaPercent,
     priceDropAlert,
     automaticDiscountPercent: detectAutomaticDiscount(price, toNumberOrNull(offer.listPrice))?.percentOff ?? null,

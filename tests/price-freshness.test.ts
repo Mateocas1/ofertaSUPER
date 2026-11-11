@@ -35,9 +35,9 @@ describe("price freshness model", () => {
 
     assert.equal(getStalenessAgeDays(stale), 57);
     assert.deepEqual(getPriceFreshnessCopy(stale), {
-      priceLabel: "Ultimo precio registrado",
+      priceLabel: "Último precio registrado",
       badgeLabel: "Dato viejo",
-      helperText: "Puede estar desactualizado. Revisalo en la web del super antes de comprar.",
+      helperText: "Puede estar desactualizado. Revisalo en la web del súper antes de comprar.",
     });
   });
 });
