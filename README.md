@@ -1,18 +1,23 @@
-# ofertasSUPER
+# ofertaSUPER
 
-Comparador de precios y ofertas de supermercados de Argentina (Carrefour, Disco y
-Jumbo) por GTIN-14: buscás un producto, ves el precio y la oferta en cada súper,
-y armás un carrito que puede mezclar súpers.
+> - **Qué es:** comparador de precios y ofertas de 5 supermercados argentinos, con unos 24.500 productos y 47.500 ofertas.
+> - **Estado (11/11/2026):** sitio pausado por el hosting (Vercel) hasta el 14/11/2026, por pasarse de la CPU del plan gratuito. El refresh diario está verde desde el 27/10. No hay datos de uso.
+> - **Stack:** TypeScript, Next.js 16, React 19, snapshot JSON versionado al servir; Prisma y PostgreSQL solo en la ingesta y en CI; GitHub Actions.
+> - **Cómo correrlo:** `npm ci && npm run dev` (detalle en [Desarrollo local](#desarrollo-local)).
+> - **Links:** [postmortem del incidente de CPU](docs/postmortem-2026-10-vercel-cpu-pause.md)
+> - **Cómo se hizo:** diseño, decido y verifico: defino los tests, los criterios de revisión y las mediciones. Agentes de IA escriben buena parte del código bajo esos tests y esa revisión.
 
-- **Sitio:** https://ofertasuper.com (Vercel lo pausó del 15/10 al 14/11/2026 por
-  pasarse de la CPU del plan gratuito; causa y arreglo en el
-  [postmortem](docs/postmortem-2026-10-vercel-cpu-pause.md))
+Comparador de precios y ofertas de supermercados de Argentina (Carrefour, Coto,
+Disco, Jumbo y Vea) por GTIN-14: buscás un producto, ves el precio y la oferta en
+cada súper, y armás un carrito que puede mezclar súpers.
+
 - **Runbook operativo** (actualización diaria, cron, Postgres, backups): [docs/RUNBOOK.md](docs/RUNBOOK.md)
 - **Arquitectura** (flujo de datos y módulos clave): [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ## Cómo fluyen los datos
 
-Los scrapers VTEX leen el catálogo de cada súper y lo escriben en tablas de
+Los lectores de catálogo (la API pública VTEX de Carrefour, Disco, Jumbo y Vea, y
+la búsqueda que usa el sitio de Coto) leen el catálogo de cada súper y lo escriben en tablas de
 staging de un Postgres local; un reconcile transaccional con advisory lock
 fusiona cada observación en el catálogo vivo (identidad GTIN-14 con checksum),
 un gate de frescura decide qué precio es "actual", y el pipeline exporta
@@ -25,13 +30,14 @@ disponible", nunca datos demo. Detalle en [ARCHITECTURE.md](ARCHITECTURE.md).
 
 El sitio corre en el plan gratuito de Vercel, que incluye 4 horas de CPU activa
 por mes. En octubre de 2026 se pasó y quedó pausado 30 días: cada producto
-recorría todas las ofertas (24.547 × 48.419 ≈ 1.200 millones de comparaciones,
+recorría todas las ofertas (productos × ofertas ≈ 1.200 millones de comparaciones,
 10-16 s de CPU por request) en el sitemap, `/ofertas` y `/categoria`, sin caché.
 
 El arreglo mantiene el sitio gratis y con la misma salida:
 
 - Índice por EAN armado una vez por proceso: las páginas más pesadas pasaron de
-  10-16 s a 18-173 ms de CPU, medido con el snapshot real.
+  10-16 s a 18-173 ms de CPU, medido en una réplica local con el snapshot real.
+  En producción se mide cuando Vercel levante la pausa.
 - Sitemap generado en el build y caché del CDN de Vercel (1 h) en páginas y
   APIs públicas; los errores y los 429 nunca se cachean.
 - robots.txt deja afuera a los crawlers de IA, los filtros y la búsqueda interna.
@@ -56,8 +62,10 @@ Fuente: snapshot real `data/catalog-snapshot.json` · Rango 2026-09-20 → 2026-
   desde `price_history` y el estado de cada oferta; un valor con más de 24 h sin
   observarse queda nulo con un motivo explícito.
 - El job diario sube un Parquet por día al release `analytics-data`
-  (`scripts/analytics-data.sh`) y publica un índice Laspeyres de canasta fija
-  comparado con el IPC Nivel General del INDEC.
+  (`scripts/analytics-data.sh`). El modelo de un índice Laspeyres de canasta fija
+  para comparar con el IPC del INDEC está armado, pero todavía no produce valores:
+  `data/analytics/basket-index.json` declara `status: "insufficient"` hasta
+  juntar la serie que necesita.
 - La página `/inflacion` renderiza `data/analytics/basket-index.json`
   precalculado: no hay base de datos en el camino de lectura. Mientras la serie
   no tenga al menos dos meses de canasta y un mes de IPC del INDEC superpuesto,
@@ -97,7 +105,8 @@ Postgres están en [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 ## Limitaciones honestas
 
-- Las promos simples son de Carrefour; Disco y Jumbo no exponen teasers por producto.
+- Las promos simples (porcentaje, 2x1, 2do al X %) vienen de Carrefour y Coto; Disco,
+  Jumbo y Vea no exponen teasers por producto.
 - Las promos bancarias y de fidelidad están fuera de v1.
 - La frescura depende del refresh diario: el sitio siempre muestra el último
   snapshot commiteado, con su fecha de observación.
