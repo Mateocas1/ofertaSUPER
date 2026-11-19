@@ -40,6 +40,11 @@ describe("cloud refresh workflow contract", () => {
     assert.match(workflow, /postgresql-client-16/);
     assert.match(workflow, /\/usr\/lib\/postgresql\/16\/bin" >> "\$GITHUB_PATH"/);
     assert.match(workflow, /pg_restore --version \| grep -q "\(PostgreSQL\) 16\\\."/);
+    assert.match(workflow, /pg_dump --version \| grep -q "\(PostgreSQL\) 16\\\."/);
+    // The pin only helps if it runs before the restore.
+    const pin = workflow.indexOf("- name: Pin the Postgres 16 client");
+    const restore = workflow.indexOf("- name: Download and restore the database state");
+    assert.ok(pin > 0 && pin < restore, "the Postgres 16 client pin must run before the restore");
   });
 
   it("pins every action to a full commit SHA", () => {

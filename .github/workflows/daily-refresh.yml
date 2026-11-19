@@ -117,9 +117,17 @@ jobs:
       # (ubuntu-latest moved to 26.04 on 16/11/2026), so pin both the runner
       # image and the client binaries.
       - name: Pin the Postgres 16 client
+        timeout-minutes: 10
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-16
+          # The 24.04 image normally ships it; install only when missing, with
+          # a bounded retry so a mirror hiccup does not cost the day's refresh.
+          if [ ! -x /usr/lib/postgresql/16/bin/pg_restore ]; then
+            for attempt in 1 2 3; do
+              sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-16 && break
+              if [ "$attempt" = 3 ]; then exit 1; fi
+              sleep 15
+            done
+          fi
           echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
           export PATH="/usr/lib/postgresql/16/bin:$PATH"
           pg_restore --version
