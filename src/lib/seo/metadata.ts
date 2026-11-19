@@ -83,7 +83,7 @@ export function createMetadata({ title, description, path = "/", feeds = [] }: M
       title,
       description,
       url,
-      siteName: "ofertasSUPER",
+      siteName: "ofertaSUPER",
       locale: "es_AR",
       type: "website",
     },

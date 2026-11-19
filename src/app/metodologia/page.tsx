@@ -7,7 +7,7 @@ import { createMetadata } from "@/lib/seo/metadata";
 
 export const metadata: Metadata = createMetadata({
   title: "Metodología",
-  description: "Cómo ofertasSUPER compara productos por EAN, muestra frescura y comunica cobertura por supermercado.",
+  description: "Cómo ofertaSUPER compara productos por EAN, muestra frescura y comunica cobertura por supermercado.",
   path: "/metodologia",
 });
 
@@ -63,7 +63,7 @@ export default function MethodologyPage() {
         <header className="pb-8">
           <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">Metodología</h1>
           <p className="mt-3 text-lg leading-7 text-muted-foreground">
-            ofertasSUPER cruza productos por EAN, muestra la fecha de cada registro y separa la cobertura del precio
+            ofertaSUPER cruza productos por EAN, muestra la fecha de cada registro y separa la cobertura del precio
             para evitar lecturas engañosas.
           </p>
           <nav aria-label="En esta página" className="mt-4 flex flex-wrap gap-x-4">
