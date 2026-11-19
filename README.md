@@ -57,17 +57,17 @@ precios a Parquet y la modela con DuckDB + dbt (`analytics/`):
 <!-- price-chart:start -->
 ![Evolución de precios de la canasta](analytics/assets/price-evolution.png)
 
-Fuente: snapshot real `data/catalog-snapshot.json` · Rango 2026-09-20 → 2026-11-09 · 24 días relevados.
+Fuente: snapshot real `data/catalog-snapshot.json` · Rango 2026-09-20 → 2026-11-19 · 27 días relevados.
 <!-- price-chart:end -->
 
 - `scripts/export-price-series.ts` escribe una fila por (fecha, GTIN-14, súper)
   desde `price_history` y el estado de cada oferta; un valor con más de 24 h sin
   observarse queda nulo con un motivo explícito.
 - El job diario sube un Parquet por día al release `analytics-data`
-  (`scripts/analytics-data.sh`). El modelo de un índice Laspeyres de canasta fija
-  para comparar con el IPC del INDEC está armado, pero todavía no produce valores:
-  `data/analytics/basket-index.json` declara `status: "insufficient"` hasta
-  juntar la serie que necesita.
+  (`scripts/analytics-data.sh`). Un índice Laspeyres de canasta fija (12
+  productos) se calcula desde toda esa historia y se compara con el IPC del INDEC:
+  la serie arranca el 3/10/2026 y `/inflacion` la muestra contra el IPC de
+  octubre, con la cobertura del último día relevado.
 - La página `/inflacion` renderiza `data/analytics/basket-index.json`
   precalculado: no hay base de datos en el camino de lectura. Mientras la serie
   no tenga al menos dos meses de canasta y un mes de IPC del INDEC superpuesto,
@@ -113,9 +113,9 @@ Postgres están en [docs/RUNBOOK.md](docs/RUNBOOK.md).
 - La frescura depende del refresh diario: el sitio siempre muestra el último
   snapshot commiteado, con su fecha de observación.
 - El índice de canasta de `/inflacion` se recalcula con el refresh diario; su
-  JSON declara la fuente, la cobertura y el estado, y hasta que exista la
-  ventana comparable (2 meses de canasta + 1 mes de IPC superpuesto) la página
-  muestra un estado vacío honesto, sin valores de muestra.
+  JSON declara la fuente, la cobertura y el estado. El ranking de mayores subas
+  y bajas no se publica: con el precio relevado hoy, los inicios y finales de
+  promos y algunos errores de captura dominan ese ranking.
 - Admin: acceso con falla cerrada salvo que la sesión de Clerk tenga el claim exacto de rol admin.
 
 ## Documentación histórica
