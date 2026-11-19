@@ -1,15 +1,17 @@
 # ofertaSUPER
 
-> - **Qué es:** comparador de precios y ofertas de 5 supermercados argentinos, con unos 24.500 productos y 47.500 ofertas.
-> - **Estado (11/11/2026):** sitio pausado por el hosting (Vercel) hasta el 14/11/2026, por pasarse de la CPU del plan gratuito. El refresh diario está verde desde el 27/10. No hay datos de uso.
+Comparador de precios y ofertas de 5 supermercados argentinos: Carrefour, Coto,
+Disco, Jumbo y Vea. Buscás un producto, ves el precio y la oferta en cada súper
+y armás un carrito que puede mezclar súpers.
+
+**En línea en [ofertasuper.com](https://ofertasuper.com)** · más de 25.000 productos y 50.000 ofertas en un catálogo diario · USD 0 de infraestructura
+
+> - **Qué resuelve:** para comparar el mismo producto entre cadenas hace falta una identidad común. Cada observación se concilia por GTIN-14 (con checksum) en un solo catálogo, y un gate de frescura decide qué precio cuenta.
+> - **Estado:** en línea; el catálogo se actualiza todos los días con GitHub Actions. No hay datos de uso.
 > - **Stack:** TypeScript, Next.js 16, React 19, snapshot JSON versionado al servir; Prisma y PostgreSQL solo en la ingesta y en CI; GitHub Actions.
 > - **Cómo correrlo:** `npm ci && npm run dev` (detalle en [Desarrollo local](#desarrollo-local)).
-> - **Links:** [postmortem del incidente de CPU](docs/postmortem-2026-10-vercel-cpu-pause.md)
+> - **Links:** [sitio](https://ofertasuper.com) · [postmortem del incidente de CPU](docs/postmortem-2026-10-vercel-cpu-pause.md)
 > - **Cómo se hizo:** diseño, decido y verifico: defino los tests, los criterios de revisión y las mediciones. Agentes de IA escriben buena parte del código bajo esos tests y esa revisión.
-
-Comparador de precios y ofertas de supermercados de Argentina (Carrefour, Coto,
-Disco, Jumbo y Vea) por GTIN-14: buscás un producto, ves el precio y la oferta en
-cada súper, y armás un carrito que puede mezclar súpers.
 
 - **Runbook operativo** (actualización diaria, cron, Postgres, backups): [docs/RUNBOOK.md](docs/RUNBOOK.md)
 - **Arquitectura** (flujo de datos y módulos clave): [ARCHITECTURE.md](ARCHITECTURE.md)
@@ -17,14 +19,14 @@ cada súper, y armás un carrito que puede mezclar súpers.
 ## Cómo fluyen los datos
 
 Los lectores de catálogo (la API pública VTEX de Carrefour, Disco, Jumbo y Vea, y
-la búsqueda que usa el sitio de Coto) leen el catálogo de cada súper y lo escriben en tablas de
-staging de un Postgres local; un reconcile transaccional con advisory lock
-fusiona cada observación en el catálogo vivo (identidad GTIN-14 con checksum),
-un gate de frescura decide qué precio es "actual", y el pipeline exporta
-`data/catalog-snapshot.json`: un snapshot JSON versionado que se commitea en el
+la búsqueda que usa el sitio de Coto) escriben el catálogo de cada súper en tablas
+de staging de un Postgres local. Un reconcile transaccional con advisory lock
+fusiona cada observación en el catálogo vivo (identidad GTIN-14 con checksum), un
+gate de frescura decide qué precio cuenta y el pipeline exporta
+`data/catalog-snapshot.json`, un snapshot JSON versionado que se commitea en el
 repo. Vercel sirve ese snapshot a la app Next.js y a las APIs públicas, sin base
 de datos en el camino de lectura; si falta o está corrupto, el sitio muestra "no
-disponible", nunca datos demo. Detalle en [ARCHITECTURE.md](ARCHITECTURE.md).
+disponible", nunca datos de ejemplo. Detalle en [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Costo por request (Vercel Hobby, USD 0)
 
@@ -37,7 +39,7 @@ El arreglo mantiene el sitio gratis y con la misma salida:
 
 - Índice por EAN armado una vez por proceso: las páginas más pesadas pasaron de
   10-16 s a 18-173 ms de CPU, medido en una réplica local con el snapshot real.
-  En producción se mide cuando Vercel levante la pausa.
+  El sitio volvió el 14/11 con el arreglo; la CPU en producción todavía no está medida.
 - Sitemap generado en el build y caché del CDN de Vercel (1 h) en páginas y
   APIs públicas; los errores y los 429 nunca se cachean.
 - robots.txt deja afuera a los crawlers de IA, los filtros y la búsqueda interna.
