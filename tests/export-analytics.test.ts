@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { describe, it } from "node:test";
+import { spawnSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, before, describe, it } from "node:test";
 
 const root = new URL("../", import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), "utf8");
@@ -43,6 +46,148 @@ describe("cloud analytics hook contract", () => {
     assert.match(script, /run_stage analytics[\s\S]*\|\| true/);
     assert.match(script, /run_stage commit[\s\S]*\|\| true/);
   });
+
+  // A fresh runner only holds today's partition; without the release history
+  // the index collapses to a one-day series (production on 2026-11-18).
+  it("downloads the release history after the upload and before the dbt build", () => {
+    const main = script.slice(script.indexOf("main() {"));
+    const upload = main.indexOf("run_stage upload");
+    const download = main.indexOf('run_stage download download_history "$DATA_DIR"');
+    const analytics = main.indexOf("run_stage analytics");
+    assert.ok(download >= 0, "the download stage must exist");
+    assert.ok(upload < download && download < analytics, "download must sit between upload and analytics");
+    assert.match(script, /scripts\/analytics-data\.sh download "\$staging"/);
+  });
+
+  it("keeps the published index when the history download fails instead of publishing a thinner series", () => {
+    assert.match(
+      script,
+      /if ! run_stage download download_history "\$DATA_DIR"; then\s*keep_published_index\s*return 0\s*fi\s*run_stage analytics/,
+    );
+  });
+
+  it("surfaces the kept index as a GitHub Actions warning without failing the step", () => {
+    const scriptPath = new URL("scripts/export-analytics.sh", root).pathname;
+    // $0 must differ from the sourced path so the script's main guard stays off.
+    const result = spawnSync("bash", ["-c", 'source "$1" && keep_published_index', "export-analytics-test", scriptPath], {
+      encoding: "utf8",
+    });
+
+    assert.equal(result.status, 0);
+    const warnings = result.stdout.split("\n").filter((line) => line.startsWith("::warning"));
+    assert.equal(warnings.length, 1, result.stdout);
+    assert.match(warnings[0], /^::warning title=[^:]*basket index[^:]*::.*release history.*kept/i);
+  });
+});
+
+// Exercises download_history against a stub `gh`, without touching GitHub.
+const GH_STUB = `#!/usr/bin/env bash
+set -euo pipefail
+state="$GH_STUB_DIR"
+case "$1 $2" in
+  "release view")
+    [ -f "$state/assets" ] || exit 1
+    cat "$state/assets"
+    ;;
+  "release download")
+    pattern=""
+    dir=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --pattern) pattern="$2"; shift 2 ;;
+        --dir) dir="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    cp "$state/$pattern" "$dir/$pattern"
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+`;
+
+describe("export-analytics download_history", () => {
+  let workdir: string;
+  let stubDir: string;
+  const scriptPath = new URL("scripts/export-analytics.sh", root).pathname;
+
+  before(() => {
+    workdir = mkdtempSync(join(tmpdir(), "os-export-analytics-"));
+    stubDir = join(workdir, "bin");
+    mkdirSync(stubDir, { recursive: true });
+    writeFileSync(join(stubDir, "gh"), GH_STUB);
+    chmodSync(join(stubDir, "gh"), 0o755);
+  });
+
+  after(() => {
+    rmSync(workdir, { recursive: true, force: true });
+  });
+
+  function downloadHistory(dataDir: string) {
+    // $0 must differ from the sourced path so the script's main guard stays off.
+    const command = 'source "$1" && download_history "$2"';
+    return spawnSync("bash", ["-c", command, "export-analytics-test", scriptPath, dataDir], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${stubDir}:${process.env.PATH ?? ""}`, GH_STUB_DIR: stubDir },
+    });
+  }
+
+  function writePartition(dir: string, date: string, body: string) {
+    mkdirSync(join(dir, `date=${date}`), { recursive: true });
+    writeFileSync(join(dir, `date=${date}`, "part.parquet"), body);
+  }
+
+  it("adds every historical partition without clobbering today's fresh export", () => {
+    const dataDir = join(workdir, "data");
+    writePartition(dataDir, "2026-11-16", "fresh export");
+    const assets = ["2026-10-03", "2026-11-15", "2026-11-16"].map((date) => `price-series-${date}.parquet`);
+    writeFileSync(join(stubDir, "assets"), assets.join("\n") + "\n");
+    for (const asset of assets) writeFileSync(join(stubDir, asset), `release ${asset}`);
+
+    const result = downloadHistory(dataDir);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(readdirSync(dataDir).sort(), ["date=2026-10-03", "date=2026-11-15", "date=2026-11-16"]);
+    assert.equal(readFileSync(join(dataDir, "date=2026-11-16", "part.parquet"), "utf8"), "fresh export");
+    assert.equal(
+      readFileSync(join(dataDir, "date=2026-10-03", "part.parquet"), "utf8"),
+      "release price-series-2026-10-03.parquet",
+    );
+  });
+
+  // root ignores directory permissions, so the unwritable dir cannot be staged.
+  it("fails instead of reporting success when a partition cannot be written", { skip: process.getuid?.() === 0 }, () => {
+    const dataDir = join(workdir, "data-read-only");
+    writePartition(dataDir, "2026-11-16", "fresh export");
+    const assets = ["price-series-2026-10-03.parquet", "price-series-2026-11-16.parquet"];
+    writeFileSync(join(stubDir, "assets"), assets.join("\n") + "\n");
+    for (const asset of assets) writeFileSync(join(stubDir, asset), `release ${asset}`);
+    chmodSync(dataDir, 0o555);
+
+    try {
+      const result = downloadHistory(dataDir);
+
+      assert.notEqual(result.status, 0, "an unwritable data dir must fail the stage");
+      assert.match(result.stdout + result.stderr, /could not (create|move)/);
+      assert.deepEqual(readdirSync(dataDir), ["date=2026-11-16"]);
+    } finally {
+      chmodSync(dataDir, 0o755);
+    }
+  });
+
+  it("fails without touching the local partitions when the release is unreadable", () => {
+    const dataDir = join(workdir, "data-missing-release");
+    writePartition(dataDir, "2026-11-16", "fresh export");
+    rmSync(join(stubDir, "assets"), { force: true });
+
+    const result = downloadHistory(dataDir);
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /NO_DATA_RELEASE/);
+    assert.deepEqual(readdirSync(dataDir), ["date=2026-11-16"]);
+    assert.equal(existsSync(join(dataDir, "date=2026-11-16", "part.parquet")), true);
+  });
 });
 
 describe("analytics CI workflow contract", () => {
@@ -52,6 +197,10 @@ describe("analytics CI workflow contract", () => {
     assert.match(analyticsWorkflow, /publish_basket_index\.py --skip-build --out tests\/fixtures\/basket-index\.sample\.json --check/);
     assert.match(analyticsWorkflow, /publish_basket_index\.py --verify-production/);
     assert.match(analyticsWorkflow, /chart_price_evolution\.py/);
+  });
+
+  it("runs the publish script unit tests", () => {
+    assert.match(analyticsWorkflow, /uv run python -m unittest discover -s scripts -p 'test_\*\.py'/);
   });
 
   it("pins every action to a full commit SHA and reads only the repository", () => {

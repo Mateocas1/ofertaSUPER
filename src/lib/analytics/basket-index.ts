@@ -1,7 +1,7 @@
 import "server-only";
 
 import basketIndexJson from "../../../data/analytics/basket-index.json";
-import { formatSignedPercent } from "@/lib/format";
+import { formatCalendarDate, formatSignedPercent } from "@/lib/format";
 
 export const BASKET_INDEX_SCHEMA_VERSION = 2;
 
@@ -56,10 +56,13 @@ export type BasketIndexPayload = {
     stores: number;
     products: number;
     basketProducts: number;
+    /** Latest basket day; basketProductsCovered and weightCovered describe it. */
+    coverageDate: string | null;
     basketProductsCovered: number;
     totalWeight: number;
+    weightCovered: number;
+    /** Mean weight covered over every basket day of the series. */
     avgWeightCovered: number;
-    maxWeightCovered: number;
   };
   basketWeights: { gtin14: string; label: string; category: string | null; weight: number }[];
   basketDaily: BasketIndexDailyPoint[];
@@ -160,7 +163,8 @@ export function coverageSummary(payload: BasketIndexPayload): string {
   const end = coverage.seriesEnd ?? "sin datos";
   return (
     `${coverage.basketProductsCovered} de ${coverage.basketProducts} productos de la canasta ` +
-    `con precio fresco entre ${start} y ${end}, en ${coverage.stores} supermercados.`
+    `con precio fresco el ${coverage.coverageDate ?? end}; serie entre ${start} y ${end}, ` +
+    `en ${coverage.stores} supermercados.`
   );
 }
 
@@ -182,7 +186,30 @@ export type BasketIndexView = {
   requirements: BasketIndexPayload["requirements"];
 };
 
-function buildStats(payload: BasketIndexPayload, latest: BasketIndexMonthlyPoint | null, cpiMonthLabel: string): BasketIndexStat[] {
+/**
+ * The newest basket month that also has a published INDEC change. The current
+ * basket month usually runs ahead of the INDEC release, so the latest month
+ * alone would leave the CPI card empty.
+ */
+export function latestMonthWithCpi(payload: BasketIndexPayload): BasketIndexMonthlyPoint | null {
+  return payload.basketMonthly.findLast((row) => row.cpiChangePct !== null && row.cpiChangePct !== undefined) ?? null;
+}
+
+function cpiStat(payload: BasketIndexPayload): BasketIndexStat {
+  const month = latestMonthWithCpi(payload);
+  return {
+    label: "IPC último mes",
+    value: formatPercent(month?.cpiChangePct ?? null),
+    detail: month ? `IPC de ${formatMonthLabel(month.month)}` : "Sin IPC publicado para los meses de la canasta",
+  };
+}
+
+function coverageDetail(coverage: BasketIndexPayload["coverage"]): string {
+  const products = `${coverage.basketProductsCovered} de ${coverage.basketProducts} productos`;
+  return coverage.coverageDate ? `${products} al ${formatCalendarDate(coverage.coverageDate, { withYear: true })}` : products;
+}
+
+function buildStats(payload: BasketIndexPayload, latest: BasketIndexMonthlyPoint | null): BasketIndexStat[] {
   const ready = payload.status === "ready";
   return [
     {
@@ -195,11 +222,11 @@ function buildStats(payload: BasketIndexPayload, latest: BasketIndexMonthlyPoint
       value: formatPercent(latest?.changePct ?? null),
       detail: "Contra el mes anterior publicado",
     },
-    { label: "IPC último mes", value: formatPercent(latest?.cpiChangePct ?? null), detail: cpiMonthLabel },
+    cpiStat(payload),
     {
       label: "Cobertura de canasta",
-      value: ready ? `${Math.round(payload.coverage.avgWeightCovered * 100)}%` : "—",
-      detail: `${payload.coverage.basketProductsCovered} de ${payload.coverage.basketProducts} productos`,
+      value: ready ? `${Math.round(payload.coverage.weightCovered * 100)}%` : "—",
+      detail: coverageDetail(payload.coverage),
     },
   ];
 }
@@ -219,6 +246,6 @@ export function buildBasketIndexView(payload: BasketIndexPayload): BasketIndexVi
     cpiSourceUrl: payload.cpi.sourceUrl,
     statusNote: payload.statusNote ?? payload.comparison.note,
     requirements: payload.requirements,
-    stats: buildStats(payload, latest, cpiMonthLabel),
+    stats: buildStats(payload, latest),
   };
 }

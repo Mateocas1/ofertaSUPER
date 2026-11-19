@@ -388,16 +388,34 @@ pair that was never observed has no row. Availability and promotion are only
 known for the current offer state, so older rows carry nulls for them.
 2. `scripts/analytics-data.sh upload-dir analytics/data` uploads one
 `price-series-<date>.parquet` asset per day to the GitHub Release
-`analytics-data` (same `GITHUB_TOKEN` pattern as `db-state`; keeps the newest
-60 assets).
-3. `cd analytics && uv run --locked --no-dev python scripts/publish_basket_index.py \
+`analytics-data` (same `GITHUB_TOKEN` pattern as `db-state`). Only today's
+partition is on a fresh runner, so only today's asset is uploaded.
+3. `download_history` runs `scripts/analytics-data.sh download` into a temp dir
+and merges every earlier `price-series-<date>.parquet` into `analytics/data`
+without overwriting today's fresh export. Without this stage the build only
+sees one day: until 2026-11-18 production published `days: 1` although the
+release held 40 partitions. If the download fails, the stage logs it and
+analytics and commit are skipped, keeping the published multi-day index instead
+of overwriting it with a one-day series.
+4. `cd analytics && uv run --locked --no-dev python scripts/publish_basket_index.py \
    --glob 'data/*/part.parquet' --source release` runs `dbt build` and rewrites
 `data/analytics/basket-index.json`; the script then commits and pushes it as
 `chore(analytics): refresh basket index <date> [cloud]`. The payload is only
 `status = "ready"` with at least two basket months and one overlapping INDEC
 month; otherwise it is `status = "insufficient"` with no index values, so the
-page can never show a one-point or sample "index". The file is left untouched
-when the only difference is `generatedAt`. Regenerate the committed production
+page can never show a one-point or sample "index". The `coverage` block
+is real in both states; only the index values are withheld while insufficient.
+`basketProductsCovered` and `weightCovered` describe the latest basket day
+(`coverageDate`), which is what the page shows; `avgWeightCovered` is the mean
+over every basket day. The public
+risers/fallers come from `mart_price_movers`, which drops implausible moves:
+first-to-last ratio beyond 3x (`mover_max_ratio`), an endpoint more than 3x
+from the product's median price, GS1 variable-measure codes (`02...`, priced
+per kg in one capture and per piece in another), and unconfirmed moves: a
+mover needs at least 3 `observed` readings (carried-forward rows do not count)
+and its last two readings within 10% of each other. A dbt unit test in
+`analytics/models/marts/_mart_price_movers_unit.yml` pins the rule. The file is left
+untouched when the only difference is `generatedAt`. Regenerate the committed production
 placeholder without dbt with:
 
 ```bash
@@ -405,8 +423,25 @@ cd analytics && uv run python scripts/publish_basket_index.py --placeholder --so
 ```
 
 A failed export skips
-the rest; a failed dbt build leaves the previous JSON in place. `uv` is
-installed with `pip` when the runner does not have it.
+the rest; a failed history download or dbt build leaves the previous JSON in
+place (a failed download also emits a `::warning::` annotation on the run). `uv` is installed with `pip` when the runner does not have it.
+
+Retention: `scripts/analytics-data.sh prune` exists but is not called by any
+workflow, so the release keeps every daily asset (one per day, far below the
+1,000-asset release limit). Do not wire it with the default
+`ANALYTICS_DATA_KEEP=60`: two months of history barely covers the two basket
+months the index needs, and pruning would drop the base month that every index
+value is relative to.
+
+INDEC CPI: `analytics/seeds/indec_cpi.csv` is refreshed by hand with
+`cd analytics && uv run python scripts/fetch_indec_cpi.py --months <n>`, with
+`<n>` large enough to keep the seed's first month (2025-03; `20` reached
+2026-10). It only writes the months the official API returns.
+After a refresh, regenerate the sample fixture (its `cpi` block embeds the seed)
+with `uv run dbt build --profiles-dir .` followed by
+`uv run python scripts/publish_basket_index.py --skip-build --out tests/fixtures/basket-index.sample.json --source sample`.
+The basket index is `ready` once INDEC has published the first basket month
+(October 2026, present in the seed since 2026-11-19).
 
 ### README price chart (weekly)
 
@@ -451,7 +486,8 @@ cd analytics && uv run python scripts/publish_basket_index.py \
 sample (`analytics/sample/part.parquet`); the sample **page payload** lives at
 `analytics/tests/fixtures/basket-index.sample.json` and the CI job in
 `.github/workflows/analytics.yml` builds from the sample, checks both payloads
-(`--check` against the fixture and `--placeholder --check` against production)
+(`--check` against the fixture and `--verify-production` for the honesty of the
+committed production payload)
 and regenerates the sample chart fixture. The README chart is not built here:
 it comes from real data via `npx tsx scripts/chart-price-evolution.ts` (see
 "README price chart" above). No sample artifact is ever served in production.
@@ -699,3 +735,11 @@ Reconcile replaces a product's category whenever the fresh classification
 differs, so a refresh corrects earlier guesses instead of only filling blanks.
 To tune it, edit the ordered `PATH_RULES` / `DECISIVE_DEPARTMENTS` and extend
 `tests/category-classifier.test.ts` with the real path.
+
+### Movers ranking on /inflacion (unpublished)
+
+The payload still carries `topRisers`/`topFallers`, but `/inflacion` does not
+render them. With the current price field, endpoints that land on a deep promo
+(60-66 % off) dominate the ranking and capture errors survive every
+plausibility rule, so a shopper would read promo artifacts as price changes.
+Publish them again only once the movers use promo-aware (list) prices.

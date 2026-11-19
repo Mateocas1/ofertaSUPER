@@ -19,10 +19,11 @@
     "stores": 3,
     "products": 16,
     "basketProducts": 12,
+    "coverageDate": "2026-08-31",
     "basketProductsCovered": 12,
     "totalWeight": 1.0,
-    "avgWeightCovered": 1.0,
-    "maxWeightCovered": 1.0
+    "weightCovered": 1.0,
+    "avgWeightCovered": 1.0
   },
   "basketWeights": [
     {
@@ -689,7 +690,7 @@
     "sourceUrl": "https://apis.datos.gob.ar/series/api/series/?ids=145.3_INGNACNAL_DICI_M_15",
     "unit": "Índice base diciembre 2016 = 100",
     "firstMonth": "2025-03-01",
-    "latestMonth": "2026-08-01",
+    "latestMonth": "2026-10-01",
     "rows": [
       {
         "month": "2025-03-01",
@@ -780,6 +781,16 @@
         "month": "2026-08-01",
         "index": 12276.766,
         "changePct": 1.6592
+      },
+      {
+        "month": "2026-09-01",
+        "index": 12514.1508,
+        "changePct": 1.9336
+      },
+      {
+        "month": "2026-10-01",
+        "index": 12785.9321,
+        "changePct": 2.1718
       }
     ]
   },
@@ -830,18 +841,6 @@
       "change_pct": 8.1584
     },
     {
-      "gtin14": "02900002002058",
-      "store": "jumbo",
-      "product_name": "Fideos mostacholes al huevo 500 g.",
-      "brand": "Genérico",
-      "category": "Almacén",
-      "first_date": "2026-06-01",
-      "last_date": "2026-08-31",
-      "first_price": 955.5,
-      "last_price": 1026.5,
-      "change_pct": 7.4307
-    },
-    {
       "gtin14": "07790742348302",
       "store": "jumbo",
       "product_name": "Leche Entera 3% Sachet 1 Lts La Serenísima",
@@ -852,6 +851,18 @@
       "first_price": 1218.75,
       "last_price": 1304.28,
       "change_pct": 7.0178
+    },
+    {
+      "gtin14": "00744430256209",
+      "store": "carrefour",
+      "product_name": "Yogur Bebible Yogurade Sabor Frutilla 250g",
+      "brand": "Yogurade",
+      "category": "Lácteos",
+      "first_date": "2026-06-01",
+      "last_date": "2026-08-31",
+      "first_price": 1150.0,
+      "last_price": 1223.59,
+      "change_pct": 6.3991
     }
   ],
   "topFallers": [

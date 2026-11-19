@@ -158,14 +158,14 @@ def insuffiency_reason(monthly: list[dict], overlap: list[str]) -> str | None:
 
 
 def insufficient_note(reason: str | None, series_start: object, monthly_count: int) -> str:
+    start = f"La serie de precios del catálogo arranca el {optional(series_start) or 'sin fecha'}. "
+    requirement = "El índice necesita al menos 2 meses de canasta y un mes de IPC del INDEC superpuesto."
     if reason == "insufficient_cpi_overlap":
         return (
-            f"Hay {monthly_count} mes(es) de canasta, pero ninguno coincide todavía con un mes publicado del IPC del INDEC."
+            f"{start}Hay {monthly_count} mes(es) de canasta, pero ninguno coincide todavía con un mes "
+            f"publicado del IPC del INDEC. {requirement}"
         )
-    return (
-        f"La serie de precios del catálogo arranca el {optional(series_start) or 'sin fecha'}. "
-        "El índice necesita al menos 2 meses de canasta y un mes de IPC del INDEC superpuesto."
-    )
+    return start + requirement
 
 
 def empty_coverage(series_start: object, basket_products: int, total_weight: float) -> dict:
@@ -176,10 +176,11 @@ def empty_coverage(series_start: object, basket_products: int, total_weight: flo
         "stores": 0,
         "products": 0,
         "basketProducts": basket_products,
+        "coverageDate": None,
         "basketProductsCovered": 0,
         "totalWeight": round(total_weight, 4),
+        "weightCovered": 0.0,
         "avgWeightCovered": 0.0,
-        "maxWeightCovered": 0.0,
     }
 
 
@@ -224,17 +225,19 @@ def build_payload(connection: duckdb.DuckDBPyConnection, source: str) -> dict:
         connection,
         "select count(*) as basket_products, sum(weight) as total_weight from main.basket_weights",
     )[0]
-    daily = clean(
+    basket_days = clean(
         query(
             connection,
             """
-            select price_date, basket_index, products_covered, weight_covered
+            select price_date, basket_index,
+                   coalesce(products_covered, 0) as products_covered,
+                   coalesce(weight_covered, 0.0) as weight_covered
             from main.mart_basket_index_daily
-            where basket_index is not null
             order by price_date
             """,
         )
     )
+    daily = [row for row in basket_days if row["basket_index"] is not None]
     monthly = clean(
         query(
             connection,
@@ -279,9 +282,16 @@ def build_payload(connection: duckdb.DuckDBPyConnection, source: str) -> dict:
 
     overlap = [row["month"] for row in monthly if row["month"] in {item["month"] for item in cpi_rows}]
     reason = insuffiency_reason(monthly, overlap)
-    covered_products = max((row["products_covered"] for row in daily), default=0)
-    weight_covered = max((row["weight_covered"] for row in daily), default=0.0)
-    avg_weight = round(sum(row["weight_covered"] for row in daily) / len(daily), 4) if daily else 0.0
+    # Coverage is reported even while the index is withheld: it says whether the
+    # basket is being tracked at all. Products and weight describe the latest
+    # basket day (what the page says is priced now); the average spans every
+    # basket day (below the threshold or without a price counts as 0).
+    latest_day = max(basket_days, key=lambda row: row["price_date"]) if basket_days else None
+    covered_products = latest_day["products_covered"] if latest_day else 0
+    weight_covered = latest_day["weight_covered"] if latest_day else 0.0
+    avg_weight = (
+        round(sum(row["weight_covered"] for row in basket_days) / len(basket_days), 4) if basket_days else 0.0
+    )
 
     payload = {
         "schemaVersion": SCHEMA_VERSION,
@@ -301,10 +311,11 @@ def build_payload(connection: duckdb.DuckDBPyConnection, source: str) -> dict:
             "stores": coverage["store_count"],
             "products": coverage["products"],
             "basketProducts": basket_summary["basket_products"],
-            "basketProductsCovered": 0 if reason else covered_products,
+            "coverageDate": latest_day["price_date"] if latest_day else None,
+            "basketProductsCovered": covered_products,
             "totalWeight": round(float(basket_summary["total_weight"] or 0), 4),
-            "avgWeightCovered": 0.0 if reason else avg_weight,
-            "maxWeightCovered": 0.0 if reason else round(weight_covered, 4),
+            "weightCovered": round(float(weight_covered), 4),
+            "avgWeightCovered": avg_weight,
         },
         "basketWeights": weights,
         "basketDaily": [] if reason else [
