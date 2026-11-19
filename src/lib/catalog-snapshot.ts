@@ -1,12 +1,20 @@
 import "server-only";
 
+import { closeSync, fstatSync, openSync, readFileSync, readSync } from "node:fs";
+import { join } from "node:path";
+
 import { normalizeGtin } from "@/lib/identity/gtin";
 import { slugify } from "@/lib/slugify";
 import type { SimplePromotion } from "@/lib/promotions/simple-promos";
 
-import catalogSnapshot from "../../data/catalog-snapshot.json";
-
 export const SNAPSHOT_SCHEMA_VERSION = 2;
+
+// The committed snapshot, relative to the project root. It is read from disk on
+// first use instead of imported: a static JSON import makes webpack inline the
+// whole file into a JS chunk that every catalog function evaluates on a cold
+// start (Active CPU on Vercel Hobby). next.config.ts ships the file with each
+// catalog function (outputFileTracingIncludes).
+export const CATALOG_SNAPSHOT_FILE = "data/catalog-snapshot.json";
 
 export type CatalogSnapshot = {
   schemaVersion: number;
@@ -65,15 +73,88 @@ export function setSnapshotOverrideForTests(snapshot: CatalogSnapshot | null): v
   snapshotOverrideForTests = snapshot;
 }
 
-function readSnapshot(): CatalogSnapshot {
-  return parseCatalogSnapshot(snapshotOverrideForTests ?? catalogSnapshot);
+/** Reads and parses a snapshot file; a missing or unreadable file is unavailable. */
+export function loadCatalogSnapshotFile(filePath: string): CatalogSnapshot {
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(filePath, "utf8"));
+  } catch {
+    throw new SnapshotUnavailableError("catalog snapshot is missing or not valid JSON");
+  }
+  return parseCatalogSnapshot(value);
 }
 
-// Health probe: proves the bundled snapshot loads and is structurally usable.
+// Parsed once per process. A failed read is not cached, so the next request retries.
+let committedSnapshot: CatalogSnapshot | null = null;
+
+function committedSnapshotPath(): string {
+  return join(process.cwd(), CATALOG_SNAPSHOT_FILE);
+}
+
+function readSnapshot(): CatalogSnapshot {
+  if (snapshotOverrideForTests) return parseCatalogSnapshot(snapshotOverrideForTests);
+  committedSnapshot ??= loadCatalogSnapshotFile(committedSnapshotPath());
+  return committedSnapshot;
+}
+
+const UNEXPECTED_SNAPSHOT = "catalog snapshot has an unexpected schema or no products";
+const PROBE_HEAD_BYTES = 64 * 1024;
+const PROBE_TAIL_BYTES = 64;
+
+function readSlice(fd: number, position: number, length: number): string {
+  const buffer = Buffer.alloc(length);
+  const read = readSync(fd, buffer, 0, length, position);
+  return buffer.toString("utf8", 0, read);
+}
+
+/**
+ * Health probe over a snapshot file without parsing it: the metadata that
+ * precedes "products" (schemaVersion, generatedAt, sources) must be in the
+ * first 64 KB with the expected schema, products must not be empty and the
+ * file must end where the top-level object closes. Reads about 64 KB instead
+ * of parsing 51 MB, so a health check never pays the catalog cold start.
+ */
+export function probeCatalogSnapshotFile(filePath: string): { generatedAt: string } {
+  let head: string;
+  let tail: string;
+  try {
+    const fd = openSync(filePath, "r");
+    try {
+      const size = fstatSync(fd).size;
+      head = readSlice(fd, 0, Math.min(size, PROBE_HEAD_BYTES));
+      tail = readSlice(fd, Math.max(0, size - PROBE_TAIL_BYTES), Math.min(size, PROBE_TAIL_BYTES));
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    throw new SnapshotUnavailableError("catalog snapshot is missing or unreadable");
+  }
+
+  const products = /"products"\s*:\s*\[\s*(\S)/.exec(head);
+  const preamble = products ? head.slice(0, products.index) : "";
+  const schemaVersion = /"schemaVersion"\s*:\s*(\d+)\s*[,}]/.exec(preamble);
+  const generatedAt = /"generatedAt"\s*:\s*"([^"\\]+)"/.exec(preamble);
+  if (
+    !/^\s*\{/.test(head) ||
+    !/\]\s*\}\s*$/.test(tail) ||
+    products?.[1] !== "{" ||
+    Number(schemaVersion?.[1]) !== SNAPSHOT_SCHEMA_VERSION ||
+    !generatedAt
+  ) {
+    throw new SnapshotUnavailableError(UNEXPECTED_SNAPSHOT);
+  }
+  return { generatedAt: generatedAt[1] };
+}
+
+// Health probe: proves the snapshot is present and structurally usable. It
+// reuses a snapshot this process already parsed and otherwise only probes the
+// file, so /api/health/* stays cheap on a cold instance.
 export function probeCatalogSnapshot(): { generatedAt: string } {
-  const snapshot = readSnapshot();
+  const loaded = snapshotOverrideForTests ?? committedSnapshot;
+  if (!loaded) return probeCatalogSnapshotFile(committedSnapshotPath());
+  const snapshot = parseCatalogSnapshot(loaded);
   if (snapshot.schemaVersion !== SNAPSHOT_SCHEMA_VERSION || snapshot.products.length === 0) {
-    throw new SnapshotUnavailableError("catalog snapshot has an unexpected schema or no products");
+    throw new SnapshotUnavailableError(UNEXPECTED_SNAPSHOT);
   }
   return { generatedAt: snapshot.generatedAt };
 }
@@ -209,7 +290,9 @@ type SnapshotIndex = {
   pricedOfferCount: Map<string, number>;
   productByGtin: Map<string, SnapshotProduct>;
   gtinKeys: string[];
-  searchFields: string[][];
+  // Normalized name, brand and EAN per product, built on the first text search
+  // so product, list and home renders never pay for it.
+  searchFields: string[][] | null;
   defaultOrder: SnapshotProduct[] | null;
 };
 
@@ -239,10 +322,7 @@ function snapshotIndex(snapshot: CatalogSnapshot): SnapshotIndex {
     if (!productByGtin.has(key)) productByGtin.set(key, product);
     return key;
   });
-  const searchFields = snapshot.products.map((product) =>
-    [product.name, product.brand ?? "", product.ean].map(normalizeQuery));
-
-  const index = { offersByEan, pricedOfferCount, productByGtin, gtinKeys, searchFields, defaultOrder: null };
+  const index = { offersByEan, pricedOfferCount, productByGtin, gtinKeys, searchFields: null, defaultOrder: null };
   snapshotIndexes.set(snapshot, index);
   return index;
 }
@@ -285,9 +365,11 @@ function filterAndRankProducts(
   // every name starts with the empty term, so only an EAN equal to the empty
   // query's key can rank above the rest.
   const emptyKey = gtinKey("");
+  const searchFields = query === null ? null : (index.searchFields ??= snapshot.products.map((product) =>
+    [product.name, product.brand ?? "", product.ean].map(normalizeQuery)));
   const ranked: { product: SnapshotProduct; rank: number }[] = [];
   snapshot.products.forEach((product, position) => {
-    if (query !== null && !index.searchFields[position].some((field) => field.includes(query))) return;
+    if (searchFields !== null && !searchFields[position].some((field) => field.includes(query!))) return;
     if (supermarket !== null
       && !(index.offersByEan.get(product.ean) ?? []).some((offer) => offer.source === supermarket)) return;
     const rank = query === null

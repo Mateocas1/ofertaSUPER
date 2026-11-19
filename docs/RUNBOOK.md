@@ -11,6 +11,14 @@ The site serves the committed snapshot `data/catalog-snapshot.json`. The refresh
 reads every source, stages offers, reconciles them with a transactional advisory
 lock, applies the freshness gate, and regenerates the snapshot.
 
+The deployment reads that file from disk on the first catalog request of each
+instance (`src/lib/catalog-snapshot.ts`); it is not bundled into the JS, and
+`outputFileTracingIncludes` in `next.config.ts` ships it with every dynamic
+catalog route. A new route that reads the catalog must be added there.
+`/api/health/catalog` and `/api/health/ready` only probe the head and tail of
+the file (schema, `generatedAt`, non-empty products, closed object), so a
+health check never pays the full parse on a cold instance.
+
 1. **Previous backup** (guardrail: never write before the dump exists):
 
    ```bash

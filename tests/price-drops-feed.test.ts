@@ -120,6 +120,19 @@ describe("price drops Atom feed", () => {
     assert.equal(broken.status, 503);
     assert.match(await broken.text(), /unavailable/);
   });
+
+  // Polling readers would otherwise invoke a function on every poll; the
+  // payload changes once a day, like the catalog the public API serves.
+  it("lets Vercel's CDN cache a readable feed but never the 503", () => {
+    const response = priceDropsFeedResponse(() => payload([drop()]));
+    assert.equal(response.headers.get("Vercel-CDN-Cache-Control"), "s-maxage=3600, stale-while-revalidate=86400");
+    assert.equal(response.headers.get("cache-control"), PRICE_DROPS_FEED_HEADERS["cache-control"]);
+
+    const broken = priceDropsFeedResponse(() => {
+      throw new Error("payload is missing");
+    });
+    assert.equal(broken.headers.get("Vercel-CDN-Cache-Control"), null);
+  });
 });
 
 describe("xml well-formedness checker", () => {

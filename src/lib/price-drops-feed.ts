@@ -1,3 +1,4 @@
+import { withCatalogCdnCache } from "@/lib/http-cache";
 import { buildAbsoluteUrl, canonicalProductPath } from "@/lib/seo/metadata";
 import { formatDropAmount, formatDropPercent, storeLabel, type PriceDrop, type PriceDropsPayload } from "@/lib/price-drops";
 
@@ -59,7 +60,8 @@ export const PRICE_DROPS_FEED_HEADERS = {
 // subscriber gets an explicit 503 instead of an empty list.
 export function priceDropsFeedResponse(load: () => PriceDropsPayload): Response {
   try {
-    return new Response(buildPriceDropsFeed(load()), { headers: PRICE_DROPS_FEED_HEADERS });
+    // The CDN may cache a readable feed (src/lib/http-cache.ts); the 503 never.
+    return withCatalogCdnCache(new Response(buildPriceDropsFeed(load()), { headers: PRICE_DROPS_FEED_HEADERS }));
   } catch {
     return new Response("Price drops feed unavailable\n", {
       status: 503,
