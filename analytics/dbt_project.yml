@@ -22,6 +22,9 @@ vars:
   # Minimum share of the fixed basket weight that must carry a fresh price on a
   # date for the Laspeyres index to be published (otherwise null + reason).
   basket_min_coverage: 0.6
+  # Largest first-to-last price ratio (and distance from the product's median
+  # price) a public risers/fallers move may show; see mart_price_movers.sql.
+  mover_max_ratio: 3
 
 models:
   ofertasuper_analytics:

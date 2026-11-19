@@ -397,7 +397,12 @@ of overwriting it with a one-day series.
 month; otherwise it is `status = "insufficient"` with no index values, so the
 page can never show a one-point or sample "index". The `coverage` block
 (series range, days, basket products and weight with a price) is real in both
-states; only the index values are withheld while insufficient. The file is left
+states; only the index values are withheld while insufficient. The public
+risers/fallers come from `mart_price_movers`, which drops implausible moves:
+first-to-last ratio beyond 3x (`mover_max_ratio`), an endpoint more than 3x
+from the product's median price, and GS1 variable-measure codes (`02...`,
+priced per kg in one capture and per piece in another). A dbt unit test in
+`analytics/models/marts/_mart_price_movers_unit.yml` pins the rule. The file is left
 untouched when the only difference is `generatedAt`. Regenerate the committed production
 placeholder without dbt with:
 

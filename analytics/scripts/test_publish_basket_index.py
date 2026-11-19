@@ -95,6 +95,21 @@ class InsufficientPayloadTest(unittest.TestCase):
         self.assertEqual(payload["coverage"]["maxWeightCovered"], 0.3)
         self.assertEqual(payload["basketDaily"], [])
 
+    def test_null_coverage_day_counts_as_zero_over_one_consistent_day_set(self) -> None:
+        daily = [
+            ("2026-10-03", 100.0, 3, 1.0),
+            ("2026-10-04", None, None, None),
+            ("2026-10-05", None, 1, 0.3),
+            ("2026-11-15", 102.0, 2, 0.8),
+        ]
+        coverage = publish.build_payload(build_marts(daily, ["2026-08-01"]), "release")["coverage"]
+
+        self.assertEqual(coverage["days"], 4)
+        self.assertEqual(coverage["basketProductsCovered"], 3)
+        self.assertEqual(coverage["maxWeightCovered"], 1.0)
+        # Every basket day counts, the null one as 0: (1.0 + 0 + 0.3 + 0.8) / 4.
+        self.assertEqual(coverage["avgWeightCovered"], 0.525)
+
     def test_overlapping_cpi_month_turns_the_payload_ready(self) -> None:
         daily = [("2026-10-03", 100.0, 3, 1.0), ("2026-11-15", 102.0, 3, 1.0)]
         connection = build_marts(daily, ["2026-10-01"])

@@ -1,0 +1,42 @@
+version: 2
+
+# Runs inside `dbt build` (and therefore in the Analytics CI job). Pins the
+# plausibility guard of the public risers/fallers ranking: capture or unit
+# errors (e.g. 3.59 -> 2890) never reach /inflacion, ordinary moves do.
+unit_tests:
+  - name: price_movers_drop_implausible_moves
+    model: mart_price_movers
+    given:
+      - input: ref('dim_product')
+        rows:
+          - {gtin14: "P_PREPIZZA", product_name: "Prepizza", brand: null, category: "Almacén"}
+          - {gtin14: "P_LECHE", product_name: "Leche", brand: null, category: "Lácteos"}
+          - {gtin14: "P_YERBA", product_name: "Yerba", brand: null, category: "Almacén"}
+          - {gtin14: "P_KIWI", product_name: "Kiwi", brand: null, category: "Frutas"}
+          - {gtin14: "02595678000004", product_name: "Cuadril", brand: null, category: "Carnes"}
+      - input: ref('fct_price_daily')
+        rows:
+          # +80401%: a unit/capture error, the ratio alone excludes it.
+          - {price_date: "2026-10-03", gtin14: "P_PREPIZZA", store: "vea", price: 3.59, value_reason: "observed"}
+          - {price_date: "2026-11-15", gtin14: "P_PREPIZZA", store: "vea", price: 2890.0, value_reason: "observed"}
+          # +30% and -30%: plausible moves stay.
+          - {price_date: "2026-10-03", gtin14: "P_LECHE", store: "vea", price: 1000.0, value_reason: "observed"}
+          - {price_date: "2026-11-15", gtin14: "P_LECHE", store: "vea", price: 1300.0, value_reason: "observed"}
+          - {price_date: "2026-10-03", gtin14: "P_YERBA", store: "vea", price: 1000.0, value_reason: "observed"}
+          - {price_date: "2026-11-15", gtin14: "P_YERBA", store: "vea", price: 700.0, value_reason: "observed"}
+          # A 2.7x move inside 3x whose endpoints sit far below the product's
+          # own robust (median) price: excluded; the consistent store stays.
+          - {price_date: "2026-10-03", gtin14: "P_KIWI", store: "vea", price: 300.0, value_reason: "observed"}
+          - {price_date: "2026-11-15", gtin14: "P_KIWI", store: "vea", price: 800.0, value_reason: "observed"}
+          - {price_date: "2026-10-03", gtin14: "P_KIWI", store: "jumbo", price: 8000.0, value_reason: "observed"}
+          - {price_date: "2026-10-20", gtin14: "P_KIWI", store: "jumbo", price: 8100.0, value_reason: "observed"}
+          - {price_date: "2026-11-15", gtin14: "P_KIWI", store: "jumbo", price: 8400.0, value_reason: "observed"}
+          # GS1 variable-measure code (GTIN-13 prefix 2): priced per kg in one
+          # capture and per piece in another, so even a -10% move is not a move.
+          - {price_date: "2026-10-03", gtin14: "02595678000004", store: "disco", price: 10000.0, value_reason: "observed"}
+          - {price_date: "2026-11-15", gtin14: "02595678000004", store: "disco", price: 9000.0, value_reason: "observed"}
+    expect:
+      rows:
+        - {gtin14: "P_LECHE", store: "vea", change_pct: 30.0}
+        - {gtin14: "P_YERBA", store: "vea", change_pct: -30.0}
+        - {gtin14: "P_KIWI", store: "jumbo", change_pct: 5.0}

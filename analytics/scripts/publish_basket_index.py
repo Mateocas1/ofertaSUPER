@@ -228,7 +228,9 @@ def build_payload(connection: duckdb.DuckDBPyConnection, source: str) -> dict:
         query(
             connection,
             """
-            select price_date, basket_index, products_covered, weight_covered
+            select price_date, basket_index,
+                   coalesce(products_covered, 0) as products_covered,
+                   coalesce(weight_covered, 0.0) as weight_covered
             from main.mart_basket_index_daily
             order by price_date
             """,
@@ -280,12 +282,12 @@ def build_payload(connection: duckdb.DuckDBPyConnection, source: str) -> dict:
     overlap = [row["month"] for row in monthly if row["month"] in {item["month"] for item in cpi_rows}]
     reason = insuffiency_reason(monthly, overlap)
     # Coverage is reported even while the index is withheld: it says whether the
-    # basket is being tracked at all (days below the threshold count too).
+    # basket is being tracked at all. All three figures use the same day set,
+    # every basket day (below the threshold or without a price counts as 0).
     covered_products = max((row["products_covered"] for row in basket_days), default=0)
     weight_covered = max((row["weight_covered"] for row in basket_days), default=0.0)
-    weighted_days = daily or basket_days
     avg_weight = (
-        round(sum(row["weight_covered"] for row in weighted_days) / len(weighted_days), 4) if weighted_days else 0.0
+        round(sum(row["weight_covered"] for row in basket_days) / len(basket_days), 4) if basket_days else 0.0
     )
 
     payload = {

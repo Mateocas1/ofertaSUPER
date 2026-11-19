@@ -143,6 +143,26 @@ describe("export-analytics download_history", () => {
     );
   });
 
+  // root ignores directory permissions, so the unwritable dir cannot be staged.
+  it("fails instead of reporting success when a partition cannot be written", { skip: process.getuid?.() === 0 }, () => {
+    const dataDir = join(workdir, "data-read-only");
+    writePartition(dataDir, "2026-11-16", "fresh export");
+    const assets = ["price-series-2026-10-03.parquet", "price-series-2026-11-16.parquet"];
+    writeFileSync(join(stubDir, "assets"), assets.join("\n") + "\n");
+    for (const asset of assets) writeFileSync(join(stubDir, asset), `release ${asset}`);
+    chmodSync(dataDir, 0o555);
+
+    try {
+      const result = downloadHistory(dataDir);
+
+      assert.notEqual(result.status, 0, "an unwritable data dir must fail the stage");
+      assert.match(result.stdout + result.stderr, /could not (create|move)/);
+      assert.deepEqual(readdirSync(dataDir), ["date=2026-11-16"]);
+    } finally {
+      chmodSync(dataDir, 0o755);
+    }
+  });
+
   it("fails without touching the local partitions when the release is unreadable", () => {
     const dataDir = join(workdir, "data-missing-release");
     writePartition(dataDir, "2026-11-16", "fresh export");
@@ -164,6 +184,10 @@ describe("analytics CI workflow contract", () => {
     assert.match(analyticsWorkflow, /publish_basket_index\.py --skip-build --out tests\/fixtures\/basket-index\.sample\.json --check/);
     assert.match(analyticsWorkflow, /publish_basket_index\.py --verify-production/);
     assert.match(analyticsWorkflow, /chart_price_evolution\.py/);
+  });
+
+  it("runs the publish script unit tests", () => {
+    assert.match(analyticsWorkflow, /uv run python -m unittest discover -s scripts -p 'test_\*\.py'/);
   });
 
   it("pins every action to a full commit SHA and reads only the repository", () => {

@@ -840,18 +840,6 @@
       "change_pct": 8.1584
     },
     {
-      "gtin14": "02900002002058",
-      "store": "jumbo",
-      "product_name": "Fideos mostacholes al huevo 500 g.",
-      "brand": "Genérico",
-      "category": "Almacén",
-      "first_date": "2026-06-01",
-      "last_date": "2026-08-31",
-      "first_price": 955.5,
-      "last_price": 1026.5,
-      "change_pct": 7.4307
-    },
-    {
       "gtin14": "07790742348302",
       "store": "jumbo",
       "product_name": "Leche Entera 3% Sachet 1 Lts La Serenísima",
@@ -862,6 +850,18 @@
       "first_price": 1218.75,
       "last_price": 1304.28,
       "change_pct": 7.0178
+    },
+    {
+      "gtin14": "00744430256209",
+      "store": "carrefour",
+      "product_name": "Yogur Bebible Yogurade Sabor Frutilla 250g",
+      "brand": "Yogurade",
+      "category": "Lácteos",
+      "first_date": "2026-06-01",
+      "last_date": "2026-08-31",
+      "first_price": 1150.0,
+      "last_price": 1223.59,
+      "change_pct": 6.3991
     }
   ],
   "topFallers": [

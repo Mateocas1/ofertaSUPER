@@ -157,6 +157,36 @@ describe("sample fixture (CI only)", () => {
     assert.match(view.stats[3].value, /%$/);
   });
 
+  it("shows the CPI of the latest basket month the INDEC already published", () => {
+    const sample = loadSampleFixture();
+    const august = sample.basketMonthly.find((row) => row.month === "2026-08-01")!;
+    const withUnpublishedMonth: BasketIndexPayload = {
+      ...sample,
+      basketMonthly: [
+        ...sample.basketMonthly,
+        { ...august, month: "2026-09-01", cpiIndex: null, cpiRebasedIndex: null, cpiChangePct: null },
+      ],
+    };
+
+    const cpiStat = buildBasketIndexView(withUnpublishedMonth).stats[2];
+
+    assert.equal(cpiStat.value, formatPercent(august.cpiChangePct));
+    assert.equal(cpiStat.detail.replace(/\s/g, " "), "IPC de ago 2026");
+  });
+
+  it("says plainly when no basket month has a published CPI", () => {
+    const sample = loadSampleFixture();
+    const noCpi: BasketIndexPayload = {
+      ...sample,
+      basketMonthly: sample.basketMonthly.map((row) => ({ ...row, cpiIndex: null, cpiRebasedIndex: null, cpiChangePct: null })),
+    };
+
+    const cpiStat = buildBasketIndexView(noCpi).stats[2];
+
+    assert.equal(cpiStat.value, "—");
+    assert.match(cpiStat.detail, /Sin IPC publicado/);
+  });
+
   it("exposes the latest published month", () => {
     const latest = latestMonthlyPoint(loadSampleFixture());
 

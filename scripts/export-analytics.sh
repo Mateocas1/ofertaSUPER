@@ -36,24 +36,40 @@ run_stage() {
 
 # Merge every release partition into the data dir without clobbering the ones
 # exported on this run (today's fresh export wins over its release copy).
+# The script runs without errexit (and `if ! run_stage` would suppress it), so
+# every filesystem step is checked explicitly.
 download_history() {
   local data_dir="$1"
   local staging
-  staging="$(mktemp -d)"
+  if ! staging="$(mktemp -d)"; then
+    log "could not create a staging dir for the release history"
+    return 1
+  fi
   if ! scripts/analytics-data.sh download "$staging" >/dev/null; then
     rm -rf "$staging"
     return 1
   fi
-  mkdir -p "$data_dir"
+  if ! mkdir -p "$data_dir"; then
+    log "could not create $data_dir"
+    rm -rf "$staging"
+    return 1
+  fi
   local partition name added=0
   for partition in "$staging"/date=*; do
     [ -f "$partition/part.parquet" ] || continue
     name="$(basename "$partition")"
-    if [ ! -e "$data_dir/$name/part.parquet" ]; then
-      mkdir -p "$data_dir/$name"
-      mv "$partition/part.parquet" "$data_dir/$name/part.parquet"
-      added=$((added + 1))
+    [ -e "$data_dir/$name/part.parquet" ] && continue
+    if ! mkdir -p "$data_dir/$name"; then
+      log "could not create $data_dir/$name"
+      rm -rf "$staging"
+      return 1
     fi
+    if ! mv "$partition/part.parquet" "$data_dir/$name/part.parquet"; then
+      log "could not move $name into $data_dir"
+      rm -rf "$staging"
+      return 1
+    fi
+    added=$((added + 1))
   done
   rm -rf "$staging"
   log "merged $added historical partition(s) into $data_dir"

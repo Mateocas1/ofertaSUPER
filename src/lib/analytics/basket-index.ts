@@ -182,7 +182,25 @@ export type BasketIndexView = {
   requirements: BasketIndexPayload["requirements"];
 };
 
-function buildStats(payload: BasketIndexPayload, latest: BasketIndexMonthlyPoint | null, cpiMonthLabel: string): BasketIndexStat[] {
+/**
+ * The newest basket month that also has a published INDEC change. The current
+ * basket month usually runs ahead of the INDEC release, so the latest month
+ * alone would leave the CPI card empty.
+ */
+export function latestMonthWithCpi(payload: BasketIndexPayload): BasketIndexMonthlyPoint | null {
+  return payload.basketMonthly.findLast((row) => row.cpiChangePct !== null && row.cpiChangePct !== undefined) ?? null;
+}
+
+function cpiStat(payload: BasketIndexPayload): BasketIndexStat {
+  const month = latestMonthWithCpi(payload);
+  return {
+    label: "IPC último mes",
+    value: formatPercent(month?.cpiChangePct ?? null),
+    detail: month ? `IPC de ${formatMonthLabel(month.month)}` : "Sin IPC publicado para los meses de la canasta",
+  };
+}
+
+function buildStats(payload: BasketIndexPayload, latest: BasketIndexMonthlyPoint | null): BasketIndexStat[] {
   const ready = payload.status === "ready";
   return [
     {
@@ -195,7 +213,7 @@ function buildStats(payload: BasketIndexPayload, latest: BasketIndexMonthlyPoint
       value: formatPercent(latest?.changePct ?? null),
       detail: "Contra el mes anterior publicado",
     },
-    { label: "IPC último mes", value: formatPercent(latest?.cpiChangePct ?? null), detail: cpiMonthLabel },
+    cpiStat(payload),
     {
       label: "Cobertura de canasta",
       value: ready ? `${Math.round(payload.coverage.avgWeightCovered * 100)}%` : "—",
@@ -219,6 +237,6 @@ export function buildBasketIndexView(payload: BasketIndexPayload): BasketIndexVi
     cpiSourceUrl: payload.cpi.sourceUrl,
     statusNote: payload.statusNote ?? payload.comparison.note,
     requirements: payload.requirements,
-    stats: buildStats(payload, latest, cpiMonthLabel),
+    stats: buildStats(payload, latest),
   };
 }
