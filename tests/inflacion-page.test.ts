@@ -43,9 +43,11 @@ describe("production payload (committed JSON)", () => {
 
     assert.ok(coverage.days > 1, `expected a multi-day series, got ${coverage.days} day(s)`);
     assert.ok(coverage.seriesStart && coverage.seriesEnd && coverage.seriesStart < coverage.seriesEnd);
-    assert.ok(coverage.basketProductsCovered > 0, "the basket coverage is reported, not zeroed");
-    assert.ok(coverage.basketProductsCovered <= coverage.basketProducts);
-    assert.ok(coverage.weightCovered > 0 && coverage.weightCovered <= coverage.totalWeight);
+    // Coverage describes the latest basket day, which can honestly be 0 after
+    // a partial scrape; the series average proves the basket is tracked.
+    assert.ok(coverage.avgWeightCovered > 0, "the basket coverage is reported, not zeroed");
+    assert.ok(coverage.basketProductsCovered >= 0 && coverage.basketProductsCovered <= coverage.basketProducts);
+    assert.ok(coverage.weightCovered >= 0 && coverage.weightCovered <= coverage.totalWeight);
     assert.ok(coverage.coverageDate && coverage.coverageDate <= coverage.seriesEnd!, "coverage names its latest basket day");
   });
 

@@ -286,7 +286,7 @@ def build_payload(connection: duckdb.DuckDBPyConnection, source: str) -> dict:
     # basket is being tracked at all. Products and weight describe the latest
     # basket day (what the page says is priced now); the average spans every
     # basket day (below the threshold or without a price counts as 0).
-    latest_day = basket_days[-1] if basket_days else None
+    latest_day = max(basket_days, key=lambda row: row["price_date"]) if basket_days else None
     covered_products = latest_day["products_covered"] if latest_day else 0
     weight_covered = latest_day["weight_covered"] if latest_day else 0.0
     avg_weight = (
