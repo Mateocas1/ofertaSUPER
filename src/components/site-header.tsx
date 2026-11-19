@@ -41,7 +41,7 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
       <div className="container-page flex flex-wrap items-center gap-x-8">
-        <Link href="/" className="inline-flex min-h-14 items-center gap-2.5" aria-label="ofertasSUPER, inicio">
+        <Link href="/" className="inline-flex min-h-14 items-center gap-2.5" aria-label="ofertaSUPER, inicio">
           <BrandMark className="size-8" />
           <span className="font-display text-xl font-extrabold tracking-[-0.03em] text-foreground">
             ofertas<span className="text-primary">SUPER</span>

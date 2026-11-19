@@ -9,7 +9,7 @@ test("registers an updatable Serwist service worker and exposes the install mani
 
   await expect(manifestData).toMatchObject({
     display: "standalone",
-    name: "ofertasSUPER",
+    name: "ofertaSUPER",
     start_url: "/",
   });
   expect(manifestData.icons).toEqual(

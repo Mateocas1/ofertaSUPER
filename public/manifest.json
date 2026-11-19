@@ -1,6 +1,6 @@
 {
-  "name": "ofertasSUPER",
-  "short_name": "ofertasSUPER",
+  "name": "ofertaSUPER",
+  "short_name": "ofertaSUPER",
   "description": "Comparador de precios y ofertas de supermercados argentinos.",
   "start_url": "/",
   "scope": "/",

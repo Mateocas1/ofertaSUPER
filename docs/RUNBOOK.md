@@ -1,4 +1,4 @@
-# Runbook — ofertasSUPER
+# Runbook — ofertaSUPER
 
 Operational runbook for the daily catalog refresh, the local Postgres, and the
 encrypted off-site backups. The retired long-form plans and governance docs live

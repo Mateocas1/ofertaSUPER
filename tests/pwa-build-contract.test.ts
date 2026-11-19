@@ -47,7 +47,7 @@ test("keeps the install manifest and offline fallback route", async () => {
     start_url: string;
   };
 
-  assert.equal(manifest.name, "ofertasSUPER");
+  assert.equal(manifest.name, "ofertaSUPER");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.start_url, "/");
   assert.deepEqual(manifest.icons.map(({ src }) => src), ["/icon-192.svg", "/icon-512.svg"]);

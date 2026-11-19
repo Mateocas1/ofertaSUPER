@@ -10,7 +10,7 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "sw
 // Bricolage is the display face for the wordmark and the home H1 only.
 const bricolage = Bricolage_Grotesque({ subsets: ["latin"], weight: ["800"], variable: "--font-bricolage", display: "swap" });
 
-const APP_NAME = "ofertasSUPER";
+const APP_NAME = "ofertaSUPER";
 const APP_DESCRIPTION = "Comparador de precios y canastas de supermercados argentinos.";
 
 export const metadata: Metadata = {
@@ -88,7 +88,7 @@ export default function RootLayout({
           <footer className="border-t border-border bg-surface-1">
             <div className="container-page flex flex-col gap-6 py-8 text-sm text-muted-foreground md:flex-row md:items-start md:justify-between">
               <div className="max-w-md space-y-2">
-                <p className="font-medium text-foreground">ofertasSUPER</p>
+                <p className="font-medium text-foreground">ofertaSUPER</p>
                 <p>
                   Precios registrados de supermercados argentinos, comparados por código de barras. Cada precio
                   muestra la fecha en que se relevó: verificalo en la web del supermercado antes de comprar.

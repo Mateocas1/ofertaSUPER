@@ -65,7 +65,7 @@ test("header navigation reaches every section and returns home", async ({ page }
 		await nav.getByRole("link", { name, exact: true }).click();
 		await expect(page).toHaveURL(url);
 		await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeVisible();
-		await page.getByRole("link", { name: "ofertasSUPER, inicio" }).click();
+		await page.getByRole("link", { name: "ofertaSUPER, inicio" }).click();
 		await expect(page).toHaveURL(/\/$/);
 	}
 

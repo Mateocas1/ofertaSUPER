@@ -9,7 +9,7 @@ import { formatDropAmount, formatDropPercent, storeLabel, type PriceDrop, type P
 
 export const PRICE_DROPS_FEED_PATH = "/bajas/feed.xml";
 export const PRICE_DROPS_PAGE_PATH = "/bajas";
-export const PRICE_DROPS_FEED_TITLE = "ofertasSUPER — bajas de precio";
+export const PRICE_DROPS_FEED_TITLE = "ofertaSUPER — bajas de precio";
 
 const XML_ESCAPES: Record<string, string> = {
   "&": "&amp;",
@@ -88,7 +88,7 @@ export function buildPriceDropsFeed(payload: PriceDropsPayload): string {
     `  <updated>${escapeXml(payload.generatedAt)}</updated>`,
     `  <subtitle>${escapeXml(subtitle)}</subtitle>`,
     "  <author>",
-    "    <name>ofertasSUPER</name>",
+    "    <name>ofertaSUPER</name>",
     "  </author>",
     ...payload.drops.map(entry),
     "</feed>",
