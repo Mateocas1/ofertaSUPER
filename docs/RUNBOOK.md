@@ -727,3 +727,11 @@ Reconcile replaces a product's category whenever the fresh classification
 differs, so a refresh corrects earlier guesses instead of only filling blanks.
 To tune it, edit the ordered `PATH_RULES` / `DECISIVE_DEPARTMENTS` and extend
 `tests/category-classifier.test.ts` with the real path.
+
+### Movers ranking on /inflacion (unpublished)
+
+The payload still carries `topRisers`/`topFallers`, but `/inflacion` does not
+render them. With the current price field, endpoints that land on a deep promo
+(60-66 % off) dominate the ranking and capture errors survive every
+plausibility rule, so a shopper would read promo artifacts as price changes.
+Publish them again only once the movers use promo-aware (list) prices.

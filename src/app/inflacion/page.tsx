@@ -8,7 +8,6 @@ import {
   formatMonthLabel,
   formatNumber,
   loadBasketIndex,
-  type BasketIndexMover,
   type BasketIndexPayload,
   type BasketIndexView,
 } from "@/lib/analytics/basket-index";
@@ -81,36 +80,6 @@ function InsufficientSeries({ view }: { view: BasketIndexView }) {
   );
 }
 
-function MoversList({ title, movers }: { title: string; movers: BasketIndexMover[] }) {
-  return (
-    <section aria-label={title} className="p-4 md:p-5">
-      <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-      {movers.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">Sin movimientos suficientes en la ventana.</p>
-      ) : (
-        <ul className="mt-3 divide-y divide-border">
-          {movers.map((mover) => (
-            <li key={`${mover.gtin14}-${mover.store}`} className="flex items-baseline justify-between gap-4 py-2.5">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">{mover.product_name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {mover.category ?? "Sin categoría"} · {mover.store}
-                </p>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="price text-sm text-foreground">{formatSignedPercent(mover.change_pct, 1)}</p>
-                <p className="text-xs tabular-nums text-muted-foreground">
-                  {formatNumber(mover.first_price)} → {formatNumber(mover.last_price)}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
 function ComparisonTable({ payload }: { payload: BasketIndexPayload }) {
   return (
     <section className="surface overflow-hidden" aria-labelledby="basket-vs-cpi-table">
@@ -171,11 +140,8 @@ function ReadySeries({ view, payload }: { view: BasketIndexView; payload: Basket
       </section>
 
       <ComparisonTable payload={payload} />
-
-      <div className="surface grid divide-y divide-border lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-        <MoversList title="Mayores subas" movers={payload.topRisers} />
-        <MoversList title="Mayores bajas" movers={payload.topFallers} />
-      </div>
+      {/* The movers ranking stays unpublished until prices are promo-aware:
+          promo endpoints and capture errors dominate it (docs/RUNBOOK.md). */}
     </>
   );
 }

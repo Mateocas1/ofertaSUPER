@@ -276,3 +276,14 @@ describe("inflation route", () => {
     assert.doesNotMatch(source, PUBLIC_RED_FLAG_PATTERN);
   });
 });
+
+describe("inflacion page movers", () => {
+  it("does not publish the movers ranking until prices are promo-aware", () => {
+    // Endpoints that land on a deep promo (60-66% off) dominate the ranking
+    // and at least one capture error survives every plausibility rule, so the
+    // page keeps the payload's movers unpublished (see docs/RUNBOOK.md).
+    const page = readFileSync(new URL("../src/app/inflacion/page.tsx", import.meta.url), "utf8");
+    assert.doesNotMatch(page, /<MoversList\b/);
+    assert.doesNotMatch(page, /Mayores (subas|bajas)/);
+  });
+});
