@@ -1,4 +1,6 @@
-import { SUPERMARKETS } from "@/lib/supermarkets";
+import { getSnapshotSources } from "@/lib/catalog-snapshot";
+
+import { supermarketOptions } from "./supermarket-options";
 
 export type FilterOption = { value: string; label: string };
 
@@ -27,13 +29,16 @@ export function FilterSelect({ id, name, label, value, options }: FilterSelectPr
   );
 }
 
-export const SUPERMARKET_OPTIONS: FilterOption[] = [
-  { value: "", label: "Todos" },
-  ...SUPERMARKETS.map((supermarket) => ({ value: supermarket.slug, label: supermarket.name })),
-];
+function publishedSources(): string[] | null {
+  try {
+    return getSnapshotSources();
+  } catch {
+    return null;
+  }
+}
 
 export function SupermarketFilter({ id, value }: { id: string; value: string | undefined }) {
-  return <FilterSelect id={id} name="super" label="Supermercado" value={value} options={SUPERMARKET_OPTIONS} />;
+  return <FilterSelect id={id} name="super" label="Supermercado" value={value} options={supermarketOptions(publishedSources())} />;
 }
 
 export function FilterCheckbox({ id, name, label, checked }: { id: string; name: string; label: string; checked: boolean }) {
