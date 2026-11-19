@@ -1,28 +1,28 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-15T18:25:44.430Z",
+  "generatedAt": "2026-11-19T07:18:06.256Z",
   "source": "release",
-  "status": "insufficient",
-  "statusReason": "insufficient_series",
-  "statusNote": "La serie de precios del catálogo arranca el 2026-11-15. El índice necesita al menos 2 meses de canasta y un mes de IPC del INDEC superpuesto.",
+  "status": "ready",
+  "statusReason": null,
+  "statusNote": null,
   "requirements": {
     "minimumBasketMonths": 2,
     "minimumOverlappingCpiMonths": 1
   },
   "method": "Laspeyres de canasta fija; precio promedio simple entre los supermercados relevados",
   "currency": "ARS",
-  "baseDate": null,
+  "baseDate": "2026-10-03",
   "coverage": {
-    "seriesStart": "2026-11-15",
+    "seriesStart": "2026-10-03",
     "seriesEnd": "2026-11-15",
-    "days": 1,
+    "days": 40,
     "stores": 5,
     "products": 40061,
     "basketProducts": 12,
-    "basketProductsCovered": 0,
+    "basketProductsCovered": 12,
     "totalWeight": 1.0,
-    "avgWeightCovered": 0.0,
-    "maxWeightCovered": 0.0
+    "avgWeightCovered": 0.9483,
+    "maxWeightCovered": 1.0
   },
   "basketWeights": [
     {
@@ -98,14 +98,276 @@
       "weight": 0.06
     }
   ],
-  "basketDaily": [],
-  "basketMonthly": [],
+  "basketDaily": [
+    {
+      "date": "2026-10-03",
+      "index": 100.0,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-05",
+      "index": 98.6854,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-06",
+      "index": 98.986,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-08",
+      "index": 99.4359,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-09",
+      "index": 99.2996,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-10",
+      "index": 99.5247,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-13",
+      "index": 99.2019,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-14",
+      "index": 98.7597,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-15",
+      "index": 98.3375,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-16",
+      "index": 98.861,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-17",
+      "index": 98.861,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-18",
+      "index": 98.861,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-19",
+      "index": 98.1129,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-20",
+      "index": 99.0667,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-21",
+      "index": 99.326,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-22",
+      "index": 99.944,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-23",
+      "index": 100.0516,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-24",
+      "index": 100.0022,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-25",
+      "index": 100.0022,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-26",
+      "index": 100.0022,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-27",
+      "index": 100.0862,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-28",
+      "index": 99.8539,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-29",
+      "index": 98.7794,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-30",
+      "index": 98.7794,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-10-31",
+      "index": 98.7794,
+      "productsCovered": 12,
+      "weightCovered": 1.0
+    },
+    {
+      "date": "2026-11-01",
+      "index": 99.5611,
+      "productsCovered": 10,
+      "weightCovered": 0.86
+    },
+    {
+      "date": "2026-11-02",
+      "index": 99.8683,
+      "productsCovered": 11,
+      "weightCovered": 0.93
+    },
+    {
+      "date": "2026-11-03",
+      "index": 99.8683,
+      "productsCovered": 11,
+      "weightCovered": 0.93
+    },
+    {
+      "date": "2026-11-04",
+      "index": 95.6914,
+      "productsCovered": 11,
+      "weightCovered": 0.93
+    },
+    {
+      "date": "2026-11-05",
+      "index": 95.7149,
+      "productsCovered": 11,
+      "weightCovered": 0.93
+    },
+    {
+      "date": "2026-11-06",
+      "index": 99.3394,
+      "productsCovered": 10,
+      "weightCovered": 0.87
+    },
+    {
+      "date": "2026-11-07",
+      "index": 100.1088,
+      "productsCovered": 10,
+      "weightCovered": 0.87
+    },
+    {
+      "date": "2026-11-08",
+      "index": 100.1099,
+      "productsCovered": 10,
+      "weightCovered": 0.87
+    },
+    {
+      "date": "2026-11-09",
+      "index": 100.1099,
+      "productsCovered": 10,
+      "weightCovered": 0.87
+    },
+    {
+      "date": "2026-11-10",
+      "index": 100.1099,
+      "productsCovered": 10,
+      "weightCovered": 0.87
+    },
+    {
+      "date": "2026-11-11",
+      "index": 101.4888,
+      "productsCovered": 9,
+      "weightCovered": 0.8
+    },
+    {
+      "date": "2026-11-12",
+      "index": 102.4038,
+      "productsCovered": 9,
+      "weightCovered": 0.8
+    },
+    {
+      "date": "2026-11-13",
+      "index": 102.2304,
+      "productsCovered": 9,
+      "weightCovered": 0.8
+    },
+    {
+      "date": "2026-11-14",
+      "index": 102.2304,
+      "productsCovered": 9,
+      "weightCovered": 0.8
+    },
+    {
+      "date": "2026-11-15",
+      "index": 102.1686,
+      "productsCovered": 9,
+      "weightCovered": 0.8
+    }
+  ],
+  "basketMonthly": [
+    {
+      "month": "2026-10-01",
+      "index": 99.264,
+      "changePct": null,
+      "cpiIndex": 12785.9321,
+      "cpiRebasedIndex": 100.0,
+      "cpiChangePct": 2.1718,
+      "daysCovered": 25,
+      "avgWeightCovered": 1.0
+    },
+    {
+      "month": "2026-11-01",
+      "index": 100.0669,
+      "changePct": 0.8089,
+      "cpiIndex": null,
+      "cpiRebasedIndex": null,
+      "cpiChangePct": null,
+      "daysCovered": 15,
+      "avgWeightCovered": 0.862
+    }
+  ],
   "cpi": {
     "source": "INDEC — IPC Nivel General Nacional, base diciembre 2016",
     "sourceUrl": "https://apis.datos.gob.ar/series/api/series/?ids=145.3_INGNACNAL_DICI_M_15",
     "unit": "Índice base diciembre 2016 = 100",
     "firstMonth": "2025-03-01",
-    "latestMonth": "2026-08-01",
+    "latestMonth": "2026-10-01",
     "rows": [
       {
         "month": "2025-03-01",
@@ -196,14 +458,148 @@
         "month": "2026-08-01",
         "index": 12276.766,
         "changePct": 1.6592
+      },
+      {
+        "month": "2026-09-01",
+        "index": 12514.1508,
+        "changePct": 1.9336
+      },
+      {
+        "month": "2026-10-01",
+        "index": 12785.9321,
+        "changePct": 2.1718
       }
     ]
   },
   "comparison": {
-    "baseMonth": null,
-    "overlapMonths": [],
-    "note": "La serie de precios del catálogo arranca el 2026-11-15. El índice necesita al menos 2 meses de canasta y un mes de IPC del INDEC superpuesto."
+    "baseMonth": "2026-10-01",
+    "overlapMonths": [
+      "2026-10-01"
+    ],
+    "note": "El IPC del INDEC está disponible para 1 de los meses de la canasta."
   },
-  "topRisers": [],
-  "topFallers": []
+  "topRisers": [
+    {
+      "gtin14": "07798009620444",
+      "store": "vea",
+      "product_name": "Prepizza Sabor tomate x 1 Un",
+      "brand": "ELABORACION PROPIA",
+      "category": "Panadería",
+      "first_date": "2026-10-06",
+      "last_date": "2026-11-15",
+      "first_price": 3.59,
+      "last_price": 2890.0,
+      "change_pct": 80401.3928
+    },
+    {
+      "gtin14": "07896001025745",
+      "store": "disco",
+      "product_name": "Tijera De Uñas Lanossi Curva",
+      "brand": "LANOSSI",
+      "category": "Perfumería",
+      "first_date": "2026-10-08",
+      "last_date": "2026-11-14",
+      "first_price": 278.03,
+      "last_price": 13950.0,
+      "change_pct": 4917.4442
+    },
+    {
+      "gtin14": "07791720041178",
+      "store": "carrefour",
+      "product_name": "Repelente Carrefour Expert extra duración en crema 200 grs",
+      "brand": "Carrefour",
+      "category": "Perfumería",
+      "first_date": "2026-10-05",
+      "last_date": "2026-11-15",
+      "first_price": 460.6,
+      "last_price": 9672.6,
+      "change_pct": 2000.0
+    },
+    {
+      "gtin14": "07792052181006",
+      "store": "vea",
+      "product_name": "Lentejones 400 Gr Cuisine & Co",
+      "brand": "Cuisine & CO",
+      "category": "Almacén",
+      "first_date": "2026-10-29",
+      "last_date": "2026-11-05",
+      "first_price": 2990.0,
+      "last_price": 47198.59,
+      "change_pct": 1478.5482
+    },
+    {
+      "gtin14": "02571201000000",
+      "store": "jumbo",
+      "product_name": "Kiwi Elegido X Kg",
+      "brand": "VERDULERIA PROPIA",
+      "category": "Frutas y Verduras",
+      "first_date": "2026-10-03",
+      "last_date": "2026-11-15",
+      "first_price": 7999.0,
+      "last_price": 115592.39,
+      "change_pct": 1345.0855
+    }
+  ],
+  "topFallers": [
+    {
+      "gtin14": "07792052175920",
+      "store": "vea",
+      "product_name": "Espinaca Congelada 500 Grs Cuisine & Co",
+      "brand": "CUISINE & CO PREMIUM",
+      "category": "Congelados",
+      "first_date": "2026-10-08",
+      "last_date": "2026-11-15",
+      "first_price": 116130.77,
+      "last_price": 4590.0,
+      "change_pct": -96.0476
+    },
+    {
+      "gtin14": "07792052175906",
+      "store": "jumbo",
+      "product_name": "Choclo 500 Grs Cuisine & Co",
+      "brand": "CUISINE & CO PREMIUM",
+      "category": "Congelados",
+      "first_date": "2026-10-08",
+      "last_date": "2026-11-15",
+      "first_price": 90124.99,
+      "last_price": 4950.0,
+      "change_pct": -94.5076
+    },
+    {
+      "gtin14": "07792052998925",
+      "store": "disco",
+      "product_name": "Vinagre De Manzana 1 Lts Cuisine & Co",
+      "brand": "Cuisine & CO",
+      "category": "Almacén",
+      "first_date": "2026-10-10",
+      "last_date": "2026-11-14",
+      "first_price": 61079.29,
+      "last_price": 4050.0,
+      "change_pct": -93.3693
+    },
+    {
+      "gtin14": "07792052039505",
+      "store": "vea",
+      "product_name": "Limpiador Cremoso 250 Grs Limon Home Care",
+      "brand": "HOME CARE",
+      "category": "Limpieza",
+      "first_date": "2026-10-10",
+      "last_date": "2026-11-15",
+      "first_price": 50062.69,
+      "last_price": 3890.0,
+      "change_pct": -92.2297
+    },
+    {
+      "gtin14": "02582997000006",
+      "store": "disco",
+      "product_name": "Bondiola De Cerdo Congelada",
+      "brand": "GRANJA PROPIA",
+      "category": "Carnes",
+      "first_date": "2026-10-10",
+      "last_date": "2026-11-15",
+      "first_price": 85201.29,
+      "last_price": 6999.0,
+      "change_pct": -91.7853
+    }
+  ]
 }

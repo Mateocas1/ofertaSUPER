@@ -689,7 +689,7 @@
     "sourceUrl": "https://apis.datos.gob.ar/series/api/series/?ids=145.3_INGNACNAL_DICI_M_15",
     "unit": "Índice base diciembre 2016 = 100",
     "firstMonth": "2025-03-01",
-    "latestMonth": "2026-08-01",
+    "latestMonth": "2026-10-01",
     "rows": [
       {
         "month": "2025-03-01",
@@ -780,6 +780,16 @@
         "month": "2026-08-01",
         "index": 12276.766,
         "changePct": 1.6592
+      },
+      {
+        "month": "2026-09-01",
+        "index": 12514.1508,
+        "changePct": 1.9336
+      },
+      {
+        "month": "2026-10-01",
+        "index": 12785.9321,
+        "changePct": 2.1718
       }
     ]
   },

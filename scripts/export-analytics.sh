@@ -2,8 +2,9 @@
 # Best-effort analytics publish for the daily cloud refresh (#548 slice 1).
 #
 # Runs after the state dump: exports today's dense price series, uploads the
-# partition to the `analytics-data` release, rebuilds the dbt marts and commits
-# the refreshed basket-index JSON. The workflow marks the step
+# partition to the `analytics-data` release, downloads the earlier partitions
+# from that release (a fresh runner only holds today's), rebuilds the dbt marts
+# over the whole series and commits the refreshed basket-index JSON. The workflow marks the step
 # `continue-on-error`, so a broken analytics stage never blocks the catalog
 # refresh. Every stage logs what it did.
 #
@@ -31,6 +32,31 @@ run_stage() {
   fi
   log "stage failed: $name (the catalog refresh is not blocked)"
   return 1
+}
+
+# Merge every release partition into the data dir without clobbering the ones
+# exported on this run (today's fresh export wins over its release copy).
+download_history() {
+  local data_dir="$1"
+  local staging
+  staging="$(mktemp -d)"
+  if ! scripts/analytics-data.sh download "$staging" >/dev/null; then
+    rm -rf "$staging"
+    return 1
+  fi
+  mkdir -p "$data_dir"
+  local partition name added=0
+  for partition in "$staging"/date=*; do
+    [ -f "$partition/part.parquet" ] || continue
+    name="$(basename "$partition")"
+    if [ ! -e "$data_dir/$name/part.parquet" ]; then
+      mkdir -p "$data_dir/$name"
+      mv "$partition/part.parquet" "$data_dir/$name/part.parquet"
+      added=$((added + 1))
+    fi
+  done
+  rm -rf "$staging"
+  log "merged $added historical partition(s) into $data_dir"
 }
 
 analytics_pipeline() {
@@ -75,9 +101,18 @@ main() {
   fi
 
   run_stage upload scripts/analytics-data.sh upload-dir "$DATA_DIR" || true
+  # Without the history the build would publish a one-day series over the
+  # committed multi-day index; keep the published payload instead.
+  if ! run_stage download download_history "$DATA_DIR"; then
+    log "release history unavailable; keeping the published basket index"
+    return 0
+  fi
   run_stage analytics analytics_pipeline || true
   run_stage commit commit_basket_index || true
   return 0
 }
 
-main "$@"
+# Sourcing (tests) only defines the helpers; executing runs the stages.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  main "$@"
+fi
