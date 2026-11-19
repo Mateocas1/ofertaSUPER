@@ -31,6 +31,22 @@ describe("cloud refresh workflow contract", () => {
     assert.match(workflow, /--health-cmd "pg_isready -U ofertasuper_owner -d ofertasuper"/);
   });
 
+  it("pins the runner image and the Postgres 16 client used by pg_restore", () => {
+    // ubuntu-latest moved to ubuntu-26.04 on 16/11/2026; its newer pg_restore
+    // emits SET transaction_timeout, which the Postgres 16 service rejects.
+    assert.doesNotMatch(workflow, /runs-on: ubuntu-latest/);
+    assert.match(workflow, /guard:[\s\S]*?runs-on: ubuntu-24\.04/);
+    assert.match(workflow, /refresh:[\s\S]*?runs-on: ubuntu-24\.04/);
+    assert.match(workflow, /postgresql-client-16/);
+    assert.match(workflow, /\/usr\/lib\/postgresql\/16\/bin" >> "\$GITHUB_PATH"/);
+    assert.match(workflow, /pg_restore --version \| grep -q "\(PostgreSQL\) 16\\\."/);
+    assert.match(workflow, /pg_dump --version \| grep -q "\(PostgreSQL\) 16\\\."/);
+    // The pin only helps if it runs before the restore.
+    const pin = workflow.indexOf("- name: Pin the Postgres 16 client");
+    const restore = workflow.indexOf("- name: Download and restore the database state");
+    assert.ok(pin > 0 && pin < restore, "the Postgres 16 client pin must run before the restore");
+  });
+
   it("pins every action to a full commit SHA", () => {
     const usesLines = workflow.split("\n").filter((line) => /^\s*uses:/.test(line));
     assert.ok(usesLines.length >= 2, "expected at least two action steps");
