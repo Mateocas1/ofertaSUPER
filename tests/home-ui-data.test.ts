@@ -111,9 +111,11 @@ describe("home source contract", () => {
 		assert.match(page, /"application\/atom\+xml"/);
 	});
 
-	it("fails closed: offline mode and an unreadable snapshot render the unavailable state", () => {
+	it("fails closed: an unreadable snapshot or basket index renders the unavailable state", () => {
 		const loader = read("src/lib/home-catalog.ts");
-		assert.match(loader, /isCatalogOfflineMode\(\)\) return \{ status: "unavailable" \}/);
+		// Offline mode means "no database"; the home reads only committed files
+		// (tests/home-catalog.test.ts).
+		assert.doesNotMatch(loader, /isCatalogOfflineMode/);
 		assert.match(loader, /SnapshotUnavailableError/);
 		assert.match(loader, /BasketIndexUnavailableError/);
 		assert.match(read("src/components/home/home-basket.tsx"), /HOME_BASKET\.unavailable/);
