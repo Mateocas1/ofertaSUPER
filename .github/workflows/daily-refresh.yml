@@ -28,7 +28,7 @@ permissions:
 jobs:
   guard:
     name: Skip a duplicate scheduled refresh
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       skip: ${{ steps.check.outputs.skip }}
@@ -67,7 +67,7 @@ jobs:
     name: Restore, refresh and publish
     needs: guard
     if: ${{ needs.guard.outputs.skip != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The refresh took 52 of 60 minutes on 2026-10-10 and the top-up grows
     # with the catalog, so the job has headroom and the refresh step below
     # carries the real cap.
@@ -111,6 +111,20 @@ jobs:
 
       - name: Generate Prisma client
         run: npx prisma generate
+
+      # The state dumps come from Postgres 16 and restore into the 16 service
+      # above. A newer client emits SET transaction_timeout, which 16 rejects
+      # (ubuntu-latest moved to 26.04 on 16/11/2026), so pin both the runner
+      # image and the client binaries.
+      - name: Pin the Postgres 16 client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/16/bin:$PATH"
+          pg_restore --version
+          pg_restore --version | grep -q "(PostgreSQL) 16\."
+          pg_dump --version | grep -q "(PostgreSQL) 16\."
 
       - name: Download and restore the database state
         env:

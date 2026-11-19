@@ -237,7 +237,11 @@ describe("chart generator CLI", () => {
 
     assert.equal(result.status, 0, result.stderr);
     const series = committedSeries();
-    assert.match(result.stdout, /12 series · \d+ días \(/);
+    // Stores delist basket GTINs over time; the chart omits products with no
+    // real observations, so the count follows the snapshot, never a constant.
+    assert.ok(series.products.length > 0, "expected at least one basket series");
+    assert.ok(series.products.length <= 12);
+    assert.match(result.stdout, new RegExp(`${series.products.length} series · ${series.dayCount} días \\(`));
     assert.match(
       result.stdout,
       new RegExp(`Rango ${series.startDate} → ${series.endDate} · ${series.dayCount} días relevados`),
