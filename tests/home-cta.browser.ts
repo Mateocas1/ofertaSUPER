@@ -8,9 +8,9 @@ test.beforeEach(async ({ context }) => {
 	});
 });
 
-// The home is ISR: whether its snapshot-backed parts render prices or the
-// unavailable state depends on the environment of the build that prerendered
-// it. Either is honest; demo or illustrative content never is.
+// The home is ISR: its snapshot-backed parts render prices, the stale note or,
+// when the committed snapshot cannot be read, the unavailable state (offline
+// mode no longer hides it). Each is honest; demo or illustrative content never is.
 const BASKET_STATE = /\d+ de \d+|no está disponible|más de 24 horas/;
 
 test("search form and all quick searches go to the search page", async ({ page }) => {

@@ -1,7 +1,6 @@
 import "server-only";
 
 import { BasketIndexUnavailableError, loadBasketIndex } from "@/lib/analytics/basket-index";
-import { isCatalogOfflineMode } from "@/lib/catalog-availability";
 import {
 	getSnapshotGeneratedAt,
 	getSnapshotOffers,
@@ -17,8 +16,13 @@ import { SUPERMARKETS } from "@/lib/supermarkets";
 
 // Everything the home renders that comes from data, read once per ISR render.
 // The snapshot-backed parts (provenance line, basket) fail closed together:
-// offline mode, a missing or corrupt snapshot or basket payload yields
-// "unavailable", never a fallback. The drops read their own committed payload.
+// a missing or corrupt snapshot or basket payload yields "unavailable", never a
+// fallback. The drops read their own committed payload.
+//
+// CATALOG_OFFLINE_MODE does not apply: it means "no database", and the home
+// reads only committed files, like every other snapshot route. Gating on it made
+// a build with that variable prerender "/" as unavailable while /ofertas,
+// /producto and the sitemap served the same snapshot (19/11/2026).
 
 export type HomeProvenance = {
 	generatedAt: string;
@@ -63,7 +67,6 @@ function loadReadySnapshot(now: Date): HomeSnapshotData {
 }
 
 export function loadHomeSnapshotData(now: Date = new Date()): HomeSnapshotData {
-	if (isCatalogOfflineMode()) return { status: "unavailable" };
 	try {
 		return loadReadySnapshot(now);
 	} catch (error) {

@@ -14,7 +14,14 @@ lock, applies the freshness gate, and regenerates the snapshot.
 The deployment reads that file from disk on the first catalog request of each
 instance (`src/lib/catalog-snapshot.ts`); it is not bundled into the JS, and
 `outputFileTracingIncludes` in `next.config.ts` ships it with every dynamic
-catalog route. A new route that reads the catalog must be added there.
+catalog route. A new route that reads the catalog must be added there. The ISR
+home (`/`) and the static sitemap cannot take includes (Next.js skips them for
+prerendered routes); the home keeps the file through Next.js's own trace, which
+`tests/catalog-snapshot-cold-start.test.ts` checks after a build.
+
+`CATALOG_OFFLINE_MODE=true` means "no database" (Lighthouse CI, local smoke
+runs). It does not hide the snapshot: every public catalog page, the home
+included, serves the committed file. It has no use in the Vercel environment.
 `/api/health/catalog` and `/api/health/ready` only probe the head and tail of
 the file (schema, `generatedAt`, non-empty products, closed object), so a
 health check never pays the full parse on a cold instance.

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -110,6 +110,26 @@ describe("snapshot file tracing", () => {
     for (const route of SNAPSHOT_ROUTES) {
       assert.deepEqual(includes[route], [`./${CATALOG_SNAPSHOT_FILE}`], route);
     }
+  });
+
+  // "/" is ISR, so Next.js skips includes for it ("staticPages" in
+  // next/dist/build/collect-build-traces.js) and no key can add a file to it
+  // alone. Its trace must still carry the snapshot it reads when it
+  // regenerates; Next.js's own trace of catalog-snapshot.ts puts it there. The
+  // basket index and price drops are bundled imports. Checked against the last
+  // `npm run build`; skipped when there is none.
+  const HOME_TRACE = ".next/server/app/page.js.nft.json";
+  it("ships the snapshot with the home function", { skip: !existsSync(HOME_TRACE) && "no build output" }, () => {
+    const trace = JSON.parse(readFileSync(HOME_TRACE, "utf8")) as { files: string[] };
+    const files = trace.files.map((file) => join(".next/server/app", file));
+    assert.ok(files.includes(CATALOG_SNAPSHOT_FILE), `${HOME_TRACE} lacks ${CATALOG_SNAPSHOT_FILE}`);
+  });
+
+  // The sitemap has no route segment config: it is generated once at build time
+  // and served as a static file, so no function reads the snapshot for it.
+  it("keeps the sitemap static", () => {
+    const sitemap = readFileSync("src/app/sitemap.ts", "utf8");
+    assert.doesNotMatch(sitemap, /export\s+const\s+(revalidate|dynamic)\b/);
   });
 
   // Next.js matches include keys with picomatch({ contains: true }), so a key
