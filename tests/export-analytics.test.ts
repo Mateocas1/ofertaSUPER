@@ -62,8 +62,21 @@ describe("cloud analytics hook contract", () => {
   it("keeps the published index when the history download fails instead of publishing a thinner series", () => {
     assert.match(
       script,
-      /if ! run_stage download download_history "\$DATA_DIR"; then[\s\S]*?return 0\s*fi\s*run_stage analytics/,
+      /if ! run_stage download download_history "\$DATA_DIR"; then\s*keep_published_index\s*return 0\s*fi\s*run_stage analytics/,
     );
+  });
+
+  it("surfaces the kept index as a GitHub Actions warning without failing the step", () => {
+    const scriptPath = new URL("scripts/export-analytics.sh", root).pathname;
+    // $0 must differ from the sourced path so the script's main guard stays off.
+    const result = spawnSync("bash", ["-c", 'source "$1" && keep_published_index', "export-analytics-test", scriptPath], {
+      encoding: "utf8",
+    });
+
+    assert.equal(result.status, 0);
+    const warnings = result.stdout.split("\n").filter((line) => line.startsWith("::warning"));
+    assert.equal(warnings.length, 1, result.stdout);
+    assert.match(warnings[0], /^::warning title=[^:]*basket index[^:]*::.*release history.*kept/i);
   });
 });
 

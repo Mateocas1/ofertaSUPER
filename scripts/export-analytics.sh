@@ -75,6 +75,14 @@ download_history() {
   log "merged $added historical partition(s) into $data_dir"
 }
 
+# The step is continue-on-error, so a kept index would otherwise only show in
+# the log; the annotation puts it on the run summary. Never fails.
+keep_published_index() {
+  log "release history unavailable; keeping the published basket index"
+  printf '::warning title=Analytics basket index not refreshed::The analytics-data release history could not be downloaded; the published basket index was kept unchanged.\n'
+  return 0
+}
+
 analytics_pipeline() {
   if [ ! -f analytics/uv.lock ]; then
     log "analytics/uv.lock is missing"
@@ -120,7 +128,7 @@ main() {
   # Without the history the build would publish a one-day series over the
   # committed multi-day index; keep the published payload instead.
   if ! run_stage download download_history "$DATA_DIR"; then
-    log "release history unavailable; keeping the published basket index"
+    keep_published_index
     return 0
   fi
   run_stage analytics analytics_pipeline || true

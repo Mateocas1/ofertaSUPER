@@ -396,12 +396,16 @@ of overwriting it with a one-day series.
 `status = "ready"` with at least two basket months and one overlapping INDEC
 month; otherwise it is `status = "insufficient"` with no index values, so the
 page can never show a one-point or sample "index". The `coverage` block
-(series range, days, basket products and weight with a price) is real in both
-states; only the index values are withheld while insufficient. The public
+is real in both states; only the index values are withheld while insufficient.
+`basketProductsCovered` and `weightCovered` describe the latest basket day
+(`coverageDate`), which is what the page shows; `avgWeightCovered` is the mean
+over every basket day. The public
 risers/fallers come from `mart_price_movers`, which drops implausible moves:
 first-to-last ratio beyond 3x (`mover_max_ratio`), an endpoint more than 3x
-from the product's median price, and GS1 variable-measure codes (`02...`,
-priced per kg in one capture and per piece in another). A dbt unit test in
+from the product's median price, GS1 variable-measure codes (`02...`, priced
+per kg in one capture and per piece in another), and unconfirmed moves: a
+mover needs at least 3 `observed` readings (carried-forward rows do not count)
+and its last two readings within 10% of each other. A dbt unit test in
 `analytics/models/marts/_mart_price_movers_unit.yml` pins the rule. The file is left
 untouched when the only difference is `generatedAt`. Regenerate the committed production
 placeholder without dbt with:
@@ -412,7 +416,7 @@ cd analytics && uv run python scripts/publish_basket_index.py --placeholder --so
 
 A failed export skips
 the rest; a failed history download or dbt build leaves the previous JSON in
-place. `uv` is installed with `pip` when the runner does not have it.
+place (a failed download also emits a `::warning::` annotation on the run). `uv` is installed with `pip` when the runner does not have it.
 
 Retention: `scripts/analytics-data.sh prune` exists but is not called by any
 workflow, so the release keeps every daily asset (one per day, far below the

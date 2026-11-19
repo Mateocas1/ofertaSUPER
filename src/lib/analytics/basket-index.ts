@@ -1,7 +1,7 @@
 import "server-only";
 
 import basketIndexJson from "../../../data/analytics/basket-index.json";
-import { formatSignedPercent } from "@/lib/format";
+import { formatCalendarDate, formatSignedPercent } from "@/lib/format";
 
 export const BASKET_INDEX_SCHEMA_VERSION = 2;
 
@@ -56,10 +56,13 @@ export type BasketIndexPayload = {
     stores: number;
     products: number;
     basketProducts: number;
+    /** Latest basket day; basketProductsCovered and weightCovered describe it. */
+    coverageDate: string | null;
     basketProductsCovered: number;
     totalWeight: number;
+    weightCovered: number;
+    /** Mean weight covered over every basket day of the series. */
     avgWeightCovered: number;
-    maxWeightCovered: number;
   };
   basketWeights: { gtin14: string; label: string; category: string | null; weight: number }[];
   basketDaily: BasketIndexDailyPoint[];
@@ -160,7 +163,8 @@ export function coverageSummary(payload: BasketIndexPayload): string {
   const end = coverage.seriesEnd ?? "sin datos";
   return (
     `${coverage.basketProductsCovered} de ${coverage.basketProducts} productos de la canasta ` +
-    `con precio fresco entre ${start} y ${end}, en ${coverage.stores} supermercados.`
+    `con precio fresco el ${coverage.coverageDate ?? end}; serie entre ${start} y ${end}, ` +
+    `en ${coverage.stores} supermercados.`
   );
 }
 
@@ -200,6 +204,11 @@ function cpiStat(payload: BasketIndexPayload): BasketIndexStat {
   };
 }
 
+function coverageDetail(coverage: BasketIndexPayload["coverage"]): string {
+  const products = `${coverage.basketProductsCovered} de ${coverage.basketProducts} productos`;
+  return coverage.coverageDate ? `${products} al ${formatCalendarDate(coverage.coverageDate, { withYear: true })}` : products;
+}
+
 function buildStats(payload: BasketIndexPayload, latest: BasketIndexMonthlyPoint | null): BasketIndexStat[] {
   const ready = payload.status === "ready";
   return [
@@ -216,8 +225,8 @@ function buildStats(payload: BasketIndexPayload, latest: BasketIndexMonthlyPoint
     cpiStat(payload),
     {
       label: "Cobertura de canasta",
-      value: ready ? `${Math.round(payload.coverage.avgWeightCovered * 100)}%` : "—",
-      detail: `${payload.coverage.basketProductsCovered} de ${payload.coverage.basketProducts} productos`,
+      value: ready ? `${Math.round(payload.coverage.weightCovered * 100)}%` : "—",
+      detail: coverageDetail(payload.coverage),
     },
   ];
 }

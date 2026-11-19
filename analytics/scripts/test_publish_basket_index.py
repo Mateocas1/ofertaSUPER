@@ -70,8 +70,11 @@ class InsufficientPayloadTest(unittest.TestCase):
         self.assertEqual(payload["statusReason"], "insufficient_cpi_overlap")
         coverage = payload["coverage"]
         self.assertEqual((coverage["seriesStart"], coverage["seriesEnd"], coverage["days"]), ("2026-10-03", "2026-11-15", 3))
-        self.assertEqual(coverage["basketProductsCovered"], 3)
-        self.assertEqual(coverage["maxWeightCovered"], 1.0)
+        # Products and weight describe the latest basket day; avg spans every day.
+        self.assertEqual(coverage["coverageDate"], "2026-11-15")
+        self.assertEqual(coverage["basketProductsCovered"], 2)
+        self.assertEqual(coverage["weightCovered"], 0.8)
+        self.assertNotIn("maxWeightCovered", coverage)
         self.assertAlmostEqual(coverage["avgWeightCovered"], 0.9333, places=4)
         self.assertIsNone(payload["baseDate"])
         for key in ("basketDaily", "basketMonthly", "topRisers", "topFallers"):
@@ -92,7 +95,7 @@ class InsufficientPayloadTest(unittest.TestCase):
 
         self.assertEqual(payload["statusReason"], "insufficient_series")
         self.assertEqual(payload["coverage"]["basketProductsCovered"], 1)
-        self.assertEqual(payload["coverage"]["maxWeightCovered"], 0.3)
+        self.assertEqual(payload["coverage"]["weightCovered"], 0.3)
         self.assertEqual(payload["basketDaily"], [])
 
     def test_null_coverage_day_counts_as_zero_over_one_consistent_day_set(self) -> None:
@@ -105,10 +108,19 @@ class InsufficientPayloadTest(unittest.TestCase):
         coverage = publish.build_payload(build_marts(daily, ["2026-08-01"]), "release")["coverage"]
 
         self.assertEqual(coverage["days"], 4)
-        self.assertEqual(coverage["basketProductsCovered"], 3)
-        self.assertEqual(coverage["maxWeightCovered"], 1.0)
+        self.assertEqual(coverage["basketProductsCovered"], 2)
+        self.assertEqual(coverage["weightCovered"], 0.8)
         # Every basket day counts, the null one as 0: (1.0 + 0 + 0.3 + 0.8) / 4.
         self.assertEqual(coverage["avgWeightCovered"], 0.525)
+
+    def test_latest_day_without_coverage_reports_zero_not_an_older_day(self) -> None:
+        daily = [("2026-10-03", 100.0, 3, 1.0), ("2026-11-15", None, None, None)]
+        coverage = publish.build_payload(build_marts(daily, ["2026-08-01"]), "release")["coverage"]
+
+        self.assertEqual(coverage["coverageDate"], "2026-11-15")
+        self.assertEqual(coverage["basketProductsCovered"], 0)
+        self.assertEqual(coverage["weightCovered"], 0.0)
+        self.assertEqual(coverage["avgWeightCovered"], 0.5)
 
     def test_overlapping_cpi_month_turns_the_payload_ready(self) -> None:
         daily = [("2026-10-03", 100.0, 3, 1.0), ("2026-11-15", 102.0, 3, 1.0)]

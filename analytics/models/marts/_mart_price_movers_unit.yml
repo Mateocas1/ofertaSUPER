@@ -2,7 +2,9 @@ version: 2
 
 # Runs inside `dbt build` (and therefore in the Analytics CI job). Pins the
 # plausibility guard of the public risers/fallers ranking: capture or unit
-# errors (e.g. 3.59 -> 2890) never reach /inflacion, ordinary moves do.
+# errors (e.g. 3.59 -> 2890) and unconfirmed one-point jumps never reach
+# /inflacion, ordinary confirmed moves do. Every excluded case below trips
+# exactly one clause, so each clause is tested on its own.
 unit_tests:
   - name: price_movers_drop_implausible_moves
     model: mart_price_movers
@@ -14,19 +16,27 @@ unit_tests:
           - {gtin14: "P_YERBA", product_name: "Yerba", brand: null, category: "Almacén"}
           - {gtin14: "P_KIWI", product_name: "Kiwi", brand: null, category: "Frutas"}
           - {gtin14: "02595678000004", product_name: "Cuadril", brand: null, category: "Carnes"}
+          - {gtin14: "P_QUAD", product_name: "Cuadruplica", brand: null, category: "Almacén"}
+          - {gtin14: "P_TRIPLE", product_name: "Triplica", brand: null, category: "Almacén"}
+          - {gtin14: "P_JUMP", product_name: "Salto final", brand: null, category: "Almacén"}
+          - {gtin14: "P_TWO", product_name: "Dos lecturas", brand: null, category: "Almacén"}
       - input: ref('fct_price_daily')
         rows:
-          # +80401%: a unit/capture error, the ratio alone excludes it.
+          # +80401%: a unit/capture error.
           - {price_date: "2026-10-03", gtin14: "P_PREPIZZA", store: "vea", price: 3.59, value_reason: "observed"}
+          - {price_date: "2026-11-14", gtin14: "P_PREPIZZA", store: "vea", price: 2890.0, value_reason: "observed"}
           - {price_date: "2026-11-15", gtin14: "P_PREPIZZA", store: "vea", price: 2890.0, value_reason: "observed"}
-          # +30% and -30%: plausible moves stay.
+          # +30% and -30%, confirmed by a second reading: plausible, kept.
           - {price_date: "2026-10-03", gtin14: "P_LECHE", store: "vea", price: 1000.0, value_reason: "observed"}
+          - {price_date: "2026-11-14", gtin14: "P_LECHE", store: "vea", price: 1290.0, value_reason: "observed"}
           - {price_date: "2026-11-15", gtin14: "P_LECHE", store: "vea", price: 1300.0, value_reason: "observed"}
           - {price_date: "2026-10-03", gtin14: "P_YERBA", store: "vea", price: 1000.0, value_reason: "observed"}
+          - {price_date: "2026-11-14", gtin14: "P_YERBA", store: "vea", price: 700.0, value_reason: "observed"}
           - {price_date: "2026-11-15", gtin14: "P_YERBA", store: "vea", price: 700.0, value_reason: "observed"}
           # A 2.7x move inside 3x whose endpoints sit far below the product's
           # own robust (median) price: excluded; the consistent store stays.
           - {price_date: "2026-10-03", gtin14: "P_KIWI", store: "vea", price: 300.0, value_reason: "observed"}
+          - {price_date: "2026-11-14", gtin14: "P_KIWI", store: "vea", price: 800.0, value_reason: "observed"}
           - {price_date: "2026-11-15", gtin14: "P_KIWI", store: "vea", price: 800.0, value_reason: "observed"}
           - {price_date: "2026-10-03", gtin14: "P_KIWI", store: "jumbo", price: 8000.0, value_reason: "observed"}
           - {price_date: "2026-10-20", gtin14: "P_KIWI", store: "jumbo", price: 8100.0, value_reason: "observed"}
@@ -34,9 +44,37 @@ unit_tests:
           # GS1 variable-measure code (GTIN-13 prefix 2): priced per kg in one
           # capture and per piece in another, so even a -10% move is not a move.
           - {price_date: "2026-10-03", gtin14: "02595678000004", store: "disco", price: 10000.0, value_reason: "observed"}
+          - {price_date: "2026-11-14", gtin14: "02595678000004", store: "disco", price: 9000.0, value_reason: "observed"}
           - {price_date: "2026-11-15", gtin14: "02595678000004", store: "disco", price: 9000.0, value_reason: "observed"}
+          # 4x move between two price levels, confirmed and with 3 readings;
+          # the other store pins the median at 2000, so 1000 and 4000 both sit
+          # within 3x of it: only the ratio clause excludes the vea row.
+          - {price_date: "2026-10-03", gtin14: "P_QUAD", store: "vea", price: 1000.0, value_reason: "observed"}
+          - {price_date: "2026-11-14", gtin14: "P_QUAD", store: "vea", price: 4000.0, value_reason: "observed"}
+          - {price_date: "2026-11-15", gtin14: "P_QUAD", store: "vea", price: 4000.0, value_reason: "observed"}
+          - {price_date: "2026-10-03", gtin14: "P_QUAD", store: "jumbo", price: 2000.0, value_reason: "observed"}
+          - {price_date: "2026-10-10", gtin14: "P_QUAD", store: "jumbo", price: 2000.0, value_reason: "observed"}
+          - {price_date: "2026-10-20", gtin14: "P_QUAD", store: "jumbo", price: 2000.0, value_reason: "observed"}
+          - {price_date: "2026-11-01", gtin14: "P_QUAD", store: "jumbo", price: 2000.0, value_reason: "observed"}
+          - {price_date: "2026-11-15", gtin14: "P_QUAD", store: "jumbo", price: 2000.0, value_reason: "observed"}
+          # Exactly 3x, confirmed: on the boundary, kept.
+          - {price_date: "2026-10-03", gtin14: "P_TRIPLE", store: "vea", price: 1000.0, value_reason: "observed"}
+          - {price_date: "2026-11-14", gtin14: "P_TRIPLE", store: "vea", price: 3000.0, value_reason: "observed"}
+          - {price_date: "2026-11-15", gtin14: "P_TRIPLE", store: "vea", price: 3000.0, value_reason: "observed"}
+          # 2.5x seen only in the last reading: not persisted, excluded.
+          - {price_date: "2026-10-03", gtin14: "P_JUMP", store: "vea", price: 1000.0, value_reason: "observed"}
+          - {price_date: "2026-10-20", gtin14: "P_JUMP", store: "vea", price: 1000.0, value_reason: "observed"}
+          - {price_date: "2026-11-14", gtin14: "P_JUMP", store: "vea", price: 1000.0, value_reason: "observed"}
+          - {price_date: "2026-11-15", gtin14: "P_JUMP", store: "vea", price: 2500.0, value_reason: "observed"}
+          # +20% with only two readings: unconfirmed, excluded. Carried-forward
+          # rows repeat the last reading and do not count as observations.
+          - {price_date: "2026-10-03", gtin14: "P_TWO", store: "vea", price: 1000.0, value_reason: "observed"}
+          - {price_date: "2026-11-14", gtin14: "P_TWO", store: "vea", price: 1200.0, value_reason: "observed"}
+          - {price_date: "2026-11-15", gtin14: "P_TWO", store: "vea", price: 1200.0, value_reason: "carried_forward"}
     expect:
       rows:
-        - {gtin14: "P_LECHE", store: "vea", change_pct: 30.0}
-        - {gtin14: "P_YERBA", store: "vea", change_pct: -30.0}
-        - {gtin14: "P_KIWI", store: "jumbo", change_pct: 5.0}
+        - {gtin14: "P_LECHE", store: "vea", change_pct: 30.0, observations: 3}
+        - {gtin14: "P_YERBA", store: "vea", change_pct: -30.0, observations: 3}
+        - {gtin14: "P_KIWI", store: "jumbo", change_pct: 5.0, observations: 3}
+        - {gtin14: "P_QUAD", store: "jumbo", change_pct: 0.0, observations: 5}
+        - {gtin14: "P_TRIPLE", store: "vea", change_pct: 200.0, observations: 3}

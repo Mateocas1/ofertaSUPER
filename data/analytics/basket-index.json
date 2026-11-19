@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-19T07:27:07.006Z",
+  "generatedAt": "2026-11-19T07:37:55.655Z",
   "source": "release",
   "status": "ready",
   "statusReason": null,
@@ -19,10 +19,11 @@
     "stores": 5,
     "products": 40061,
     "basketProducts": 12,
-    "basketProductsCovered": 12,
+    "coverageDate": "2026-11-15",
+    "basketProductsCovered": 9,
     "totalWeight": 1.0,
-    "avgWeightCovered": 0.9483,
-    "maxWeightCovered": 1.0
+    "weightCovered": 0.8,
+    "avgWeightCovered": 0.9483
   },
   "basketWeights": [
     {
@@ -505,12 +506,12 @@
     },
     {
       "gtin14": "07798096880028",
-      "store": "jumbo",
+      "store": "vea",
       "product_name": "Rúcula Sueño Verde 100 grs",
       "brand": "Sueño Verde",
       "category": "Frutas y Verduras",
       "first_date": "2026-10-05",
-      "last_date": "2026-11-10",
+      "last_date": "2026-11-15",
       "first_price": 3399.0,
       "last_price": 9020.49,
       "change_pct": 165.3866
@@ -528,16 +529,16 @@
       "change_pct": 160.3015
     },
     {
-      "gtin14": "07798164160984",
-      "store": "disco",
-      "product_name": "Pan Dulce Balcarce Con Chips 400 Gr",
-      "brand": "BALCARCE",
-      "category": "Almacén",
-      "first_date": "2026-10-25",
-      "last_date": "2026-11-15",
-      "first_price": 3387.94,
-      "last_price": 8626.99,
-      "change_pct": 154.6382
+      "gtin14": "07790154009129",
+      "store": "carrefour",
+      "product_name": "Cocktail Shooter Gin & Tonic 473ml",
+      "brand": "SHOOTER",
+      "category": "Bebidas",
+      "first_date": "2026-10-10",
+      "last_date": "2026-11-13",
+      "first_price": 999.0,
+      "last_price": 2499.0,
+      "change_pct": 150.1502
     }
   ],
   "topFallers": [

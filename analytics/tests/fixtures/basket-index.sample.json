@@ -19,10 +19,11 @@
     "stores": 3,
     "products": 16,
     "basketProducts": 12,
+    "coverageDate": "2026-08-31",
     "basketProductsCovered": 12,
     "totalWeight": 1.0,
-    "avgWeightCovered": 1.0,
-    "maxWeightCovered": 1.0
+    "weightCovered": 1.0,
+    "avgWeightCovered": 1.0
   },
   "basketWeights": [
     {

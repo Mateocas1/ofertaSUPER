@@ -45,7 +45,8 @@ describe("production payload (committed JSON)", () => {
     assert.ok(coverage.seriesStart && coverage.seriesEnd && coverage.seriesStart < coverage.seriesEnd);
     assert.ok(coverage.basketProductsCovered > 0, "the basket coverage is reported, not zeroed");
     assert.ok(coverage.basketProductsCovered <= coverage.basketProducts);
-    assert.ok(coverage.maxWeightCovered > 0 && coverage.maxWeightCovered <= coverage.totalWeight);
+    assert.ok(coverage.weightCovered > 0 && coverage.weightCovered <= coverage.totalWeight);
+    assert.ok(coverage.coverageDate && coverage.coverageDate <= coverage.seriesEnd!, "coverage names its latest basket day");
   });
 
   it("is an honest payload for its status", () => {
@@ -111,8 +112,9 @@ describe("production payload (committed JSON)", () => {
     assert.equal(view.isEmpty, false);
     assert.equal(view.chartPoints.length, payload.basketDaily.length);
     assert.equal(view.latest?.month, payload.basketMonthly.at(-1)?.month);
-    const { basketProductsCovered, basketProducts } = payload.coverage;
+    const { basketProductsCovered, basketProducts, coverageDate } = payload.coverage;
     assert.ok(view.summary.includes(`${basketProductsCovered} de ${basketProducts} productos`));
+    assert.ok(view.summary.includes(`el ${coverageDate}`), "the count is the latest basket day's");
   });
 });
 
@@ -185,6 +187,23 @@ describe("sample fixture (CI only)", () => {
 
     assert.equal(cpiStat.value, "—");
     assert.match(cpiStat.detail, /Sin IPC publicado/);
+  });
+
+  it("describes the latest basket day's coverage, not the best day of the series", () => {
+    const sample = loadSampleFixture();
+    const payload: BasketIndexPayload = {
+      ...sample,
+      coverage: { ...sample.coverage, coverageDate: "2026-08-31", basketProductsCovered: 9, weightCovered: 0.8, avgWeightCovered: 0.95 },
+    };
+
+    const view = buildBasketIndexView(payload);
+    const coverageStat = view.stats[3];
+
+    assert.match(view.summary, /^9 de 12 productos de la canasta con precio fresco el 2026-08-31/);
+    assert.doesNotMatch(view.summary, /12 de 12/);
+    assert.equal(coverageStat.value, "80%");
+    assert.match(coverageStat.detail, /^9 de 12 productos al /);
+    assert.ok(!coverageStat.detail.includes("2026-08-31"), "the card shows a readable date");
   });
 
   it("exposes the latest published month", () => {
