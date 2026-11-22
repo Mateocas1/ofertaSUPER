@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-21T18:48:58.170Z",
+  "generatedAt": "2026-11-22T18:43:42.171Z",
   "source": "release",
   "status": "ready",
   "statusReason": null,
@@ -14,16 +14,16 @@
   "baseDate": "2026-10-03",
   "coverage": {
     "seriesStart": "2026-10-03",
-    "seriesEnd": "2026-11-21",
-    "days": 43,
+    "seriesEnd": "2026-11-22",
+    "days": 44,
     "stores": 5,
-    "products": 40381,
+    "products": 40426,
     "basketProducts": 12,
-    "coverageDate": "2026-11-21",
-    "basketProductsCovered": 9,
+    "coverageDate": "2026-11-22",
+    "basketProductsCovered": 10,
     "totalWeight": 1.0,
-    "weightCovered": 0.8,
-    "avgWeightCovered": 0.9379
+    "weightCovered": 0.87,
+    "avgWeightCovered": 0.9364
   },
   "basketWeights": [
     {
@@ -357,6 +357,12 @@
       "index": 100.5693,
       "productsCovered": 9,
       "weightCovered": 0.8
+    },
+    {
+      "date": "2026-11-22",
+      "index": 99.3741,
+      "productsCovered": 10,
+      "weightCovered": 0.87
     }
   ],
   "basketMonthly": [
@@ -372,13 +378,13 @@
     },
     {
       "month": "2026-11-01",
-      "index": 100.1507,
-      "changePct": 0.8933,
+      "index": 100.1098,
+      "changePct": 0.8521,
       "cpiIndex": null,
       "cpiRebasedIndex": null,
       "cpiChangePct": null,
-      "daysCovered": 18,
-      "avgWeightCovered": 0.8517
+      "daysCovered": 19,
+      "avgWeightCovered": 0.8526
     }
   ],
   "cpi": {
@@ -517,7 +523,7 @@
       "brand": "Carrefour",
       "category": "Perfumería",
       "first_date": "2026-10-05",
-      "last_date": "2026-11-21",
+      "last_date": "2026-11-22",
       "first_price": 2370.25,
       "last_price": 7020.5,
       "change_pct": 196.1924
@@ -541,7 +547,7 @@
       "brand": "Carrefour",
       "category": "Perfumería",
       "first_date": "2026-10-05",
-      "last_date": "2026-11-21",
+      "last_date": "2026-11-22",
       "first_price": 935.3,
       "last_price": 2434.6,
       "change_pct": 160.3015
@@ -553,7 +559,7 @@
       "brand": "BALCARCE",
       "category": "Almacén",
       "first_date": "2026-10-25",
-      "last_date": "2026-11-21",
+      "last_date": "2026-11-22",
       "first_price": 3387.94,
       "last_price": 8626.99,
       "change_pct": 154.6382
