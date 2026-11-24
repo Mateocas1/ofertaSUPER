@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-23T22:56:07.429Z",
+  "generatedAt": "2026-11-24T03:00:40.860Z",
   "source": "release",
   "status": "ready",
   "statusReason": null,
@@ -14,16 +14,16 @@
   "baseDate": "2026-10-03",
   "coverage": {
     "seriesStart": "2026-10-03",
-    "seriesEnd": "2026-11-23",
-    "days": 45,
+    "seriesEnd": "2026-11-24",
+    "days": 46,
     "stores": 5,
-    "products": 40459,
+    "products": 40479,
     "basketProducts": 12,
-    "coverageDate": "2026-11-23",
+    "coverageDate": "2026-11-24",
     "basketProductsCovered": 10,
     "totalWeight": 1.0,
     "weightCovered": 0.87,
-    "avgWeightCovered": 0.9349
+    "avgWeightCovered": 0.9335
   },
   "basketWeights": [
     {
@@ -369,6 +369,12 @@
       "index": 99.3348,
       "productsCovered": 10,
       "weightCovered": 0.87
+    },
+    {
+      "date": "2026-11-24",
+      "index": 99.3348,
+      "productsCovered": 10,
+      "weightCovered": 0.87
     }
   ],
   "basketMonthly": [
@@ -384,13 +390,13 @@
     },
     {
       "month": "2026-11-01",
-      "index": 100.0711,
-      "changePct": 0.8131,
+      "index": 100.036,
+      "changePct": 0.7777,
       "cpiIndex": null,
       "cpiRebasedIndex": null,
       "cpiChangePct": null,
-      "daysCovered": 20,
-      "avgWeightCovered": 0.8535
+      "daysCovered": 21,
+      "avgWeightCovered": 0.8543
     }
   ],
   "cpi": {
@@ -529,22 +535,10 @@
       "brand": "Carrefour",
       "category": "Perfumería",
       "first_date": "2026-10-05",
-      "last_date": "2026-11-23",
+      "last_date": "2026-11-24",
       "first_price": 2370.25,
       "last_price": 7020.5,
       "change_pct": 196.1924
-    },
-    {
-      "gtin14": "07798134193752",
-      "store": "carrefour",
-      "product_name": "Whisky Petakon en petaca 380 ml",
-      "brand": "Petakon",
-      "category": "Bebidas",
-      "first_date": "2026-10-22",
-      "last_date": "2026-11-14",
-      "first_price": 690.0,
-      "last_price": 1896.75,
-      "change_pct": 174.8913
     },
     {
       "gtin14": "07791720041154",
@@ -553,7 +547,7 @@
       "brand": "Carrefour",
       "category": "Perfumería",
       "first_date": "2026-10-05",
-      "last_date": "2026-11-23",
+      "last_date": "2026-11-24",
       "first_price": 935.3,
       "last_price": 2434.6,
       "change_pct": 160.3015
@@ -565,10 +559,22 @@
       "brand": "BALCARCE",
       "category": "Almacén",
       "first_date": "2026-10-25",
-      "last_date": "2026-11-23",
+      "last_date": "2026-11-24",
       "first_price": 3387.94,
       "last_price": 8626.99,
       "change_pct": 154.6382
+    },
+    {
+      "gtin14": "07790154009136",
+      "store": "carrefour",
+      "product_name": "Bebida Alcohólica Shooter Vodka & Lima 473ml",
+      "brand": "SHOOTER",
+      "category": "Bebidas",
+      "first_date": "2026-10-10",
+      "last_date": "2026-11-24",
+      "first_price": 999.0,
+      "last_price": 2499.0,
+      "change_pct": 150.1502
     }
   ],
   "topFallers": [
@@ -603,7 +609,7 @@
       "brand": "Proline",
       "category": "Mascotas",
       "first_date": "2026-10-27",
-      "last_date": "2026-11-23",
+      "last_date": "2026-11-24",
       "first_price": 21999.0,
       "last_price": 7999.0,
       "change_pct": -63.6393
@@ -615,7 +621,7 @@
       "brand": "Proline",
       "category": "Mascotas",
       "first_date": "2026-10-27",
-      "last_date": "2026-11-23",
+      "last_date": "2026-11-24",
       "first_price": 35199.0,
       "last_price": 12999.0,
       "change_pct": -63.07
