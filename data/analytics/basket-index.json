@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-24T03:00:40.860Z",
+  "generatedAt": "2026-11-25T21:13:23.247Z",
   "source": "release",
   "status": "ready",
   "statusReason": null,
@@ -14,16 +14,16 @@
   "baseDate": "2026-10-03",
   "coverage": {
     "seriesStart": "2026-10-03",
-    "seriesEnd": "2026-11-24",
-    "days": 46,
+    "seriesEnd": "2026-11-25",
+    "days": 47,
     "stores": 5,
-    "products": 40479,
+    "products": 40535,
     "basketProducts": 12,
-    "coverageDate": "2026-11-24",
+    "coverageDate": "2026-11-25",
     "basketProductsCovered": 10,
     "totalWeight": 1.0,
     "weightCovered": 0.87,
-    "avgWeightCovered": 0.9335
+    "avgWeightCovered": 0.9321
   },
   "basketWeights": [
     {
@@ -375,6 +375,12 @@
       "index": 99.3348,
       "productsCovered": 10,
       "weightCovered": 0.87
+    },
+    {
+      "date": "2026-11-25",
+      "index": 100.355,
+      "productsCovered": 10,
+      "weightCovered": 0.87
     }
   ],
   "basketMonthly": [
@@ -390,13 +396,13 @@
     },
     {
       "month": "2026-11-01",
-      "index": 100.036,
-      "changePct": 0.7777,
+      "index": 100.0505,
+      "changePct": 0.7923,
       "cpiIndex": null,
       "cpiRebasedIndex": null,
       "cpiChangePct": null,
-      "daysCovered": 21,
-      "avgWeightCovered": 0.8543
+      "daysCovered": 22,
+      "avgWeightCovered": 0.855
     }
   ],
   "cpi": {
@@ -535,7 +541,7 @@
       "brand": "Carrefour",
       "category": "Perfumería",
       "first_date": "2026-10-05",
-      "last_date": "2026-11-24",
+      "last_date": "2026-11-25",
       "first_price": 2370.25,
       "last_price": 7020.5,
       "change_pct": 196.1924
@@ -547,7 +553,7 @@
       "brand": "Carrefour",
       "category": "Perfumería",
       "first_date": "2026-10-05",
-      "last_date": "2026-11-24",
+      "last_date": "2026-11-25",
       "first_price": 935.3,
       "last_price": 2434.6,
       "change_pct": 160.3015
@@ -565,9 +571,9 @@
       "change_pct": 154.6382
     },
     {
-      "gtin14": "07790154009136",
+      "gtin14": "07790154009129",
       "store": "carrefour",
-      "product_name": "Bebida Alcohólica Shooter Vodka & Lima 473ml",
+      "product_name": "Cocktail Shooter Gin & Tonic 473ml",
       "brand": "SHOOTER",
       "category": "Bebidas",
       "first_date": "2026-10-10",
@@ -589,18 +595,6 @@
       "first_price": 42100.0,
       "last_price": 15000.0,
       "change_pct": -64.3705
-    },
-    {
-      "gtin14": "07797942007497",
-      "store": "carrefour",
-      "product_name": "Espumante Tardio De Abril Putruele 750ml",
-      "brand": "PUTRUELE",
-      "category": "Bebidas",
-      "first_date": "2026-10-13",
-      "last_date": "2026-11-04",
-      "first_price": 11120.0,
-      "last_price": 4000.0,
-      "change_pct": -64.0288
     },
     {
       "gtin14": "07799111694330",
@@ -637,6 +631,18 @@
       "first_price": 8049.0,
       "last_price": 3000.0,
       "change_pct": -62.7283
+    },
+    {
+      "gtin14": "07792934101054",
+      "store": "vea",
+      "product_name": "Brote de soja Song 500 g.",
+      "brand": "Song",
+      "category": "Frutas y Verduras",
+      "first_date": "2026-10-05",
+      "last_date": "2026-11-22",
+      "first_price": 10001.37,
+      "last_price": 3799.0,
+      "change_pct": -62.0152
     }
   ]
 }
