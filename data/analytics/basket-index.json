@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-26T20:50:53.820Z",
+  "generatedAt": "2026-11-27T20:46:39.637Z",
   "source": "release",
   "status": "ready",
   "statusReason": null,
@@ -14,16 +14,16 @@
   "baseDate": "2026-10-03",
   "coverage": {
     "seriesStart": "2026-10-03",
-    "seriesEnd": "2026-11-26",
-    "days": 48,
+    "seriesEnd": "2026-11-27",
+    "days": 49,
     "stores": 5,
-    "products": 40621,
+    "products": 40685,
     "basketProducts": 12,
-    "coverageDate": "2026-11-26",
+    "coverageDate": "2026-11-27",
     "basketProductsCovered": 10,
     "totalWeight": 1.0,
     "weightCovered": 0.87,
-    "avgWeightCovered": 0.9308
+    "avgWeightCovered": 0.9296
   },
   "basketWeights": [
     {
@@ -387,6 +387,12 @@
       "index": 100.8611,
       "productsCovered": 10,
       "weightCovered": 0.87
+    },
+    {
+      "date": "2026-11-27",
+      "index": 100.8611,
+      "productsCovered": 10,
+      "weightCovered": 0.87
     }
   ],
   "basketMonthly": [
@@ -402,13 +408,13 @@
     },
     {
       "month": "2026-11-01",
-      "index": 100.0857,
-      "changePct": 0.8278,
+      "index": 100.118,
+      "changePct": 0.8603,
       "cpiIndex": null,
       "cpiRebasedIndex": null,
       "cpiChangePct": null,
-      "daysCovered": 23,
-      "avgWeightCovered": 0.8557
+      "daysCovered": 24,
+      "avgWeightCovered": 0.8563
     }
   ],
   "cpi": {
@@ -547,7 +553,7 @@
       "brand": "Carrefour",
       "category": "Perfumería",
       "first_date": "2026-10-05",
-      "last_date": "2026-11-26",
+      "last_date": "2026-11-27",
       "first_price": 2370.25,
       "last_price": 7020.5,
       "change_pct": 196.1924
@@ -559,7 +565,7 @@
       "brand": "Carrefour",
       "category": "Perfumería",
       "first_date": "2026-10-05",
-      "last_date": "2026-11-26",
+      "last_date": "2026-11-27",
       "first_price": 935.3,
       "last_price": 2434.6,
       "change_pct": 160.3015
@@ -577,9 +583,9 @@
       "change_pct": 154.6382
     },
     {
-      "gtin14": "07790154009136",
+      "gtin14": "07790154009129",
       "store": "carrefour",
-      "product_name": "Bebida Alcohólica Shooter Vodka & Lima 473ml",
+      "product_name": "Cocktail Shooter Gin & Tonic 473ml",
       "brand": "SHOOTER",
       "category": "Bebidas",
       "first_date": "2026-10-10",
